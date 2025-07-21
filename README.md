@@ -1,4 +1,4 @@
-# Aura - AI Interior Design Dialogue Research Platform
+# AWA - AI Interior Design Dialogue Research Platform
 
 ## Architektura Hybrydowa
 
