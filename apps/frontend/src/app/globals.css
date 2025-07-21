@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Audiowide:wght@400&family=Exo+2:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
+/* Glassmorphism utilities */
+@layer utilities {
+  .glass-panel {
+    @apply bg-pearl-100/15 backdrop-blur-glass border border-white/30 shadow-glass;
+  }
+
+  .glass-button {
+    @apply bg-gold-500/20 backdrop-blur-glass border border-gold-400/40 shadow-glass-inset;
+    @apply hover:bg-gold-400/30 hover:border-gold-300/60 transition-all duration-300;
+  }
+
+  .glass-slider {
+    @apply bg-silver-400/20 backdrop-blur-glass border border-silver-300/40;
+  }
+
+  .gradient-radial {
+    background: radial-gradient(ellipse at center, var(--tw-gradient-stops));
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-pearl-100/20 backdrop-blur-glass;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gold-400/60 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gold-500/80;
+}
+
+/* Smooth transitions */
+* {
+  transition: backdrop-filter 0.3s ease;
+}
+
+/* Loading animations */
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.4), transparent);
+  background-size: 200px 100%;
+  animation: shimmer 2s infinite;
+}

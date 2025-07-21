@@ -1,0 +1,13 @@
+{
+  "name": "@aura/modal-backend",
+  "version": "1.0.0",
+  "description": "Modal.com backend with FLUX 1 Kontext integration",
+  "scripts": {
+    "dev": "modal serve main.py",
+    "deploy": "modal deploy main.py",
+    "logs": "modal logs flux-api",
+    "shell": "modal shell main.py"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
