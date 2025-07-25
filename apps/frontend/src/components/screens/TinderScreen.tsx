@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui';
 import { TinderCard } from '@/components/ui/TinderCard';
@@ -53,7 +55,7 @@ const TinderScreen: React.FC = () => {
         message={`Obraz ${currentIndex + 1} z ${INTERIOR_IMAGES.length}`}
       />
 
-      <div className="flex-1 ml-96 flex flex-col p-8">
+      <div className="flex-1 ml-[400px] flex flex-col p-8">
         {/* Progress bar */}
         <div className="mb-4">
           <div className="glass-panel rounded-full h-2 overflow-hidden">
@@ -68,7 +70,7 @@ const TinderScreen: React.FC = () => {
         </div>
 
         {/* Card Container */}
-        <div className="flex-1 relative max-w-md mx-auto w-full">
+        <div className="flex-1 relative w-full">
           {INTERIOR_IMAGES.map((image, index) => (
             <div
               key={image.id}
@@ -95,7 +97,7 @@ const TinderScreen: React.FC = () => {
         </div>
 
         {/* Instructions */}
-        <GlassCard className="mt-4 text-center">
+        <GlassCard className="mt-4 text-center w-full">
           <div className="flex justify-center items-center gap-8 text-sm font-modern">
             <div className="flex items-center gap-2">
               <span className="text-2xl">←</span>

@@ -1,9 +1,14 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
 import { FlowStep } from '@/types';
+import TextType from "@/components/ui/TextType";
+import GlassSurface from 'src/components/ui/GlassSurface';
 
 interface AwaDialogueProps {
   currentStep: FlowStep;
   message?: string;
+  onDialogueEnd?: () => void;
 }
 
 const DIALOGUE_MAP: Record<FlowStep, string[]> = {
@@ -61,62 +66,53 @@ const DIALOGUE_MAP: Record<FlowStep, string[]> = {
 
 export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   currentStep,
-  message
+  message,
+  onDialogueEnd
 }) => {
-  const [currentMessage, setCurrentMessage] = useState(0);
-  const [isTyping, setIsTyping] = useState(false);
-
   const dialogues = DIALOGUE_MAP[currentStep] || ["Cześć! Jestem AWA."];
+  const [currentMessage, setCurrentMessage] = useState(0);
+  const [isDone, setIsDone] = useState(false);
 
   useEffect(() => {
-    setCurrentMessage(0);
-    setIsTyping(true);
-
-    const timer = setTimeout(() => {
-      setIsTyping(false);
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, [currentStep]);
+    setIsDone(false);
+  }, [currentMessage]);
 
   const nextMessage = () => {
     if (currentMessage < dialogues.length - 1) {
       setCurrentMessage(prev => prev + 1);
-      setIsTyping(true);
-      setTimeout(() => setIsTyping(false), 1000);
+      setIsDone(false);
+    } else if (onDialogueEnd) {
+      onDialogueEnd();
     }
   };
 
   return (
-    <div className="glass-panel rounded-lg p-4 h-full flex flex-col">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-3 h-3 bg-gold-400 rounded-full animate-pulse"></div>
-        <span className="text-gold-600 font-futuristic text-sm">AWA</span>
-      </div>
-
-      <div className="flex-1 flex flex-col justify-center">
-        <p className={`text-gray-800 text-sm leading-relaxed font-modern ${
-          isTyping ? 'animate-pulse' : ''
-        }`}>
-          {message || dialogues[currentMessage]}
-        </p>
-
-        {isTyping && (
-          <div className="flex gap-1 mt-2">
-            <div className="w-2 h-2 bg-gold-400 rounded-full animate-bounce"></div>
-            <div className="w-2 h-2 bg-gold-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-            <div className="w-2 h-2 bg-gold-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-          </div>
-        )}
-      </div>
-
-      {currentMessage < dialogues.length - 1 && (
-        <button
-          onClick={nextMessage}
-          className="glass-button px-3 py-1 rounded-md text-xs font-modern self-end mt-2"
-        >
-          Dalej →
-        </button>
+    <div className="z-30 flex flex-col items-center justify-start min-h-[220px] w-full p-8 text-center mt-12">
+      <span className="inline-block whitespace-pre-wrap tracking-tight w-full text-3xl md:text-4xl font-exo2 font-bold text-white drop-shadow-lg select-none text-center mt-8">
+        <TextType
+          text={message || dialogues[currentMessage]}
+          typingSpeed={75}
+          pauseDuration={1500}
+          showCursor={true}
+          cursorCharacter="|"
+          onSentenceComplete={() => setIsDone(true)}
+        />
+      </span>
+      {isDone && (
+        <div className="mt-12 flex justify-center w-full">
+          <GlassSurface
+            width={260}
+            height={64}
+            borderRadius={32}
+            className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400"
+            onClick={nextMessage}
+            aria-label={currentMessage < dialogues.length - 1 ? 'Dalej' : 'Zaczynamy'}
+          >
+            <span className="text-2xl font-exo2 font-bold text-white">
+              {currentMessage < dialogues.length - 1 ? 'Dalej →' : 'Zaczynamy!'}
+            </span>
+          </GlassSurface>
+        </div>
       )}
     </div>
   );

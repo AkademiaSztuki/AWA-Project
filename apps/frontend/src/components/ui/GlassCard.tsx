@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import { cn } from '@/lib/utils';
 
@@ -13,14 +15,13 @@ export const GlassCard: React.FC<GlassCardProps> = ({
   variant = 'default'
 }) => {
   const variants = {
-    default: 'glass-panel',
-    interactive: 'glass-panel hover:bg-gold-400/10 hover:border-gold-300/50 cursor-pointer transition-all duration-300',
-    highlighted: 'glass-panel border-gold-400/60 bg-gold-400/5'
+    default: 'glass-panel rounded-[32px] bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl',
+    interactive: 'glass-panel hover:bg-gold-400/10 hover:border-gold-300/50 cursor-pointer transition-all duration-300 rounded-[32px] bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl',
+    highlighted: 'glass-panel border-gold-400/60 bg-gold-400/5 rounded-[48px] backdrop-blur-xl border shadow-xl'
   };
 
   return (
     <div className={cn(
-      'rounded-lg p-6',
       variants[variant],
       className
     )}>

@@ -13,7 +13,7 @@ const toBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onload = () => resolve(reader.result as string); // Zwraca CAŁY string z nagłówkiem MIME
     reader.onerror = (error) => reject(error);
   });
 

@@ -9,6 +9,15 @@ export interface SessionData {
   ladderResults: LadderStep[];
   generations: GenerationSet[];
   finalSurvey: SurveyResults;
+  tinderData?: {
+    swipes: any[];
+    currentProgress?: number;
+    totalImages?: number;
+  };
+  dnaAccuracyScore?: number;
+  dnaFeedbackTime?: string;
+  dnaAnalysisComplete?: boolean;
+  roomImage?: string; // Base64 encoded image
 }
 
 export type FlowStep = 

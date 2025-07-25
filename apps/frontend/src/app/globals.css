@@ -12,7 +12,7 @@
 
   .glass-button {
     @apply bg-gold-500/20 backdrop-blur-glass border border-gold-400/40 shadow-glass-inset;
-    @apply hover:bg-gold-400/30 hover:border-gold-300/60 transition-all duration-300;
+    @apply hover:bg-gold-400/30 hover:border-gold-400 transition-all duration-300;
   }
 
   .glass-slider {
@@ -21,6 +21,10 @@
 
   .gradient-radial {
     background: radial-gradient(ellipse at center, var(--tw-gradient-stops));
+  }
+
+  .border-gold-300-60 {
+    border-color: rgb(255 229 92 / 0.6); /* gold-300 z 60% przezroczystości */
   }
 }
 
@@ -56,4 +60,8 @@
   background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.4), transparent);
   background-size: 200px 100%;
   animation: shimmer 2s infinite;
+}
+
+html, body, #__next, #root {
+  background: transparent !important;
 }

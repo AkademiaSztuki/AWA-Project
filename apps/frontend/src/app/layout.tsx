@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter, Audiowide, Exo_2 } from 'next/font/google';
 import './globals.css';
+import AuroraBackgroundClient from '@/components/ui/AuroraBackgroundClient';
+import { AwaBackground } from '@/components/awa';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const audiowide = Audiowide({ 
@@ -26,11 +28,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pl" className={`${inter.variable} ${audiowide.variable} ${exo2.variable}`}>
-      <body className="min-h-screen bg-gradient-to-br from-pearl-50 via-pearl-100 to-silver-300 font-modern">
-        <div id="gradient-bg" className="fixed inset-0 -z-10">
-          <div className="absolute inset-0 bg-gradient-radial from-gold-400/20 via-pearl-100/40 to-silver-400/30 animate-gradient-xy"></div>
+      <body className="h-screen font-modern">
+        <AwaBackground />
+        <AuroraBackgroundClient />
+        <div className="flex items-center justify-end h-screen w-full">
+          <div className="w-full max-w-3xl lg:mr-32">
+            {children}
+          </div>
         </div>
-        {children}
       </body>
     </html>
   );

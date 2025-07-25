@@ -1,4 +1,6 @@
-import React, { useRef, useEffect } from 'react';
+"use client";
+
+import React, { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Environment, OrbitControls } from '@react-three/drei';
 import { AwaModel } from './AwaModel';
@@ -9,60 +11,65 @@ interface AwaContainerProps {
   currentStep: FlowStep;
   message?: string;
   isVisible?: boolean;
+  onDialogueEnd?: () => void;
+  showDialogue?: boolean;
 }
 
 export const AwaContainer: React.FC<AwaContainerProps> = ({
   currentStep,
   message,
-  isVisible = true
+  isVisible = true,
+  onDialogueEnd,
+  showDialogue = true
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   return (
-    <div 
-      ref={containerRef}
-      className={`fixed left-0 top-0 w-96 h-screen glass-panel transition-all duration-500 ${
-        isVisible ? 'translate-x-0' : '-translate-x-full'
-      }`}
-    >
-      {/* Three.js Scene */}
-      <div className="h-2/3 relative">
-        <Canvas
-          camera={{ position: [0, 0, 2], fov: 50 }}
-          className="rounded-t-lg"
-        >
-          <Environment preset="studio" />
-          <ambientLight intensity={0.5} color="#F7E7CE" />
-          <directionalLight
-            position={[2, 2, 2]}
-            intensity={0.8}
-            color="#FFD700"
-            castShadow
-          />
-
-          <AwaModel currentStep={currentStep} />
-
-          <OrbitControls 
-            enablePan={false}
-            enableZoom={false}
-            enableRotate={false}
-          />
-        </Canvas>
-
-        {/* Loading overlay */}
-        <div className="absolute inset-0 bg-pearl-100/20 backdrop-blur-sm flex items-center justify-center">
-          <div className="text-gold-500 font-futuristic text-lg animate-pulse">
-            Ładowanie AWA...
-          </div>
+    <div className="relative z-10 min-h-screen w-full">
+      {/* Canvas z AWA */}
+      <div className="absolute inset-0 z-10 pointer-events-none flex items-end justify-start">
+        <div className="w-1/2 h-[80vh] min-w-[400px] flex items-end">
+          <Canvas
+            camera={{ position: [-0.5, 0.3, 1.1], fov: 90 }}
+            className="w-full h-full bg-transparent"
+          >
+            <Environment preset="studio" />
+            <ambientLight intensity={0.5} color="#F7E7CE" />
+            <directionalLight
+              position={[2, 2, 2]}
+              intensity={0.8}
+              color="#FFD700"
+              castShadow
+            />
+            <AwaModel currentStep={currentStep} onLoaded={() => setIsLoading(false)} />
+            <OrbitControls 
+              enablePan={false}
+              enableZoom={false}
+              enableRotate={false}
+            />
+          </Canvas>
         </div>
+        {/* Loading overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-pearl-100/40 backdrop-blur-sm flex items-center justify-center rounded-xl z-20">
+            <div className="text-gold-500 font-futuristic text-lg animate-pulse">
+              Ładowanie AWA...
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Dialogue Section */}
-      <div className="h-1/3 p-4">
-        <AwaDialogue 
-          currentStep={currentStep}
-          message={message}
-        />
+      {/* UI na wierzchu */}
+      <div className="relative z-20 flex flex-col items-center justify-center min-h-screen w-full">
+        <div className="max-w-3xl w-full mt-16 mb-8">
+          {showDialogue && (
+            <AwaDialogue 
+              currentStep={currentStep}
+              message={message}
+              onDialogueEnd={onDialogueEnd}
+            />
+          )}
+        </div>
+        {/* Tu możesz dodać inne elementy UI, np. przyciski, menu itp. */}
       </div>
     </div>
   );

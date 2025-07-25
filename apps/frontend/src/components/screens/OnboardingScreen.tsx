@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from 'react';
 import { GlassCard, GlassButton } from '@/components/ui';
 import { AwaContainer } from '@/components/awa/AwaContainer';
@@ -18,7 +20,7 @@ const OnboardingScreen: React.FC = () => {
       // Save consent timestamp
       sessionStorage.setItem('aura_consent', new Date().toISOString());
       sessionStorage.setItem('aura_user_hash', Math.random().toString(36).substring(7));
-      router.push('/flow/upload');
+      router.push('/flow/photo');
     }
   };
 

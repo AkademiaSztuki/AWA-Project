@@ -252,7 +252,10 @@ export default function GeneratePage() {
 
     const modifications = isMacro
       ? [modification.label]
-      : [...(selectedImage.parameters.modifications || []), modification.label];
+      : [
+          ...((selectedImage.parameters && selectedImage.parameters.modifications) || []),
+          modification.label,
+        ];
 
     try {
       const response = await generateImages({

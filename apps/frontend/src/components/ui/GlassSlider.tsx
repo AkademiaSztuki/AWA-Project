@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import { cn } from '@/lib/utils';
 
@@ -30,7 +32,7 @@ export const GlassSlider: React.FC<GlassSliderProps> = ({
         </label>
       )}
 
-      <div className="glass-slider rounded-lg p-4">
+      <div className="glass-slider rounded-[32px] bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl p-4">
         <div className="flex justify-between text-xs text-gray-500 mb-2 font-modern">
           {leftLabel && <span>{leftLabel}</span>}
           {rightLabel && <span>{rightLabel}</span>}
