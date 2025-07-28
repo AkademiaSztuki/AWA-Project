@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GlassCard } from '../ui/GlassCard';
@@ -65,7 +67,21 @@ export function LadderScreen() {
 
   return (
     <div className="min-h-screen flex">
-      <AwaContainer currentScreen="ladder" />
+      {/* Development Skip Button */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-4 right-4 z-50">
+          <GlassButton
+            onClick={() => router.push('/flow/generate')}
+            variant="secondary"
+            size="sm"
+            className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
+          >
+            🚀 Pomiń (DEV)
+          </GlassButton>
+        </div>
+      )}
+
+      <AwaContainer currentStep="ladder" showDialogue={false} />
 
       <div className="flex-1 ml-[400px] flex items-center justify-center p-8">
         <div className="w-full max-w-3xl mx-auto">
@@ -97,7 +113,8 @@ export function LadderScreen() {
                   <GlassButton
                     key={index}
                     onClick={() => handleAnswer(option)}
-                    variant="secondary"
+                    variant="primary"
+                    size="lg"
                     className="w-full text-left justify-start p-4 hover:bg-gold/10"
                   >
                     {option}

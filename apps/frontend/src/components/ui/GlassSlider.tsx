@@ -1,92 +1,87 @@
 "use client";
 
-import React from 'react';
-import { cn } from '@/lib/utils';
+import React, { useState, useRef } from 'react';
 
 interface GlassSliderProps {
+  min: number;
+  max: number;
   value: number;
   onChange: (value: number) => void;
-  min?: number;
-  max?: number;
-  step?: number;
-  label?: string;
-  leftLabel?: string;
-  rightLabel?: string;
+  className?: string;
 }
 
 export const GlassSlider: React.FC<GlassSliderProps> = ({
+  min,
+  max,
   value,
   onChange,
-  min = 1,
-  max = 7,
-  step = 1,
-  label,
-  leftLabel,
-  rightLabel
+  className = ''
 }) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const percentage = ((value - min) / (max - min)) * 100;
+  const thumbWidth = 64; // w-16 = 16 * 4px
+  const thumbHalf = thumbWidth / 2; // 32px
+  
+  // Oblicz pozycję tak żeby thumb był dokładnie na krawędziach
+  const leftPosition = percentage === 0 ? 0 : percentage === 100 ? `calc(100% - ${thumbWidth}px)` : `calc(${percentage}% - ${thumbHalf}px)`;
+
+  const handleChange = (newValue: number) => {
+    if (!hasInteracted) {
+      setHasInteracted(true);
+    }
+    onChange(newValue);
+  };
+
   return (
-    <div className="space-y-3">
-      {label && (
-        <label className="block text-sm font-medium text-gray-700 font-modern">
-          {label}
-        </label>
-      )}
-
-      <div className="glass-slider rounded-[32px] bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl p-4">
-        <div className="flex justify-between text-xs text-gray-500 mb-2 font-modern">
-          {leftLabel && <span>{leftLabel}</span>}
-          {rightLabel && <span>{rightLabel}</span>}
+    <div className={`relative ${className}`}>
+      {/* Glass container - pill-shaped like GlassSurface buttons */}
+      <div className="relative w-full h-10 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-[32px] overflow-hidden">
+        {/* Track background */}
+        <div className="absolute inset-0 bg-black/10 rounded-[32px]"></div>
+        
+        {/* Progress track */}
+        <div 
+          className="absolute top-1/2 transform -translate-y-1/2 h-3 bg-gradient-to-r from-gold/60 to-gold/40 rounded-full transition-all duration-300 ease-in-out"
+          style={{ width: `${percentage}%` }}
+        ></div>
+        
+        {/* Slider thumb - styled like bottom buttons */}
+        <div 
+          className={`absolute top-1/2 transform -translate-y-1/2 w-16 h-9 bg-white/20 backdrop-blur-xl border border-white/30 shadow-xl rounded-[32px] cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 focus:ring-2 focus:ring-gold-400 ${
+            isDragging ? 'scale-110 border-gold/60 ring-2 ring-gold/400' : ''
+          }`}
+          style={{ left: leftPosition }}
+          onMouseDown={() => setIsDragging(true)}
+          onMouseUp={() => setIsDragging(false)}
+          onMouseLeave={() => setIsDragging(false)}
+        >
         </div>
-
-        <div className="relative">
-          <input
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            onChange={(e) => onChange(Number(e.target.value))}
-            className="w-full h-2 bg-silver-300/30 rounded-lg appearance-none cursor-pointer slider"
-          />
-
-          <div className="flex justify-between text-xs text-gold-600 mt-2 font-modern font-medium">
-            {Array.from({ length: max - min + 1 }, (_, i) => (
-              <span key={i} className={value === min + i ? 'text-gold-700 font-bold' : ''}>
-                {min + i}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div className="text-center mt-2">
-          <span className="text-lg font-bold text-gold-600 font-futuristic">
-            {value}
-          </span>
-        </div>
+        
+        {/* Hidden input for accessibility */}
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => handleChange(parseInt(e.target.value))}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        />
       </div>
-
-      <style jsx>{`
-        .slider::-webkit-slider-thumb {
-          appearance: none;
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: #FFD700;
-          border: 2px solid #F7E7CE;
-          cursor: pointer;
-          box-shadow: 0 2px 4px rgba(255, 215, 0, 0.3);
-        }
-
-        .slider::-moz-range-thumb {
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: #FFD700;
-          border: 2px solid #F7E7CE;
-          cursor: pointer;
-          box-shadow: 0 2px 4px rgba(255, 215, 0, 0.3);
-        }
-      `}</style>
+      
+      {/* Scale markers - only show when user has interacted */}
+      <div className="flex justify-between mt-2 px-2">
+        {Array.from({ length: max - min + 1 }, (_, i) => min + i).map((mark) => (
+          <div key={mark} className="flex flex-col items-center">
+            <div className={`w-2 h-2 rounded-full transition-all duration-200 ${
+              hasInteracted && mark <= value 
+                ? 'bg-gold shadow-[0_0_8px_3px_rgba(251,191,36,0.6)]' 
+                : 'bg-white/20'
+            }`}></div>
+            <span className="text-xs text-gray-500 mt-1 font-exo2">{mark}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

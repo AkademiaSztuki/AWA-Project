@@ -23,12 +23,19 @@ module.exports = {
           300: '#E5E4E2',  // Platynowy
           400: '#C0C0C0',  // Srebrny
           500: '#A8A8A8',  // Ciemny srebrny
+          dark: '#6B7280', // Ciemny srebrny dla tekstu
         },
         champagne: '#F7E7CE',
+        platinum: {
+          100: '#F8F9FA',  // Jasny platynowy
+        },
+        graphite: '#374151', // Ciemny szary dla tekstu
       },
       fontFamily: {
         'futuristic': ['Audiowide', 'Orbitron', 'sans-serif'],
         'modern': ['Exo 2', 'Inter', 'system-ui'],
+        'exo2': ['var(--font-exo2)', 'Exo 2', 'Inter', 'system-ui'],
+        'nasalization': ['Nasalization', 'Audiowide', 'Orbitron', 'sans-serif'],
       },
       backdropBlur: {
         'glass': '15px',

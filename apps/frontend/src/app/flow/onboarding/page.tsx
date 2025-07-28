@@ -20,7 +20,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center w-full">
-      <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto">
+      <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
         <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Zgoda na udział w badaniu</h1>
         <p className="text-base md:text-lg text-gray-700 font-modern mb-3 leading-relaxed">
           Projekt badawczy na Akademii Sztuk Pięknych

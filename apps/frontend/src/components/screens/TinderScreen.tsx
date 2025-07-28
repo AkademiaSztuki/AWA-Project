@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { GlassCard } from '@/components/ui';
+import { GlassCard, GlassButton } from '@/components/ui';
 import { TinderCard } from '@/components/ui/TinderCard';
 import { AwaContainer } from '@/components/awa/AwaContainer';
 import { useRouter } from 'next/navigation';
+import { useSessionData } from '@/hooks/useSessionData';
 
 // Mock data - replace with real images
 const INTERIOR_IMAGES = [
@@ -23,6 +24,7 @@ const TinderScreen: React.FC = () => {
     reactionTime: number;
     timestamp: string;
   }>>([]);
+  const { updateSessionData, sessionData } = useSessionData();
 
   const handleSwipe = (direction: 'left' | 'right', reactionTime: number) => {
     const currentImage = INTERIOR_IMAGES[currentIndex];
@@ -41,7 +43,17 @@ const TinderScreen: React.FC = () => {
       setCurrentIndex(prev => prev + 1);
     } else {
       // Save results and proceed
-      sessionStorage.setItem('aura_tinder_data', JSON.stringify([...swipeData, newSwipe]));
+      updateSessionData({
+        tinderResults: [
+          ...(sessionData.tinderResults || []),
+          ...swipeData.map(s => ({
+            imageId: s.imageId,
+            direction: s.direction,
+            reactionTimeMs: s.reactionTime,
+            timestamp: s.timestamp
+          }))
+        ]
+      });
       router.push('/flow/dna');
     }
   };
@@ -50,8 +62,23 @@ const TinderScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen flex">
+      {/* Development Skip Button */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-4 right-4 z-50">
+          <GlassButton
+            onClick={() => router.push('/flow/dna')}
+            variant="secondary"
+            size="sm"
+            className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
+          >
+            🚀 Pomiń (DEV)
+          </GlassButton>
+        </div>
+      )}
+
       <AwaContainer 
         currentStep="tinder"
+        showDialogue={false}
         message={`Obraz ${currentIndex + 1} z ${INTERIOR_IMAGES.length}`}
       />
 

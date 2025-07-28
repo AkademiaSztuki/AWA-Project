@@ -45,11 +45,8 @@ export const useModalAPI = () => {
     try {
       console.log('Rozpoczynam generowanie z parametrami:', request);
       
-      // Convert base_image from data URL to base64 if needed
-      let base64Image = request.base_image;
-      if (base64Image && base64Image.startsWith('data:image/')) {
-        base64Image = base64Image.split(',')[1];
-      }
+      // Use base_image directly - it's already clean base64 without MIME header
+      const base64Image = request.base_image;
 
       // Send generation request - now expecting synchronous response
       const response = await fetch(`${apiBase}/generate`, {

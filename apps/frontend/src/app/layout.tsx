@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Inter, Audiowide, Exo_2 } from 'next/font/google';
 import './globals.css';
 import AuroraBackgroundClient from '@/components/ui/AuroraBackgroundClient';
+import ParticlesBackground from '@/components/ui/ParticlesBackground';
+import AuroraBubbles from '@/components/ui/AuroraBubbles';
 import { AwaBackground } from '@/components/awa';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -28,9 +30,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pl" className={`${inter.variable} ${audiowide.variable} ${exo2.variable}`}>
-      <body className="h-screen font-modern">
+      <body className="h-screen font-nasalization">
         <AwaBackground />
         <AuroraBackgroundClient />
+        <AuroraBubbles />
+        <ParticlesBackground />
         <div className="flex items-center justify-end h-screen w-full">
           <div className="w-full max-w-3xl lg:mr-32">
             {children}

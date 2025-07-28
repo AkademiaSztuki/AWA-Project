@@ -88,7 +88,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
 
   return (
     <div className="z-30 flex flex-col items-center justify-start min-h-[220px] w-full p-8 text-center mt-12">
-      <span className="inline-block whitespace-pre-wrap tracking-tight w-full text-3xl md:text-4xl font-exo2 font-bold text-white drop-shadow-lg select-none text-center mt-8">
+      <span className="inline-block whitespace-pre-wrap tracking-tight w-full text-3xl md:text-4xl font-nasalization font-bold text-white drop-shadow-lg select-none text-center mt-8">
         <TextType
           text={message || dialogues[currentMessage]}
           typingSpeed={75}
@@ -108,7 +108,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
             onClick={nextMessage}
             aria-label={currentMessage < dialogues.length - 1 ? 'Dalej' : 'Zaczynamy'}
           >
-            <span className="text-2xl font-exo2 font-bold text-white">
+            <span className="text-2xl font-nasalization font-bold text-white">
               {currentMessage < dialogues.length - 1 ? 'Dalej →' : 'Zaczynamy!'}
             </span>
           </GlassSurface>

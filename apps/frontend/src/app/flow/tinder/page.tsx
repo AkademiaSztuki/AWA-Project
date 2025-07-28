@@ -77,7 +77,7 @@ export default function TinderTestPage() {
     return (
       <div className="min-h-screen flex items-center justify-center w-full">
         <div className="w-full max-w-3xl mx-auto">
-          <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto">
+          <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
             <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Wnętrzarski Tinder</h1>
             <p className="text-base md:text-lg text-gray-700 font-modern mb-3 leading-relaxed">
               Pokażę Ci {INTERIOR_IMAGES.length} różnych wnętrz. Przesuwaj w prawo (❤️) jeśli Ci się podobają,
@@ -130,7 +130,7 @@ export default function TinderTestPage() {
   return (
     <div className="min-h-screen flex items-center justify-center w-full">
       <div className="w-full max-w-3xl mx-auto">
-        <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto">
+        <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-silver-dark">Postęp</span>

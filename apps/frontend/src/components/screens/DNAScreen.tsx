@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GlassCard } from '../ui/GlassCard';
@@ -40,7 +42,21 @@ export function DNAScreen() {
   if (isAnalyzing) {
     return (
       <div className="min-h-screen flex">
-        <AwaContainer currentScreen="dna" />
+        {/* Development Skip Button */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed top-4 right-4 z-50">
+            <GlassButton
+              onClick={() => router.push('/flow/ladder')}
+              variant="secondary"
+              size="sm"
+              className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
+            >
+              🚀 Pomiń (DEV)
+            </GlassButton>
+          </div>
+        )}
+
+        <AwaContainer currentStep="dna" showDialogue={false} />
         <div className="flex-1 ml-[400px] flex items-center justify-center">
           <GlassCard className="text-center">
             <div className="text-6xl mb-4 animate-pulse">🧬</div>
@@ -63,7 +79,21 @@ export function DNAScreen() {
 
   return (
     <div className="min-h-screen flex">
-      <AwaContainer currentScreen="dna" />
+      {/* Development Skip Button */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-4 right-4 z-50">
+          <GlassButton
+            onClick={() => router.push('/flow/ladder')}
+            variant="secondary"
+            size="sm"
+            className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
+          >
+            🚀 Pomiń (DEV)
+          </GlassButton>
+        </div>
+      )}
+
+      <AwaContainer currentStep="dna" showDialogue={false} />
 
       <div className="flex-1 ml-[400px] flex items-center justify-center p-8">
         <div className="w-full max-w-3xl mx-auto">

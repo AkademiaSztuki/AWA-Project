@@ -62,6 +62,12 @@ importers:
       react-use-gesture:
         specifier: ^9.1.3
         version: 9.1.3(react@18.3.1)
+      simplebar:
+        specifier: ^6.3.2
+        version: 6.3.2
+      simplebar-react:
+        specifier: ^3.3.2
+        version: 3.3.2(react@18.3.1)
       tailwindcss:
         specifier: ^3.4.0
         version: 3.4.17
@@ -1406,8 +1412,14 @@ packages:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
     engines: {node: '>=10'}
 
+  lodash-es@4.17.21:
+    resolution: {integrity: sha512-mKnC+QJ9pWVzv+C4/U3rRsHapFfHvQFoFB92e52xeyGMcX6/OlIl78je1u8vePzYZSkkogMPJ2yjxxsb89cxyw==}
+
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==}
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
@@ -1840,6 +1852,17 @@ packages:
   signal-exit@4.1.0:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
+
+  simplebar-core@1.3.2:
+    resolution: {integrity: sha512-qKgTTuTqapjsFGkNhCjyPhysnbZGpQqNmjk0nOYjFN5ordC/Wjvg+RbYCyMSnW60l/Z0ZS82GbNltly6PMUH1w==}
+
+  simplebar-react@3.3.2:
+    resolution: {integrity: sha512-ZsgcQhKLtt5ra0BRIJeApfkTBQCa1vUPA/WXI4HcYReFt+oCEOvdVz6rR/XsGJcKxTlCRPmdGx1uJIUChupo+A==}
+    peerDependencies:
+      react: '>=16.8.0'
+
+  simplebar@6.3.2:
+    resolution: {integrity: sha512-l4P1Oma0nply0g+pkrkwfC1SF5WDnIHrgiQDXSDzIdjngUDLkPgZcPGKrOvuFeXoSensfKijjIjDlUJSEp+mLQ==}
 
   slash@3.0.0:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
@@ -3724,7 +3747,11 @@ snapshots:
     dependencies:
       p-locate: 5.0.0
 
+  lodash-es@4.17.21: {}
+
   lodash.merge@4.6.2: {}
+
+  lodash@4.17.21: {}
 
   loose-envify@1.4.0:
     dependencies:
@@ -4167,6 +4194,20 @@ snapshots:
       side-channel-weakmap: 1.0.2
 
   signal-exit@4.1.0: {}
+
+  simplebar-core@1.3.2:
+    dependencies:
+      lodash: 4.17.21
+      lodash-es: 4.17.21
+
+  simplebar-react@3.3.2(react@18.3.1):
+    dependencies:
+      react: 18.3.1
+      simplebar-core: 1.3.2
+
+  simplebar@6.3.2:
+    dependencies:
+      simplebar-core: 1.3.2
 
   slash@3.0.0: {}
 

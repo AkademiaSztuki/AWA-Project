@@ -22,16 +22,46 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
 
   useEffect(() => {
     if (scene) {
-      // Find head bone for mouse tracking
+      // Find head bone for mouse tracking and apply metallic materials
       let foundHead: THREE.Object3D | null = null;
       scene.traverse((child: THREE.Object3D) => {
+        // Find head bone
         if (
           child.type === 'Bone' &&
           child.name.toLowerCase().includes('head')
         ) {
           foundHead = child;
         }
+        
+        // Apply metallic materials to meshes
+        if (child.type === 'Mesh') {
+          const mesh = child as THREE.Mesh;
+          if (mesh.material) {
+            const material = mesh.material as THREE.Material;
+            
+            // Create new metallic material
+            const metallicMaterial = new THREE.MeshStandardMaterial({
+              color: new THREE.Color(0xE0E0E0), // Srebrzysty kolor
+              metalness: 0.9, // Wysoka metaliczność
+              roughness: 0.1, // Niska chropowatość = wysoki połysk
+              envMapIntensity: 1.2, // Intensywność odbicia środowiska
+            });
+            
+            // Zachowaj oryginalne tekstury jeśli istnieją
+            if (material instanceof THREE.MeshStandardMaterial) {
+              if (material.map) metallicMaterial.map = material.map;
+              if (material.normalMap) metallicMaterial.normalMap = material.normalMap;
+              if (material.roughnessMap) metallicMaterial.roughnessMap = material.roughnessMap;
+              if (material.metalnessMap) metallicMaterial.metalnessMap = material.metalnessMap;
+              if (material.aoMap) metallicMaterial.aoMap = material.aoMap;
+            }
+            
+            // Zastąp materiał
+            mesh.material = metallicMaterial;
+          }
+        }
       });
+      
       if (foundHead && (foundHead as THREE.Bone).rotation) {
         (foundHead as THREE.Bone).rotation.order = 'YXZ';
         (foundHead as THREE.Bone).rotation.y += Math.PI / 2;
@@ -61,8 +91,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
     } else {
       // Jeśli animacja ma inną nazwę, odpal pierwszą z listy
       const keys = actions ? Object.keys(actions) : [];
-      if (keys.length > 0) {
-        actions[keys[0]].play();
+      if (keys.length > 0 && actions) {
+        actions[keys[0]]?.play();
       }
     }
   }, [actions]);
@@ -88,7 +118,9 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
     }
 
     // Animacja oddychania
-    meshRef.current?.scale && ((meshRef.current as THREE.Group).scale.y = 1 + Math.sin(state.clock.elapsedTime * 0.5) * 0.02);
+    if (meshRef.current) {
+      (meshRef.current as THREE.Group).scale.y = 1 + Math.sin(state.clock.elapsedTime * 0.5) * 0.02;
+    }
   });
 
   if (!scene) {

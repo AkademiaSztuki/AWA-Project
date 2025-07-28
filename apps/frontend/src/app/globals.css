@@ -4,6 +4,15 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Audiowide:wght@400&family=Exo+2:wght@100;200;300;400;500;600;700;800;900&display=swap');
 
+/* Custom font declarations */
+@font-face {
+  font-family: 'Nasalization';
+  src: url('/fonts/nasalization-rg.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Glassmorphism utilities */
 @layer utilities {
   .glass-panel {
@@ -50,6 +59,70 @@
   transition: backdrop-filter 0.3s ease;
 }
 
+/* Custom slider styles */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(156, 163, 175, 0.2);
+  border-radius: 8px;
+  outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
+  transition: all 0.2s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.6);
+}
+
+.slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
+  transition: all 0.2s ease;
+}
+
+.slider::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.6);
+}
+
+/* Glass slider enhancements - matching GlassSurface style */
+.glass-slider-container {
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
+}
+
+.glass-slider-thumb {
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.glass-slider-thumb:hover {
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
 /* Loading animations */
 @keyframes shimmer {
   0% { background-position: -200px 0; }
@@ -64,4 +137,35 @@
 
 html, body, #__next, #root {
   background: transparent !important;
+}
+
+.simplebar-scrollbar:before {
+  background: rgba(251, 191, 36, 0.7); /* Twój kolor gold */
+  border-radius: 8px;
+}
+.simplebar-track.simplebar-vertical {
+  width: 8px;
+  right: 2px;
+  border-radius: 8px;
+  background: transparent;
+}
+.simplebar-scrollbar {
+  border-radius: 8px;
+}
+
+.simplebar-content {
+  margin-right: 0 !important;
+}
+
+/* Styl natywnego scrollbara tylko w GlassCard */
+.glass-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.glass-scroll::-webkit-scrollbar-thumb {
+  background: rgba(251, 191, 36, 0.4); /* gold, półprzezroczysty */
+  border-radius: 8px;
+}
+.glass-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 8px;
 }

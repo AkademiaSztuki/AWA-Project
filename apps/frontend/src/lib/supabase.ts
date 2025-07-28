@@ -85,3 +85,19 @@ export const saveGenerationSet = async (projectId: string, prompt: string) => {
 
   return data;
 };
+
+export const saveFullSessionToSupabase = async (sessionData: any) => {
+  if (!sessionData?.userHash) return;
+  const { error } = await supabase
+    .from('sessions')
+    .upsert([
+      {
+        user_hash: sessionData.userHash,
+        session_json: sessionData,
+        updated_at: new Date().toISOString(),
+      }
+    ], { onConflict: 'user_hash' });
+  if (error) {
+    console.error('Błąd zapisu pełnej sesji:', error);
+  }
+};

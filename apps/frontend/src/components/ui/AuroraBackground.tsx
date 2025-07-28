@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import ParticlesBackground from '@/components/ui/ParticlesBackground';
 
 const blobConfigs = [
   // duże, wolne

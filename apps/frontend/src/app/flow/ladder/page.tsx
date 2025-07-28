@@ -7,7 +7,7 @@ import { useSession } from '@/hooks';
 import { AwaContainer } from '@/components/awa/AwaContainer';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { ArrowRight, Heart, Users, Zap, Home, Brain, Shield, Leaf, Ruler, Palette, Sun, Sprout, Gem, Hand, Eye, Globe, Smile, Briefcase, Book, Tag, Star } from 'lucide-react';
+import { ArrowRight, Heart, Users, Zap, Home, Brain, Shield, Leaf, Ruler, Palette, Sun, Sprout, Gem, Hand, Eye, Globe, Smile, Briefcase, Book, Tag, Star, Clock, User, GraduationCap } from 'lucide-react';
 
 interface LadderStep {
   level: number;
@@ -21,10 +21,118 @@ interface LadderStep {
   }>;
 }
 
+interface DemographicStep {
+  type: 'demographic';
+  question: string;
+  options: Array<{
+    id: string;
+    text: string;
+    icon: React.ReactNode;
+  }>;
+}
+
+interface UsageStep {
+  type: 'usage';
+  question: string;
+  options: Array<{
+    id: string;
+    text: string;
+    icon: React.ReactNode;
+  }>;
+}
+
+interface EmotionalStep {
+  type: 'emotional';
+  question: string;
+  options: Array<{
+    id: string;
+    text: string;
+    icon: React.ReactNode;
+    emotion: string;
+  }>;
+}
+
+// Core needs mapping to specific FLUX prompt elements
+const CORE_NEED_TO_PROMPT = {
+  regeneration: {
+    atmosphere: "calming and peaceful atmosphere",
+    colors: "soft, muted colors with warm undertones, gentle pastels", 
+    lighting: "gentle, diffused natural lighting, warm ambient light",
+    materials: "natural textures, soft fabrics, organic materials, wood and stone",
+    layout: "uncluttered, harmonious arrangement with comfortable seating areas",
+    mood: "serene, restful, spa-like tranquility"
+  },
+  creativity: {
+    atmosphere: "inspiring and energizing environment",
+    colors: "vibrant accent colors with artistic elements, bold contrasts",
+    lighting: "dynamic lighting with task illumination, adjustable brightness", 
+    materials: "mixed textures, artistic materials, unique finishes, creative surfaces",
+    layout: "flexible, dynamic arrangement with creative zones and workspace areas",
+    mood: "stimulating, artistic, inspiring creativity"
+  },
+  family_bonding: {
+    atmosphere: "warm and welcoming family space",
+    colors: "warm, inviting colors that encourage togetherness",
+    lighting: "soft, warm lighting perfect for family gatherings",
+    materials: "comfortable, durable materials suitable for family life",
+    layout: "open, social arrangement encouraging interaction and togetherness",
+    mood: "cozy, family-friendly, nurturing environment"
+  },
+  achievement: {
+    atmosphere: "professional and focused workspace environment",
+    colors: "sophisticated, professional color palette with success-oriented tones",
+    lighting: "bright, focused task lighting optimized for productivity",
+    materials: "premium, professional materials conveying success and quality",
+    layout: "organized, efficient arrangement supporting productivity and focus",
+    mood: "professional, ambitious, success-oriented atmosphere"
+  },
+  self_development: {
+    atmosphere: "quiet and contemplative learning environment",
+    colors: "calming, study-friendly colors that support concentration",
+    lighting: "optimal reading and study lighting, adjustable for different activities",
+    materials: "comfortable, study-supportive materials and surfaces",
+    layout: "organized learning space with areas for reading, writing, and reflection",
+    mood: "focused, studious, growth-oriented atmosphere"
+  },
+  mental_wellness: {
+    atmosphere: "balanced environment supporting mental health and wellbeing",
+    colors: "psychologically balanced colors promoting mental wellness",
+    lighting: "natural light with mood-supporting artificial lighting",
+    materials: "wellness-promoting natural materials and textures",
+    layout: "balanced, harmonious arrangement supporting mental clarity",
+    mood: "balanced, mentally restorative, wellness-focused"
+  },
+  security: {
+    atmosphere: "safe and comfortable sanctuary space",
+    colors: "secure, grounding colors that provide emotional stability",
+    lighting: "warm, secure lighting creating a safe haven feeling",
+    materials: "solid, trustworthy materials providing sense of security",
+    layout: "protective, enclosed arrangement with clear boundaries and privacy",
+    mood: "safe, secure, emotionally protected environment"
+  },
+  authenticity: {
+    atmosphere: "genuine space reflecting individual personality and values",
+    colors: "personally meaningful colors that reflect true self-expression",
+    lighting: "authentic lighting that supports genuine self-expression",
+    materials: "meaningful materials with personal significance and character",
+    layout: "honest, unpretentious arrangement reflecting personal lifestyle",
+    mood: "genuine, authentic, personally meaningful atmosphere"
+  },
+  connection: {
+    atmosphere: "social and inviting space ideal for relationships and community",
+    colors: "welcoming, social colors that encourage interaction and connection",
+    lighting: "warm, social lighting perfect for entertaining and gathering",
+    materials: "inviting, comfortable materials that welcome guests and social interaction",
+    layout: "social arrangement optimized for conversation and community building",
+    mood: "welcoming, social, community-oriented atmosphere"
+  }
+};
+
+// --- PYTANIA (LADDER, USAGE, EMOTIONAL, DEMOGRAPHIC) ---
 const LADDER_QUESTIONS: LadderStep[] = [
   {
     level: 1,
-    question: "Co najbardziej przyciąga Cię w Twoim wymarzonej przestrzeni?",
+    question: "Co najbardziej przyciąga Cię w Twojej wymarzonej przestrzeni?",
     options: [
       {
         id: "organic_shapes",
@@ -62,17 +170,20 @@ const LEVEL_2_QUESTIONS: Record<string, LadderStep> = {
       {
         id: "calming",
         text: "Tworzą poczucie spokoju i harmonii",
-        icon: <Heart className="w-6 h-6" />, nextQuestion: "calm_deeper"
+        icon: <Heart className="w-6 h-6" />, 
+        nextQuestion: "calm_deeper"
       },
       {
         id: "natural_connection",
         text: "Łączą mnie z naturą",
-        icon: <Sprout className="text-gold" size={28} />, nextQuestion: "nature_deeper"
+        icon: <Sprout className="text-gold" size={28} />, 
+        nextQuestion: "nature_deeper"
       },
       {
         id: "unique_character",
         text: "Dają przestrzeni unikalny charakter",
-        icon: <Zap className="w-6 h-6" />, nextQuestion: "character_deeper"
+        icon: <Zap className="w-6 h-6" />, 
+        nextQuestion: "character_deeper"
       }
     ]
   },
@@ -441,9 +552,104 @@ const LEVEL_3_QUESTIONS: Record<string, LadderStep> = {
   }
 };
 
+// Usage patterns questions
+const USAGE_QUESTIONS: UsageStep = {
+  type: 'usage',
+  question: "W jakich momentach dnia najczęściej korzystasz z tego pomieszczenia?",
+  options: [
+    {
+      id: "morning",
+      text: "Rano (6:00-12:00) - śniadanie, poranna rutyna", 
+      icon: <Sun className="text-gold" size={28} />
+    },
+    {
+      id: "afternoon", 
+      text: "Popołudniu (12:00-18:00) - praca, aktywności dzienne",
+      icon: <Briefcase className="text-gold" size={28} />
+    },
+    {
+      id: "evening",
+      text: "Wieczorem (18:00-22:00) - relaks, posiłki, towarzystwo",
+      icon: <Heart className="text-gold" size={28} />
+    },
+    {
+      id: "night",
+      text: "Nocą (22:00-6:00) - odpoczynek, sen",
+      icon: <Smile className="text-gold" size={28} />
+    }
+  ]
+};
+
+// Emotional validation questions
+const EMOTIONAL_QUESTIONS: EmotionalStep = {
+  type: 'emotional',
+  question: "Gdy myślisz o tej przestrzeni, jakie emocje chcesz przede wszystkim odczuwać?",
+  options: [
+    {
+      id: "peace",
+      text: "Spokój i wewnętrzną harmonię",
+      icon: <Heart className="text-gold" size={28} />,
+      emotion: "peaceful"
+    },
+    {
+      id: "energy", 
+      text: "Energię i motywację do działania",
+      icon: <Zap className="text-gold" size={28} />,
+      emotion: "energetic"
+    },
+    {
+      id: "joy",
+      text: "Radość i pozytywne nastawienie",
+      icon: <Smile className="text-gold" size={28} />,
+      emotion: "joyful"
+    },
+    {
+      id: "focus",
+      text: "Koncentrację i jasność myślenia",
+      icon: <Brain className="text-gold" size={28} />,
+      emotion: "focused"
+    }
+  ]
+};
+
+// Demographics questions
+const DEMOGRAPHIC_QUESTIONS: DemographicStep[] = [
+  {
+    type: 'demographic',
+    question: "Jaka jest Twoja grupa wiekowa?",
+    options: [
+      { id: "18-25", text: "18-25 lat", icon: <User className="text-gold" size={28} /> },
+      { id: "26-35", text: "26-35 lat", icon: <User className="text-gold" size={28} /> },
+      { id: "36-45", text: "36-45 lat", icon: <User className="text-gold" size={28} /> },
+      { id: "46-55", text: "46-55 lat", icon: <User className="text-gold" size={28} /> },
+      { id: "56+", text: "56+ lat", icon: <User className="text-gold" size={28} /> }
+    ]
+  },
+  {
+    type: 'demographic', 
+    question: "Jakie masz doświadczenie z projektowaniem wnętrz?",
+    options: [
+      { id: "none", text: "Żadne - to moja pierwsza próba", icon: <Home className="text-gold" size={28} /> },
+      { id: "amateur", text: "Amatorskie - interesuję się designem", icon: <Eye className="text-gold" size={28} /> },
+      { id: "student", text: "Studiuję design lub architekturę", icon: <GraduationCap className="text-gold" size={28} /> },
+      { id: "professional", text: "Jestem profesjonalistą w branży", icon: <Briefcase className="text-gold" size={28} /> }
+    ]
+  },
+  {
+    type: 'demographic',
+    question: "Jaka jest Twoja sytuacja mieszkaniowa?",
+    options: [
+      { id: "alone", text: "Mieszkam sam/sama", icon: <Home className="text-gold" size={28} /> },
+      { id: "couple", text: "Mieszkam z partnerem/partnerką", icon: <Users className="text-gold" size={28} /> },
+      { id: "family", text: "Mieszkam z rodziną (z dziećmi)", icon: <Heart className="text-gold" size={28} /> },
+      { id: "shared", text: "Mieszkam współdzielnie (współlokatorzy)", icon: <Users className="text-gold" size={28} /> }
+    ]
+  }
+];
+
 const CORE_NEEDS_DESCRIPTIONS: Record<string, string> = {
   regeneration: "Regeneracja i Odnowa",
-  creativity: "Kreatywność i Ekspresja",
+  creativity: "Kreatywność i Ekspresja", 
   family_bonding: "Więzi Rodzinne",
   achievement: "Osiągnięcia i Sukces",
   self_development: "Rozwój Osobisty",
@@ -453,49 +659,116 @@ const CORE_NEEDS_DESCRIPTIONS: Record<string, string> = {
   connection: "Więzi Społeczne"
 };
 
+type CurrentStepType = LadderStep | UsageStep | EmotionalStep | DemographicStep;
+
+// --- STAN I LOGIKA PRZECHODZENIA ---
 export default function LadderOfNeedsPage() {
   const router = useRouter();
   const { sessionData, updateSession } = useSession();
-  const [currentStep, setCurrentStep] = useState<LadderStep>(LADDER_QUESTIONS[0]);
+  const [currentStep, setCurrentStep] = useState<CurrentStepType>(LADDER_QUESTIONS[0]);
   const [ladderPath, setLadderPath] = useState<Array<{
     level: number;
     question: string;
     selectedAnswer: string;
+    selectedId: string;
     timestamp: string;
   }>>([]);
   const [coreNeed, setCoreNeed] = useState<string | null>(null);
-  const [isComplete, setIsComplete] = useState(false);
+  const [usagePattern, setUsagePattern] = useState<string | null>(null);
+  const [emotionalPreference, setEmotionalPreference] = useState<string | null>(null);
+  const [demographics, setDemographics] = useState<Record<string, string>>({});
+  const [currentDemographicIndex, setCurrentDemographicIndex] = useState(0);
+  const [phase, setPhase] = useState<'ladder' | 'usage' | 'emotional' | 'demographic' | 'complete'>('ladder');
 
-  const handleOptionSelect = async (option: typeof currentStep.options[0]) => {
-    const newPathItem = {
-      level: currentStep.level,
-      question: currentStep.question,
-      selectedAnswer: option.text,
-      timestamp: new Date().toISOString(),
-    };
+  const handleOptionSelect = async (option: any) => {
+    if (phase === 'ladder') {
+      const newPathItem = {
+        level: (currentStep as LadderStep).level,
+        question: (currentStep as LadderStep).question,
+        selectedAnswer: option.text,
+        selectedId: option.id,
+        timestamp: new Date().toISOString(),
+      };
 
-    const updatedPath = [...ladderPath, newPathItem];
-    setLadderPath(updatedPath);
+      const updatedPath = [...ladderPath, newPathItem];
+      setLadderPath(updatedPath);
 
-    // Save progress
-    await updateSession({
-      ladderResults: updatedPath,
-    });
+      if (option.deeperNeed) {
+        // Reached core need
+        setCoreNeed(option.deeperNeed);
+        
+        // Save ladder results with prompt mapping
+        await updateSession({
+          ladderResults: {
+            path: updatedPath,
+            coreNeed: option.deeperNeed,
+            promptElements: CORE_NEED_TO_PROMPT[option.deeperNeed as keyof typeof CORE_NEED_TO_PROMPT]
+          }
+        });
 
-    if (option.deeperNeed) {
-      // Reached core need
-      setCoreNeed(option.deeperNeed);
-      setIsComplete(true);
-      // Możesz dodać tu inny zapis, jeśli chcesz, ale nie do sesji
-    } else if (option.nextQuestion) {
-      // Continue to next level
-      const nextQuestion = currentStep.level === 1 
-        ? LEVEL_2_QUESTIONS[option.nextQuestion]
-        : LEVEL_3_QUESTIONS[option.nextQuestion];
-      if (nextQuestion) {
-        setTimeout(() => {
-          setCurrentStep(nextQuestion);
-        }, 500);
+        // Move to usage questions
+        setPhase('usage');
+        setCurrentStep(USAGE_QUESTIONS);
+      } else if (option.nextQuestion) {
+        // Continue to next level
+        const nextQuestion = (currentStep as LadderStep).level === 1 
+          ? LEVEL_2_QUESTIONS[option.nextQuestion]
+          : LEVEL_3_QUESTIONS[option.nextQuestion];
+        if (nextQuestion) {
+          setTimeout(() => {
+            setCurrentStep(nextQuestion);
+          }, 500);
+        }
+      }
+    } else if (phase === 'usage') {
+      setUsagePattern(option.id);
+      
+      // Save usage pattern
+      await updateSession({
+        usagePattern: {
+          timeOfDay: option.id,
+          description: option.text,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      // Move to emotional questions
+      setPhase('emotional');
+      setCurrentStep(EMOTIONAL_QUESTIONS);
+    } else if (phase === 'emotional') {
+      setEmotionalPreference(option.emotion);
+
+      // Save emotional preference
+      await updateSession({
+        emotionalPreference: {
+          emotion: option.emotion,
+          description: option.text,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      // Move to demographics
+      setPhase('demographic');
+      setCurrentStep(DEMOGRAPHIC_QUESTIONS[0]);
+    } else if (phase === 'demographic') {
+      const newDemographics = { 
+        ...demographics, 
+        [DEMOGRAPHIC_QUESTIONS[currentDemographicIndex].question]: option.id 
+      };
+      setDemographics(newDemographics);
+
+      if (currentDemographicIndex < DEMOGRAPHIC_QUESTIONS.length - 1) {
+        // Next demographic question
+        setCurrentDemographicIndex(currentDemographicIndex + 1);
+        setCurrentStep(DEMOGRAPHIC_QUESTIONS[currentDemographicIndex + 1]);
+      } else {
+        // All done, save demographics and complete
+        await updateSession({
+          demographics: newDemographics,
+          ladderCompleteTime: new Date().toISOString()
+        });
+
+        setPhase('complete');
       }
     }
   };
@@ -505,14 +778,35 @@ export default function LadderOfNeedsPage() {
   };
 
   const getAwaDialogue = () => {
-    if (isComplete && coreNeed) {
+    if (phase === 'complete' && coreNeed) {
       return {
-        text: `Teraz rozumiem! Twoja podstawowa potrzeba to ${CORE_NEEDS_DESCRIPTIONS[coreNeed]}. To będzie sercem naszego projektu.`,
+        text: `Teraz rozumiem! Twoja podstawowa potrzeba to ${CORE_NEEDS_DESCRIPTIONS[coreNeed]}. Będziemy tworzyć przestrzeń idealną dla ${usagePattern === 'morning' ? 'porannych chwil' : usagePattern === 'evening' ? 'wieczornego relaksu' : 'Twoich potrzeb'}. To będzie sercem naszego projektu.`,
         emotion: "understanding" as const
       };
     }
     
-    switch (currentStep.level) {
+    if (phase === 'usage') {
+      return {
+        text: "Teraz powiedz mi, kiedy najczęściej będziesz korzystać z tej przestrzeni? To pomoże mi dostosować oświetlenie i atmosferę.",
+        emotion: "practical" as const
+      };
+    }
+
+    if (phase === 'emotional') {
+      return {
+        text: "Jakie emocje mają być sercem tej przestrzeni? Twoje odczucia pomogą mi stworzyć idealną atmosferę.",
+        emotion: "empathetic" as const
+      };
+    }
+
+    if (phase === 'demographic') {
+      return {
+        text: "Ostatnie pytania to formalność do badania. Dzięki nim lepiej zrozumiem kontekst Twoich wyborów.",
+        emotion: "reassuring" as const
+      };
+    }
+    
+    switch ((currentStep as LadderStep).level) {
       case 1:
         return {
           text: "Opowiedz mi, co Cię pociąga. Nie ma dobrych czy złych odpowiedzi - po prostu wybierz to, co rezonuje z Tobą najbardziej.",
@@ -537,13 +831,32 @@ export default function LadderOfNeedsPage() {
   };
 
   const getProgressPercentage = () => {
-    if (isComplete) return 100;
-    // 0% na starcie, 33% po 1, 66% po 2, 100% po 3
-    const steps = ladderPath.length;
-    if (steps === 0) return 0;
-    if (steps === 1) return 33;
-    if (steps === 2) return 66;
-    return 100;
+    if (phase === 'complete') return 100;
+    
+    // Total phases: ladder (3 steps) + usage (1) + emotional (1) + demographics (3) = 8 steps
+    let progress = 0;
+    
+    if (phase === 'ladder') {
+      progress = (ladderPath.length / 8) * 100; // 3 steps out of 8 total
+    } else if (phase === 'usage') {
+      progress = 37.5; // 3/8 completed
+    } else if (phase === 'emotional') {
+      progress = 50; // 4/8 completed  
+    } else if (phase === 'demographic') {
+      progress = 62.5 + ((currentDemographicIndex + 1) / 3) * 25; // 5-8/8 completed
+    }
+    
+    return Math.round(progress);
+  };
+
+  const getPhaseTitle = () => {
+    switch (phase) {
+      case 'ladder': return "Drabina Potrzeb";
+      case 'usage': return "Wzorce Użytkowania";
+      case 'emotional': return "Preferencje Emocjonalne";  
+      case 'demographic': return "Kontekst Badawczy";
+      default: return "Drabina Potrzeb";
+    }
   };
 
   return (
@@ -557,13 +870,13 @@ export default function LadderOfNeedsPage() {
         >
           <div className="mb-8 min-h-[120px]">
             <div className="text-center mb-6">
-              <h1 className={`text-4xl font-bold bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2 ${isComplete ? 'invisible' : ''}`}>
-                Drabina Potrzeb
+              <h1 className={`text-4xl font-bold bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2 ${phase === 'complete' ? 'invisible' : ''}`}>
+                {getPhaseTitle()}
               </h1>
             </div>
-            <div className={`mb-4 ${isComplete ? 'invisible' : ''}`}>
+            <div className={`mb-4 ${phase === 'complete' ? 'invisible' : ''}`}>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-silver-dark">Poziom {currentStep.level} z 3</span>
+                <span className="text-sm text-silver-dark">Poziom {(currentStep as LadderStep).level} z 3</span>
                 <span className="text-sm text-silver-dark">
                   {getProgressPercentage()}% ukończone
                 </span>
@@ -580,9 +893,9 @@ export default function LadderOfNeedsPage() {
           </div>
 
           <AnimatePresence mode="wait">
-            {!isComplete ? (
+            {phase !== 'complete' ? (
               <motion.div
-                key={currentStep.level}
+                key={(currentStep as LadderStep).level}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
@@ -593,7 +906,7 @@ export default function LadderOfNeedsPage() {
                   {/* Question */}
                   <div className="text-center mb-8">
                     <h2 className="text-2xl font-bold text-graphite mb-4">
-                      {currentStep.question}
+                      {(currentStep as LadderStep).question}
                     </h2>
                     
                     {/* 1. Etykieta Atrybut/Korzyść/Wartość - jednolity styl */}
@@ -612,7 +925,7 @@ export default function LadderOfNeedsPage() {
 
                   {/* Options */}
                   <div className="grid gap-4 max-w-3xl mx-auto">
-                    {currentStep.options.map((option, index) => (
+                    {(currentStep as LadderStep).options.map((option, index) => (
                       <motion.div
                         key={option.id}
                         initial={{ opacity: 0, y: 20 }}
@@ -651,7 +964,7 @@ export default function LadderOfNeedsPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.6 }}
               >
-                <GlassCard className={`p-8 text-center w-full ${isComplete ? '-mt-24' : ''}`}>
+                <GlassCard className={`p-8 text-center w-full ${phase === 'complete' ? '-mt-24' : ''}`}>
                   
                   {/* Success Animation */}
                   <motion.div
@@ -660,7 +973,7 @@ export default function LadderOfNeedsPage() {
                     transition={{ duration: 0.5, type: "spring" }}
                     className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-gold to-champagne rounded-full flex items-center justify-center"
                   >
-                    <Heart className="text-white" size={48} />
+                    <Star className="text-white" size={48} />
                   </motion.div>
 
                   <h2 className="text-3xl font-bold text-graphite mb-4">
@@ -719,3 +1032,32 @@ export default function LadderOfNeedsPage() {
     </div>
   );
 }
+
+// --- PROMPT BUILDER ---
+const buildFluxPromptFromLadder = (sessionData: any) => {
+  const { ladderResults, usagePattern, emotionalPreference, visualDNA } = sessionData;
+  
+  if (!ladderResults?.coreNeed || !ladderResults?.promptElements) {
+    return null;
+  }
+
+  const promptElements = ladderResults.promptElements;
+  const timeOfDay = usagePattern?.timeOfDay || 'day';
+  const emotion = emotionalPreference?.emotion || 'balanced';
+  
+  // Build comprehensive prompt for FLUX Kontext
+  const basePrompt = `Professional interior design photography of a ${sessionData.roomType || 'living room'}`;
+  const stylePrompt = visualDNA?.dominantStyle ? `, ${visualDNA.dominantStyle.toLowerCase()} style` : '';
+  const atmospherePrompt = `, ${promptElements.atmosphere}`;
+  const materialPrompt = `, featuring ${promptElements.materials}`;
+  const colorPrompt = `, ${promptElements.colors}`;
+  const lightingPrompt = `, ${promptElements.lighting}`;
+  const layoutPrompt = `, ${promptElements.layout}`;
+  const moodPrompt = `, ${promptElements.mood}`;
+  const timePrompt = timeOfDay !== 'day' ? `, optimized for ${timeOfDay} use` : '';
+  const emotionPrompt = emotion !== 'balanced' ? `, evoking ${emotion} feelings` : '';
+  
+  const qualityPrompt = `, high quality, realistic, architectural photography, natural lighting`;
+
+  return `${basePrompt}${stylePrompt}${atmospherePrompt}${materialPrompt}${colorPrompt}${lightingPrompt}${layoutPrompt}${moodPrompt}${timePrompt}${emotionPrompt}${qualityPrompt}`;
+};

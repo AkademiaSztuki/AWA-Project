@@ -28,7 +28,7 @@ const LandingScreen: React.FC = () => {
         <div className="flex-1 ml-[0px] flex flex-col items-center justify-center h-screen p-8">
           <div className="w-full text-center z-30 max-w-3xl">
             <GlassCard className="w-full p-8">
-              <h1 className="text-5xl font-futuristic text-gray-800 mb-6 animate-pulse-slow">
+              <h1 className="text-5xl font-nasalization text-gray-800 mb-6 animate-pulse-slow">
                 AURA
               </h1>
               <p className="text-xl text-gray-700 font-modern mb-4 leading-relaxed">
@@ -39,7 +39,7 @@ const LandingScreen: React.FC = () => {
                 AWA wykorzystuje najnowsze technologie AI, aby pomóc Ci zrozumieć własny gust estetyczny.
               </p>
               <div className="mb-8">
-                <h2 className="text-2xl font-futuristic text-gold-700 mb-4">
+                <h2 className="text-2xl font-nasalization text-gold-700 mb-4">
                   Czego się dowiesz?
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-modern">

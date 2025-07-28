@@ -1,9 +1,12 @@
+"use client";
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GlassCard } from '../ui/GlassCard';
-import { GlassButton } from '../ui/GlassButton';
-import { AwaContainer } from '../awa/AwaContainer';
+import GlassSurface from '../ui/GlassSurface';
+import { GlassSlider } from '../ui/GlassSlider';
 import { useSessionData } from '@/hooks/useSessionData';
+import { supabase } from '@/lib/supabase';
 
 const CLARITY_QUESTIONS = [
   {
@@ -30,19 +33,20 @@ const CLARITY_QUESTIONS = [
 
 export function Survey2Screen() {
   const router = useRouter();
-  const { updateSessionData } = useSessionData();
+  const { updateSessionData, sessionData } = useSessionData();
   const [answers, setAnswers] = useState<Record<string, number>>({});
 
   const handleAnswerChange = (key: string, value: number) => {
     setAnswers(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     // Oblicz średnią jasność preferencji
     const clarityScore = CLARITY_QUESTIONS.reduce((sum, q) => sum + (answers[q.key] || 4), 0) / CLARITY_QUESTIONS.length;
 
     updateSessionData({
       surveyData: {
+        ...sessionData.surveyData, // zachowaj poprzednie odpowiedzi
         clarityAnswers: answers,
         clarityScore,
         survey2Completed: Date.now(),
@@ -50,67 +54,83 @@ export function Survey2Screen() {
       }
     });
 
+    // Zapisz do supabase
+    await supabase.from('survey_results').insert([
+      {
+        session_id: sessionData.userHash,
+        type: 'clarity',
+        answers: answers,
+        clarity_score: clarityScore,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+
     router.push('/flow/thanks');
   };
 
   const allAnswered = CLARITY_QUESTIONS.every(q => answers[q.key] !== undefined);
 
   return (
-    <div className="min-h-screen flex">
-      <AwaContainer currentScreen="survey2" />
-
-      <div className="flex-1 ml-[400px] p-8">
-        <div className="w-full max-w-3xl mx-auto">
-          <GlassCard className="w-full">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
-              Jasność Twoich Preferencji
-            </h2>
-
-            <p className="text-center text-gray-600 mb-8">
-              Ostatnie pytania o krystalizację Twojego gustu estetycznego
-            </p>
-
-            <div className="space-y-8 mb-8">
-              {CLARITY_QUESTIONS.map((question, index) => (
-                <div key={question.key} className="border-b border-gray-200 pb-6 last:border-b-0">
-                  <div className="mb-4">
-                    <p className="text-lg text-gray-800">{question.question}</p>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm text-gray-500 mb-2">
-                    <span>Zdecydowanie nie (1)</span>
-                    <span>Zdecydowanie tak (7)</span>
-                  </div>
-
-                  <input
-                    type="range"
-                    min="1"
-                    max="7"
-                    value={answers[question.key] || 4}
-                    onChange={(e) => handleAnswerChange(question.key, parseInt(e.target.value))}
-                    className="w-full mb-2"
-                  />
-
-                  <div className="text-center">
-                    <span className="text-gold font-semibold">
-                      Ocena: {answers[question.key] || 4}/7
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex justify-center">
-              <GlassButton 
-                onClick={handleFinish}
-                disabled={!allAnswered}
-                className="text-xl px-12 py-4"
-              >
-                Zakończ badanie ✨
-              </GlassButton>
-            </div>
-          </GlassCard>
+    <div className="min-h-screen flex items-center justify-center w-full">
+      {/* Development Skip Button */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-4 right-4 z-50">
+          <GlassSurface
+            width={120}
+            height={40}
+            borderRadius={20}
+            className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-red-400 flex items-center justify-center text-sm font-exo2 font-bold text-white rounded-xl bg-red-500/20 border-red-400/40"
+            onClick={() => router.push('/flow/thanks')}
+            aria-label="Pomiń (DEV)"
+            style={{ opacity: 1 }}
+          >
+            🚀 Pomiń
+          </GlassSurface>
         </div>
+      )}
+
+      <div className="w-full max-w-4xl mx-auto">
+        <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto">
+          <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Jasność Twoich Preferencji</h1>
+          <p className="text-base md:text-lg text-gray-700 font-modern mb-6 leading-relaxed">
+            Ostatnie pytania o krystalizację Twojego gustu estetycznego
+          </p>
+
+          <div className="space-y-6 mb-8">
+            {CLARITY_QUESTIONS.map((question, index) => (
+              <div key={question.key} className="border-b border-gray-200/50 pb-4 last:border-b-0">
+                <p className="text-base md:text-lg text-gray-800 font-modern leading-relaxed mb-3">{question.question}</p>
+
+                <div className="flex items-center justify-between text-xs md:text-sm text-gray-500 mb-3 font-modern">
+                  <span>Zdecydowanie nie (1)</span>
+                  <span>Zdecydowanie tak (7)</span>
+                </div>
+
+                <GlassSlider
+                  min={1}
+                  max={7}
+                  value={answers[question.key] || 4}
+                  onChange={(value) => handleAnswerChange(question.key, value)}
+                  className="mb-2"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-center">
+            <GlassSurface
+              width={280}
+              height={56}
+              borderRadius={32}
+              className={`cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl text-nowrap ${!allAnswered ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+              onClick={handleFinish}
+              aria-label="Zakończ badanie"
+              style={{ opacity: 1 }}
+            >
+              Zakończ badanie
+            </GlassSurface>
+          </div>
+        </GlassCard>
       </div>
     </div>
   );

@@ -31,7 +31,7 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
   return (
     <button
       className={cn(
-        'rounded-[32px] transition-all duration-300 font-modern',
+        'rounded-[32px] transition-all duration-300 font-nasalization',
         'active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed',
         variants[variant],
         sizes[size],

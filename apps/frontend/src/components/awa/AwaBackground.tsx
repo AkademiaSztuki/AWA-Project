@@ -14,10 +14,10 @@ const AwaBackground: React.FC = () => {
         className="w-screen h-screen bg-transparent"
       >
         <Environment preset="studio" />
-        <ambientLight intensity={0.5} color="#F7E7CE" />
+        <ambientLight intensity={0.6} color="#FFE5B4" />
         <directionalLight
           position={[2, 2, 2]}
-          intensity={0.8}
+          intensity={0.5}
           color="#FFD700"
           castShadow
         />
@@ -26,9 +26,9 @@ const AwaBackground: React.FC = () => {
       </Canvas>
       {isLoading && (
         <div className="absolute inset-0 bg-pearl-100/40 backdrop-blur-sm flex items-center justify-center rounded-xl z-20">
-          <div className="text-gold-500 font-futuristic text-lg animate-pulse">
-            Ładowanie AWA...
-          </div>
+                  <div className="text-gold-500 font-nasalization text-lg animate-pulse">
+          Ładowanie AWA...
+        </div>
         </div>
       )}
     </div>

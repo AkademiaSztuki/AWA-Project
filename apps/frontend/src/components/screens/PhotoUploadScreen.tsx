@@ -1,3 +1,5 @@
+"use client";
+
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
@@ -51,7 +53,21 @@ export function PhotoUploadScreen() {
 
   return (
     <div className="min-h-screen flex">
-      <AwaContainer currentScreen="photo" />
+      {/* Development Skip Button */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-4 right-4 z-50">
+          <GlassButton
+            onClick={() => router.push('/flow/tinder')}
+            variant="secondary"
+            size="sm"
+            className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
+          >
+            🚀 Pomiń (DEV)
+          </GlassButton>
+        </div>
+      )}
+
+      <AwaContainer currentStep="upload" showDialogue={false} />
 
       <div className="flex-1 ml-[400px] flex items-center justify-center p-8">
         <div className="w-full max-w-3xl mx-auto">

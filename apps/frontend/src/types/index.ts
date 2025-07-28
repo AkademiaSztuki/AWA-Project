@@ -6,9 +6,24 @@ export interface SessionData {
   uploadedImage?: string;
   tinderResults: TinderSwipe[];
   visualDNA: VisualDNA;
-  ladderResults: LadderStep[];
+  ladderResults?: LadderResults;
+  usagePattern?: UsagePattern;
+  emotionalPreference?: EmotionalPreference;
+  demographics?: Record<string, string>;
+  ladderCompleteTime?: string;
   generations: GenerationSet[];
   finalSurvey: SurveyResults;
+  surveyData?: {
+    agencyScore?: number;
+    satisfactionScore?: number;
+    clarityScore?: number;
+    agencyAnswers?: Record<string, number>;
+    satisfactionAnswers?: Record<string, number>;
+    clarityAnswers?: Record<string, number>;
+    survey1Completed?: number;
+    survey2Completed?: number;
+    sessionCompleted?: number;
+  };
   tinderData?: {
     swipes: any[];
     currentProgress?: number;
@@ -54,6 +69,37 @@ export interface LadderStep {
   level: number;
   question: string;
   selectedAnswer: string;
+  timestamp: string;
+}
+
+export interface LadderResults {
+  path: Array<{
+    level: number;
+    question: string;
+    selectedAnswer: string;
+    selectedId: string;
+    timestamp: string;
+  }>;
+  coreNeed: string;
+  promptElements: {
+    atmosphere: string;
+    colors: string;
+    lighting: string;
+    materials: string;
+    layout: string;
+    mood: string;
+  };
+}
+
+export interface UsagePattern {
+  timeOfDay: string;
+  description: string;
+  timestamp: string;
+}
+
+export interface EmotionalPreference {
+  emotion: string;
+  description: string;
   timestamp: string;
 }
 

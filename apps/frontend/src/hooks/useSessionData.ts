@@ -1,5 +1,6 @@
 import { useSession } from './useSession';
 import { SessionData } from '@/types';
+import { saveFullSessionToSupabase } from '@/lib/supabase';
 
 interface UseSessionDataReturn {
   sessionData: SessionData;
@@ -12,6 +13,8 @@ export const useSessionData = (): UseSessionDataReturn => {
 
   const updateSessionData = (updates: Partial<SessionData>) => {
     updateSession(updates);
+    // Zapisz całą sesję do supabase
+    setTimeout(() => saveFullSessionToSupabase({ ...sessionData, ...updates }), 0);
   };
 
   const exportSessionData = () => {

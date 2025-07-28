@@ -78,9 +78,9 @@ export const TinderCard: React.FC<TinderCardProps> = ({
 
           {title && (
             <div className="absolute bottom-4 left-4 right-4">
-              <h3 className="text-white font-futuristic text-lg mb-2">
-                {title}
-              </h3>
+                              <h3 className="text-white font-nasalization text-lg mb-2">
+                  {title}
+                </h3>
               {tags && (
                 <div className="flex flex-wrap gap-1">
                   {tags.map((tag, index) => (

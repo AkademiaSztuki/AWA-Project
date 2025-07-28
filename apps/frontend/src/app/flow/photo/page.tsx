@@ -13,7 +13,12 @@ const toBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string); // Zwraca CAŁY string z nagłówkiem MIME
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Extract only the base64 part without the MIME header
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
     reader.onerror = (error) => reject(error);
   });
 
@@ -33,11 +38,27 @@ export default function PhotoUploadPage() {
   const handleFileSelect = async (file: File) => {
     setIsLoading(true);
     try {
+      // Check for unsupported formats
+      const unsupportedFormats = ['image/avif', 'image/webp', 'image/gif'];
+      if (unsupportedFormats.includes(file.type)) {
+        throw new Error(`Format ${file.type} nie jest obsługiwany. Proszę użyć formatów: JPG, PNG, TIFF, HEIC.`);
+      }
+      
+      // Validate file type - only basic formats
+      if (!file.type.startsWith('image/')) {
+        throw new Error(`Nieprawidłowy typ pliku: ${file.type}. Proszę wybrać obraz (JPG, PNG, TIFF, HEIC).`);
+      }
+      
+      console.log(`Przetwarzam plik: ${file.name}, typ: ${file.type}, rozmiar: ${file.size} bytes`);
+      
       const base64 = await toBase64(file);
+      console.log(`Przekonwertowano do base64, długość: ${base64.length} znaków`);
+      
       await updateSession({ roomImage: base64 });
       setSelectedImage(URL.createObjectURL(file));
     } catch (error) {
       console.error("Error converting file to base64", error);
+      alert(error instanceof Error ? error.message : "Błąd podczas przetwarzania pliku");
     } finally {
       setIsLoading(false);
     }
@@ -73,13 +94,16 @@ export default function PhotoUploadPage() {
         <p className="text-base md:text-lg text-gray-700 font-modern mb-3 leading-relaxed">
           Wgraj zdjęcie swojego pokoju lub wybierz przykładowe, aby AWA mogła lepiej zrozumieć Twój kontekst projektowy.
         </p>
+        <p className="text-sm text-gray-600 mb-4">
+          <strong>Obsługiwane formaty:</strong> JPG, PNG, TIFF, HEIC
+        </p>
         <div className="space-y-4 mb-4">
           <div>
             <h3 className="text-sm md:text-base font-bold text-gray-700 mb-1 font-exo2">Twoje zdjęcie</h3>
             <div className="flex flex-col items-center gap-2">
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/jpg,image/png,image/tiff,image/heic,image/heif"
                 onChange={e => {
                   if (e.target.files && e.target.files[0]) {
                     handleFileSelect(e.target.files[0]);
