@@ -6,3 +6,4 @@ export { GlassSlider } from './GlassSlider';
 export { TinderCard } from './TinderCard';
 export { default as ParticlesBackground } from './ParticlesBackground';
 export { default as AuroraBubbles } from './AuroraBubbles';
+export { default as AmbientMusic } from './AmbientMusic';

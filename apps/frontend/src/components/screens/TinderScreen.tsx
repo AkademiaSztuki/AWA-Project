@@ -76,10 +76,11 @@ const TinderScreen: React.FC = () => {
         </div>
       )}
 
-      <AwaContainer 
+      <AwaContainer
         currentStep="tinder"
         showDialogue={false}
-        message={`Obraz ${currentIndex + 1} z ${INTERIOR_IMAGES.length}`}
+        fullWidth={true}
+        autoHide={true}
       />
 
       <div className="flex-1 ml-[400px] flex flex-col p-8">

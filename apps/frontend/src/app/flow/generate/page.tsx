@@ -50,28 +50,30 @@ interface ModificationOption {
 }
 
 const MICRO_MODIFICATIONS: ModificationOption[] = [
-  { id: 'warmer_colors', label: 'Cieplejsze kolory', icon: <Palette size={16} />, category: 'micro' },
-  { id: 'cooler_colors', label: 'Chłodniejsze kolory', icon: <Palette size={16} />, category: 'micro' },
-  { id: 'more_lighting', label: 'Więcej oświetlenia', icon: <Lightbulb size={16} />, category: 'micro' },
-  { id: 'darker_mood', label: 'Ciemniejszy nastrój', icon: <span className="text-sm">🌙</span>, category: 'micro' },
-  { id: 'natural_materials', label: 'Naturalne materiały', icon: <span className="text-sm">🌿</span>, category: 'micro' },
-  { id: 'more_plants', label: 'Więcej roślin', icon: <span className="text-sm">🪴</span>, category: 'micro' },
-  { id: 'textured_walls', label: 'Teksturowane ściany', icon: <span className="text-sm">🧱</span>, category: 'micro' },
-  { id: 'rearrange_furniture', label: 'Przestaw meble', icon: <Home size={16} />, category: 'micro' },
-  { id: 'add_decorations', label: 'Dodaj dekoracje', icon: <Star size={16} />, category: 'micro' },
-  { id: 'change_flooring', label: 'Zmień podłogę', icon: <span className="text-sm">🟫</span>, category: 'micro' },
+  { id: 'warmer_colors', label: 'Cieplejsze kolory', icon: null, category: 'micro' },
+  { id: 'cooler_colors', label: 'Chłodniejsze kolory', icon: null, category: 'micro' },
+  { id: 'more_lighting', label: 'Więcej oświetlenia', icon: null, category: 'micro' },
+  { id: 'darker_mood', label: 'Ciemniejszy nastrój', icon: null, category: 'micro' },
+  { id: 'natural_materials', label: 'Naturalne materiały', icon: null, category: 'micro' },
+  { id: 'more_plants', label: 'Więcej roślin', icon: null, category: 'micro' },
+  { id: 'less_plants', label: 'Mniej roślin', icon: null, category: 'micro' },
+  { id: 'textured_walls', label: 'Teksturowane ściany', icon: null, category: 'micro' },
+  { id: 'add_decorations', label: 'Dodaj dekoracje', icon: null, category: 'micro' },
+  { id: 'change_flooring', label: 'Zmień podłogę', icon: null, category: 'micro' },
   // USUNIĘTE: bigger_windows, more_spacious (nie mają sensu w aranżacji)
 ];
 
 const MACRO_MODIFICATIONS: ModificationOption[] = [
-  { id: 'scandinavian', label: 'Skandynawski', icon: <span className="text-sm">🌲</span>, category: 'macro' },
-  { id: 'industrial', label: 'Industrialny', icon: <span className="text-sm">🏭</span>, category: 'macro' },
-  { id: 'bohemian', label: 'Boho', icon: <span className="text-sm">🎨</span>, category: 'macro' },
-  { id: 'classic', label: 'Klasyczny', icon: <span className="text-sm">🏛️</span>, category: 'macro' },
-  { id: 'modern', label: 'Nowoczesny', icon: <span className="text-sm">🔷</span>, category: 'macro' },
-  { id: 'rustic', label: 'Rustykalny', icon: <span className="text-sm">🏡</span>, category: 'macro' },
-  { id: 'art_deco', label: 'Art Deco', icon: <span className="text-sm">💎</span>, category: 'macro' },
-  { id: 'zen', label: 'Zen', icon: <span className="text-sm">🧘</span>, category: 'macro' },
+  { id: 'scandinavian', label: 'Skandynawski', icon: null, category: 'macro' },
+  { id: 'minimalist', label: 'Minimalistyczny', icon: null, category: 'macro' },
+  { id: 'classic', label: 'Klasyczny', icon: null, category: 'macro' },
+  { id: 'industrial', label: 'Industrialny', icon: null, category: 'macro' },
+  { id: 'eclectic', label: 'Eklektyczny', icon: null, category: 'macro' },
+  { id: 'glamour', label: 'Glamour', icon: null, category: 'macro' },
+  { id: 'bohemian', label: 'Boho', icon: null, category: 'macro' },
+  { id: 'rustic', label: 'Rustykalny', icon: null, category: 'macro' },
+  { id: 'provencal', label: 'Prowansalski', icon: null, category: 'macro' },
+  { id: 'shabby_chic', label: 'Shabby Chic', icon: null, category: 'macro' },
 ];
 
 /*************************
@@ -387,125 +389,184 @@ export default function GeneratePage() {
     }
   };
 
-  /** Fresh Start handler - POPRAWIONE: zachowuje historię i dodaje nowy obraz */
-  const handleFreshStart = async () => {
-    if (generatedImages.length === 0) return;
+  /** Remove furniture handler */
+  const handleRemoveFurniture = async () => {
+    if (!selectedImage) return;
     
-    // Zbierz wszystkie poprzednie mikro-modyfikacje
-    const allModifications = generatedImages
-      .filter(img => img.parameters?.modificationType === 'micro')
-      .map(img => img.parameters?.modifications || [])
-      .flat()
-      .filter((mod, index, arr) => arr.indexOf(mod) === index); // unique
-      
-    if (allModifications.length > 0) {
-      const cumulativePrompt = buildCumulativePrompt(allModifications);
-      
-      try {
-        const response = await generateImages({
-          prompt: cumulativePrompt,
-          base_image: (sessionData as any).roomImage,  // Zawsze oryginalny
-          style: (sessionData as any).visualDNA?.dominantStyle || 'modern',
-          modifications: allModifications,
-          ...getOptimalParameters('initial', 0)
-        });
+    const removeFurniturePrompt = "Remove ALL furniture and accessories from the room. Keep only walls, doors, windows, ceiling, stairs, and floor. Empty room with no furniture, no decorations, no rugs, no plants, no lighting fixtures. Clean empty space.";
+    
+    try {
+      const response = await generateImages({
+        prompt: removeFurniturePrompt,
+        base_image: selectedImage.base64,
+        style: 'empty',
+        modifications: ['remove_furniture'],
+        ...getOptimalParameters('micro', generationCount)
+      });
 
-        if (!response || !response.images) {
-          setError("Nie udało się odświeżyć jakości obrazu.");
-          return;
-        }
-
-        const newImage: GeneratedImage = {
-          id: `fresh-${Date.now()}`,
-          url: `data:image/png;base64,${response.images[0]}`,
-          base64: response.images[0],
-          prompt: cumulativePrompt,
-          parameters: { 
-            ...response.parameters, 
-            modificationType: 'fresh_start',
-            modifications: allModifications,
-            iterationCount: generationCount,
-            usedOriginal: true
-          },
-          ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 }, // Initialize new rating
-          isFavorite: false,
-          createdAt: Date.now(),
-        };
-
-        // DODAJ do historii zamiast zastępować
-        setGeneratedImages((prev) => [...prev, newImage]);
-        setSelectedImage(newImage);
-        setGenerationCount((prev) => prev + 1);
-        setShowModifications(false);
-        
-        // Reset progress only for new images
-        setHasAnsweredInteriorQuestion(false);
-        setHasCompletedRatings(false);
-
-        await updateSessionData({
-          generations: [
-            ...((sessionData as any).generations || []),
-            {
-              id: `fresh-${Date.now()}`,
-              prompt: cumulativePrompt,
-              images: 1,
-              timestamp: Date.now(),
-              type: 'fresh_start',
-              modifications: allModifications,
-              iterationCount: generationCount,
-              usedOriginal: true
-            },
-          ],
-        });
-      } catch (err) {
-        console.error('Fresh start failed:', err);
-        setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas odświeżania jakości.');
+      if (!response || !response.images) {
+        setError("Nie udało się usunąć mebli.");
+        return;
       }
+
+      const newImage: GeneratedImage = {
+        id: `remove-${Date.now()}`,
+        url: `data:image/png;base64,${response.images[0]}`,
+        base64: response.images[0],
+        prompt: removeFurniturePrompt,
+        parameters: { 
+          ...response.parameters, 
+          modificationType: 'remove_furniture',
+          modifications: ['remove_furniture'],
+          iterationCount: generationCount,
+          usedOriginal: false
+        },
+        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+        isFavorite: false,
+        createdAt: Date.now(),
+      };
+
+      setGeneratedImages((prev) => [...prev, newImage]);
+      setSelectedImage(newImage);
+      setGenerationCount((prev) => prev + 1);
+      setShowModifications(false);
+      
+      // Reset progress only for new images
+      setHasAnsweredInteriorQuestion(false);
+      setHasCompletedRatings(false);
+
+      await updateSessionData({
+        generations: [
+          ...((sessionData as any).generations || []),
+          {
+            id: `remove-${Date.now()}`,
+            prompt: removeFurniturePrompt,
+            images: 1,
+            timestamp: Date.now(),
+            type: 'remove_furniture',
+            modifications: ['remove_furniture'],
+            iterationCount: generationCount,
+            usedOriginal: false
+          },
+        ],
+      });
+    } catch (err) {
+      console.error('Remove furniture failed:', err);
+      setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas usuwania mebli.');
     }
   };
 
-  /** Build cumulative prompt for fresh start */
-  const buildCumulativePrompt = (modifications: string[]) => {
-    const basePrompt = buildOptimizedPrompt('initial');
-    const modString = modifications.join(', ');
+  /** Quality improvement handler - using FLUX Kontext quality prompts */
+  const handleQualityImprovement = async () => {
+    if (!selectedImage) return;
     
-    return `${basePrompt} with these modifications: ${modString}. Maintain room structure, windows, doors, and architectural elements.`;
+    // Get current style from selected image
+    const currentStyle = selectedImage.parameters?.style || 'modern';
+    
+    const qualityPrompt = `Improve this ${currentStyle} interior: enhance sharpness, remove artifacts, improve lighting quality, add realistic shadows, enhance material textures, perfect composition, professional photography, crisp details, natural lighting, high resolution quality`;
+    
+    try {
+      const response = await generateImages({
+        prompt: qualityPrompt,
+        base_image: selectedImage.base64,  // Use current selected image
+        style: currentStyle,
+        modifications: ['quality_improvement'],
+        ...getOptimalParameters('micro', generationCount)
+      });
+
+      if (!response || !response.images) {
+        setError("Nie udało się poprawić jakości obrazu.");
+        return;
+      }
+
+      const newImage: GeneratedImage = {
+        id: `quality-${Date.now()}`,
+        url: `data:image/png;base64,${response.images[0]}`,
+        base64: response.images[0],
+        prompt: qualityPrompt,
+        parameters: { 
+          ...response.parameters, 
+          modificationType: 'quality_improvement',
+          modifications: ['quality_improvement'],
+          iterationCount: generationCount,
+          usedOriginal: false
+        },
+        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+        isFavorite: false,
+        createdAt: Date.now(),
+      };
+
+      setGeneratedImages((prev) => [...prev, newImage]);
+      setSelectedImage(newImage);
+      setGenerationCount((prev) => prev + 1);
+      setShowModifications(false);
+      
+      // Reset progress only for new images
+      setHasAnsweredInteriorQuestion(false);
+      setHasCompletedRatings(false);
+
+      await updateSessionData({
+        generations: [
+          ...((sessionData as any).generations || []),
+          {
+            id: `quality-${Date.now()}`,
+            prompt: qualityPrompt,
+            images: 1,
+            timestamp: Date.now(),
+            type: 'quality_improvement',
+            modifications: ['quality_improvement'],
+            iterationCount: generationCount,
+            usedOriginal: false
+          },
+        ],
+      });
+    } catch (err) {
+      console.error('Quality improvement failed:', err);
+      setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas poprawiania jakości.');
+    }
   };
 
-  /** Build macro prompt with furniture replacement */
+
+
+  /** Build macro prompt with complete style transformation */
   const buildMacroPrompt = (modification: ModificationOption) => {
-    const furniturePrompts = {
-      scandinavian: "Replace ALL furniture with new Scandinavian pieces: light wood tables, white upholstered sofas, minimalist chairs, simple wooden shelves. Keep walls, doors, windows, ceiling, stairs exactly in same positions.",
-      industrial: "Replace ALL furniture with new industrial pieces: metal and leather sofas, steel coffee tables, vintage factory chairs, metal shelving units. Keep walls, doors, windows, ceiling, stairs exactly in same positions.",
-      bohemian: "Replace ALL furniture with new bohemian pieces: colorful vintage sofas, eclectic wooden tables, artistic chairs, macrame wall hangings, colorful textiles. Keep walls, doors, windows, ceiling, stairs exactly in same positions.",
-      classic: "Replace ALL furniture with new classic pieces: elegant wooden sofas, traditional coffee tables, luxurious armchairs, ornate wooden shelves, crystal chandeliers. Keep walls, doors, windows, ceiling, stairs exactly in same positions.",
-      modern: "Replace ALL furniture with new modern pieces: sleek leather sofas, glass coffee tables, contemporary chairs, minimalist shelving, clean lines. Keep walls, doors, windows, ceiling, stairs exactly in same positions.",
-      rustic: "Replace ALL furniture with new rustic pieces: reclaimed wood tables, farmhouse sofas, vintage wooden chairs, stone accents, lantern lighting. Keep walls, doors, windows, ceiling, stairs exactly in same positions.",
-      art_deco: "Replace ALL furniture with new Art Deco pieces: geometric velvet sofas, marble coffee tables, gold-accented chairs, mirrored surfaces, statement lighting. Keep walls, doors, windows, ceiling, stairs exactly in same positions.",
-      zen: "Replace ALL furniture with new zen pieces: natural wood tables, minimalist sofas, simple wooden chairs, bamboo elements, meditation corner. Keep walls, doors, windows, ceiling, stairs exactly in same positions."
+    const stylePrompts = {
+      scandinavian: "Replace ALL furniture and accessories with Scandinavian style: white walls, light oak wooden floors, cozy beige sofa with cream throw pillows, minimalist coffee table, large windows with natural light, hygge atmosphere, neutral color palette of whites and warm grays, simple geometric patterns, potted green plants, clean lines, functional furniture, peaceful and bright space",
+      minimalist: "Replace ALL furniture and accessories with minimalist style: clean white walls, polished concrete floors, sleek modern furniture with geometric shapes, neutral color scheme of white, gray and beige, empty space with perfect symmetry, hidden storage solutions, single statement piece of art, floor-to-ceiling windows, natural light flooding the space, uncluttered surfaces, zen-like atmosphere",
+      classic: "Replace ALL furniture and accessories with classical style: elegant living room with ornate moldings, rich mahogany furniture, luxurious velvet upholstery in deep burgundy, crystal chandelier, marble fireplace with decorative mantle, Persian rug with intricate patterns, gold accents, symmetrical layout, heavy drapes with tassels, antique decorative objects, warm ambient lighting, traditional European elegance",
+      industrial: "Replace ALL furniture and accessories with industrial loft style: exposed brick walls, raw concrete floors, high ceilings with visible steel beams, large factory windows, weathered leather furniture, metal pipe shelving, vintage Edison bulb lighting fixtures, distressed wood dining table, iron staircase, urban atmosphere, muted color palette of grays and browns, raw materials",
+      eclectic: "Replace ALL furniture and accessories with eclectic style: mix of vintage and modern furniture, colorful Persian rug over hardwood floors, mid-century modern chair next to baroque mirror, gallery wall with diverse artwork, vibrant throw pillows in various patterns, antique wooden chest, contemporary lighting, bold color combinations, layered textures, curated collection of objects from different eras and cultures",
+      glamour: "Replace ALL furniture and accessories with glamorous style: luxurious velvet sofa in deep emerald green, crystal chandelier with sparkling reflections, mirrored coffee table, gold accent details, marble surfaces, plush fur throw, metallic wallpaper with geometric patterns, dramatic lighting, rich jewel tones, glossy finishes, opulent textures, Hollywood regency style, sophisticated and dramatic atmosphere",
+      bohemian: "Replace ALL furniture and accessories with bohemian style: colorful tapestries hanging on walls, layered Persian and Moroccan rugs, floor cushions and poufs, macrame wall hangings, hanging plants in woven baskets, vintage wooden furniture, warm earth tones mixed with vibrant jewel colors, ethnic patterns, natural textures, eclectic mix of global artifacts, cozy reading nook with lots of textiles",
+      rustic: "Replace ALL furniture and accessories with rustic country style: exposed wooden ceiling beams, stone fireplace, reclaimed wood furniture, checkered upholstery, vintage mason jars, wrought iron fixtures, natural linen curtains, earth tone color palette, handcrafted pottery, woven baskets, dried flowers, cozy farmhouse atmosphere, warm and inviting, natural materials throughout",
+      provencal: "Replace ALL furniture and accessories with Provencal French countryside style: whitewashed wooden furniture, lavender and sage green color palette, toile fabric patterns, vintage ceramic dishes, dried lavender bundles, lace curtains, weathered shutters, natural stone floors, rustic wooden dining table, fresh flowers in ceramic vases, soft natural lighting, romantic and pastoral atmosphere",
+      shabby_chic: "Replace ALL furniture and accessories with shabby chic style: distressed white painted furniture, vintage floral patterns, pastel pink and mint green accents, lace doilies, antique china display, weathered wood surfaces, soft romantic lighting, ruffled curtains, vintage roses wallpaper, delicate porcelain accessories, feminine and nostalgic atmosphere, deliberately aged and worn textures"
     };
 
-    const furnitureChange = furniturePrompts[modification.id as keyof typeof furniturePrompts];
+    const styleChange = stylePrompts[modification.id as keyof typeof stylePrompts];
     
-    return `${furnitureChange}. Do NOT change wall textures, floor materials, or architectural elements - ONLY replace furniture.`;
+    return `${styleChange}. Keep walls, doors, windows, ceiling, stairs exactly in same positions. Transform colors, furniture, decorations, flooring, and accessories to match the style completely.`;
   };
 
   /** Build micro prompt */
   const buildMicroPrompt = (modification: ModificationOption) => {
+    // Get current style from selected image
+    const currentStyle = selectedImage?.parameters?.style || 'modern';
+    
     const microPrompts = {
-      warmer_colors: "Change colors to warm beige tones, keep furniture placement",
-      cooler_colors: "Change colors to cool blue-gray tones, keep furniture placement", 
-      more_lighting: "Add more lamps and brighter lighting, same layout",
-      darker_mood: "Create darker mood with dim lighting, keep same furniture",
-      natural_materials: "Replace with wood and stone materials, same furniture",
-      more_plants: "Add plants throughout space, keep furniture arrangement",
-      textured_walls: "Add wall textures and panels, maintain layout",
-      add_decorations: "Add artwork and decorative accessories",
-      rearrange_furniture: "Rearrange furniture for better flow",
-      change_flooring: "Change floor material, keep everything else same"
+      warmer_colors: `Change color palette to warm beige and cream tones in this ${currentStyle} interior, keep all furniture and layout exactly the same`,
+      cooler_colors: `Change color palette to cool blue-gray and silver tones in this ${currentStyle} interior, keep all furniture and layout exactly the same`, 
+      more_lighting: `Add more lamps, chandeliers, and brighter lighting fixtures to this ${currentStyle} interior, enhance natural light, keep furniture arrangement`,
+      darker_mood: `Create darker, more intimate mood with dim lighting and shadows in this ${currentStyle} interior, keep same furniture placement`,
+      natural_materials: `Replace materials with natural wood, stone, and organic textures in this ${currentStyle} interior, keep furniture layout`,
+      more_plants: `Add potted plants, hanging greenery, and natural elements throughout this ${currentStyle} interior, keep furniture arrangement`,
+      less_plants: `Remove all plants, flowers, and greenery from this ${currentStyle} interior, keep furniture arrangement`,
+      textured_walls: `Add wall textures, panels, or wallpaper to this ${currentStyle} interior, maintain furniture layout`,
+      add_decorations: `Add artwork, decorative accessories, and styling elements to this ${currentStyle} interior`,
+      change_flooring: `Change floor material to different texture or pattern in this ${currentStyle} interior, keep everything else exactly the same`
     };
     
-    return `${microPrompts[modification.id as keyof typeof microPrompts] || modification.label}, modern interior style`;
+    return microPrompts[modification.id as keyof typeof microPrompts] || `${modification.label} in ${currentStyle} style`;
   };
 
   /** Build optimized prompt under 77 token limit */
@@ -829,9 +890,28 @@ export default function GeneratePage() {
                                   {showModifications ? 'Ukryj opcje' : 'Modyfikuj'}
                                 </GlassButton>
 
-                                <GlassButton onClick={handleFreshStart} variant="secondary" className="flex-1">
+                                <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="flex-1">
+                                  <Home size={16} className="mr-2" />
+                                  Usuń meble
+                                </GlassButton>
+
+                                <GlassButton onClick={handleQualityImprovement} variant="secondary" className="flex-1">
                                   <RefreshCw size={16} className="mr-2" />
-                                  Odśwież Jakość
+                                  Popraw Jakość
+                                </GlassButton>
+
+                                <GlassButton 
+                                  onClick={() => {
+                                    const originalImage = generatedImages.find(img => img.parameters?.modificationType === 'initial');
+                                    if (originalImage) {
+                                      handleImageSelect(originalImage);
+                                    }
+                                  }} 
+                                  variant="secondary" 
+                                  className="flex-1"
+                                >
+                                  <Home size={16} className="mr-2" />
+                                  Oryginalny
                                 </GlassButton>
                               </motion.div>
                             )}
@@ -859,7 +939,7 @@ export default function GeneratePage() {
                                 Drobne modyfikacje
                               </h4>
                               <p className="text-sm text-silver-dark mb-4">
-                                Subtelne zmiany w kolorach, oświetleniu i detalach
+                                Subtelne zmiany w kolorach i detalach
                               </p>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {MICRO_MODIFICATIONS.map((mod) => (
@@ -871,7 +951,6 @@ export default function GeneratePage() {
                                     className="justify-start text-sm h-12 px-4"
                                     disabled={isLoading}
                                   >
-                                    <span className="mr-3 text-base">{mod.icon}</span>
                                     {mod.label}
                                   </GlassButton>
                                 ))}
@@ -897,7 +976,6 @@ export default function GeneratePage() {
                                     className="justify-start text-sm h-12 px-4"
                                     disabled={isLoading}
                                   >
-                                    <span className="mr-3 text-base">{mod.icon}</span>
                                     {mod.label}
                                   </GlassButton>
                                 ))}
@@ -911,28 +989,49 @@ export default function GeneratePage() {
 
                   {/* Bottom section with thumbnails and continue button */}
                   <div className="space-y-6">
-                    {/* Thumbnails */}
+                    {/* Thumbnails with slider */}
                     <GlassCard className="p-4">
-                      <h4 className="font-semibold text-graphite mb-3">Wszystkie warianty:</h4>
-                      <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
-                        {generatedImages.slice(-8).map((image) => (
-                          <motion.div
-                            key={image.id}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => handleImageSelect(image)}
-                            className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer ${
-                              selectedImage?.id === image.id ? 'ring-2 ring-gold' : ''
-                            }`}
-                          >
-                            <Image src={image.url} alt="thumbnail" fill className="object-cover" />
-                            {image.isFavorite && (
-                              <div className="absolute top-1 right-1">
-                                <Heart size={12} className="text-red-500" fill="currentColor" />
-                              </div>
-                            )}
-                          </motion.div>
-                        ))}
+                      <h4 className="font-semibold text-graphite mb-3">Wszystkie warianty ({generatedImages.length}):</h4>
+                      <div className="space-y-3">
+                        {/* Image thumbnails */}
+                        <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
+                          {generatedImages.slice(-8).map((image) => (
+                            <motion.div
+                              key={image.id}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => handleImageSelect(image)}
+                              className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 ${
+                                selectedImage?.id === image.id ? 'border-gold ring-2 ring-gold' : 'border-transparent'
+                              }`}
+                            >
+                              <Image src={image.url} alt="thumbnail" fill className="object-cover" />
+                              {image.isFavorite && (
+                                <div className="absolute top-1 right-1">
+                                  <Heart size={12} className="text-red-500" fill="currentColor" />
+                                </div>
+                              )}
+                            </motion.div>
+                          ))}
+                        </div>
+                        
+                        {/* Subtle slider indicator */}
+                        {generatedImages.length > 8 && (
+                          <div className="flex justify-center">
+                            <div className="flex gap-2">
+                              {Array.from({ length: Math.ceil(generatedImages.length / 8) }, (_, i) => (
+                                <div
+                                  key={i}
+                                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                                    i === Math.floor((generatedImages.length - 1) / 8) 
+                                      ? 'bg-gold shadow-[0_0_8px_3px_rgba(251,191,36,0.6)]' 
+                                      : 'bg-white/20'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </GlassCard>
 

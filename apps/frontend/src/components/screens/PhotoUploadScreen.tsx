@@ -67,7 +67,12 @@ export function PhotoUploadScreen() {
         </div>
       )}
 
-      <AwaContainer currentStep="upload" showDialogue={false} />
+      <AwaContainer 
+        currentStep="upload" 
+        showDialogue={false}
+        fullWidth={true}
+        autoHide={true}
+      />
 
       <div className="flex-1 ml-[400px] flex items-center justify-center p-8">
         <div className="w-full max-w-3xl mx-auto">

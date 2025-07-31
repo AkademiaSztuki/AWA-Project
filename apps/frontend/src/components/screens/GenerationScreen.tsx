@@ -83,7 +83,11 @@ export function GenerationScreen() {
 
   return (
     <div className="min-h-screen flex">
-      <AwaContainer currentScreen="generate" />
+      <AwaContainer 
+        currentScreen="generate"
+        fullWidth={true}
+        autoHide={true}
+      />
 
       <div className="flex-1 ml-[400px] p-8">
         <GlassCard className="w-full">

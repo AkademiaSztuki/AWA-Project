@@ -5,12 +5,18 @@ import { GlassCard, GlassButton } from '@/components/ui';
 import { useRouter } from 'next/navigation';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { usePathname } from 'next/navigation';
+import { Palette, Home, Sparkles } from 'lucide-react';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
   const [showAuraSection, setShowAuraSection] = useState(false);
 
-  const handleDialogueEnd = () => setShowAuraSection(true);
+  const handleDialogueEnd = () => {
+    // Dodaj opóźnienie 1 sekundy przed pokazaniem okna AURA
+    setTimeout(() => {
+      setShowAuraSection(true);
+    }, 1500);
+  };
 
   const pathname = typeof window !== "undefined" ? window.location.pathname : "";
   const isLanding = pathname === '/';
@@ -44,15 +50,21 @@ const LandingScreen: React.FC = () => {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-modern">
                   <div className="text-center">
-                    <div className="text-3xl mb-2">🎨</div>
+                    <div className="flex justify-center mb-2">
+                      <Palette className="w-8 h-8 text-gold-600" />
+                    </div>
                     <div>Twoje wizualne DNA</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-3xl mb-2">🏠</div>
+                    <div className="flex justify-center mb-2">
+                      <Home className="w-8 h-8 text-gold-600" />
+                    </div>
                     <div>Idealne wnętrze</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-3xl mb-2">✨</div>
+                    <div className="flex justify-center mb-2">
+                      <Sparkles className="w-8 h-8 text-gold-600" />
+                    </div>
                     <div>Ukryte preferencje</div>
                   </div>
                 </div>

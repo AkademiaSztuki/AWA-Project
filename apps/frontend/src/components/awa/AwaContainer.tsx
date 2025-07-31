@@ -13,6 +13,8 @@ interface AwaContainerProps {
   isVisible?: boolean;
   onDialogueEnd?: () => void;
   showDialogue?: boolean;
+  fullWidth?: boolean; // Nowy prop dla pełnej szerokości
+  autoHide?: boolean; // Nowy prop dla automatycznego ukrywania
 }
 
 export const AwaContainer: React.FC<AwaContainerProps> = ({
@@ -20,7 +22,9 @@ export const AwaContainer: React.FC<AwaContainerProps> = ({
   message,
   isVisible = true,
   onDialogueEnd,
-  showDialogue = true
+  showDialogue = true,
+  fullWidth = false,
+  autoHide = false
 }) => {
   const [isLoading, setIsLoading] = useState(true);
 
@@ -66,6 +70,8 @@ export const AwaContainer: React.FC<AwaContainerProps> = ({
               currentStep={currentStep}
               message={message}
               onDialogueEnd={onDialogueEnd}
+              fullWidth={fullWidth}
+              autoHide={autoHide}
             />
           )}
         </div>

@@ -236,8 +236,8 @@ def build_prompt(request: GenerationRequest) -> str:
         modifications_text = ", ".join(request.modifications)
         full_prompt += f", {modifications_text}"
 
-    # Add quality enhancers for interior design
-    full_prompt += ", high quality, professional interior photography, detailed, realistic lighting, beautiful composition"
+    # Add minimal quality enhancers to stay under token limit
+    full_prompt += ", professional interior photography"
 
     return full_prompt
 

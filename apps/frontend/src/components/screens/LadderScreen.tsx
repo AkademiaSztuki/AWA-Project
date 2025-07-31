@@ -81,7 +81,12 @@ export function LadderScreen() {
         </div>
       )}
 
-      <AwaContainer currentStep="ladder" showDialogue={false} />
+      <AwaContainer 
+        currentStep="ladder" 
+        showDialogue={false}
+        fullWidth={true}
+        autoHide={true}
+      />
 
       <div className="flex-1 ml-[400px] flex items-center justify-center p-8">
         <div className="w-full max-w-3xl mx-auto">

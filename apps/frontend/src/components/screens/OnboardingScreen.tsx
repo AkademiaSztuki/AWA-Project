@@ -42,7 +42,12 @@ const OnboardingScreen: React.FC = () => {
         </div>
       )}
 
-      <AwaContainer currentStep="onboarding" showDialogue={false} />
+      <AwaContainer 
+        currentStep="onboarding" 
+        showDialogue={false}
+        fullWidth={true}
+        autoHide={true}
+      />
 
       <div className="flex-1 ml-96 p-8">
         <div className="max-w-3xl">

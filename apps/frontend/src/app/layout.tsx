@@ -4,6 +4,8 @@ import './globals.css';
 import AuroraBackgroundClient from '@/components/ui/AuroraBackgroundClient';
 import ParticlesBackground from '@/components/ui/ParticlesBackground';
 import AuroraBubbles from '@/components/ui/AuroraBubbles';
+import AmbientMusic from '@/components/ui/AmbientMusic';
+import MusicTestButton from '@/components/ui/MusicTestButton';
 import { AwaBackground } from '@/components/awa';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -35,6 +37,8 @@ export default function RootLayout({
         <AuroraBackgroundClient />
         <AuroraBubbles />
         <ParticlesBackground />
+        <AmbientMusic volume={0.4} audioFile="/audio/ambient.mp3" />
+        <MusicTestButton />
         <div className="flex items-center justify-end h-screen w-full">
           <div className="w-full max-w-3xl lg:mr-32">
             {children}
