@@ -3,8 +3,10 @@
 import React, { useState } from 'react';
 import { GlassCard, GlassButton } from '@/components/ui';
 import { AwaContainer } from '@/components/awa/AwaContainer';
+import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { useRouter } from 'next/navigation';
 import { useSessionData } from '@/hooks/useSessionData';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 const OnboardingScreen: React.FC = () => {
   const router = useRouter();
@@ -19,6 +21,7 @@ const OnboardingScreen: React.FC = () => {
 
   const handleSubmit = () => {
     if (canProceed) {
+      stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
       updateSessionData({
         consentTimestamp: new Date().toISOString(),
       });
@@ -27,12 +30,15 @@ const OnboardingScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col w-full">
       {/* Development Skip Button */}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed top-4 right-4 z-50">
           <GlassButton
-            onClick={() => router.push('/flow/photo')}
+            onClick={() => {
+              stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+              router.push('/flow/photo');
+            }}
             variant="secondary"
             size="sm"
             className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
@@ -46,10 +52,10 @@ const OnboardingScreen: React.FC = () => {
         currentStep="onboarding" 
         showDialogue={false}
         fullWidth={true}
-        autoHide={true}
+        autoHide={false}
       />
 
-      <div className="flex-1 ml-96 p-8">
+      <div className="flex-1 p-8">
         <div className="max-w-3xl">
           <GlassCard className="mb-8">
             <h1 className="text-3xl font-nasalization text-gray-800 mb-6">
@@ -131,7 +137,10 @@ const OnboardingScreen: React.FC = () => {
             <div className="flex justify-between items-center mt-8">
               <GlassButton
                 variant="subtle"
-                onClick={() => router.push('/')}
+                onClick={() => {
+                  stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+                  router.push('/');
+                }}
               >
                 Wstecz
               </GlassButton>
@@ -146,6 +155,15 @@ const OnboardingScreen: React.FC = () => {
             </div>
           </GlassCard>
         </div>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="onboarding" 
+          fullWidth={true}
+          autoHide={true}
+        />
       </div>
     </div>
   );

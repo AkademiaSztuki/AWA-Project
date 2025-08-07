@@ -7,6 +7,8 @@ import GlassSurface from '../ui/GlassSurface';
 import { GlassSlider } from '../ui/GlassSlider';
 import { useSessionData } from '@/hooks/useSessionData';
 import { supabase } from '@/lib/supabase';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
+import { AwaDialogue } from '@/components/awa';
 
 const CLARITY_QUESTIONS = [
   {
@@ -65,31 +67,33 @@ export function Survey2Screen() {
       }
     ]);
 
+    stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
     router.push('/flow/thanks');
   };
 
   const allAnswered = CLARITY_QUESTIONS.every(q => answers[q.key] !== undefined);
 
   return (
-    <div className="min-h-screen flex items-center justify-center w-full">
-      {/* Development Skip Button */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed top-4 right-4 z-50">
-          <GlassSurface
-            width={120}
-            height={40}
-            borderRadius={20}
-            className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-red-400 flex items-center justify-center text-sm font-exo2 font-bold text-white rounded-xl bg-red-500/20 border-red-400/40"
-            onClick={() => router.push('/flow/thanks')}
-            aria-label="Pomiń (DEV)"
-            style={{ opacity: 1 }}
-          >
-            🚀 Pomiń
-          </GlassSurface>
-        </div>
-      )}
+    <div className="min-h-screen flex flex-col w-full">
+      <div className="flex-1 flex items-center justify-center p-8">
+        {/* Development Skip Button */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed top-4 right-4 z-50">
+            <GlassSurface
+              width={120}
+              height={40}
+              borderRadius={20}
+              className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-red-400 flex items-center justify-center text-sm font-exo2 font-bold text-white rounded-xl bg-red-500/20 border-red-400/40"
+              onClick={() => router.push('/flow/thanks')}
+              aria-label="Pomiń (DEV)"
+              style={{ opacity: 1 }}
+            >
+              🚀 Pomiń
+            </GlassSurface>
+          </div>
+        )}
 
-      <div className="w-full max-w-4xl mx-auto">
+        <div className="w-full max-w-4xl mx-auto">
         <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto">
           <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Jasność Twoich Preferencji</h1>
           <p className="text-base md:text-lg text-gray-700 font-modern mb-6 leading-relaxed">
@@ -131,6 +135,16 @@ export function Survey2Screen() {
             </GlassSurface>
           </div>
         </GlassCard>
+        </div>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="survey_clarity" 
+          fullWidth={true}
+          autoHide={true}
+        />
       </div>
     </div>
   );

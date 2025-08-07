@@ -21,16 +21,17 @@ const AwaBackground: React.FC = () => {
           color="#FFD700"
           castShadow
         />
-        <AwaModel currentStep="landing" onLoaded={() => setIsLoading(false)} position={[-1.4, -0.9, 0]} />
+        <AwaModel currentStep="landing" onLoaded={() => setIsLoading(false)} position={[-1.4, -0.8, 0]} />
         <OrbitControls enablePan={false} enableZoom={false} enableRotate={false} />
       </Canvas>
-      {isLoading && (
+      {/* Loading overlay - wyłączone */}
+      {/* {isLoading && (
         <div className="absolute inset-0 bg-pearl-100/40 backdrop-blur-sm flex items-center justify-center rounded-xl z-20">
                   <div className="text-gold-500 font-nasalization text-lg animate-pulse">
           Ładowanie AWA...
         </div>
         </div>
-      )}
+      )} */}
     </div>
   );
 };

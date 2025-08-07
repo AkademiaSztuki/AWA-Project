@@ -7,6 +7,8 @@ import { useSession } from '@/hooks';
 import { GlassCard } from '@/components/ui/GlassCard';
 import GlassSurface from 'src/components/ui/GlassSurface';
 import { Dna, Palette, Home, Lightbulb } from 'lucide-react';
+import { AwaContainer, AwaDialogue } from '@/components/awa';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 interface DNAAnalysis {
   dominantStyle: string;
@@ -99,6 +101,7 @@ export default function VisualDNAPage() {
   };
 
   const handleAccuracySubmit = async () => {
+    stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
     await updateSession({
       dnaAccuracyScore: accuracyRating,
       dnaFeedbackTime: new Date().toISOString(),
@@ -107,8 +110,9 @@ export default function VisualDNAPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center w-full">
-      <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-[48px] max-h-[90vh] overflow-auto scrollbar-hide">
+    <div className="min-h-screen flex flex-col w-full">
+      <div className="flex-1 flex items-center justify-center p-8">
+        <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-[48px] max-h-[90vh] overflow-auto scrollbar-hide">
         {isAnalyzing && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -276,6 +280,16 @@ export default function VisualDNAPage() {
           </motion.div>
         )}
       </GlassCard>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="dna" 
+          fullWidth={true}
+          autoHide={true}
+        />
+      </div>
     </div>
   );
 }

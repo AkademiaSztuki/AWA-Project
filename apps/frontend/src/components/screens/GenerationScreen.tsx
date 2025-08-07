@@ -3,8 +3,10 @@ import { useRouter } from 'next/navigation';
 import { GlassCard } from '../ui/GlassCard';
 import { GlassButton } from '../ui/GlassButton';
 import { AwaContainer } from '../awa/AwaContainer';
+import { AwaDialogue } from '../awa/AwaDialogue';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useModalAPI } from '@/hooks/useModalAPI';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 export function GenerationScreen() {
   const router = useRouter();
@@ -73,6 +75,7 @@ export function GenerationScreen() {
   };
 
   const handleContinue = () => {
+    stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
     updateSessionData({
       generatedImages,
       selectedImage,
@@ -82,14 +85,15 @@ export function GenerationScreen() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col w-full">
       <AwaContainer 
-        currentScreen="generate"
+        currentStep="generation"
+        showDialogue={false}
         fullWidth={true}
-        autoHide={true}
+        autoHide={false}
       />
 
-      <div className="flex-1 ml-[400px] p-8">
+      <div className="flex-1 p-8">
         <GlassCard className="w-full">
           <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
             Twoje Wizualizacje
@@ -180,6 +184,15 @@ export function GenerationScreen() {
             </>
           )}
         </GlassCard>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="generation" 
+          fullWidth={true}
+          autoHide={true}
+        />
       </div>
     </div>
   );

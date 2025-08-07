@@ -7,6 +7,8 @@ import { motion } from 'framer-motion';
 import { useSession } from '@/hooks';
 import GlassSurface from 'src/components/ui/GlassSurface';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { AwaContainer, AwaDialogue } from '@/components/awa';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 // Helper function to convert file to base64
 const toBase64 = (file: File): Promise<string> =>
@@ -30,9 +32,9 @@ export default function PhotoUploadPage() {
 
   // Corrected paths for example images
   const exampleImages = [
-    '/images/tinder/industrial_kitchen_1.jpg',
-    '/images/tinder/modern_living_1.jpg',
-    '/images/tinder/scandinavian_bedroom_1.jpg',
+    '/images/tinder/Living Room (1).jpg',
+    '/images/tinder/Living Room (2).jpg',
+    '/images/tinder/Living Room (3).jpg',
   ];
 
   const handleFileSelect = async (file: File) => {
@@ -82,14 +84,17 @@ export default function PhotoUploadPage() {
 
   const handleContinue = () => {
     if (selectedImage) {
+      stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
       router.push('/flow/tinder');
     }
   };
 
 
   return (
-    <div className="min-h-screen flex items-center justify-center w-full">
-      <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto">
+    <div className="min-h-screen flex flex-col w-full">
+            {/* Formularz upload */}
+      <div className="flex-1 flex items-center justify-center p-4">
+        <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
         <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Dodaj zdjęcie przestrzeni</h1>
         <p className="text-base md:text-lg text-gray-700 font-modern mb-3 leading-relaxed">
           Wgraj zdjęcie swojego pokoju lub wybierz przykładowe, aby AWA mogła lepiej zrozumieć Twój kontekst projektowy.
@@ -159,6 +164,16 @@ export default function PhotoUploadPage() {
           </GlassSurface>
         </div>
       </GlassCard>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="upload" 
+          fullWidth={true}
+          autoHide={true}
+        />
+      </div>
     </div>
   );
 }

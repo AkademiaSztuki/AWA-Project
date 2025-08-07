@@ -6,7 +6,9 @@ import { useDropzone } from 'react-dropzone';
 import { GlassCard } from '../ui/GlassCard';
 import { GlassButton } from '../ui/GlassButton';
 import { AwaContainer } from '../awa/AwaContainer';
+import { AwaDialogue } from '../awa/AwaDialogue';
 import { useSessionData } from '@/hooks/useSessionData';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 const EXAMPLE_IMAGES = [
   { id: 1, src: '/images/examples/room1.jpg', name: 'Salon nowoczesny' },
@@ -43,21 +45,24 @@ export function PhotoUploadScreen() {
 
   const handleContinue = () => {
     if (selectedImage) {
+      stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
       updateSessionData({
-        uploadedImage: selectedImage,
-        isUploadedFile: !!uploadedFile
+        uploadedImage: selectedImage
       });
       router.push('/flow/tinder');
     }
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col w-full">
       {/* Development Skip Button */}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed top-4 right-4 z-50">
           <GlassButton
-            onClick={() => router.push('/flow/tinder')}
+            onClick={() => {
+              stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+              router.push('/flow/tinder');
+            }}
             variant="secondary"
             size="sm"
             className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
@@ -71,10 +76,10 @@ export function PhotoUploadScreen() {
         currentStep="upload" 
         showDialogue={false}
         fullWidth={true}
-        autoHide={true}
+        autoHide={false}
       />
 
-      <div className="flex-1 ml-[400px] flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-3xl mx-auto">
           <GlassCard className="w-full">
             <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">
@@ -158,6 +163,15 @@ export function PhotoUploadScreen() {
             </div>
           </GlassCard>
         </div>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="upload" 
+          fullWidth={false}
+          autoHide={false}
+        />
       </div>
     </div>
   );

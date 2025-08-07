@@ -10,7 +10,7 @@ interface AwaModelProps {
   position?: [number, number, number];
 }
 
-export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, position = [-0.6, -0.9, 0] }) => {
+export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, position = [-0.6, -0.7, 0] }) => {
   const meshRef = useRef<THREE.Group>(null);
   const [headBone, setHeadBone] = useState<THREE.Bone | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });

@@ -97,15 +97,16 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
 
     // Dodaj event listener na zmiany stanu
     audio.addEventListener('timeupdate', () => {
-      if (audioRef.current && audioRef.current.currentTime > 0) {
-        console.log('AmbientMusic: Audio is playing, current time:', audioRef.current.currentTime);
-      }
+      // Wyłączone logi dla lepszej wydajności
+      // if (audioRef.current && audioRef.current.currentTime > 0) {
+      //   console.log('AmbientMusic: Audio is playing, current time:', audioRef.current.currentTime);
+      // }
     });
 
     // Sprawdź czy muzyka nie została zatrzymana przez inne audio
     setInterval(() => {
       if (audioRef.current && isPlaying && audioRef.current.paused) {
-        console.log('AmbientMusic: Audio was paused unexpectedly, restarting...');
+        // console.log('AmbientMusic: Audio was paused unexpectedly, restarting...');
         audioRef.current.play().catch(error => {
           console.error('AmbientMusic: Failed to restart audio:', error);
         });
@@ -115,24 +116,24 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     // Funkcja do rozpoczęcia odtwarzania po interakcji użytkownika
     const startMusic = () => {
       if (audioRef.current && !isPlaying) {
-        console.log('AmbientMusic: Attempting to start music');
-        console.log('AmbientMusic: Current volume:', audioRef.current.volume);
-        console.log('AmbientMusic: Audio element:', audioRef.current);
-        console.log('AmbientMusic: Audio readyState:', audioRef.current.readyState);
-        console.log('AmbientMusic: Audio networkState:', audioRef.current.networkState);
+        // console.log('AmbientMusic: Attempting to start music');
+        // console.log('AmbientMusic: Current volume:', audioRef.current.volume);
+        // console.log('AmbientMusic: Audio element:', audioRef.current);
+        // console.log('AmbientMusic: Audio readyState:', audioRef.current.readyState);
+        // console.log('AmbientMusic: Audio networkState:', audioRef.current.networkState);
         
         // Sprawdź czy audio jest gotowe do odtwarzania
         if (audioRef.current.readyState >= 2) { // HAVE_CURRENT_DATA
-          console.log('AmbientMusic: Audio is ready to play');
+          // console.log('AmbientMusic: Audio is ready to play');
           audioRef.current.play().then(() => {
-            console.log('AmbientMusic: Music started successfully');
-            console.log('AmbientMusic: Current time:', audioRef.current?.currentTime);
-            console.log('AmbientMusic: Duration:', audioRef.current?.duration);
+            // console.log('AmbientMusic: Music started successfully');
+            // console.log('AmbientMusic: Current time:', audioRef.current?.currentTime);
+            // console.log('AmbientMusic: Duration:', audioRef.current?.duration);
           }).catch(error => {
             console.error('AmbientMusic: Failed to start music:', error);
           });
         } else {
-          console.log('AmbientMusic: Audio not ready yet, waiting...');
+          // console.log('AmbientMusic: Audio not ready yet, waiting...');
           // Spróbuj ponownie za chwilę
           setTimeout(() => {
             if (audioRef.current && !isPlaying) {
@@ -141,18 +142,18 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
           }, 100);
         }
       } else {
-        console.log('AmbientMusic: Cannot start music - conditions not met:', {
-          hasAudioRef: !!audioRef.current,
-          isPlaying,
-          isLoaded,
-          readyState: audioRef.current?.readyState
-        });
+        // console.log('AmbientMusic: Cannot start music - conditions not met:', {
+        //   hasAudioRef: !!audioRef.current,
+        //   isPlaying,
+        //   isLoaded,
+        //   readyState: audioRef.current?.readyState
+        // });
       }
     };
 
     // Dodaj event listenery dla interakcji użytkownika
     const handleUserInteraction = () => {
-      console.log('AmbientMusic: User interaction detected, starting music');
+      // console.log('AmbientMusic: User interaction detected, starting music');
       startMusic();
       // Usuń event listenery po pierwszej interakcji
       document.removeEventListener('click', handleUserInteraction);
@@ -180,7 +181,7 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = currentVolume;
-      console.log('AmbientMusic: Volume set to:', currentVolume);
+      // console.log('AmbientMusic: Volume set to:', currentVolume);
     }
   }, [currentVolume]);
 

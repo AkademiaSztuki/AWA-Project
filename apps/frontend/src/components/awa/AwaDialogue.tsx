@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FlowStep } from '@/types';
 import TextType from "@/components/ui/TextType";
 import GlassSurface from 'src/components/ui/GlassSurface';
+import { useAudioManager } from '@/hooks/useAudioManager';
+import { useDialogueVoice } from '@/hooks/useDialogueVoice';
+import DialogueAudioPlayer from '../ui/DialogueAudioPlayer';
 
 interface AwaDialogueProps {
   currentStep: FlowStep;
@@ -49,7 +52,7 @@ const DIALOGUE_MAP: Record<FlowStep, string[]> = {
     "Razem udoskonalimy Twoją idealną przestrzeń!"
   ],
   survey_satisfaction: [
-    "Jak oceniasz nasze współpracę?",
+    "Jak oceniasz naszą współpracę?",
     "Twoja szczera opinia pomoże mi się rozwijać.",
     "Czy proces był dla Ciebie angażujący i przyjemny?"
   ],
@@ -60,8 +63,8 @@ const DIALOGUE_MAP: Record<FlowStep, string[]> = {
   ],
   thanks: [
     "Dziękuję za tę wspaniałą podróż!",
-    "Twoje odpowiedzi są niezwykle cenne dla badań nad AI w designie.",
-    "Mam nadzieję, że odkryłeś coś nowego o swoich preferencjach!"
+    "Twoje odpowiedzi są niezwykle cenne.",
+    "Mam nadzieję, że udało Ci się odkryć coś nowego i lepiej zrozumieć swoje preferencje!"
   ]
 };
 
@@ -86,88 +89,41 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   fullWidth = false,
   autoHide = false
 }) => {
+  // Zabezpieczenie przed undefined
+  if (!currentStep) {
+    console.error('AwaDialogue: currentStep is undefined');
+    return null;
+  }
+  
   const dialogues = DIALOGUE_MAP[currentStep] || ["Cześć! Jestem AWA."];
   const audioFile = AUDIO_MAP[currentStep] || "";
+  
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [isDone, setIsDone] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
   const [isVisible, setIsVisible] = useState(true); // Nowy stan dla widoczności
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Zabezpieczenie przed pustą tablicą
+  if (!dialogues || dialogues.length === 0) {
+    console.error('AwaDialogue: No dialogues found for step:', currentStep);
+    return null;
+  }
+  
+  console.log('AwaDialogue render:', { currentStep, dialogues, audioFile, fullWidth, autoHide, audioReady, hasStarted, currentSentenceIndex });
+  const audioManager = useAudioManager();
+  const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
 
-  useEffect(() => {
-    // Resetuj stan gdy zmienia się krok
-    setCurrentSentenceIndex(0);
-    setIsDone(false);
-    setHasStarted(false);
-    setAudioReady(false);
-    setIsVisible(true); // Resetuj widoczność
-  }, [currentStep]);
-
-  const playAudio = (audioPath: string) => {
-    console.log('Attempting to play audio:', audioPath);
-    
-    if (!audioPath) {
-      console.log('No audio path provided');
-      setAudioReady(true); // Jeśli nie ma audio, od razu gotowe
-      return;
-    }
-    
-    // Zatrzymaj tylko audio dialogów, nie muzykę ambientową
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    
-    const audio = new Audio(audioPath);
-    audioRef.current = audio;
-    
-    // Dodaj identyfikator żeby odróżnić od muzyki ambientowej
-    audio.dataset.type = 'dialogue';
-    
-    // Ustaw niższą głośność dla dialogów żeby nie zagłuszały muzyki ambientowej
-    audio.volume = 0.7; // 70% głośności dla dialogów
-    
-    // Dodaj obsługę błędów i informacje o autoplay policy
-    audio.play().then(() => {
-      console.log('Dialogue audio started playing successfully');
-      setAudioReady(true); // Audio się odtwarza, dialog może się rozpocząć
-    }).catch(error => {
-      console.log('Dialogue audio playback failed:', error);
-      if (error.name === 'NotAllowedError') {
-        console.log('Autoplay blocked by browser. User interaction required.');
-        // Spróbuj ponownie po interakcji użytkownika
-        const handleUserInteraction = () => {
-          audio.play().then(() => {
-            console.log('Dialogue audio started playing after user interaction');
-            setAudioReady(true); // Audio się odtwarza, dialog może się rozpocząć
-          }).catch(err => {
-            console.log('Dialogue audio still failed after user interaction:', err);
-            setAudioReady(true); // Nawet jeśli audio nie działa, dialog może się rozpocząć
-          });
-          document.removeEventListener('click', handleUserInteraction);
-          document.removeEventListener('keydown', handleUserInteraction);
-        };
-        document.addEventListener('click', handleUserInteraction);
-        document.addEventListener('keydown', handleUserInteraction);
-      } else if (error.name === 'NotSupportedError') {
-        console.log('Dialogue audio format not supported or file not found:', audioPath);
-        setAudioReady(true); // Jeśli audio nie działa, dialog może się rozpocząć
-      } else {
-        console.log('Unknown dialogue audio error:', error);
-        setAudioReady(true); // Jeśli audio nie działa, dialog może się rozpocząć
-      }
-    });
-  };
+  console.log('AwaDialogue: useDialogueVoice hook returned:', { voiceVolume, voiceEnabled });
 
   const handleSentenceComplete = () => {
     console.log(`Completed sentence ${currentSentenceIndex + 1}/${dialogues.length}`);
     
     if (currentSentenceIndex < dialogues.length - 1) {
-      // Przejdź do następnego zdania
+      // Przejdź do następnego zdania z dłuższą przerwą
       setTimeout(() => {
         setCurrentSentenceIndex(prev => prev + 1);
-      }, 500);
+      }, 800); // Zmniejszone z 1500ms na 800ms
     } else {
       // Ostatnie zdanie zakończone
       console.log('All sentences completed');
@@ -189,39 +145,71 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     }
   };
 
+  // Cała logika audioRef, new Audio, efekty synchronizujące, cleanup, itp. – USUNIĘTA
+
+  useEffect(() => {
+    // Resetuj stan gdy zmienia się krok
+    setCurrentSentenceIndex(0);
+    setIsDone(false);
+    setHasStarted(false);
+    setAudioReady(false);
+    setIsVisible(true); // Resetuj widoczność
+    
+    // Zatrzymaj poprzedni dźwięk przy zmianie kroku
+    // audioManager.unregisterDialogueAudio(audioRef.current); // audioRef.current nie istnieje
+    // audioRef.current.pause();
+    // audioRef.current = null;
+  }, [currentStep, audioManager]);
+
+  // Cleanup przy odmontowywaniu komponentu
+  useEffect(() => {
+    return () => {
+      // audioRef.current.pause(); // audioRef.current nie istnieje
+      // audioRef.current = null;
+    };
+  }, [audioManager]);
+
   // Sprawdź audio i rozpocznij dialog gdy audio jest gotowe
   useEffect(() => {
-    if (currentSentenceIndex === 0 && !hasStarted && audioFile) {
+    if (currentSentenceIndex === 0 && !hasStarted) {
       setHasStarted(true);
-      console.log('Checking audio and preparing to start dialogue:', audioFile);
       
-      // Sprawdź czy plik istnieje przed próbą odtwarzania
-      fetch(audioFile, { method: 'HEAD' })
-        .then(response => {
-          if (response.ok) {
-            // Spróbuj odtworzyć audio
-            playAudio(audioFile);
-          } else {
-            console.log('Audio file not found:', audioFile);
-            setAudioReady(true); // Jeśli plik nie istnieje, dialog może się rozpocząć
-          }
-        })
-        .catch(error => {
-          console.log('Error checking audio file:', audioFile, error);
-          setAudioReady(true); // Jeśli błąd, dialog może się rozpocząć
-        });
-    } else if (currentSentenceIndex === 0 && !hasStarted && !audioFile) {
-      // Jeśli nie ma audio, od razu gotowe
-      setHasStarted(true);
-      setAudioReady(true);
+      if (audioFile && voiceEnabled) {
+        console.log('Checking audio and preparing to start dialogue:', audioFile);
+        
+        // Sprawdź czy plik istnieje przed próbą odtwarzania
+        fetch(audioFile, { method: 'HEAD' })
+          .then(response => {
+            if (response.ok) {
+              // Spróbuj odtworzyć audio
+              // const audio = new Audio(audioFile); // audioRef.current nie istnieje
+              // audioRef.current = audio;
+              // audioManager.registerDialogueAudio(audio); // audioRef.current nie istnieje
+              // audio.dataset.type = 'dialogue';
+              // audio.volume = voiceVolume;
+              setAudioReady(true); // Audio się odtwarza, dialog może się rozpocząć
+            } else {
+              console.log('Audio file not found:', audioFile);
+              setAudioReady(true); // Jeśli plik nie istnieje, dialog może się rozpocząć
+            }
+          })
+          .catch(error => {
+            console.log('Error checking audio file:', audioFile, error);
+            setAudioReady(true); // Jeśli błąd, dialog może się rozpocząć
+          });
+      } else {
+        // Jeśli nie ma audio lub głos wyłączony, od razu gotowe
+        console.log('No audio file specified or voice disabled, starting dialogue immediately');
+        setAudioReady(true);
+      }
     }
   }, [currentSentenceIndex, hasStarted, audioFile]);
 
   // Jeśli nie ma audio lub audio jest gotowe, pokaż dialog
   if (!audioReady) {
     return (
-      <div className={`z-30 flex flex-col items-center justify-start min-h-[220px] w-full p-8 text-center mt-12 ${fullWidth ? 'fixed bottom-0 left-0 right-0' : ''}`}>
-        <span className="inline-block whitespace-pre-wrap tracking-tight w-full text-3xl md:text-4xl font-nasalization font-bold text-white drop-shadow-lg select-none text-center mt-8">
+      <div className={`z-50 flex flex-col items-center justify-start min-h-[220px] w-full p-8 text-center ${fullWidth ? 'fixed bottom-0 left-0 right-0' : ''}`}>
+        <span className="inline-block whitespace-pre-wrap tracking-tight w-full text-3xl md:text-4xl font-nasalization font-bold text-white drop-shadow-lg select-none text-center">
           Kliknij gdziekolwiek, aby rozpocząć...
         </span>
       </div>
@@ -233,17 +221,48 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     return null;
   }
 
+  console.log('AwaDialogue rendering with:', { currentSentenceIndex, dialogues, audioReady, hasStarted });
+  
+  // Debug render conditions
+  console.log('AwaDialogue: Render conditions:', { 
+    audioFile: !!audioFile, 
+    voiceEnabled, 
+    audioReady, 
+    shouldRender: !!(audioFile && voiceEnabled && audioReady) 
+  });
+  
+  // Różne style dla Landing vs inne strony
+  const isLanding = currentStep === 'landing';
+  
   return (
-    <div className={`z-30 flex flex-col items-center justify-start min-h-[220px] w-full p-8 text-center mt-12 ${fullWidth ? 'fixed bottom-0 left-0 right-0' : ''}`}>
-      <span className="inline-block whitespace-pre-wrap tracking-tight w-full text-3xl md:text-4xl font-nasalization font-bold text-white drop-shadow-lg select-none text-center mt-8">
+    <div className={`z-50 flex flex-col items-center justify-start w-full text-center ${
+      fullWidth ? 'fixed bottom-0 left-0 right-0' : ''
+    } ${
+      isLanding 
+        ? 'min-h-[220px] p-8' 
+        : 'min-h-[180px] p-6 pb-8'
+    }`}>
+      <span className={`inline-block whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center ${
+        isLanding 
+          ? 'text-3xl md:text-4xl text-white' 
+          : 'text-2xl md:text-3xl text-white/90'
+      }`}>
         <TextType
-          text={dialogues[currentSentenceIndex]}
+          text={dialogues?.[currentSentenceIndex] ?? ""}
           typingSpeed={45}
-          pauseDuration={0}
+          pauseDuration={500}
           onSentenceComplete={handleSentenceComplete}
           loop={false}
         />
       </span>
+      {audioFile && voiceEnabled && audioReady && (
+        <DialogueAudioPlayer
+          src={audioFile}
+          volume={voiceVolume}
+          autoPlay={true}
+          onEnded={handleSentenceComplete}
+        />
+      )}
     </div>
   );
 };

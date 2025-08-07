@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { GlassCard } from '../ui/GlassCard';
 import { GlassButton } from '../ui/GlassButton';
 import { AwaContainer } from '../awa/AwaContainer';
+import { AwaDialogue } from '../awa/AwaDialogue';
 import { useSessionData } from '@/hooks/useSessionData';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 export function DNAScreen() {
   const router = useRouter();
@@ -32,6 +34,7 @@ export function DNAScreen() {
   }, []);
 
   const handleContinue = () => {
+    stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
     updateSessionData({
       visualDNA,
       dnaAccuracy: accuracy
@@ -39,14 +42,17 @@ export function DNAScreen() {
     router.push('/flow/ladder');
   };
 
-  if (isAnalyzing) {
+    if (isAnalyzing) {
     return (
-      <div className="min-h-screen flex">
+      <div className="min-h-screen flex flex-col w-full">
         {/* Development Skip Button */}
         {process.env.NODE_ENV === 'development' && (
           <div className="fixed top-4 right-4 z-50">
             <GlassButton
-              onClick={() => router.push('/flow/ladder')}
+              onClick={() => {
+                stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+                router.push('/flow/ladder');
+              }}
               variant="secondary"
               size="sm"
               className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
@@ -60,9 +66,9 @@ export function DNAScreen() {
           currentStep="dna" 
           showDialogue={false}
           fullWidth={true}
-          autoHide={true}
+          autoHide={false}
         />
-        <div className="flex-1 ml-[400px] flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center">
           <GlassCard className="text-center">
             <div className="text-6xl mb-4 animate-pulse">🧬</div>
             <h2 className="text-2xl font-bold text-gray-800 mb-4">
@@ -79,16 +85,19 @@ export function DNAScreen() {
           </GlassCard>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col w-full">
       {/* Development Skip Button */}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed top-4 right-4 z-50">
           <GlassButton
-            onClick={() => router.push('/flow/ladder')}
+            onClick={() => {
+              stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+              router.push('/flow/ladder');
+            }}
             variant="secondary"
             size="sm"
             className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
@@ -102,10 +111,10 @@ export function DNAScreen() {
         currentStep="dna" 
         showDialogue={false}
         fullWidth={true}
-        autoHide={true}
+        autoHide={false}
       />
 
-      <div className="flex-1 ml-[400px] flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-3xl mx-auto">
           <GlassCard className="w-full">
             <div className="text-center mb-8">
@@ -170,6 +179,15 @@ export function DNAScreen() {
             </div>
           </GlassCard>
         </div>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="dna" 
+          fullWidth={true}
+          autoHide={true}
+        />
       </div>
     </div>
   );

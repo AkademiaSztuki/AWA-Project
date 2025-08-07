@@ -4,8 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { GlassCard, GlassButton } from '@/components/ui';
 import { TinderCard } from '@/components/ui/TinderCard';
 import { AwaContainer } from '@/components/awa/AwaContainer';
+import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { useRouter } from 'next/navigation';
 import { useSessionData } from '@/hooks/useSessionData';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 // Mock data - replace with real images
 const INTERIOR_IMAGES = [
@@ -43,6 +45,7 @@ const TinderScreen: React.FC = () => {
       setCurrentIndex(prev => prev + 1);
     } else {
       // Save results and proceed
+      stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
       updateSessionData({
         tinderResults: [
           ...(sessionData.tinderResults || []),
@@ -61,12 +64,15 @@ const TinderScreen: React.FC = () => {
   const progress = ((currentIndex + 1) / INTERIOR_IMAGES.length) * 100;
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col w-full">
       {/* Development Skip Button */}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed top-4 right-4 z-50">
           <GlassButton
-            onClick={() => router.push('/flow/dna')}
+            onClick={() => {
+              stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+              router.push('/flow/dna');
+            }}
             variant="secondary"
             size="sm"
             className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
@@ -80,10 +86,10 @@ const TinderScreen: React.FC = () => {
         currentStep="tinder"
         showDialogue={false}
         fullWidth={true}
-        autoHide={true}
+        autoHide={false}
       />
 
-      <div className="flex-1 ml-[400px] flex flex-col p-8">
+      <div className="flex-1 flex flex-col p-8">
         {/* Progress bar */}
         <div className="mb-4">
           <div className="glass-panel rounded-full h-2 overflow-hidden">
@@ -140,6 +146,15 @@ const TinderScreen: React.FC = () => {
             Przesuń kartę lub użyj strzałek na klawiaturze
           </p>
         </GlassCard>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="tinder" 
+          fullWidth={true}
+          autoHide={true}
+        />
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { usePathname } from 'next/navigation';
 import { Palette, Home, Sparkles } from 'lucide-react';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
@@ -51,19 +52,19 @@ const LandingScreen: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-modern">
                   <div className="text-center">
                     <div className="flex justify-center mb-2">
-                      <Palette className="w-8 h-8 text-gold-600" />
+                      <Palette className="w-8 h-8 text-black" />
                     </div>
                     <div>Twoje wizualne DNA</div>
                   </div>
                   <div className="text-center">
                     <div className="flex justify-center mb-2">
-                      <Home className="w-8 h-8 text-gold-600" />
+                      <Home className="w-8 h-8 text-black" />
                     </div>
                     <div>Idealne wnętrze</div>
                   </div>
                   <div className="text-center">
                     <div className="flex justify-center mb-2">
-                      <Sparkles className="w-8 h-8 text-gold-600" />
+                      <Sparkles className="w-8 h-8 text-black" />
                     </div>
                     <div>Ukryte preferencje</div>
                   </div>
@@ -71,7 +72,10 @@ const LandingScreen: React.FC = () => {
               </div>
               <GlassButton
                 size="lg"
-                onClick={() => router.push('/flow/onboarding')}
+                onClick={() => {
+                  stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+                  router.push('/flow/onboarding');
+                }}
                 className="text-xl px-12 py-4 animate-float mb-4"
               >
                 Rozpocznij Podróż z AWA

@@ -8,33 +8,65 @@ import GlassSurface from 'src/components/ui/GlassSurface';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Heart, X, RotateCcw } from 'lucide-react';
 import Image from 'next/image';
+import { AwaDialogue } from '@/components/awa';
 
-// Sample interior images with tags for analysis
-const INTERIOR_IMAGES = [
-  { id: 1, url: '/images/interiors/modern-living-1.jpg', tags: ['modern', 'minimal', 'neutral', 'clean'] },
-  { id: 2, url: '/images/interiors/cozy-bedroom-1.jpg', tags: ['cozy', 'warm', 'textured', 'natural'] },
-  { id: 3, url: '/images/interiors/industrial-kitchen-1.jpg', tags: ['industrial', 'dark', 'metal', 'urban'] },
-  { id: 4, url: '/images/interiors/bohemian-living-1.jpg', tags: ['bohemian', 'colorful', 'eclectic', 'artistic'] },
-  { id: 5, url: '/images/interiors/scandinavian-bedroom-1.jpg', tags: ['scandinavian', 'light', 'wood', 'simple'] },
-  { id: 30, url: '/images/interiors/luxurious-bathroom-1.jpg', tags: ['luxury', 'marble', 'gold', 'elegant'] },
-];
+type TinderImage = {
+  id: number;
+  url: string;
+  filename: string;
+  tags: string[];
+  categories: {
+    style: string | null;
+    colors: string[];
+    materials: string[];
+    furniture: string[];
+    lighting: string[];
+    layout: string[];
+    mood: string[];
+  };
+};
 
 export default function TinderTestPage() {
   const router = useRouter();
   const { sessionData, updateSession } = useSession();
+  const [images, setImages] = useState<TinderImage[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [swipeResults, setSwipeResults] = useState<Array<{
     imageId: number;
     direction: 'left' | 'right';
     timestamp: number;
     reactionTime: number;
+    tags: string[];
+    categories: TinderImage['categories'];
   }>>([]);
   const [startTime, setStartTime] = useState(Date.now());
   const [isComplete, setIsComplete] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
 
-  const currentImage = INTERIOR_IMAGES[currentImageIndex];
-  const progress = ((currentImageIndex + 1) / INTERIOR_IMAGES.length) * 100;
+  useEffect(() => {
+    let isMounted = true;
+    const fetchImages = async () => {
+      try {
+        setIsLoading(true);
+        const res = await fetch('/api/tinder/livingroom', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load images');
+        const data: TinderImage[] = await res.json();
+        if (isMounted) setImages(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    fetchImages();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const currentImage = images[currentImageIndex];
+  const progress = images.length > 0 ? ((currentImageIndex + 1) / images.length) * 100 : 0;
 
   useEffect(() => {
     setStartTime(Date.now());
@@ -49,10 +81,11 @@ export default function TinderTestPage() {
       timestamp: Date.now(),
       reactionTime,
       tags: currentImage.tags,
+      categories: currentImage.categories,
     };
     const newResults = [...swipeResults, swipeData];
     setSwipeResults(newResults);
-    if (currentImageIndex + 1 >= INTERIOR_IMAGES.length) {
+    if (currentImageIndex + 1 >= images.length) {
       setIsComplete(true);
       updateSession({ tinderData: { swipes: newResults } });
       setTimeout(() => {
@@ -75,12 +108,12 @@ export default function TinderTestPage() {
 
   if (showInstructions) {
     return (
-      <div className="min-h-screen flex items-center justify-center w-full">
-        <div className="w-full max-w-3xl mx-auto">
+      <div className="min-h-screen flex flex-col w-full">
+        <div className="flex-1 flex items-center justify-center p-8">
           <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
             <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Wnętrzarski Tinder</h1>
             <p className="text-base md:text-lg text-gray-700 font-modern mb-3 leading-relaxed">
-              Pokażę Ci {INTERIOR_IMAGES.length} różnych wnętrz. Przesuwaj w prawo (❤️) jeśli Ci się podobają,
+              Pokażę Ci {isLoading ? '...' : images.length} różnych wnętrz. Przesuwaj w prawo (❤️) jeśli Ci się podobają,
                w lewo (✕) jeśli Ci się nie podobają.
             </p>
             <div className="flex justify-center space-x-8 mb-4">
@@ -123,19 +156,34 @@ export default function TinderTestPage() {
             </div>
           </GlassCard>
         </div>
+
+        {/* Dialog AWA na dole - cała szerokość */}
+        <div className="w-full">
+          <AwaDialogue 
+            currentStep="tinder" 
+            fullWidth={true}
+            autoHide={true}
+          />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center w-full">
-      <div className="w-full max-w-3xl mx-auto">
+    <div className="min-h-screen flex flex-col w-full">
+      <div className="flex-1 flex items-center justify-center p-8">
         <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
+          {isLoading && (
+            <div className="mb-6 text-center text-silver-dark">Ładowanie obrazów...</div>
+          )}
+          {!isLoading && images.length === 0 && (
+            <div className="mb-6 text-center text-red-500">Nie znaleziono obrazów w katalogu Livingroom.</div>
+          )}
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-silver-dark">Postęp</span>
               <span className="text-sm text-silver-dark">
-                {currentImageIndex + 1} / {INTERIOR_IMAGES.length}
+                {images.length === 0 ? 0 : currentImageIndex + 1} / {images.length}
               </span>
             </div>
             <div className="w-full bg-silver/20 rounded-full h-2">
@@ -164,14 +212,16 @@ export default function TinderTestPage() {
                     transition: { duration: 0.2 }
                   }}
                   whileDrag={{ scale: 1.05, rotate: 5 }}
+                  style={{ touchAction: 'none' }}
                 >
-                  <GlassCard className="h-full p-2">
-                    <div className="relative h-full rounded-lg overflow-hidden">
+                  <GlassCard className="h-full p-0 overflow-hidden">
+                    <div className="relative h-full w-full">
                       <Image
                         src={currentImage.url}
                         alt="Interior"
                         fill
-                        className="object-cover"
+                        draggable={false}
+                        className="object-cover w-full h-full select-none"
                       />
                     </div>
                   </GlassCard>
@@ -202,7 +252,7 @@ export default function TinderTestPage() {
               </motion.div>
             )}
           </div>
-          {!isComplete && (
+          {!isComplete && currentImage && (
             <div className="flex justify-center space-x-4">
               <GlassSurface
                 width={64}
@@ -229,6 +279,15 @@ export default function TinderTestPage() {
             </div>
           )}
         </GlassCard>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="tinder" 
+          fullWidth={true}
+          autoHide={true}
+        />
       </div>
     </div>
   );

@@ -115,9 +115,8 @@ const TextType = ({
 
     let timeout: ReturnType<typeof setTimeout>;
     const currentText = textArray[currentTextIndex];
-    const processedText = reverseMode
-      ? currentText.split("").reverse().join("")
-      : currentText;
+    // Zabezpieczenie przed undefined/null
+    const processedText = currentText ?? "";
 
     const executeTypingAnimation = () => {
       if (isDeleting) {
@@ -151,10 +150,12 @@ const TextType = ({
             variableSpeed ? getRandomSpeed() : typingSpeed
           );
         } else {
-          // Tekst został w całości napisany, nie ma kasowania
-          if (onSentenceComplete) {
-            onSentenceComplete(textArray[currentTextIndex], currentTextIndex);
-          }
+          // Tekst został w całości napisany, poczekaj przed wywołaniem callback
+          timeout = setTimeout(() => {
+            if (onSentenceComplete) {
+              onSentenceComplete(textArray[currentTextIndex], currentTextIndex);
+            }
+          }, pauseDuration);
         }
       }
     };

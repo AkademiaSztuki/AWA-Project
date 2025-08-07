@@ -53,14 +53,14 @@ export const AwaContainer: React.FC<AwaContainerProps> = ({
             />
           </Canvas>
         </div>
-        {/* Loading overlay */}
-        {isLoading && (
+        {/* Loading overlay - wyłączone */}
+        {/* {isLoading && (
           <div className="absolute inset-0 bg-pearl-100/40 backdrop-blur-sm flex items-center justify-center rounded-xl z-20">
             <div className="text-gold-500 font-nasalization text-lg animate-pulse">
               Ładowanie AWA...
             </div>
           </div>
-        )}
+        )} */}
       </div>
       {/* UI na wierzchu */}
       <div className="relative z-20 flex flex-col items-center justify-center min-h-screen w-full">

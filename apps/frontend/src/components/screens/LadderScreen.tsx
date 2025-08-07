@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { GlassCard } from '../ui/GlassCard';
 import { GlassButton } from '../ui/GlassButton';
 import { AwaContainer } from '../awa/AwaContainer';
+import { AwaDialogue } from '../awa/AwaDialogue';
 import { useSessionData } from '@/hooks/useSessionData';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 const LADDER_QUESTIONS = [
   {
@@ -54,6 +56,7 @@ export function LadderScreen() {
       setCurrentLevel(currentLevel + 1);
     } else {
       // Zakończ drabinę potrzeb
+      stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
       updateSessionData({
         ladderPath: newAnswers,
         coreNeed: answer
@@ -66,12 +69,15 @@ export function LadderScreen() {
   const progress = ((currentLevel + 1) / LADDER_QUESTIONS.length) * 100;
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col w-full">
       {/* Development Skip Button */}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed top-4 right-4 z-50">
           <GlassButton
-            onClick={() => router.push('/flow/generate')}
+            onClick={() => {
+              stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+              router.push('/flow/generate');
+            }}
             variant="secondary"
             size="sm"
             className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
@@ -85,10 +91,10 @@ export function LadderScreen() {
         currentStep="ladder" 
         showDialogue={false}
         fullWidth={true}
-        autoHide={true}
+        autoHide={false}
       />
 
-      <div className="flex-1 ml-[400px] flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-3xl mx-auto">
           <GlassCard className="w-full">
             <div className="mb-6">
@@ -135,6 +141,15 @@ export function LadderScreen() {
             )}
           </GlassCard>
         </div>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="ladder" 
+          fullWidth={true}
+          autoHide={true}
+        />
       </div>
     </div>
   );

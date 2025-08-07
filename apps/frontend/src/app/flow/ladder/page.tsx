@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession } from '@/hooks';
-import { AwaContainer } from '@/components/awa/AwaContainer';
+import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { ArrowRight, Heart, Users, Zap, Home, Brain, Shield, Leaf, Ruler, Palette, Sun, Sprout, Gem, Hand, Eye, Globe, Smile, Briefcase, Book, Tag, Star, Clock, User, GraduationCap } from 'lucide-react';
 
 interface LadderStep {
@@ -774,6 +775,7 @@ export default function LadderOfNeedsPage() {
   };
 
   const handleContinue = () => {
+    stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
     router.push('/flow/generate');
   };
 
@@ -860,8 +862,9 @@ export default function LadderOfNeedsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-radial from-pearl-50 to-platinum-100 p-4">
-      <div className="h-full w-full">
+    <div className="min-h-screen flex flex-col w-full">
+      <div className="flex-1 bg-gradient-radial from-pearl-50 to-platinum-100 p-4">
+        <div className="h-full w-full">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1028,6 +1031,16 @@ export default function LadderOfNeedsPage() {
           </AnimatePresence>
 
         </motion.div>
+      </div>
+      </div>
+
+      {/* Dialog AWA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="ladder" 
+          fullWidth={true}
+          autoHide={true}
+        />
       </div>
     </div>
   );

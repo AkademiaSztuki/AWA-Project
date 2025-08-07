@@ -12,7 +12,7 @@ interface AmbientMusicControls {
 }
 
 export const useAmbientMusic = (): AmbientMusicControls => {
-  const [volume, setVolumeState] = useState(0.4);
+  const [volume, setVolumeState] = useState(0.8);
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Zapisz głośność w localStorage i synchronizuj z audio
@@ -89,7 +89,7 @@ export const useAmbientMusic = (): AmbientMusicControls => {
   };
 
   const unmute = () => {
-    setVolume(0.4); // Przywróć domyślną głośność
+    setVolume(0.8); // Przywróć domyślną głośność
   };
 
   return {
