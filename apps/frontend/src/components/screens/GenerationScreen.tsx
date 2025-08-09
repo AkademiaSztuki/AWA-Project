@@ -11,7 +11,7 @@ import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 export function GenerationScreen() {
   const router = useRouter();
   const { sessionData, updateSessionData } = useSessionData();
-  const { generateImages, isGenerating } = useModalAPI();
+  const { generateImages, isLoading } = useModalAPI();
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [ratings, setRatings] = useState<Record<string, any>>({});
@@ -21,8 +21,17 @@ export function GenerationScreen() {
     const generateInitialImages = async () => {
       if (sessionData?.visualDNA && sessionData?.coreNeed) {
         const prompt = buildPrompt(sessionData.visualDNA, sessionData.coreNeed);
-        const images = await generateImages(prompt);
-        setGeneratedImages(images);
+        const request = {
+          prompt,
+          style: 'default',
+          modifications: [],
+          strength: 0.65,
+          steps: 30,
+          guidance: 3.5,
+          num_images: 4,
+        };
+        const result = await generateImages(request as any);
+        setGeneratedImages(result?.images || []);
       }
     };
 
@@ -99,7 +108,7 @@ export function GenerationScreen() {
             Twoje Wizualizacje
           </h2>
 
-          {isGenerating ? (
+          {isLoading ? (
             <div className="text-center py-12">
               <div className="text-6xl mb-4 animate-pulse">🎨</div>
               <p className="text-gray-600">Generuję wizualizacje na podstawie Twoich preferencji...</p>
