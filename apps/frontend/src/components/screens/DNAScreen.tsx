@@ -87,7 +87,6 @@ export function DNAScreen() {
       </div>
     </div>
   );
-
   return (
     <div className="min-h-screen flex flex-col w-full">
       {/* Development Skip Button */}
