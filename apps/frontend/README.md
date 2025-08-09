@@ -4,7 +4,7 @@ Aplikacja badawcza do eksploracji współpracy człowieka z AI w projektowaniu w
 
 ## Features
 
-- **Interaktywna postać AWA** - model 3D z śledzeniem myszy
+- **Interaktywna postać IDA** - model 3D z śledzeniem myszy
 - **Glassmorphism UI** - perłowo-złoto-srebrny design system  
 - **Research Through Design** - kompletny przepływ zbierania danych
 - **FLUX Integration** - generowanie obrazów przez Modal API
@@ -29,7 +29,7 @@ npm run dev
 ## Struktura
 
 - `src/app/` - Next.js routing
-- `src/components/awa/` - komponenty postaci AWA
+- `src/components/awa/` - komponenty postaci IDA
 - `src/components/screens/` - ekrany przepływu
 - `src/components/ui/` - glassmorphism UI
 - `src/hooks/` - React hooks
