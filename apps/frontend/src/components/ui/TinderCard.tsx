@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useSpring, animated, config } from '@react-spring/web';
-import { useDrag } from '@use-gesture/react';
+import { useDrag } from 'react-use-gesture';
 
 interface TinderCardProps {
   image: string;
