@@ -76,22 +76,7 @@ export function Survey2Screen() {
   return (
     <div className="min-h-screen flex flex-col w-full">
       <div className="flex-1 flex items-center justify-center p-8">
-        {/* Development Skip Button */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="fixed top-4 right-4 z-50">
-            <GlassSurface
-              width={120}
-              height={40}
-              borderRadius={20}
-              className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-red-400 flex items-center justify-center text-sm font-exo2 font-bold text-white rounded-xl bg-red-500/20 border-red-400/40"
-              onClick={() => router.push('/flow/thanks')}
-              aria-label="Pomiń (DEV)"
-              style={{ opacity: 1 }}
-            >
-              🚀 Pomiń
-            </GlassSurface>
-          </div>
-        )}
+        
 
         <div className="w-full max-w-4xl mx-auto">
         <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto">

@@ -70,22 +70,7 @@ export function LadderScreen() {
 
   return (
     <div className="min-h-screen flex flex-col w-full">
-      {/* Development Skip Button */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed top-4 right-4 z-50">
-          <GlassButton
-            onClick={() => {
-              stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
-              router.push('/flow/generate');
-            }}
-            variant="secondary"
-            size="sm"
-            className="bg-red-500/20 border-red-400/40 text-red-700 hover:bg-red-400/30"
-          >
-            🚀 Pomiń (DEV)
-          </GlassButton>
-        </div>
-      )}
+      
 
       <AwaContainer 
         currentStep="ladder" 
