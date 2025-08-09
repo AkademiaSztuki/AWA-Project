@@ -55,3 +55,4 @@ public/models/*.bin
 *.zip
 coverage/
 .nyc_output/.cursor/
+.vercel

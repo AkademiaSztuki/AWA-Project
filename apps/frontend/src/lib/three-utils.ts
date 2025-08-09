@@ -101,14 +101,15 @@ export class AwaSceneManager {
         );
       });
 
-      this.model = gltf.scene;
+      const model = gltf.scene as THREE.Group;
+      this.model = model;
 
       // Skalowanie i pozycjonowanie
-      this.model.scale.setScalar(1);
-      this.model.position.set(0, -0.5, 0);
+      model.scale.setScalar(1);
+      model.position.set(0, -0.5, 0);
 
       // Znajdź kość głowy
-      this.model.traverse((child) => {
+      model.traverse((child) => {
         if (child instanceof THREE.Bone) {
           const boneName = child.name.toLowerCase();
           if (boneName.includes('head') || boneName.includes('głowa')) {
@@ -118,7 +119,7 @@ export class AwaSceneManager {
         }
       });
 
-      this.scene.add(this.model);
+      this.scene.add(model);
 
       return {
         model: this.model,
