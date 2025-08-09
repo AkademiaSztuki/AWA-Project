@@ -19,8 +19,9 @@ export function GenerationScreen() {
   useEffect(() => {
     // Automatyczne generowanie na podstawie zebranych danych
     const generateInitialImages = async () => {
-      if (sessionData?.visualDNA && sessionData?.coreNeed) {
-        const prompt = buildPrompt(sessionData.visualDNA, sessionData.coreNeed);
+      const coreNeed = sessionData?.ladderResults?.coreNeed;
+      if (sessionData?.visualDNA && coreNeed) {
+        const prompt = buildPrompt(sessionData.visualDNA, coreNeed);
         const request = {
           prompt,
           style: 'default',
