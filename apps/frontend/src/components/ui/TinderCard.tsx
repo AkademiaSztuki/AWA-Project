@@ -29,7 +29,7 @@ export const TinderCard: React.FC<TinderCardProps> = ({
     config: config.default
   }));
 
-  const bind = useDrag(({ active, movement: [mx, my], velocity: [vx] }) => {
+  const bind = useDrag(({ active, movement: [mx, my] }) => {
     const trigger = Math.abs(mx) > 100;
     const direction = mx > 0 ? 'right' : 'left';
 
