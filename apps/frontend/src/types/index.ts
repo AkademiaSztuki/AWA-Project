@@ -166,6 +166,28 @@ export interface SurveyResults {
   };
 }
 
+// Three/Model related types used by three-utils
+export interface MouseTrackingConfig {
+  sensitivity: {
+    horizontal: number;
+    vertical: number;
+  };
+  smoothing: boolean;
+  limits: {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+  };
+}
+
+export interface AwaModelState {
+  model?: unknown;
+  headBone?: unknown;
+  isLoaded: boolean;
+  isTracking: boolean;
+}
+
 // Modal API typy
 export interface GenerateRequest {
   prompt: string;
