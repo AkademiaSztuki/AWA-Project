@@ -26,7 +26,6 @@ export const useSession = (): UseSessionReturn => {
       },
       accuracyScore: 0
     },
-    ladderResults: [],
     generations: [],
     finalSurvey: {
       satisfaction: { easeOfUse: 0, engagement: 0, clarity: 0, overall: 0 },
