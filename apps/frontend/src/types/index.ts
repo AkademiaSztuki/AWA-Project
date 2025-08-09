@@ -12,6 +12,9 @@ export interface SessionData {
   emotionalPreference?: EmotionalPreference;
   demographics?: Record<string, string>;
   ladderCompleteTime?: string;
+  // Optional simplified ladder fields used by lightweight UI
+  ladderPath?: string[];
+  coreNeed?: string;
   generations: GenerationSet[];
   finalSurvey: SurveyResults;
   surveyData?: {
