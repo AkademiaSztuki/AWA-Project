@@ -146,7 +146,7 @@ export function buildFinalFluxPromptFromSession(sessionData: any) {
   const styles = Array.isArray(prefs.styles) ? prefs.styles : [];
   const colors = Array.isArray(prefs.colors) ? prefs.colors : [];
   const materials = Array.isArray(prefs.materials) ? prefs.materials : [];
-  const furniture = []; // not explicitly in visualDNA; can be inferred later
+  const furniture: string[] = []; // not explicitly in visualDNA; can be inferred later
   const lighting = Array.isArray(prefs.lighting) ? prefs.lighting : [];
   const mood = Array.isArray(v?.moodSummary ? [v.moodSummary] : []) ? [v.moodSummary].filter(Boolean) : [];
 
