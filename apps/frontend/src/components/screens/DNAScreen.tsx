@@ -37,7 +37,7 @@ export function DNAScreen() {
     stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
     updateSessionData({
       visualDNA,
-      dnaAccuracy: accuracy
+      dnaAccuracyScore: accuracy
     });
     router.push('/flow/ladder');
   };
