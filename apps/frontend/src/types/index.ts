@@ -34,6 +34,10 @@ export interface SessionData {
   dnaFeedbackTime?: string;
   dnaAnalysisComplete?: boolean;
   roomImage?: string; // Base64 encoded image
+  // Optional UI state for simple generation screen
+  generatedImages?: string[];
+  selectedImage?: string | null;
+  imageRatings?: Record<string, any>;
 }
 
 export type FlowStep = 
