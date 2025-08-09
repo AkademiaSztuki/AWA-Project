@@ -7,6 +7,8 @@ import { useSession } from '@/hooks';
 import { GlassCard } from '@/components/ui/GlassCard';
 import GlassSurface from 'src/components/ui/GlassSurface';
 import { Dna, Palette, Home, Lightbulb } from 'lucide-react';
+import { computeWeightedDNAFromSwipes, buildFluxPromptFromDNA } from '@/lib/dna';
+import { getOrCreateProjectId, updateDiscoverySession, saveTinderSwipes, saveDnaSnapshot, startPageView, endPageView } from '@/lib/supabase';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
@@ -26,79 +28,111 @@ export default function VisualDNAPage() {
   const [accuracyRating, setAccuracyRating] = useState<number>(4);
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [showResults, setShowResults] = useState(false);
+  const [pageViewId, setPageViewId] = useState<string | null>(null);
 
   useEffect(() => {
     analyzeDNA();
+    (async () => {
+      try {
+        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectId) {
+          const id = await startPageView(projectId, 'dna');
+          setPageViewId(id);
+        }
+      } catch {}
+    })();
+    return () => { (async () => { if (pageViewId) await endPageView(pageViewId); })(); };
   }, []);
 
   const analyzeDNA = async () => {
     setIsAnalyzing(true);
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 800));
     const tinderData = sessionData.tinderData;
-    const likedImages = tinderData?.swipes?.filter((swipe: any) => swipe.direction === 'right') || [];
-    const allTags = likedImages.flatMap((swipe: any) => swipe.tags || []);
-    const tagCounts = allTags.reduce((acc: Record<string, number>, tag: string) => {
-      acc[tag] = (acc[tag] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const likes = tinderData?.swipes?.filter((s: any) => s.direction === 'right') || [];
+
+    const weighted = computeWeightedDNAFromSwipes(likes, tinderData?.totalImages || likes.length || 30);
+    const dominantStyle = weighted.top.styles.join(' + ') || 'Nowoczesny';
+    const colorPalette = weighted.top.colors.join(' + ') || 'Neutralne kolory';
+    const materials = weighted.top.materials.join(' + ') || 'Naturalne materiały';
+    const lighting = weighted.top.lighting.join(' + ') || 'Miękkie światło';
+    const mood = weighted.top.mood.join(' + ') || 'Przytulny';
+
     const analysis: DNAAnalysis = {
-      dominantStyle: getDominantValue(tagCounts, ['modern', 'scandinavian', 'industrial', 'bohemian', 'classic'], 'Nowoczesny'),
-      colorPalette: getDominantValue(tagCounts, ['neutral', 'warm', 'cool', 'colorful', 'monochrome'], 'Neutralne kolory'),
-      materials: getDominantValue(tagCounts, ['wood', 'metal', 'marble', 'fabric', 'glass'], 'Naturalne materiały'),
-      lighting: getDominantValue(tagCounts, ['natural', 'warm', 'bright', 'dramatic', 'soft'], 'Miękkie światło'),
-      mood: getDominantValue(tagCounts, ['cozy', 'elegant', 'energetic', 'calm', 'luxurious'], 'Przytulny'),
-      confidence: Math.min(95, Math.max(65, (likedImages.length / 30) * 100)),
+      dominantStyle,
+      colorPalette,
+      materials,
+      lighting,
+      mood,
+      confidence: weighted.confidence,
     };
     setDnaAnalysis(analysis);
     setIsAnalyzing(false);
     setShowResults(true);
+
+    // Update session with structured preferences (used later in generation)
     await updateSession({
       visualDNA: {
-        dominantTags: [analysis.dominantStyle],
+        dominantTags: [dominantStyle, ...weighted.top.colors, ...weighted.top.materials].filter(Boolean),
         preferences: {
-          colors: [analysis.colorPalette],
-          materials: [analysis.materials],
-          styles: [analysis.dominantStyle],
-          lighting: [analysis.lighting],
+          colors: weighted.top.colors,
+          materials: weighted.top.materials,
+          styles: weighted.top.styles,
+          lighting: weighted.top.lighting,
         },
-        accuracyScore: Math.round(analysis.confidence),
-      },
+        accuracyScore: Math.round(weighted.confidence),
+        // Extended fields for convenience in prompt building
+        dominantStyle,
+        colorPalette,
+        materialsSummary: materials,
+        lightingSummary: lighting,
+        moodSummary: mood,
+      } as any,
       dnaAnalysisComplete: true,
     });
+
+    // Persist swipes + discovery session to Supabase
+    try {
+      const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+      if (projectId) {
+        await saveTinderSwipes(projectId, tinderData?.swipes || []);
+        await updateDiscoverySession(
+          projectId,
+          (sessionData as any).visualDNA,
+          Math.round(weighted.confidence),
+          (sessionData as any).ladderResults?.path || [],
+          (sessionData as any).ladderResults?.coreNeed || 'unknown'
+        );
+        await saveDnaSnapshot(projectId, {
+          weights: (weighted as any).weights,
+          top: (weighted as any).top,
+          confidence: weighted.confidence,
+          parser_version: 'v1'
+        });
+      }
+    } catch (e) {
+      console.warn('Supabase persist failed (DNA):', e);
+    }
+
+    // Server-side debug log to terminal (Next.js dev server)
+    try {
+      await fetch('/api/debug/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'DNA_ANALYSIS',
+          likesCount: likes.length,
+          weightedTop: weighted.top,
+          confidence: weighted.confidence,
+          promptPreview: buildFluxPromptFromDNA(weighted, 'living room'),
+          timestamp: new Date().toISOString(),
+        }),
+      });
+    } catch (e) {
+      // ignore
+    }
   };
 
-  const getDominantValue = (tagCounts: Record<string, number>, tags: string[], defaultValue: string) => {
-    const relevantTags = tags.filter(tag => tagCounts[tag] > 0);
-    if (relevantTags.length === 0) return defaultValue;
-    const dominant = relevantTags.reduce((a, b) => tagCounts[a] > tagCounts[b] ? a : b);
-    const translations: Record<string, string> = {
-      modern: 'Nowoczesny',
-      scandinavian: 'Skandynawski',
-      industrial: 'Industrialny',
-      bohemian: 'Bohemski',
-      classic: 'Klasyczny',
-      neutral: 'Neutralne kolory',
-      warm: 'Ciepłe kolory',
-      cool: 'Chłodne kolory',
-      colorful: 'Kolorowy',
-      monochrome: 'Monochromatyczny',
-      wood: 'Drewno',
-      metal: 'Metal',
-      marble: 'Marmur',
-      fabric: 'Tkaniny',
-      glass: 'Szkło',
-      natural: 'Naturalne światło',
-      bright: 'Jasne oświetlenie',
-      dramatic: 'Dramatyczne światło',
-      soft: 'Miękkie światło',
-      cozy: 'Przytulny',
-      elegant: 'Elegancki',
-      energetic: 'Energetyczny',
-      calm: 'Spokojny',
-      luxurious: 'Luksusowy',
-    };
-    return translations[dominant] || defaultValue;
-  };
+  const getDominantValue = () => null; // unused now
 
   const handleAccuracySubmit = async () => {
     stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
@@ -282,7 +316,7 @@ export default function VisualDNAPage() {
       </GlassCard>
       </div>
 
-      {/* Dialog AWA na dole - cała szerokość */}
+      {/* Dialog IDA na dole - cała szerokość */}
       <div className="w-full">
         <AwaDialogue 
           currentStep="dna" 

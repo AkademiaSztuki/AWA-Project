@@ -12,8 +12,12 @@ export function ThanksScreen() {
 
   useEffect(() => {
     if (sessionData?.consentTimestamp) {
-      const duration = (Date.now() - new Date(sessionData.consentTimestamp).getTime()) / 1000 / 60; // minuty
-      setSessionDuration(Math.round(duration));
+      const start = new Date(sessionData.consentTimestamp).getTime();
+      const end = sessionData?.surveyData?.sessionCompleted
+        ? Number(sessionData.surveyData.sessionCompleted)
+        : Date.now();
+      const duration = (end - start) / 1000 / 60; // minuty
+      setSessionDuration(Math.max(0, Math.round(duration)));
     }
   }, [sessionData]);
 
@@ -30,10 +34,10 @@ export function ThanksScreen() {
   };
 
   const stats = {
-    imagesLiked: sessionData?.tinderResults?.filter(swipe => swipe.direction === 'right').length || 0,
-    totalImages: 30, // z Tinder testu
-    dnaAccuracy: sessionData?.dnaAccuracyScore || 0,
-    ladderSteps: sessionData?.ladderResults?.length || 0,
+    imagesLiked: (sessionData as any)?.tinderData?.swipes?.filter((s: any) => s.direction === 'right').length || 0,
+    totalImages: (sessionData as any)?.tinderData?.totalImages || 0,
+    dnaAccuracy: (sessionData as any)?.visualDNA?.accuracyScore || (sessionData as any)?.dnaAccuracyScore || 0,
+    ladderSteps: (sessionData as any)?.ladderResults?.path?.length || 0,
     agencyScore: sessionData?.surveyData?.agencyScore || 0,
     satisfactionScore: sessionData?.surveyData?.satisfactionScore || 0,
     clarityScore: sessionData?.surveyData?.clarityScore || 0,
@@ -145,7 +149,7 @@ export function ThanksScreen() {
 
               <p className="text-xs text-gray-400 font-modern">
                 Dziękujemy za udział w badaniu Research through Design. 
-                Twoja przygoda z AWA zakończyła się, ale nauka trwa dalej!
+                Twoja przygoda z IDA zakończyła się, ale nauka trwa dalej!
               </p>
             </div>
           </div>

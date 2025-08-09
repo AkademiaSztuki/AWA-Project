@@ -15,7 +15,7 @@ public/models/
 └── ... (inne tekstury)
 ```
 
-4. **Weryfikacja**: Po umieszczeniu plików uruchom aplikację i sprawdź czy model się ładuje w komponencie AWA
+4. **Weryfikacja**: Po umieszczeniu plików uruchom aplikację i sprawdź czy model się ładuje w komponencie IDA
 
 ## Wymagania modelu:
 

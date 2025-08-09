@@ -54,4 +54,4 @@ public/models/*.glb
 public/models/*.bin
 *.zip
 coverage/
-.nyc_output/
+.nyc_output/.cursor/

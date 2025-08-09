@@ -17,7 +17,7 @@ export const defaultTrackingConfig: MouseTrackingConfig = {
   },
 };
 
-// Klasa do zarządzania sceną Three.js dla AWA
+// Klasa do zarządzania sceną Three.js dla IDA
 export class AwaSceneManager {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
@@ -127,7 +127,7 @@ export class AwaSceneManager {
         isTracking: false,
       };
     } catch (error) {
-      console.error('Błąd ładowania modelu AWA:', error);
+      console.error('Błąd ładowania modelu IDA:', error);
       throw error;
     }
   }

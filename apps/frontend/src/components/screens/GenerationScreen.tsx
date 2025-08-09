@@ -186,7 +186,7 @@ export function GenerationScreen() {
         </GlassCard>
       </div>
 
-      {/* Dialog AWA na dole - cała szerokość */}
+      {/* Dialog IDA na dole - cała szerokość */}
       <div className="w-full">
         <AwaDialogue 
           currentStep="generation" 

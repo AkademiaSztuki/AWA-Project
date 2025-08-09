@@ -18,7 +18,7 @@ interface AwaDialogueProps {
 
 const DIALOGUE_MAP: Record<FlowStep, string[]> = {
   landing: [
-    "Cześć! Jestem AWA, Twoja futurystyczna asystentka projektowania wnętrz.",
+  "Cześć! Jestem IDA, Twoja futurystyczna asystentka projektowania wnętrz.",
     "Pomogę Ci odkryć Twoje preferencje designerskie i stworzyć wizualizacje marzeń.",
     "Gotowy na tę podróż?"
   ],
@@ -95,7 +95,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     return null;
   }
   
-  const dialogues = DIALOGUE_MAP[currentStep] || ["Cześć! Jestem AWA."];
+  const dialogues = DIALOGUE_MAP[currentStep] || ["Cześć! Jestem IDA."];
   const audioFile = AUDIO_MAP[currentStep] || "";
   
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);

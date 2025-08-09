@@ -181,7 +181,7 @@ export function DNAScreen() {
         </div>
       </div>
 
-      {/* Dialog AWA na dole - cała szerokość */}
+      {/* Dialog IDA na dole - cała szerokość */}
       <div className="w-full">
         <AwaDialogue 
           currentStep="dna" 

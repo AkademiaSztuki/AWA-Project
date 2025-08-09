@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "db:push": "supabase db execute --file ./supabase/schema_full.sql",
+    "db:studio": "supabase studio",
+    "db:link": "supabase link"
   },
   "dependencies": {
     "@react-three/drei": "^9.92.0",

@@ -30,7 +30,7 @@ export const AwaContainer: React.FC<AwaContainerProps> = ({
 
   return (
     <div className="relative z-10 min-h-screen w-full">
-      {/* Canvas z AWA */}
+      {/* Canvas z IDA */}
       <div className="absolute inset-0 z-10 pointer-events-none flex items-end justify-start">
         <div className="w-1/2 h-[80vh] min-w-[400px] flex items-end">
           <Canvas
@@ -57,7 +57,7 @@ export const AwaContainer: React.FC<AwaContainerProps> = ({
         {/* {isLoading && (
           <div className="absolute inset-0 bg-pearl-100/40 backdrop-blur-sm flex items-center justify-center rounded-xl z-20">
             <div className="text-gold-500 font-nasalization text-lg animate-pulse">
-              Ładowanie AWA...
+              Ładowanie IDA...
             </div>
           </div>
         )} */}

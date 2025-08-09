@@ -1,4 +1,4 @@
-# Pliki audio dla dialogów AWA
+# Pliki audio dla dialogów IDA
 
 W tym folderze umieść pliki audio w formacie MP3 dla każdego kroku dialogu.
 

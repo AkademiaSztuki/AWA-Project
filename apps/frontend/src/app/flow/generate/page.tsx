@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
+import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startGenerationJob, endGenerationJob, saveImageRatingEvent, startPageView, endPageView } from '@/lib/supabase';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -23,6 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import Image from 'next/image';
+import { buildFinalFluxPromptFromSession } from '@/lib/dna';
 
 interface GeneratedImage {
   id: string;
@@ -87,6 +89,7 @@ export default function GeneratePage() {
   const [statusMessage, setStatusMessage] = useState("Krok 1/3: Inicjalizacja środowiska AI...");
   const [hasAnsweredInteriorQuestion, setHasAnsweredInteriorQuestion] = useState(false);
   const [hasCompletedRatings, setHasCompletedRatings] = useState(false);
+  const [pageViewId, setPageViewId] = useState<string | null>(null);
 
   useEffect(() => {
     const waitForApi = async () => {
@@ -109,60 +112,27 @@ export default function GeneratePage() {
   }, []);
 
   useEffect(() => {
+    (async () => {
+      try {
+        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectId) {
+          const id = await startPageView(projectId, 'generate');
+          setPageViewId(id);
+        }
+      } catch {}
+    })();
+    return () => { (async () => { if (pageViewId) await endPageView(pageViewId); })(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (isApiReady && generationCount === 0 && !hasAttemptedGeneration) {
       setHasAttemptedGeneration(true);
       handleInitialGeneration();
     }
   }, [isApiReady, generationCount, hasAttemptedGeneration]);
 
-  const buildInitialPrompt = () => {
-    const { visualDNA, coreNeed, ladderResults, usagePattern, emotionalPreference } = sessionData as any;
-
-    const promptParts = [];
-
-    promptParts.push("Professional interior design photography");
-
-    const roomType = (sessionData as any).roomType || 'living room';
-    const style = visualDNA?.dominantStyle || 'modern';
-    promptParts.push(`of a ${roomType} in ${style} architectural style`);
-
-    if (coreNeed && ladderResults?.promptElements) {
-      const elements = ladderResults.promptElements;
-      
-      promptParts.push(`featuring ${elements.atmosphere}`);
-      promptParts.push(`with ${elements.materials}`);
-      promptParts.push(`using ${elements.colors}`);
-      promptParts.push(`illuminated by ${elements.lighting}`);
-      promptParts.push(`arranged in ${elements.layout}`);
-    }
-
-    if (usagePattern?.timeOfDay) {
-      const timePrompts: Record<string, string> = {
-        morning: "optimized for morning use with bright, energizing daylight",
-        afternoon: "designed for afternoon productivity with balanced natural lighting", 
-        evening: "perfect for evening relaxation with warm, ambient lighting",
-        night: "created for nighttime comfort with soft, cozy illumination"
-      };
-      promptParts.push(timePrompts[usagePattern.timeOfDay] || "");
-    }
-
-    if (emotionalPreference?.emotion) {
-      const moodPrompts: Record<string, string> = {
-        peaceful: "evoking deep tranquility and inner peace",
-        energetic: "inspiring motivation and dynamic energy", 
-        joyful: "radiating happiness and positive vibes",
-        focused: "promoting concentration and mental clarity"
-      };
-      promptParts.push(moodPrompts[emotionalPreference.emotion] || "");
-    }
-
-    promptParts.push("shot with professional camera");
-    promptParts.push("high resolution, sharp focus");
-    promptParts.push("realistic lighting and shadows");
-    promptParts.push("interior design magazine quality");
-
-    return promptParts.filter(Boolean).join(', ');
-  };
+  const buildInitialPrompt = () => buildFinalFluxPromptFromSession(sessionData as any);
 
   const getOptimalParameters = (modificationType: 'initial' | 'micro' | 'macro', iterationCount: number = 0) => {
     const qualityAdjustment = Math.max(0.1, 1 - (iterationCount * 0.1));
@@ -221,6 +191,16 @@ export default function GeneratePage() {
     console.log("FLUX Kontext Parameters:", parameters);
 
     try {
+      const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+      let jobId: string | null = null;
+      if (projectId) {
+        jobId = await startGenerationJob(projectId, {
+          type: 'initial',
+          prompt,
+          parameters,
+          has_base_image: Boolean(typedSessionData.roomImage),
+        });
+      }
       const response = await generateImages({
         prompt,
         base_image: typedSessionData.roomImage,
@@ -265,9 +245,40 @@ export default function GeneratePage() {
           },
         ],
       });
+
+      // Persist generation to Supabase
+      try {
+        const projectIdPersist = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectIdPersist) {
+          const genSet = await saveGenerationSet(projectIdPersist, prompt);
+          if (genSet?.id) {
+            await saveGeneratedImages(genSet.id, newImages.map((i) => ({ url: i.url, prompt: i.prompt })));
+          }
+          await logBehavioralEvent(projectIdPersist, 'generation_initial', { prompt, parameters });
+        }
+      } catch (e) {
+        console.warn('Supabase persist failed (initial generation):', e);
+      }
+
+      // Close job with timing (approx, since we don't have precise start time here)
+      try {
+        if (jobId) await endGenerationJob(jobId, { status: 'success', latency_ms: 0 });
+      } catch {}
     } catch (err) {
       console.error('Generation failed in handleInitialGeneration:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas generacji.');
+      try {
+        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectId) {
+          const jobId = await startGenerationJob(projectId, {
+            type: 'initial',
+            prompt: buildInitialPrompt(),
+            parameters: getOptimalParameters('initial', generationCount),
+            has_base_image: Boolean((sessionData as any).roomImage),
+          });
+          if (jobId) await endGenerationJob(jobId, { status: 'error', latency_ms: 0, error_message: String(err) });
+        }
+      } catch {}
     }
   };
 
@@ -288,6 +299,17 @@ export default function GeneratePage() {
     const parameters = getOptimalParameters(isMacro ? 'macro' : 'micro', generationCount);
 
     try {
+      const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+      let jobId: string | null = null;
+      if (projectId) {
+        jobId = await startGenerationJob(projectId, {
+          type: isMacro ? 'macro' : 'micro',
+          prompt: modificationPrompt,
+          parameters,
+          has_base_image: true,
+          modification_label: modification.label,
+        });
+      }
       const response = await generateImages({
         prompt: modificationPrompt,
         base_image: baseImageSource,
@@ -342,9 +364,42 @@ export default function GeneratePage() {
           },
         ],
       });
+
+      // Persist generation modification and user choice
+      try {
+        const projectIdPersist = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectIdPersist) {
+          const genSet = await saveGenerationSet(projectIdPersist, modificationPrompt);
+          if (genSet?.id) {
+            await saveGeneratedImages(genSet.id, newImages.map((i) => ({ url: i.url, prompt: i.prompt })));
+          }
+          await logBehavioralEvent(projectIdPersist, 'generation_modification', {
+            type: isMacro ? 'macro' : 'micro',
+            modification: modification.label,
+            parameters,
+          });
+        }
+      } catch (e) {
+        console.warn('Supabase persist failed (modification):', e);
+      }
+
+      try { if (jobId) await endGenerationJob(jobId, { status: 'success', latency_ms: 0 }); } catch {}
     } catch (err) {
       console.error('Modification failed:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas modyfikacji.');
+      try {
+        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectId) {
+          const jobId = await startGenerationJob(projectId, {
+            type: modification.category,
+            prompt: 'n/a',
+            parameters: getOptimalParameters(modification.category === 'macro' ? 'macro' : 'micro', generationCount),
+            has_base_image: true,
+            modification_label: modification.label,
+          });
+          if (jobId) await endGenerationJob(jobId, { status: 'error', latency_ms: 0, error_message: String(err) });
+        }
+      } catch {}
     }
   };
 
@@ -582,6 +637,14 @@ export default function GeneratePage() {
         },
       },
     } as any);
+
+    // ratings history event
+    try {
+      const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+      if (projectId) {
+        await saveImageRatingEvent(projectId, { local_image_id: imageId, rating_key: rating, value });
+      }
+    } catch {}
   };
 
   const handleFavorite = (imageId: string) => {

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { useSession } from '@/hooks';
+import { getOrCreateProjectId, saveDeviceContext, startPageView, endPageView } from '@/lib/supabase';
 import GlassSurface from 'src/components/ui/GlassSurface';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
@@ -26,9 +27,43 @@ const toBase64 = (file: File): Promise<string> =>
 
 export default function PhotoUploadPage() {
   const router = useRouter();
-  const { updateSession } = useSession();
+  const { sessionData, updateSession } = useSession();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [roomType, setRoomType] = useState<string>('living room');
+  const [pageViewId, setPageViewId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const userHash = sessionData?.userHash || (window as any)?.sessionStorage?.getItem('aura_user_hash') || '';
+        const projectId = await getOrCreateProjectId(userHash);
+        if (projectId) {
+          // Device context snapshot (once per page enter)
+          const context = {
+            userAgent: navigator.userAgent,
+            language: navigator.language,
+            viewport: { width: window.innerWidth, height: window.innerHeight, dpr: window.devicePixelRatio },
+            network: (navigator as any)?.connection?.effectiveType || null,
+          };
+          await saveDeviceContext(projectId, context);
+          // Page view start
+          const pvId = await startPageView(projectId, 'photo', { roomTypeDefault: roomType });
+          if (isMounted) setPageViewId(pvId);
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => {
+      (async () => {
+        if (pageViewId) await endPageView(pageViewId);
+      })();
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Corrected paths for example images
   const exampleImages = [
@@ -85,6 +120,7 @@ export default function PhotoUploadPage() {
   const handleContinue = () => {
     if (selectedImage) {
       stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+      updateSession({ roomType });
       router.push('/flow/tinder');
     }
   };
@@ -97,12 +133,35 @@ export default function PhotoUploadPage() {
         <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
         <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Dodaj zdjęcie przestrzeni</h1>
         <p className="text-base md:text-lg text-gray-700 font-modern mb-3 leading-relaxed">
-          Wgraj zdjęcie swojego pokoju lub wybierz przykładowe, aby AWA mogła lepiej zrozumieć Twój kontekst projektowy.
+          Wgraj zdjęcie swojego pokoju lub wybierz przykładowe, aby IDA mogła lepiej zrozumieć Twój kontekst projektowy.
         </p>
         <p className="text-sm text-gray-600 mb-4">
           <strong>Obsługiwane formaty:</strong> JPG, PNG, TIFF, HEIC
         </p>
         <div className="space-y-4 mb-4">
+          <div>
+            <h3 className="text-sm md:text-base font-bold text-gray-700 mb-1 font-exo2">Typ pomieszczenia</h3>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'living room', label: 'Pokój dzienny' },
+                { id: 'bedroom', label: 'Sypialnia' },
+                { id: 'kitchen', label: 'Kuchnia' },
+                { id: 'dining room', label: 'Jadalnia' },
+                { id: 'bathroom', label: 'Łazienka' },
+                { id: 'home office', label: 'Gabinet' },
+                { id: 'kids room', label: 'Pokój dziecięcy' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setRoomType(opt.id)}
+                  className={`px-3 py-2 rounded-xl text-sm border ${roomType === opt.id ? 'bg-gold/20 border-gold text-graphite' : 'bg-white/10 border-white/30 text-graphite hover:bg-white/20'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div>
             <h3 className="text-sm md:text-base font-bold text-gray-700 mb-1 font-exo2">Twoje zdjęcie</h3>
             <div className="flex flex-col items-center gap-2">
@@ -166,7 +225,7 @@ export default function PhotoUploadPage() {
       </GlassCard>
       </div>
 
-      {/* Dialog AWA na dole - cała szerokość */}
+      {/* Dialog IDA na dole - cała szerokość */}
       <div className="w-full">
         <AwaDialogue 
           currentStep="upload" 

@@ -43,7 +43,7 @@ const LandingScreen: React.FC = () => {
               </p>
               <p className="text-lg text-gray-600 font-modern leading-relaxed mb-8">
                 Razem odkryjemy Twoje preferencje designerskie i stworzymy wizualizacje Twoich marzeń.
-                AWA wykorzystuje najnowsze technologie AI, aby pomóc Ci zrozumieć własny gust estetyczny.
+                IDA wykorzystuje najnowsze technologie AI, aby pomóc Ci zrozumieć własny gust estetyczny.
               </p>
               <div className="mb-8">
                 <h2 className="text-2xl font-nasalization text-gold-700 mb-4">
@@ -78,7 +78,7 @@ const LandingScreen: React.FC = () => {
                 }}
                 className="text-xl px-12 py-4 animate-float mb-4"
               >
-                Rozpocznij Podróż z AWA
+                Rozpocznij Podróż z IDA
               </GlassButton>
               <p className="text-sm text-gray-500 mt-4 font-modern">
                 Badanie trwa około 15-20 minut

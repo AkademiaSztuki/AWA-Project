@@ -6,6 +6,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import GlassSurface from '@/components/ui/GlassSurface';
 import { GlassSlider } from '@/components/ui/GlassSlider';
 import { useSessionData } from '@/hooks/useSessionData';
+import { supabase } from '@/lib/supabase';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { AwaDialogue } from '@/components/awa';
 
@@ -56,7 +57,7 @@ export default function Survey1Page() {
     setAnswers(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     // Oblicz średnie dla kategorii
     const agencyQuestions = SATISFACTION_QUESTIONS.filter(q => q.category === 'Agency');
     const satisfactionQuestions = SATISFACTION_QUESTIONS.filter(q => q.category === 'Satisfaction');
@@ -87,6 +88,22 @@ export default function Survey1Page() {
         survey1Completed: Date.now()
       }
     });
+    
+    // Zapis do Supabase (survey_results)
+    try {
+      await supabase.from('survey_results').insert([
+        {
+          session_id: (window as any)?.sessionStorage?.getItem('aura_user_hash') || '',
+          type: 'satisfaction',
+          answers: { agencyAnswers, satisfactionAnswers },
+          agency_score: agencyScore,
+          satisfaction_score: satisfactionScore,
+          timestamp: new Date().toISOString(),
+        }
+      ]);
+    } catch (e) {
+      // ignore
+    }
 
     router.push('/flow/survey2');
   };
@@ -169,7 +186,7 @@ export default function Survey1Page() {
         </div>
       </div>
 
-      {/* Dialog AWA na dole - cała szerokość */}
+      {/* Dialog IDA na dole - cała szerokość */}
       <div className="w-full">
         <AwaDialogue 
           currentStep="survey_satisfaction" 

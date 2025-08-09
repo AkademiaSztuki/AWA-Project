@@ -28,7 +28,7 @@ const AwaBackground: React.FC = () => {
       {/* {isLoading && (
         <div className="absolute inset-0 bg-pearl-100/40 backdrop-blur-sm flex items-center justify-center rounded-xl z-20">
                   <div className="text-gold-500 font-nasalization text-lg animate-pulse">
-          Ładowanie AWA...
+          Ładowanie IDA...
         </div>
         </div>
       )} */}

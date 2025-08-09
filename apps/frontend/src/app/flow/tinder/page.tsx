@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-import { useSession } from '@/hooks';
+import { useSessionData } from '@/hooks/useSessionData';
+import { getOrCreateProjectId, saveTinderExposures, saveTinderSwipesDetailed, startPageView, endPageView } from '@/lib/supabase';
 import GlassSurface from 'src/components/ui/GlassSurface';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Heart, X, RotateCcw } from 'lucide-react';
@@ -28,7 +29,7 @@ type TinderImage = {
 
 export default function TinderTestPage() {
   const router = useRouter();
-  const { sessionData, updateSession } = useSession();
+  const { sessionData, updateSessionData } = useSessionData();
   const [images, setImages] = useState<TinderImage[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -43,6 +44,7 @@ export default function TinderTestPage() {
   const [startTime, setStartTime] = useState(Date.now());
   const [isComplete, setIsComplete] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
+  const [pageViewId, setPageViewId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -53,6 +55,21 @@ export default function TinderTestPage() {
         if (!res.ok) throw new Error('Failed to load images');
         const data: TinderImage[] = await res.json();
         if (isMounted) setImages(data);
+        // Log exposures order
+        try {
+          const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+          if (projectId && data?.length) {
+            const exposures = data.map((img, idx) => ({
+              image_id: img.id,
+              filename: img.filename,
+              order_index: idx,
+              shown_at: new Date().toISOString(),
+              tags: img.tags,
+              categories: img.categories,
+            }));
+            await saveTinderExposures(projectId, exposures);
+          }
+        } catch { /* ignore */ }
       } catch (error) {
         console.error(error);
       } finally {
@@ -63,6 +80,22 @@ export default function TinderTestPage() {
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectId) {
+          const id = await startPageView(projectId, 'tinder');
+          setPageViewId(id);
+        }
+      } catch {}
+    })();
+    return () => {
+      (async () => { if (pageViewId) await endPageView(pageViewId); })();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const currentImage = images[currentImageIndex];
@@ -85,14 +118,33 @@ export default function TinderTestPage() {
     };
     const newResults = [...swipeResults, swipeData];
     setSwipeResults(newResults);
+    // persist swipe detailed
+    (async () => {
+      try {
+        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectId) {
+          await saveTinderSwipesDetailed(projectId, [{
+            image_id: currentImage.id,
+            filename: currentImage.filename,
+            direction,
+            reaction_time_ms: reactionTime,
+            decided_at: new Date().toISOString(),
+            tags: currentImage.tags,
+            categories: currentImage.categories,
+          }]);
+        }
+      } catch {}
+    })();
     if (currentImageIndex + 1 >= images.length) {
       setIsComplete(true);
-      updateSession({ tinderData: { swipes: newResults } });
+      updateSessionData({ tinderData: { swipes: newResults, totalImages: images.length, currentProgress: images.length } });
       setTimeout(() => {
         router.push('/flow/dna');
       }, 2000);
     } else {
-      setCurrentImageIndex(prev => prev + 1);
+      const nextIndex = currentImageIndex + 1;
+      setCurrentImageIndex(nextIndex);
+      updateSessionData({ tinderData: { swipes: newResults, totalImages: images.length, currentProgress: nextIndex } });
     }
   };
 
@@ -157,7 +209,7 @@ export default function TinderTestPage() {
           </GlassCard>
         </div>
 
-        {/* Dialog AWA na dole - cała szerokość */}
+        {/* Dialog IDA na dole - cała szerokość */}
         <div className="w-full">
           <AwaDialogue 
             currentStep="tinder" 
@@ -281,7 +333,7 @@ export default function TinderTestPage() {
         </GlassCard>
       </div>
 
-      {/* Dialog AWA na dole - cała szerokość */}
+      {/* Dialog IDA na dole - cała szerokość */}
       <div className="w-full">
         <AwaDialogue 
           currentStep="tinder" 

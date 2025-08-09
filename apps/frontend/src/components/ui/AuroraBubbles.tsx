@@ -18,7 +18,7 @@ const AuroraBubbles: React.FC = () => {
   useEffect(() => {
     // Inicjalizacja bąbelków - większe i bardziej widoczne
     const initialBubbles: Bubble[] = [
-      // Duże bąbelki w okolicach nóg AWA - zwiększona przezroczystość
+      // Duże bąbelki w okolicach nóg IDA - zwiększona przezroczystość
       { x: 20, y: 75, size: 120, opacity: 0.65, speed: 0.3, direction: 1, blur: 25 },
       { x: 35, y: 80, size: 80, opacity: 0.68, speed: 0.4, direction: -1, blur: 20 },
       { x: 15, y: 85, size: 100, opacity: 0.62, speed: 0.25, direction: 1, blur: 30 },

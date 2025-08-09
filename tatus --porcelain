@@ -1,0 +1,46 @@
+warning: in the working copy of 'apps/frontend/src/app/flow/dna/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/app/flow/generate/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/app/flow/ladder/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/app/flow/onboarding/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/app/flow/photo/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/app/flow/survey1/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/app/flow/tinder/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/awa/AwaContainer.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/awa/AwaDialogue.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/screens/DNAScreen.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/screens/GenerationScreen.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/screens/LadderScreen.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/screens/LandingScreen.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/screens/OnboardingScreen.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/screens/PhotoUploadScreen.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/screens/Survey2Screen.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/screens/ThanksScreen.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/screens/TinderScreen.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/ui/AmbientMusic.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/components/ui/MusicTestButton.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/frontend/src/hooks/useAmbientMusic.ts', LF will be replaced by CRLF the next time Git touches it
+apps/frontend/src/app/flow/dna/page.tsx
+apps/frontend/src/app/flow/generate/page.tsx
+apps/frontend/src/app/flow/ladder/page.tsx
+apps/frontend/src/app/flow/onboarding/page.tsx
+apps/frontend/src/app/flow/photo/page.tsx
+apps/frontend/src/app/flow/survey1/page.tsx
+apps/frontend/src/app/flow/tinder/page.tsx
+apps/frontend/src/components/awa/AwaBackground.tsx
+apps/frontend/src/components/awa/AwaContainer.tsx
+apps/frontend/src/components/awa/AwaDialogue.tsx
+apps/frontend/src/components/awa/AwaModel.tsx
+apps/frontend/src/components/screens/DNAScreen.tsx
+apps/frontend/src/components/screens/GenerationScreen.tsx
+apps/frontend/src/components/screens/LadderScreen.tsx
+apps/frontend/src/components/screens/LandingScreen.tsx
+apps/frontend/src/components/screens/OnboardingScreen.tsx
+apps/frontend/src/components/screens/PhotoUploadScreen.tsx
+apps/frontend/src/components/screens/Survey2Screen.tsx
+apps/frontend/src/components/screens/ThanksScreen.tsx
+apps/frontend/src/components/screens/TinderScreen.tsx
+apps/frontend/src/components/ui/AmbientMusic.tsx
+apps/frontend/src/components/ui/MusicTestButton.tsx
+apps/frontend/src/components/ui/TextType.tsx
+apps/frontend/src/hooks/index.ts
+apps/frontend/src/hooks/useAmbientMusic.ts

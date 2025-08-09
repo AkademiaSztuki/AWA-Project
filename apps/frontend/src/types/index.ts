@@ -4,6 +4,7 @@ export interface SessionData {
   consentTimestamp: string;
   currentStep: FlowStep;
   uploadedImage?: string;
+  roomType?: string;
   tinderResults: TinderSwipe[];
   visualDNA: VisualDNA;
   ladderResults?: LadderResults;
@@ -63,6 +64,12 @@ export interface VisualDNA {
     lighting: string[];
   };
   accuracyScore: number;
+  // Optional convenience fields for UI/prompt building
+  dominantStyle?: string;
+  colorPalette?: string;
+  materialsSummary?: string;
+  lightingSummary?: string;
+  moodSummary?: string;
 }
 
 export interface LadderStep {

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession } from '@/hooks';
+import { getOrCreateProjectId, logBehavioralEvent } from '@/lib/supabase';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -706,6 +707,16 @@ export default function LadderOfNeedsPage() {
             promptElements: CORE_NEED_TO_PROMPT[option.deeperNeed as keyof typeof CORE_NEED_TO_PROMPT]
           }
         });
+        try {
+          const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+          if (projectId) {
+            await logBehavioralEvent(projectId, 'ladder_core_need', {
+              coreNeed: option.deeperNeed,
+              path: updatedPath,
+              promptElements: CORE_NEED_TO_PROMPT[option.deeperNeed as keyof typeof CORE_NEED_TO_PROMPT],
+            });
+          }
+        } catch (e) { /* ignore */ }
 
         // Move to usage questions
         setPhase('usage');
@@ -732,6 +743,15 @@ export default function LadderOfNeedsPage() {
           timestamp: new Date().toISOString()
         }
       });
+      try {
+        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectId) {
+          await logBehavioralEvent(projectId, 'usage_pattern', {
+            timeOfDay: option.id,
+            description: option.text,
+          });
+        }
+      } catch (e) { /* ignore */ }
 
       // Move to emotional questions
       setPhase('emotional');
@@ -747,6 +767,15 @@ export default function LadderOfNeedsPage() {
           timestamp: new Date().toISOString()
         }
       });
+      try {
+        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectId) {
+          await logBehavioralEvent(projectId, 'emotional_preference', {
+            emotion: option.emotion,
+            description: option.text,
+          });
+        }
+      } catch (e) { /* ignore */ }
 
       // Move to demographics
       setPhase('demographic');
@@ -768,6 +797,12 @@ export default function LadderOfNeedsPage() {
           demographics: newDemographics,
           ladderCompleteTime: new Date().toISOString()
         });
+        try {
+          const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+          if (projectId) {
+            await logBehavioralEvent(projectId, 'demographics', newDemographics);
+          }
+        } catch (e) { /* ignore */ }
 
         setPhase('complete');
       }
