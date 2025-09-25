@@ -34,7 +34,7 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app-dev.modal.run';
+    const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
     if (!apiBase) {
       const msg = 'Brak konfiguracji ENDPOINTU generacji (NEXT_PUBLIC_MODAL_API_URL)';
       setError(msg);
@@ -77,7 +77,7 @@ export const useModalAPI = () => {
 
   const checkHealth = async () => {
     try {
-      const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app-dev.modal.run';
+      const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
       if (!apiBase) {
         console.log('Brak NEXT_PUBLIC_MODAL_API_URL');
         return false;

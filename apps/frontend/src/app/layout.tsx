@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Inter, Audiowide, Exo_2 } from 'next/font/google';
 import './globals.css';
 import AuroraBackgroundClient from '@/components/ui/AuroraBackgroundClient';
@@ -44,6 +45,7 @@ export default function RootLayout({
             {children}
           </div>
         </div>
+        <SpeedInsights />
       </body>
     </html>
   );

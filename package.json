@@ -19,13 +19,16 @@
     "deploy:backend": "cd apps/modal-backend && modal deploy main.py"
   },
   "devDependencies": {
-    "turbo": "^1.13.0",
     "@types/node": "^20.0.0",
+    "turbo": "^1.13.0",
     "typescript": "^5.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "author": "Aura Research Team - Akademia Sztuk Pięknych",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@vercel/speed-insights": "^1.2.0"
+  }
 }

@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GlassCard, GlassButton } from '@/components/ui';
 import { useRouter } from 'next/navigation';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { usePathname } from 'next/navigation';
 import { Palette, Home, Sparkles } from 'lucide-react';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
@@ -19,8 +18,14 @@ const LandingScreen: React.FC = () => {
     }, 1500);
   };
 
-  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
-  const isLanding = pathname === '/';
+  // Fallback: jeśli przeglądarka zablokuje autoplay i onDialogueEnd nie wywoła się,
+  // pokaż sekcję akcji po krótkim czasie, by nie wymagać odświeżenia strony.
+  useEffect(() => {
+    const fallback = setTimeout(() => {
+      setShowAuraSection((prev) => prev || false ? prev : true);
+    }, 8000);
+    return () => clearTimeout(fallback);
+  }, []);
 
   return (
     <div className="min-h-screen flex">
@@ -72,9 +77,14 @@ const LandingScreen: React.FC = () => {
               </div>
               <GlassButton
                 size="lg"
-                onClick={() => {
-                  stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
-                  router.push('/flow/onboarding');
+                onClick={async () => {
+                  try {
+                    await Promise.resolve(stopAllDialogueAudio());
+                  } catch (e) {
+                    // ignore audio stop failures
+                  } finally {
+                    router.push('/flow/onboarding');
+                  }
                 }}
                 className="text-xl px-12 py-4 animate-float mb-4"
               >
