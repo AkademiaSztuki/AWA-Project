@@ -37,6 +37,15 @@ export interface SessionData {
   dnaFeedbackTime?: string;
   dnaAnalysisComplete?: boolean;
   roomImage?: string; // Base64 encoded image
+  detectedRoomType?: string; // Automatycznie wykryty typ pokoju
+  roomAnalysis?: {
+    detected_room_type: string;
+    confidence: number;
+    room_description: string;
+    suggestions: string[];
+    comment?: string; // MiniCPM-o-2.6 generated comment (English)
+    human_comment?: string; // Human Polish comment from IDA
+  };
   // Optional UI state for simple generation screen
   generatedImages?: string[];
   selectedImage?: string | null;

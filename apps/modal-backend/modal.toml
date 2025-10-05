@@ -3,7 +3,7 @@ python_version = "3.11"
 requirements = "requirements.txt"
 
 [secrets]
-huggingface-secret = "HF_TOKEN"
+huggingface-secret-new = { HF_NEWTOKEN = "your_huggingface_token_here" }
 
 [gpu]
 type = "H100"

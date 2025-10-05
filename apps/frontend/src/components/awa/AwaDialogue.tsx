@@ -29,6 +29,7 @@ const DIALOGUE_MAP: Record<FlowStep, string[]> = {
   upload: [
     "Świetnie! Teraz pokaż mi przestrzeń, którą chcesz przekształcić.",
     "Możesz wgrać zdjęcie swojego pokoju lub wybrać przykładowe.",
+    "Moja sztuczna inteligencja automatycznie rozpozna typ pomieszczenia!",
     "To pomoże mi lepiej zrozumieć kontekst projektu."
   ],
   tinder: [

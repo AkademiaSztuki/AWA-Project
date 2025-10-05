@@ -8,6 +8,7 @@ import { GlassButton } from '../ui/GlassButton';
 import { AwaContainer } from '../awa/AwaContainer';
 import { AwaDialogue } from '../awa/AwaDialogue';
 import { useSessionData } from '@/hooks/useSessionData';
+import { useModalAPI } from '@/hooks/useModalAPI';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 const EXAMPLE_IMAGES = [
@@ -16,19 +17,79 @@ const EXAMPLE_IMAGES = [
   { id: 3, src: '/images/examples/room3.jpg', name: 'Kuchnia skandynawska' },
 ];
 
+const ROOM_TYPE_TRANSLATIONS: Record<string, string> = {
+  'kitchen': 'Kuchnia',
+  'bedroom': 'Sypialnia',
+  'living_room': 'Salon',
+  'bathroom': 'Łazienka',
+  'dining_room': 'Jadalnia',
+  'office': 'Biuro/Pracownia',
+  'empty_room': 'Puste pomieszczenie'
+};
+
 export function PhotoUploadScreen() {
   const router = useRouter();
   const { updateSessionData } = useSessionData();
+  const { analyzeRoom } = useModalAPI();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [detectedRoomType, setDetectedRoomType] = useState<string | null>(null);
+  const [roomAnalysis, setRoomAnalysis] = useState<any>(null);
+
+  const analyzeImage = useCallback(async (file: File) => {
+    setIsAnalyzing(true);
+    try {
+      console.log('Starting room analysis for file:', file.name);
+      
+      // Convert file to base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // Remove data:image/...;base64, prefix
+          const base64Data = result.split(',')[1];
+          resolve(base64Data);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      console.log('File converted to base64, calling analyzeRoom...');
+      
+      // Analyze room
+      const analysis = await analyzeRoom({ image: base64 });
+      
+      console.log('Room analysis result:', analysis);
+      
+      setRoomAnalysis(analysis);
+      setDetectedRoomType(analysis.detected_room_type);
+      
+      // Update session data
+      updateSessionData({
+        roomAnalysis: analysis,
+        detectedRoomType: analysis.detected_room_type
+      });
+      
+    } catch (error) {
+      console.error('Error analyzing room:', error);
+      // Fallback to default room type
+      setDetectedRoomType('living_room');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [analyzeRoom, updateSessionData]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
+      console.log('File dropped:', file.name);
       setUploadedFile(file);
       setSelectedImage(URL.createObjectURL(file));
+      // Automatically analyze the room
+      analyzeImage(file);
     }
-  }, []);
+  }, [analyzeImage]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -43,11 +104,19 @@ export function PhotoUploadScreen() {
     setUploadedFile(null);
   };
 
+  const handleRoomTypeConfirm = (roomType: string) => {
+    setDetectedRoomType(roomType);
+    updateSessionData({
+      detectedRoomType: roomType
+    });
+  };
+
   const handleContinue = () => {
-    if (selectedImage) {
+    if (selectedImage && detectedRoomType) {
       stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
       updateSessionData({
-        uploadedImage: selectedImage
+        uploadedImage: selectedImage,
+        roomType: detectedRoomType
       });
       router.push('/flow/tinder');
     }
@@ -94,6 +163,66 @@ export function PhotoUploadScreen() {
                       <p className="text-sm text-gray-600">
                         {uploadedFile.name}
                       </p>
+                      
+                      {/* Room Analysis Results */}
+                      {isAnalyzing && (
+                        <div className="text-center py-4">
+                          <div className="text-2xl mb-2">🔍</div>
+                          <p className="text-sm text-gray-600">Analizuję pomieszczenie...</p>
+                        </div>
+                      )}
+                      
+                      {detectedRoomType && !isAnalyzing && (
+                        <div className="bg-white/20 rounded-lg p-4 space-y-3">
+                          <p className="text-sm font-medium text-gray-700">
+                            IDA wykryła: <span className="font-bold text-gold">
+                              {ROOM_TYPE_TRANSLATIONS[detectedRoomType]}
+                            </span>
+                          </p>
+                          {roomAnalysis?.room_description && (
+                            <p className="text-xs text-gray-600">
+                              {roomAnalysis.room_description}
+                            </p>
+                          )}
+                          
+                          {/* Room Type Confirmation */}
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-gray-700">Czy to się zgadza?</p>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleRoomTypeConfirm(detectedRoomType)}
+                                className="flex-1 px-3 py-1 bg-green-500/20 text-green-700 text-xs rounded hover:bg-green-500/30 transition-colors"
+                              >
+                                Tak, to {ROOM_TYPE_TRANSLATIONS[detectedRoomType]}
+                              </button>
+                              <button
+                                onClick={() => setDetectedRoomType(null)}
+                                className="flex-1 px-3 py-1 bg-red-500/20 text-red-700 text-xs rounded hover:bg-red-500/30 transition-colors"
+                              >
+                                Nie, wybiorę ręcznie
+                              </button>
+                            </div>
+                          </div>
+                          
+                          {/* Manual Room Type Selection */}
+                          {!detectedRoomType && (
+                            <div className="space-y-2">
+                              <p className="text-xs font-medium text-gray-700">Wybierz typ pomieszczenia:</p>
+                              <div className="grid grid-cols-2 gap-1">
+                                {Object.entries(ROOM_TYPE_TRANSLATIONS).map(([key, label]) => (
+                                  <button
+                                    key={key}
+                                    onClick={() => handleRoomTypeConfirm(key)}
+                                    className="px-2 py-1 bg-white/30 text-gray-700 text-xs rounded hover:bg-gold/20 transition-colors"
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -141,9 +270,9 @@ export function PhotoUploadScreen() {
             <div className="flex justify-center mt-8">
               <GlassButton 
                 onClick={handleContinue}
-                disabled={!selectedImage}
+                disabled={!selectedImage || !detectedRoomType || isAnalyzing}
               >
-                Kontynuuj Test Wizualny →
+                {isAnalyzing ? 'Analizuję...' : 'Kontynuuj Test Wizualny →'}
               </GlassButton>
             </div>
           </GlassCard>
@@ -157,6 +286,28 @@ export function PhotoUploadScreen() {
           fullWidth={false}
           autoHide={false}
         />
+        
+        {/* Dynamiczny dialog dla analizy pokoju */}
+        {detectedRoomType && roomAnalysis && (
+          <div className="mt-4">
+            <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+              <div className="text-center">
+                <div className="text-2xl mb-3">🎯</div>
+                <p className="text-gray-800 font-medium mb-2">
+                  Widzę, że to prawdopodobnie {ROOM_TYPE_TRANSLATIONS[detectedRoomType]}!
+                </p>
+                {roomAnalysis.room_description && (
+                  <p className="text-sm text-gray-600 mb-3">
+                    {roomAnalysis.room_description}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500">
+                  Czy moja analiza jest trafna? Możesz to potwierdzić lub wybrać inny typ pomieszczenia.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -26,6 +26,30 @@ interface GenerationResponse {
   cost_estimate: number;
 }
 
+interface RoomAnalysisRequest {
+  image: string; // base64 encoded image
+}
+
+interface RoomAnalysisResponse {
+  detected_room_type: string;
+  confidence: number;
+  room_description: string;
+  suggestions: string[];
+  comment: string; // Gemma 3 4B-PT generated comment
+  human_comment?: string; // Human Polish comment from IDA
+}
+
+interface LLMCommentRequest {
+  room_type: string;
+  room_description: string;
+  context?: string;
+}
+
+interface LLMCommentResponse {
+  comment: string;
+  suggestions: string[];
+}
+
 export const useModalAPI = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +99,47 @@ export const useModalAPI = () => {
     }
   }, []);
 
+  const analyzeRoom = useCallback(async (request: RoomAnalysisRequest): Promise<RoomAnalysisResponse> => {
+    setIsLoading(true);
+    setError(null);
+
+    const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    if (!apiBase) {
+      const msg = 'Brak konfiguracji ENDPOINTU analizy (NEXT_PUBLIC_MODAL_API_URL)';
+      setError(msg);
+      setIsLoading(false);
+      throw new Error(msg);
+    }
+    
+    try {
+      console.log('Rozpoczynam analizę pokoju...');
+      
+      const response = await fetch(`${apiBase}/analyze-room`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Room analysis API error response:', errorText);
+        throw new Error(`Błąd analizy pokoju: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Analiza pokoju zakończona! Otrzymano wynik:', result);
+      
+      setIsLoading(false);
+      return result;
+
+    } catch (err: any) {
+      console.error('Wystąpił błąd w analizie pokoju:', err);
+      setError(err.message || 'Wystąpił nieznany błąd podczas analizy pokoju.');
+      setIsLoading(false);
+      throw err;
+    }
+  }, []);
+
   const checkHealth = async () => {
     try {
       const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
@@ -93,8 +158,46 @@ export const useModalAPI = () => {
     }
   };
 
+  const generateLLMComment = useCallback(async (roomType: string, roomDescription: string, context: string = 'room_analysis'): Promise<LLMCommentResponse> => {
+    console.log('Generating LLM comment with Groq...');
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      const response = await fetch(`${apiBase}/llm-comment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          room_type: roomType,
+          room_description: roomDescription,
+          context: context
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('LLM comment result:', result);
+      return result;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('LLM comment generation failed:', errorMessage);
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   return {
     generateImages,
+    analyzeRoom,
+    generateLLMComment,
     checkHealth,
     isLoading,
     error,

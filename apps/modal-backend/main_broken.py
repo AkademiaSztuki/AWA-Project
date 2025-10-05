@@ -28,18 +28,16 @@ volumes = {CACHE_DIR: modal.Volume.from_name("aura-flux-cache", create_if_missin
 # Modal image with dependencies
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("git", "ffmpeg", "libsndfile1")  # Added audio dependencies
+    .apt_install("git")
     .pip_install("uv")
     .run_commands(
         "uv pip install --system --compile-bytecode --index-strategy unsafe-best-match "
         "accelerate~=1.8.1 "
         "git+https://github.com/huggingface/diffusers.git@00f95b9755718aabb65456e791b8408526ae6e76 "
         "huggingface-hub[hf-transfer]~=0.33.1 "
-        "Pillow~=11.2.1 safetensors~=0.5.3 transformers>=4.50.0 sentencepiece~=0.2.0 einops timm "
-        "torch==2.7.1 torchaudio==2.7.1 optimum-quanto==0.2.7 "
+        "Pillow~=11.2.1 safetensors~=0.5.3 transformers~=4.53.0 sentencepiece~=0.2.0 einops timm "
+        "torch==2.7.1 optimum-quanto==0.2.7 "
         "fastapi~=0.110.0 pydantic~=2.7.0 uvicorn[standard]~=0.29.0 "
-        "soundfile librosa av librosa[display] "  # Added audio packages for MiniCPM-o-2.6
-        "vector-quantize-pytorch vocos "  # Added TTS packages for MiniCPM-o-2.6
         "--extra-index-url https://download.pytorch.org/whl/cu128"
     )
     .env({
@@ -79,8 +77,6 @@ class RoomAnalysisResponse(BaseModel):
     confidence: float
     room_description: str
     suggestions: List[str]
-    comment: str
-    human_comment: str  # New human Polish comment from IDA
 
 class LLMCommentRequest(BaseModel):
     room_type: str
@@ -106,8 +102,8 @@ class FluxKontextModel:
             print("Downloading FLUX Kontext model if necessary...")
             
             # Set up secrets
-            import os
-            self.hf_token = os.environ["HF_NEWTOKEN"]
+            secret = modal.Secret.from_name("huggingface-secret-new")
+            self.hf_token = secret["HF_TOKEN"]
             
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
             print(f"Using device: {self.device}")
@@ -180,176 +176,147 @@ class FluxKontextModel:
             print(f"Error generating images: {str(e)}")
             raise e
 
-# Gemma 3 4B-IT Model - MULTIMODAL MODEL WITH EXCELLENT POLISH SUPPORT
+# MiniCPM-V-2.6 Model - NEW MULTIMODAL SOLUTION
 @app.cls(
     image=image,
-    gpu="A10G",  # Good GPU for Gemma 3 4B-IT inference
+    gpu="T4",  # MiniCPM-V-2.6 is efficient, T4 should be sufficient
     volumes=volumes,
     secrets=[modal.Secret.from_name("huggingface-secret-new")],
-    scaledown_window=600  # Stay online for 10 minutes to avoid cold starts
+    scaledown_window=180  # Stay online for 3 minutes
 )
-class Gemma3VisionModel:
-    """Gemma 3 4B-IT multimodal model for room analysis and comments with excellent Polish support"""
+class MiniCPMModel:
+    """MiniCPM-V-2.6 multimodal model for room analysis and comments"""
     
     @modal.enter()
     def enter(self):
-        """Initialize Gemma 3 4B-IT model"""
+        """Initialize MiniCPM-V-2.6 model"""
         try:
-            print("Downloading Gemma 3 4B-IT model if necessary...")
+            print("Downloading MiniCPM-V-2.6 model if necessary...")
             
             # Set up secrets
-            import os
-            self.hf_token = os.environ["HF_NEWTOKEN"]
+            secret = modal.Secret.from_name("huggingface-secret-new")
+            self.hf_token = secret["HF_TOKEN"]
             
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
             print(f"Using device: {self.device}")
             
-            # Load Gemma 3 4B-IT model (multimodal vision-language model, supports 140+ languages including Polish)
-            from transformers import Gemma3ForConditionalGeneration
+            # Load MiniCPM-V-2.6 model
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                "openbmb/MiniCPM-V-2_6",
+                cache_dir=CACHE_DIR,
+                use_auth_token=self.hf_token,
+                trust_remote_code=True
+            )
+            print("Tokenizer loaded successfully")
             
-            self.model = Gemma3ForConditionalGeneration.from_pretrained(
-                "google/gemma-3-4b-it",
+            self.model = AutoModelForCausalLM.from_pretrained(
+                "openbmb/MiniCPM-V-2_6",
                 torch_dtype=torch.bfloat16,
                 cache_dir=CACHE_DIR,
-                token=self.hf_token,
-                device_map="auto",
-                low_cpu_mem_usage=True
+                use_auth_token=self.hf_token,
+                trust_remote_code=True,
+                device_map="auto"
             )
-            print("Gemma 3 vision model loaded successfully")
+            print("Model loaded successfully")
             
-            # Load processor for image-text tasks
-            self.processor = AutoProcessor.from_pretrained(
-                "google/gemma-3-4b-it",
-                cache_dir=CACHE_DIR,
-                token=self.hf_token
-            )
-            print("Processor loaded successfully")
-            
-            print("Gemma 3 4B-IT model loaded successfully!")
+            print("MiniCPM-V-2.6 model loaded successfully!")
         except Exception as e:
-            print(f"Error loading Gemma 3 4B-IT model: {str(e)}")
+            print(f"Error loading MiniCPM-V-2.6 model: {str(e)}")
             raise e
 
     @modal.method()
     def analyze_room_and_comment(self, image_bytes: bytes) -> dict:
-        """Analyze room and generate intelligent comment using Gemma 3 4B-IT"""
-        import time
-        start_time = time.time()
-        
+        """Analyze room and generate intelligent comment using MiniCPM-V-2.6"""
         try:
-            print(f"Starting room analysis and comment generation... Image size: {len(image_bytes)} bytes")
+            print("Starting room analysis and comment generation...")
             
             # Load and process image
-            image_start = time.time()
             image = Image.open(BytesIO(image_bytes))
-            print(f"Image loaded in {time.time() - image_start:.2f}s - mode: {image.mode}, size: {image.size}")
+            print(f"Original image mode: {image.mode}, size: {image.size}")
             
             # Convert to RGB if needed
             if image.mode != 'RGB':
                 image = image.convert('RGB')
                 print(f"Converted image to RGB mode")
             
-            # Prepare messages for Gemma 3 multimodal API
+            # Prepare prompt for room analysis and comment generation
+            prompt = """Przeanalizuj to pomieszczenie i napisz ciepły, entuzjastyczny komentarz jak ekspertka od projektowania wnętrz. 
+
+Zidentyfikuj typ pomieszczenia (kuchnia, pokój dzienny, sypialnia, łazienka, biuro, puste pomieszczenie) i napisz naturalny komentarz po polsku.
+
+Format odpowiedzi:
+TYP: [typ pomieszczenia]
+KOMENTARZ: [ciepły, entuzjastyczny komentarz 2-3 zdania jak przyjaciółka ekspertka od wnętrz]
+
+Bądź bardzo naturalna, ciepła i inspirująca!"""
+            
+            # Process image and text with MiniCPM-V-2.6
             messages = [
                 {
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "image": image},
-                        {"type": "text", "text": "Przeanalizuj to pomieszczenie i napisz krótki komentarz.\n\nTYP: [kuchnia/pokój dzienny/sypialnia/łazienka/biuro/puste pomieszczenie]\nKOMENTARZ: [maksymalnie 2 krótkie zdania, naturalne, bez ozdóbek]"}
-                    ]
+                    "role": "user", 
+                    "content": prompt,
+                    "image": image
                 }
             ]
             
-            # Apply chat template and process inputs
-            inputs = self.processor.apply_chat_template(
-                messages, 
-                add_generation_prompt=True, 
-                tokenize=True,
-                return_dict=True, 
-                return_tensors="pt"
-            ).to(self.model.device)
-            
-            # Generate response with optimized parameters for speed
-            generation_start = time.time()
-            print("Starting Gemma 3 4B-IT inference...")
-            
-            input_len = inputs["input_ids"].shape[-1]
-            
+            # Generate response
             with torch.no_grad():
-                generation = self.model.generate(
-                    **inputs,
-                    max_new_tokens=100,
-                    do_sample=False,  # Greedy decoding for speed
-                    temperature=0.1,
-                    top_p=0.5
+                response = self.model.chat(
+                    image=image,
+                    msgs=messages,
+                    context=None,
+                    tokenizer=self.tokenizer,
+                    sampling=True,
+                    temperature=0.7,
+                    top_p=0.9,
+                    max_new_tokens=300
                 )
-                generation = generation[0][input_len:]
             
-            # Decode response
-            response = self.processor.decode(generation, skip_special_tokens=True)
-            
-            generation_time = time.time() - generation_start
-            print(f"Gemma 3 4B-IT inference completed in {generation_time:.2f}s")
-            print(f"Gemma 3 4B-IT response: {response}")
+            print(f"MiniCPM-V-2.6 response: {response}")
             
             # Parse response
             lines = response.strip().split('\n')
             room_type = "living_room"  # default
-            comment = "Świetne pomieszczenie! Widzę tutaj ogromny potencjał na stworzenie wspaniałej przestrzeni."
+            comment = "Ooo, jakie piękne pomieszczenie! Widzę tutaj naprawdę duży potencjał na stworzenie wspaniałej przestrzeni."
             
-            print(f"Parsing {len(lines)} lines from response")
-            for i, line in enumerate(lines):
+            for line in lines:
                 line = line.strip()
-                print(f"Line {i}: '{line}'")
                 if line.startswith("TYP:"):
-                    room_type_raw = line.replace("TYP:", "").strip().lower()
-                    print(f"Found room type: {room_type_raw}")
-                    # Map Polish room types to internal format
+                    room_type = line.replace("TYP:", "").strip().lower()
+                    # Map Polish room types to English
                     room_mapping = {
                         "kuchnia": "kitchen",
                         "pokój dzienny": "living_room",
-                        "pokoj dzienny": "living_room", 
-                        "sypialnia": "bedroom",
+                        "sypialnia": "bedroom", 
                         "łazienka": "bathroom",
-                        "lazienka": "bathroom",
                         "biuro": "office",
                         "puste pomieszczenie": "empty_room"
                     }
-                    room_type = room_mapping.get(room_type_raw, "living_room")
-                    print(f"Mapped room type: {room_type}")
+                    room_type = room_mapping.get(room_type, "living_room")
                 elif line.startswith("KOMENTARZ:"):
                     comment = line.replace("KOMENTARZ:", "").strip()
-                    print(f"Found comment: {comment}")
             
-            # Generate human Polish comment using Gemma 3's excellent Polish capabilities
-            human_comment = self._generate_human_comment(room_type, comment)
-            
-            total_time = time.time() - start_time
-            result = {
+            return {
                 "detected_room_type": room_type,
-                "confidence": 0.9,  # Gemma 3 is very reliable
-                "room_description": f"Analiza pomieszczenia wykonana przez Gemma 3 4B-IT",
+                "confidence": 0.9,  # MiniCPM-V-2.6 is quite reliable
+                "room_description": f"Analiza pomieszczenia wykonana przez MiniCPM-V-2.6",
                 "suggestions": [],
-                "comment": comment,  # Polish comment from Gemma 3
-                "human_comment": human_comment  # Human Polish comment from IDA
+                "comment": comment
             }
-            print(f"Total analysis time: {total_time:.2f}s")
-            print(f"Returning result: {result}")
-            return result
             
         except Exception as e:
-            print(f"Gemma 3 error: {str(e)}")
+            print(f"MiniCPM-V-2.6 error: {str(e)}")
             import traceback
             traceback.print_exc()
             
-            # Fallback response - krótkie i naturalne
+            # Fallback response
             fallback_comments = {
-                "kitchen": "Świetna kuchnia! Dużo miejsca na gotowanie.",
-                "living_room": "Przytulny pokój dzienny. Idealne miejsce na relaks.",
-                "bedroom": "Spokojna sypialnia. Będzie się tu dobrze spało.",
-                "bathroom": "Elegancka łazienka. Ma dobry potencjał.",
-                "office": "Funkcjonalne biuro. Dobre miejsce do pracy.",
-                "empty_room": "Puste pomieszczenie - czysta karta do aranżacji."
+                "kitchen": "Ooo, widzę piękną kuchnię! To pomieszczenie ma naprawdę dużo potencjału na stworzenie wspaniałej przestrzeni do gotowania i spotkań z rodziną.",
+                "living_room": "Wow, jaki przytulny pokój dzienny! Widzę tutaj doskonałe miejsce do relaksu i spędzania czasu z bliskimi.",
+                "bedroom": "Świetnie! Ta sypialnia wygląda bardzo obiecująco. To będzie idealne miejsce do odpoczynku i regeneracji sił.",
+                "bathroom": "Uwielbiam ten styl łazienki! Widzę tutaj piękną przestrzeń, która może stać się prawdziwą oazą spokoju.",
+                "office": "Wow, to biuro ma naprawdę dobry potencjał! Widzę doskonałe miejsce do pracy i kreatywności.",
+                "empty_room": "Świetnie! Puste pomieszczenie to jak czysta karta - możemy stworzyć tutaj coś naprawdę wyjątkowego!"
             }
             
             return {
@@ -357,74 +324,12 @@ class Gemma3VisionModel:
                 "confidence": 0.5,
                 "room_description": "Fallback analysis due to model error",
                 "suggestions": [],
-                "comment": fallback_comments.get("living_room", "Świetne pomieszczenie! Ma dobry potencjał."),
-                "human_comment": "O, widzę że dzisiaj będziemy aranżować wspólnie to wnętrze! Mam już kilka pomysłów."
+                "comment": fallback_comments.get("living_room", "Ooo, jakie piękne pomieszczenie! Widzę tutaj naprawdę duży potencjał.")
             }
-    
-    def _generate_human_comment(self, room_type: str, polish_comment: str) -> str:
-        """Generate human Polish comment using Gemma 3's excellent Polish capabilities"""
-        try:
-            # Prepare prompt for Gemma 3 to generate IDA-style comment
-            transform_prompt = f"""Jesteś IDA - profesjonalnym architektem wnętrz. Napisz krótki, ciepły komentarz o tym pomieszczeniu.
-
-Typ pomieszczenia: {room_type}
-Komentarz z analizy: {polish_comment}
-
-Zasady:
-- Mów jako architekt wnętrz, który będzie współpracować z klientem
-- Użyj ciepłego, entuzjastycznego tonu
-- Zacznij od "O, widzę..." lub "Świetnie!" lub podobnie
-- Wspomnij, że będziecie projektować/aranżować razem
-- Maksymalnie 2-3 zdania
-- Naturalny, ludzki język polski
-
-Przykład stylu: "O, widzę że dzisiaj będziemy aranżować wspólnie tę łazienkę! Widzę eleganckie białe ściany, które możemy uzupełnić o ciepłe akcenty."
-            
-Odpowiedz tylko komentarzem, bez dodatkowych wyjaśnień:"""
-            
-            # Use Gemma 3 to generate the transformed comment
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": transform_prompt}
-                    ]
-                }
-            ]
-            
-            inputs = self.processor.apply_chat_template(
-                messages, 
-                add_generation_prompt=True, 
-                tokenize=True,
-                return_dict=True, 
-                return_tensors="pt"
-            ).to(self.model.device)
-            
-            with torch.no_grad():
-                input_len = inputs["input_ids"].shape[-1]
-                generation = self.model.generate(
-                    **inputs,
-                    max_new_tokens=80,
-                    do_sample=True,
-                    temperature=0.7,
-                    top_p=0.9
-                )
-                generation = generation[0][input_len:]
-            
-            # Decode response
-            human_comment = self.processor.decode(generation, skip_special_tokens=True).strip()
-            
-            print(f"Generated human comment: {human_comment}")
-            return human_comment
-            
-        except Exception as e:
-            print(f"Error generating human comment: {str(e)}")
-            # Fallback to simple comment
-            return f"O, widzę że dzisiaj będziemy aranżować wspólnie to wnętrze! Mam już kilka pomysłów."
 
 # Initialize model instances
 flux_model = FluxKontextModel()
-gemma3_vision_model = Gemma3VisionModel()
+minicpm_model = MiniCPMModel()
 
 def build_prompt(request: GenerationRequest) -> str:
     """Build comprehensive prompt from user preferences"""
@@ -437,7 +342,7 @@ def build_prompt(request: GenerationRequest) -> str:
     timeout=600,  # 10 minutes timeout
     secrets=[modal.Secret.from_name("huggingface-secret-new")],
 )
-@modal.fastapi_endpoint(method="POST", label="aura-flux-api")
+@modal.web_endpoint(method="POST", label="aura-flux-api")
 def generate_images_endpoint(request: GenerationRequest):
     """Generate images endpoint"""
     try:
@@ -480,7 +385,6 @@ web_app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001", 
         "http://localhost:3002",
-        "http://localhost:3003",
         "https://aura-design.vercel.app",
         "https://aura-design-git-main-akademiasztuki.vercel.app",
     ],
@@ -510,8 +414,8 @@ async def health_check():
     return {
         "status": "healthy",
         "model": "flux-1-kontext",
-        "vision_model": "gemma-3-4b-it",
-        "legacy_models": "minicpm-o-2.6 (commented out), florence-2 (hidden but available)"
+        "vision_model": "minicpm-v-2.6",
+        "legacy_models": "florence-2 + groq (commented out)"
     }
 
 @web_app.post("/generate", response_model=GenerationResponse)
@@ -547,38 +451,28 @@ async def generate_images(request: GenerationRequest):
         print(f"Error in generate_images: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Gemma 3 4B-IT Endpoints - ACTIVE
+# MiniCPM-V-2.6 Endpoints - ACTIVE
 @web_app.post("/analyze-room", response_model=RoomAnalysisResponse)
 async def analyze_room(request: RoomAnalysisRequest):
-    """Analyze room type and characteristics from uploaded image using Gemma 3 4B-IT"""
+    """Analyze room type and characteristics from uploaded image using MiniCPM-V-2.6"""
     try:
         print("Received room analysis request")
         
         # Decode base64 image
         image_bytes = base64.b64decode(request.image)
-        print(f"Image decoded, size: {len(image_bytes)} bytes")
         
-        # Analyze room using Gemma 3 4B-IT with timeout
-        import asyncio
-        result = await asyncio.wait_for(
-            gemma3_vision_model.analyze_room_and_comment.remote.aio(image_bytes),
-            timeout=120.0  # 2 minute timeout
-        )
+        # Analyze room using MiniCPM-V-2.6
+        result = minicpm_model.analyze_room_and_comment.remote(image_bytes)
         
         return RoomAnalysisResponse(
             detected_room_type=result["detected_room_type"],
             confidence=result["confidence"],
             room_description=result["room_description"],
-            suggestions=result["suggestions"],
-            comment=result["comment"],
-            human_comment=result["human_comment"]
+            suggestions=result["suggestions"]
         )
         
-    except asyncio.TimeoutError:
-        print("Room analysis timed out after 2 minutes")
-        raise HTTPException(status_code=408, detail="Analysis timed out")
     except Exception as e:
-        print(f"API error occurred: {str(e)}")
+        print("API error occurred")
         raise HTTPException(status_code=500, detail=str(e))
 
 @web_app.options("/analyze-room")
@@ -588,24 +482,24 @@ async def analyze_room_options():
 
 @web_app.post("/llm-comment", response_model=LLMCommentResponse)
 async def generate_llm_comment(request: LLMCommentRequest):
-    """Generate intelligent comment using Gemma 3 4B-IT (for generated images)"""
+    """Generate intelligent comment using MiniCPM-V-2.6 (for generated images)"""
     try:
         print(f"Generating LLM comment for room type: {request.room_type}")
         
         # For generated images, we don't have the actual image, so we generate a comment based on room type
-        # This is a simplified version - in the future we could pass the generated image back to Gemma 3 4B-IT
+        # This is a simplified version - in the future we could pass the generated image back to MiniCPM
         
         fallback_comments = {
-            "kitchen": "Świetnie! Ta wygenerowana kuchnia wygląda naprawdę fantastycznie! Widzę idealne miejsce do gotowania i spotkań rodzinnych.",
-            "living_room": "Świetnie! Ten pokój dzienny ma naprawdę przytulną atmosferę. Idealne miejsce na relaks i spędzanie czasu z bliskimi.",
-            "bedroom": "Uwielbiam tę sypialnię! Wygląda na bardzo komfortowe i spokojne miejsce do wypoczynku.",
-            "bathroom": "Ta łazienka ma naprawdę elegancki styl! Idealne miejsce na relaks i regenerację.",
-            "office": "Fantastyczne biuro! Widzę tu idealne warunki do pracy i kreatywności.",
-            "empty_room": "Świetnie! To puste pomieszczenie ma naprawdę duży potencjał - możemy stworzyć tu coś wyjątkowego!"
+            "kitchen": "Wow, ta wygenerowana kuchnia wygląda naprawdę fantastycznie! Widzę tutaj doskonałą przestrzeń do gotowania i spotkań z rodziną.",
+            "living_room": "Świetnie! Ten pokój dzienny ma naprawdę przytulny klimat. Idealne miejsce do relaksu i spędzania czasu z bliskimi.",
+            "bedroom": "Uwielbiam tę sypialnię! Wygląda na bardzo komfortową i spokojną przestrzeń do odpoczynku.",
+            "bathroom": "Ta łazienka ma naprawdę elegancki styl! Doskonałe miejsce do relaksu i regeneracji.",
+            "office": "Fantastyczne biuro! Widzę tutaj idealne warunki do pracy i kreatywności.",
+            "empty_room": "Świetnie! To puste pomieszczenie ma naprawdę duży potencjał - możemy stworzyć tutaj coś wyjątkowego!"
         }
         
         return LLMCommentResponse(
-            comment=fallback_comments.get(request.room_type, "Świetnie! To wygenerowane wnętrze wygląda naprawdę fantastycznie!"),
+            comment=fallback_comments.get(request.room_type, "Wow, to wygenerowane wnętrze wygląda naprawdę fantastycznie!"),
             suggestions=[]
         )
         
