@@ -138,71 +138,100 @@ export function buildFluxPromptFromDNA(dna: WeightedDNAResult, roomType: string 
   return parts.join(', ');
 }
 
-export function buildFinalFluxPromptFromSession(sessionData: any) {
-  const roomType = (sessionData?.roomType || 'living room').toString();
-  const v = sessionData?.visualDNA || {};
-  const prefs = v?.preferences || {};
-
-  const styles = Array.isArray(prefs.styles) ? prefs.styles : [];
-  const colors = Array.isArray(prefs.colors) ? prefs.colors : [];
-  const materials = Array.isArray(prefs.materials) ? prefs.materials : [];
-  const furniture: string[] = []; // not explicitly in visualDNA; can be inferred later
-  const lighting = Array.isArray(prefs.lighting) ? prefs.lighting : [];
-  const mood = Array.isArray(v?.moodSummary ? [v.moodSummary] : []) ? [v.moodSummary].filter(Boolean) : [];
-
-  const dnaPrompt = buildFluxPromptFromDNA(
-    {
-      weights: {},
-      top: {
-        styles,
-        colors,
-        materials,
-        furniture,
-        lighting,
-        layout: [],
-        mood,
-      },
-      confidence: v?.accuracyScore || 70,
-    },
-    roomType,
-  );
-
-  const promptElements = sessionData?.ladderResults?.promptElements;
-  const ladderParts: string[] = [];
-  if (promptElements) {
-    if (promptElements.atmosphere) ladderParts.push(promptElements.atmosphere);
-    if (promptElements.materials) ladderParts.push(`using ${promptElements.materials}`);
-    if (promptElements.colors) ladderParts.push(promptElements.colors);
-    if (promptElements.lighting) ladderParts.push(promptElements.lighting);
-    if (promptElements.layout) ladderParts.push(promptElements.layout);
-    if (promptElements.mood) ladderParts.push(promptElements.mood);
+export function buildOptimizedFluxPrompt(sessionData: any): string {
+  // TOKEN BUDGET: 65 max (CLIP limit is 77, we stay safe at 65)
+  // Based on Research Through Design methodology - hierarchical data importance
+  
+  const parts: string[] = [];
+  let estimatedTokens = 0;
+  
+  // Helper to estimate tokens (rough: split by spaces)
+  const countTokens = (str: string) => str.split(/\s+/).length;
+  
+  // 1. BASE (3 tokens) - ESSENTIAL
+  const roomType = (sessionData?.roomType || 'living_room').toString().replace('_', ' ');
+  parts.push(`${roomType} interior`);
+  estimatedTokens += 3;
+  
+  // 2. STYLE (2-4 tokens) - DNA 30% weight - HIGHEST PRIORITY
+  const styles = sessionData?.visualDNA?.preferences?.styles || [];
+  if (styles.length > 0 && estimatedTokens < 60) {
+    const styleText = `${styles[0]} style`;
+    parts.push(styleText);
+    estimatedTokens += countTokens(styleText);
   }
+  
+  // 3. LADDER CORE NEED (8-12 tokens) - PSYCHOLOGICAL DEPTH - CRITICAL
+  const promptElements = sessionData?.ladderResults?.promptElements;
+  if (promptElements && estimatedTokens < 55) {
+    // Choose most concise but impactful element
+    // Priority: mood > atmosphere (mood is shorter but equally powerful)
+    if (promptElements.mood) {
+      const moodText = promptElements.mood
+        .replace(/przytulny/gi, 'cozy')
+        .replace(/spokojny/gi, 'peaceful')
+        .replace(/energiczny/gi, 'energetic')
+        .replace(/harmonijny/gi, 'harmonious')
+        .replace(/autentyczny/gi, 'authentic')
+        .replace(/elegancki/gi, 'elegant');
+      
+      const moodTokens = countTokens(moodText);
+      if (moodTokens <= 12) {
+        parts.push(moodText);
+        estimatedTokens += moodTokens;
+      }
+    }
+  }
+  
+  // 4. COLORS (4-6 tokens) - DNA 25% weight - HIGH PRIORITY
+  const colors = sessionData?.visualDNA?.preferences?.colors || [];
+  if (colors.length > 0 && estimatedTokens < 58) {
+    const colorText = `${colors.slice(0, 2).join(' and ')} palette`;
+    parts.push(colorText);
+    estimatedTokens += countTokens(colorText);
+  }
+  
+  // 5. MATERIALS (3-4 tokens) - DNA 20% weight
+  const materials = sessionData?.visualDNA?.preferences?.materials || [];
+  if (materials.length > 0 && estimatedTokens < 60) {
+    parts.push(`${materials[0]} materials`);
+    estimatedTokens += 2;
+  }
+  
+  // 6. LIGHTING (2-3 tokens) - DNA 5% weight + Ladder context
+  const lighting = sessionData?.visualDNA?.preferences?.lighting || [];
+  if (lighting.length > 0 && estimatedTokens < 62) {
+    parts.push(`${lighting[0]} lighting`);
+    estimatedTokens += 2;
+  }
+  
+  // 7. QUALITY ANCHORS (3-4 tokens) - Technical
+  if (estimatedTokens < 63) {
+    parts.push('high quality, realistic');
+    estimatedTokens += 3;
+  }
+  
+  const finalPrompt = parts.filter(Boolean).join(', ');
+  const actualTokens = countTokens(finalPrompt);
+  
+  // Logging for research analytics
+  console.log('🎨 Optimized FLUX Prompt:', finalPrompt);
+  console.log('📊 Estimated tokens:', actualTokens, '/ 65 budget');
+  console.log('✅ CLIP safe:', actualTokens <= 65 ? 'YES' : 'NO - DANGER!');
+  console.log('📈 Data sources:', {
+    style: styles[0] || 'none',
+    coreNeed: sessionData?.ladderResults?.coreNeed || 'none',
+    colors: colors.slice(0, 2),
+    materials: materials[0] || 'none'
+  });
+  
+  return finalPrompt;
+}
 
-  const usage = sessionData?.usagePattern?.timeOfDay;
-  const usageMap: Record<string, string> = {
-    morning: 'optimized for morning use with bright, energizing daylight',
-    afternoon: 'optimized for afternoon productivity with balanced natural lighting',
-    evening: 'optimized for evening relaxation with warm, ambient lighting',
-    night: 'optimized for nighttime comfort with soft, cozy illumination',
-  };
-  const usagePart = usage ? usageMap[usage] : '';
-
-  const emotion = sessionData?.emotionalPreference?.emotion;
-  const emotionMap: Record<string, string> = {
-    peaceful: 'evoking deep tranquility and inner peace',
-    energetic: 'inspiring motivation and dynamic energy',
-    joyful: 'radiating happiness and positive vibes',
-    focused: 'promoting concentration and mental clarity',
-  };
-  const emotionPart = emotion ? emotionMap[emotion] : '';
-
-  const quality = 'interior design magazine quality, realistic lighting and shadows, high resolution, sharp focus';
-
-  return [dnaPrompt, ...ladderParts, usagePart, emotionPart, quality]
-    .filter(Boolean)
-    .join(', ')
-    .replace(/\s+,/g, ',')
-    .replace(/,\s+,/g, ', ');
+// Keep old function for backwards compatibility but mark as deprecated
+export function buildFinalFluxPromptFromSession(sessionData: any) {
+  console.warn('⚠️ buildFinalFluxPromptFromSession is deprecated - use buildOptimizedFluxPrompt instead');
+  return buildOptimizedFluxPrompt(sessionData);
 }
 
 

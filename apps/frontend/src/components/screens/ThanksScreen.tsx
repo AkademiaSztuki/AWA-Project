@@ -49,11 +49,11 @@ export function ThanksScreen() {
         <div className="w-full max-w-4xl mx-auto">
         <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto">
           <div className="text-center">
-            <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">
+            <h1 className="text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-exo2 font-bold text-gray-800 mb-3 lg:mb-4">
               Dziękuję za Twoją podróż!
             </h1>
 
-            <p className="text-base md:text-lg text-gray-700 font-modern mb-6 leading-relaxed">
+            <p className="text-base lg:text-lg xl:text-xl 2xl:text-2xl text-gray-700 font-modern mb-4 lg:mb-6 leading-relaxed">
               Twój udział w badaniu nad współpracą człowieka z AI jest nieoceniony 
               dla rozwoju naukowego w dziedzinie projektowania wnętrz.
             </p>

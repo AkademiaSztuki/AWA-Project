@@ -51,6 +51,74 @@
   .border-gold-300-60 {
     border-color: rgb(255 229 92 / 0.6); /* gold-300 z 60% przezroczystości */
   }
+
+  /* Multi-resolution container widths */
+  .container-1080p {
+    @apply max-w-6xl; /* 1152px */
+  }
+
+  .container-1440p {
+    @apply max-w-7xl; /* 1280px */
+  }
+
+  .container-4k {
+    @apply max-w-screen-2xl; /* 1536px */
+  }
+
+  /* Responsive typography scales */
+  .text-responsive-sm {
+    @apply text-sm lg:text-base xl:text-lg 2xl:text-xl;
+  }
+
+  .text-responsive-base {
+    @apply text-base lg:text-lg xl:text-xl 2xl:text-2xl;
+  }
+
+  .text-responsive-lg {
+    @apply text-lg lg:text-xl xl:text-2xl 2xl:text-3xl;
+  }
+
+  .text-responsive-xl {
+    @apply text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl;
+  }
+
+  .text-responsive-2xl {
+    @apply text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl;
+  }
+
+  .text-responsive-3xl {
+    @apply text-3xl lg:text-4xl xl:text-5xl 2xl:text-6xl;
+  }
+
+  /* Responsive spacing */
+  .p-responsive {
+    @apply p-4 lg:p-6 xl:p-8 2xl:p-10;
+  }
+
+  .px-responsive {
+    @apply px-4 lg:px-6 xl:px-8 2xl:px-10;
+  }
+
+  .py-responsive {
+    @apply py-4 lg:py-6 xl:py-8 2xl:py-10;
+  }
+
+  .m-responsive {
+    @apply m-4 lg:m-6 xl:m-8 2xl:m-10;
+  }
+
+  .gap-responsive {
+    @apply gap-4 lg:gap-6 xl:gap-8 2xl:gap-10;
+  }
+
+  /* Touch-friendly minimum sizes */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  .touch-button {
+    @apply min-h-[44px] xl:min-h-[52px] 2xl:min-h-[60px];
+  }
 }
 
 /* Custom scrollbar */

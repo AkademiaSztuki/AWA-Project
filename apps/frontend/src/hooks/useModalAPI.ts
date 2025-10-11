@@ -50,6 +50,57 @@ interface LLMCommentResponse {
   suggestions: string[];
 }
 
+interface RoomAnalysisResult {
+  detected_room_type: string;
+  confidence: number;
+  room_description: string;
+  suggestions: string[];
+  comment: string;
+  human_comment: string;
+}
+
+interface LLMCommentResult {
+  comment: string;
+  suggestions: string[];
+}
+
+// Centralized generation parameters - single source of truth
+export const getGenerationParameters = (modificationType: 'initial' | 'micro' | 'macro', iterationCount: number = 0) => {
+  const qualityAdjustment = Math.max(0.1, 1 - (iterationCount * 0.1));
+  
+  const baseParams = {
+    initial: {
+      strength: 0.6,
+      steps: 25,
+      guidance: 4.5,
+      num_images: 1,
+      image_size: 1024,
+      width: 1024,
+      height: 1024
+    },
+    micro: {
+      strength: 0.25 * qualityAdjustment,
+      steps: 18,
+      guidance: 3.5,
+      num_images: 1,
+      image_size: 1024,
+      width: 1024,
+      height: 1024
+    },
+    macro: {
+      strength: 0.75,
+      steps: 28,
+      guidance: 5.5,
+      num_images: 1,
+      image_size: 1024,
+      width: 1024,
+      height: 1024
+    }
+  };
+
+  return baseParams[modificationType];
+};
+
 export const useModalAPI = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

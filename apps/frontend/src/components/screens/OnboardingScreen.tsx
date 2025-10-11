@@ -43,11 +43,11 @@ const OnboardingScreen: React.FC = () => {
       <div className="flex-1 p-8">
         <div className="max-w-3xl">
           <GlassCard className="mb-8">
-            <h1 className="text-3xl font-nasalization text-gray-800 mb-6">
+            <h1 className="text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-nasalization text-gray-800 mb-4 lg:mb-6">
               Zgoda na Udział w Badaniu
             </h1>
 
-            <div className="space-y-6 text-gray-700 font-modern">
+            <div className="space-y-4 lg:space-y-6 text-gray-700 font-modern text-sm lg:text-base xl:text-lg">
               <div>
                 <h3 className="text-lg font-semibold text-gold-700 mb-2">
                   Cel Badania
@@ -85,11 +85,11 @@ const OnboardingScreen: React.FC = () => {
           </GlassCard>
 
           <GlassCard variant="highlighted">
-            <h3 className="text-xl font-nasalization text-gold-700 mb-4">
+            <h3 className="text-lg lg:text-xl xl:text-2xl font-nasalization text-gold-700 mb-3 lg:mb-4">
               Wyrażam Zgodę Na:
             </h3>
 
-            <div className="space-y-4">
+            <div className="space-y-3 lg:space-y-4">
               {[
                 {
                   key: 'dataProcessing',

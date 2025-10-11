@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startGenerationJob, endGenerationJob, saveImageRatingEvent, startPageView, endPageView } from '@/lib/supabase';
-import { useModalAPI } from '@/hooks/useModalAPI';
+import { useModalAPI, getGenerationParameters } from '@/hooks/useModalAPI';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassSlider } from '@/components/ui/GlassSlider';
+import { LoadingProgress } from '@/components/ui/LoadingProgress';
+import { GenerationHistory } from '@/components/ui/GenerationHistory';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import {
@@ -21,10 +23,9 @@ import {
   Palette,
   Home,
   Lightbulb,
-  Sparkles,
 } from 'lucide-react';
 import Image from 'next/image';
-import { buildFinalFluxPromptFromSession } from '@/lib/dna';
+import { buildOptimizedFluxPrompt } from '@/lib/dna';
 
 interface GeneratedImage {
   id: string;
@@ -78,7 +79,7 @@ const MACRO_MODIFICATIONS: ModificationOption[] = [
 export default function GeneratePage() {
   const router = useRouter();
   const { sessionData, updateSessionData } = useSessionData();
-  const { generateImages, isLoading, error, setError, checkHealth } = useModalAPI();
+  const { generateImages, isLoading, error, setError, checkHealth, generateLLMComment } = useModalAPI();
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
@@ -87,19 +88,44 @@ export default function GeneratePage() {
   const [isApiReady, setIsApiReady] = useState(false);
   const [hasAttemptedGeneration, setHasAttemptedGeneration] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Krok 1/3: Inicjalizacja środowiska AI...");
+  const [loadingStage, setLoadingStage] = useState<1 | 2 | 3>(1);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [estimatedTime, setEstimatedTime] = useState<number | undefined>(undefined);
   const [hasAnsweredInteriorQuestion, setHasAnsweredInteriorQuestion] = useState(false);
   const [hasCompletedRatings, setHasCompletedRatings] = useState(false);
   const [pageViewId, setPageViewId] = useState<string | null>(null);
+  const [idaComment, setIdaComment] = useState<string | null>(null);
+  const [isGeneratingComment, setIsGeneratingComment] = useState(false);
+  const [generationHistory, setGenerationHistory] = useState<Array<{
+    id: string;
+    type: 'initial' | 'micro' | 'macro';
+    label: string;
+    timestamp: number;
+    imageUrl: string;
+  }>>([]);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [feedbackType, setFeedbackType] = useState<'positive' | 'neutral' | 'negative'>('neutral');
 
   useEffect(() => {
     const waitForApi = async () => {
       console.log("Rozpoczynam sprawdzanie gotowości API...");
+      setLoadingStage(1);
+      setLoadingProgress(5);
+      
       for (let i = 0; i < 30; i++) {
+        const progress = Math.min(30, 5 + (i * 1.5));
+        setLoadingProgress(progress);
+        setEstimatedTime(Math.max(5, 150 - (i * 5)));
+        
         const isReady = await checkHealth();
         console.log(`[Health Check ${i + 1}] API gotowe: ${isReady}`);
         if (isReady) {
           setIsApiReady(true);
+          setLoadingProgress(30);
           setStatusMessage("Krok 2/3: API gotowe. Przygotowuję dane...");
+          setLoadingStage(2);
+          setEstimatedTime(undefined);
           return;
         }
         await new Promise(resolve => setTimeout(resolve, 5000));
@@ -132,37 +158,53 @@ export default function GeneratePage() {
     }
   }, [isApiReady, generationCount, hasAttemptedGeneration]);
 
-  const buildInitialPrompt = () => buildFinalFluxPromptFromSession(sessionData as any);
+  // Generate IDA comment when image is selected
+  useEffect(() => {
+    if (selectedImage && generatedImages.length > 0 && !idaComment && !isGeneratingComment) {
+      generateIdaComment();
+    }
+  }, [selectedImage]);
 
-  const getOptimalParameters = (modificationType: 'initial' | 'micro' | 'macro', iterationCount: number = 0) => {
-    const qualityAdjustment = Math.max(0.1, 1 - (iterationCount * 0.1));
+  const buildInitialPrompt = () => buildOptimizedFluxPrompt(sessionData as any);
+
+  // Generate IDA comment for generated images
+  const generateIdaComment = async () => {
+    if (!selectedImage || isGeneratingComment) return;
     
-    const baseParams = {
-      initial: {
-        strength: 0.6,
-        steps: 25,
-        guidance: 4.5,
-        num_images: 1,
-        image_size: 512
-      },
-      micro: {
-        strength: 0.25 * qualityAdjustment,
-        steps: 18,
-        guidance: 3.5,
-        num_images: 1,
-        image_size: 512
-      },
-      macro: {
-        strength: 0.75,
-        steps: 28,
-        guidance: 5.5,
-        num_images: 1,
-        image_size: 512
+    setIsGeneratingComment(true);
+    try {
+      const roomType = (sessionData as any)?.roomType || 'living room';
+      const roomDescription = selectedImage.prompt.substring(0, 200);
+      
+      const result = await generateLLMComment(roomType, roomDescription, 'generated_image');
+      
+      if (result && result.comment) {
+        setIdaComment(result.comment);
       }
-    };
-
-    return baseParams[modificationType];
+    } catch (error) {
+      console.error('Failed to generate IDA comment:', error);
+      // Fallback comment
+      setIdaComment('Świetnie! To wygenerowane wnętrze wygląda naprawdę fantastycznie!');
+    } finally {
+      setIsGeneratingComment(false);
+    }
   };
+
+  // Navigate through generation history
+  const handleHistoryNodeClick = (index: number) => {
+    if (index >= 0 && index < generationHistory.length) {
+      const historyNode = generationHistory[index];
+      const image = generatedImages.find(img => img.id === historyNode.id);
+      if (image) {
+        setSelectedImage(image);
+        setCurrentHistoryIndex(index);
+        setIdaComment(null); // Reset comment for historical image
+      }
+    }
+  };
+
+  // Use centralized parameters from useModalAPI
+  const getOptimalParameters = getGenerationParameters;
 
   const handleInitialGeneration = async (force = false) => {
     if (!isApiReady) {
@@ -183,6 +225,9 @@ export default function GeneratePage() {
     }
 
     setStatusMessage("Krok 3/3: Wysyłanie zadania do AI. To może potrwać kilka minut...");
+    setLoadingStage(2);
+    setLoadingProgress(35);
+    setEstimatedTime(60);
     
     const prompt = buildInitialPrompt();
     const parameters = getOptimalParameters('initial', generationCount);
@@ -201,6 +246,12 @@ export default function GeneratePage() {
           has_base_image: Boolean(typedSessionData.roomImage),
         });
       }
+      
+      // Update progress during generation
+      setLoadingProgress(50);
+      setStatusMessage("Generowanie w toku...");
+      setEstimatedTime(45);
+      
       const response = await generateImages({
         prompt,
         base_image: typedSessionData.roomImage,
@@ -208,6 +259,12 @@ export default function GeneratePage() {
         modifications: [],
         ...parameters
       });
+      
+      // Generation completed
+      setLoadingProgress(80);
+      setLoadingStage(3);
+      setStatusMessage("Finalizuję obrazy...");
+      setEstimatedTime(10);
 
       if (!response || !response.images) {
         console.error("Otrzymano pustą odpowiedź z API po generowaniu.");
@@ -232,6 +289,22 @@ export default function GeneratePage() {
       
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
+      
+      // Complete loading
+      setLoadingProgress(100);
+      setEstimatedTime(0);
+      setStatusMessage("Gotowe!");
+      
+      // Add to history
+      const historyNode = {
+        id: newImages[0].id,
+        type: 'initial' as const,
+        label: 'Początkowa generacja',
+        timestamp: Date.now(),
+        imageUrl: newImages[0].url,
+      };
+      setGenerationHistory([historyNode]);
+      setCurrentHistoryIndex(0);
 
       await updateSessionData({
         generations: [
@@ -298,6 +371,13 @@ export default function GeneratePage() {
 
     const parameters = getOptimalParameters(isMacro ? 'macro' : 'micro', generationCount);
 
+    // Update loading state for modifications
+    setLoadingStage(2);
+    setLoadingProgress(40);
+    setStatusMessage(`Modyfikuję obraz: ${modification.label}...`);
+    setEstimatedTime(30);
+    setIdaComment(null); // Reset comment for new generation
+
     try {
       const projectId = await getOrCreateProjectId((sessionData as any).userHash);
       let jobId: string | null = null;
@@ -348,6 +428,23 @@ export default function GeneratePage() {
       
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
+      
+      // Complete modification
+      setLoadingProgress(100);
+      setLoadingStage(3);
+      setStatusMessage("Modyfikacja zakończona!");
+      setEstimatedTime(0);
+      
+      // Add to history
+      const historyNode = {
+        id: newImages[0].id,
+        type: isMacro ? ('macro' as const) : ('micro' as const),
+        label: modification.label,
+        timestamp: Date.now(),
+        imageUrl: newImages[0].url,
+      };
+      setGenerationHistory((prev) => [...prev, historyNode]);
+      setCurrentHistoryIndex(generationHistory.length);
 
       await updateSessionData({
         generations: [
@@ -615,6 +712,21 @@ export default function GeneratePage() {
       
       if (rating === 'is_my_interior') {
         setHasAnsweredInteriorQuestion(true);
+        
+        // Show feedback based on rating
+        if (value === 1) {
+          setFeedbackMessage("Rozumiem, to zupełnie inne pomieszczenie. Spróbujmy zmodyfikować obraz aby był bliższy Twojemu wnętrzu.");
+          setFeedbackType('negative');
+        } else if (value === 3) {
+          setFeedbackMessage("Świetnie! Widzę podobieństwa. Możemy to jeszcze dopracować.");
+          setFeedbackType('neutral');
+        } else if (value === 5) {
+          setFeedbackMessage("Doskonale! Udało nam się odtworzyć Twoje wnętrze. Teraz oceń szczegóły.");
+          setFeedbackType('positive');
+        }
+        
+        // Auto-hide feedback after 5 seconds
+        setTimeout(() => setFeedbackMessage(null), 5000);
       }
       
       if (rating !== 'is_my_interior') {
@@ -623,6 +735,25 @@ export default function GeneratePage() {
         );
         if (allRatingsComplete) {
           setHasCompletedRatings(true);
+          
+          // Calculate average rating for feedback
+          const avgRating = (['aesthetic_match', 'character', 'harmony'].reduce(
+            (sum, key) => sum + (updatedRatings[key as keyof typeof updatedRatings] || 0), 
+            0
+          ) / 3);
+          
+          if (avgRating >= 6) {
+            setFeedbackMessage("Świetny wybór! Ten obraz ma doskonałe oceny. Możesz go zapisać lub spróbować drobnych modyfikacji.");
+            setFeedbackType('positive');
+          } else if (avgRating >= 4) {
+            setFeedbackMessage("Dobra ocena! Możemy jeszcze popracować nad szczegółami.");
+            setFeedbackType('neutral');
+          } else {
+            setFeedbackMessage("Rozumiem, spróbujmy czegoś innego. Wybierz modyfikację makro dla zupełnie nowego kierunku.");
+            setFeedbackType('negative');
+          }
+          
+          setTimeout(() => setFeedbackMessage(null), 5000);
         }
       }
     }
@@ -690,18 +821,17 @@ export default function GeneratePage() {
           </div>
 
           {(isLoading || !isApiReady) && (
-            <div className="text-center py-12">
-              <GlassCard className="p-8">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                  className="w-16 h-16 mx-auto mb-4 text-gold"
-                >
-                  <Sparkles size={64} />
-                </motion.div>
-                <h3 className="text-xl font-semibold text-graphite mb-2">{statusMessage}</h3>
-                <p className="text-silver-dark">To może potrwać kilka minut przy pierwszym uruchomieniu.</p>
-              </GlassCard>
+            <div className="flex items-center justify-center py-12">
+              <LoadingProgress
+                currentStage={loadingStage}
+                message={statusMessage}
+                progress={loadingProgress}
+                estimatedTimeRemaining={estimatedTime}
+                onCancel={isLoading ? () => {
+                  setError("Generowanie anulowane przez użytkownika");
+                  setLoadingProgress(0);
+                } : undefined}
+              />
             </div>
           )}
 
@@ -718,8 +848,17 @@ export default function GeneratePage() {
           )}
 
           {generatedImages.length > 0 && (
-            <div className="space-y-6">
-              <div>
+            <>
+              {/* Generation History */}
+              {generationHistory.length > 0 && (
+                <GenerationHistory
+                  history={generationHistory}
+                  currentIndex={currentHistoryIndex}
+                  onNodeClick={handleHistoryNodeClick}
+                />
+              )}
+
+              <div className="space-y-6">
                 <GlassCard className="p-4">
                   {selectedImage && (
                     <div className="space-y-4">
@@ -737,6 +876,40 @@ export default function GeneratePage() {
                       </div>
 
                       <div className="space-y-4">
+                        {/* Feedback Message */}
+                        <AnimatePresence>
+                          {feedbackMessage && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                              transition={{ duration: 0.3 }}
+                            >
+                              <GlassCard className={`p-4 ${
+                                feedbackType === 'positive' 
+                                  ? 'bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-400/30'
+                                  : feedbackType === 'negative'
+                                  ? 'bg-gradient-to-r from-orange-500/10 to-red-500/10 border-orange-400/30'
+                                  : 'bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-400/30'
+                              }`}>
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-2 h-2 rounded-full ${
+                                    feedbackType === 'positive' 
+                                      ? 'bg-green-400' 
+                                      : feedbackType === 'negative'
+                                      ? 'bg-orange-400'
+                                      : 'bg-blue-400'
+                                  } animate-pulse`} />
+                                  <p className="text-gray-800 font-modern text-sm">
+                                    {feedbackMessage}
+                                  </p>
+                                </div>
+                              </GlassCard>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+
                         <AnimatePresence>
                           {!hasAnsweredInteriorQuestion && (
                             <motion.div
@@ -956,49 +1129,6 @@ export default function GeneratePage() {
                 )}
               </AnimatePresence>
 
-              <div className="space-y-6">
-                <GlassCard className="p-4">
-                  <h4 className="font-semibold text-graphite mb-3">Wszystkie warianty ({generatedImages.length}):</h4>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
-                      {generatedImages.slice(-8).map((image) => (
-                        <motion.div
-                          key={image.id}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handleImageSelect(image)}
-                          className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 ${
-                            selectedImage?.id === image.id ? 'border-gold ring-2 ring-gold' : 'border-transparent'
-                          }`}
-                        >
-                          <Image src={image.url} alt="thumbnail" fill className="object-cover" />
-                          {image.isFavorite && (
-                            <div className="absolute top-1 right-1">
-                              <Heart size={12} className="text-red-500" fill="currentColor" />
-                            </div>
-                          )}
-                        </motion.div>
-                      ))}
-                    </div>
-                    
-                    {generatedImages.length > 8 && (
-                      <div className="flex justify-center">
-                        <div className="flex gap-2">
-                          {Array.from({ length: Math.ceil(generatedImages.length / 8) }, (_, i) => (
-                            <div
-                              key={i}
-                              className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                                i === Math.floor((generatedImages.length - 1) / 8) 
-                                  ? 'bg-gold shadow-[0_0_8px_3px_rgba(251,191,36,0.6)]' 
-                                  : 'bg-white/20'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </GlassCard>
 
                 <div className="flex justify-center">
                   <AnimatePresence>
@@ -1018,8 +1148,7 @@ export default function GeneratePage() {
                     )}
                   </AnimatePresence>
                 </div>
-              </div>
-            </div>
+            </>
           )}
         </motion.div>
       </div>
@@ -1029,6 +1158,7 @@ export default function GeneratePage() {
           currentStep="generation" 
           fullWidth={true}
           autoHide={true}
+          customMessage={idaComment || (isGeneratingComment ? "Analizuję wygenerowany obraz..." : undefined)}
         />
       </div>
     </div>

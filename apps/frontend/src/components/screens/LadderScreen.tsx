@@ -95,12 +95,12 @@ export function LadderScreen() {
               </div>
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+            <h2 className="text-xl lg:text-2xl xl:text-3xl font-bold text-gray-800 mb-4 lg:mb-6 text-center">
               Dialog o Sensie
             </h2>
 
-            <div className="mb-8">
-              <p className="text-lg text-gray-700 mb-6 leading-relaxed">
+            <div className="mb-6 lg:mb-8">
+              <p className="text-base lg:text-lg xl:text-xl text-gray-700 mb-4 lg:mb-6 leading-relaxed">
                 {currentQuestion.question.replace('[wybrana opcja]', answers[answers.length - 1] || 'to')}
               </p>
 

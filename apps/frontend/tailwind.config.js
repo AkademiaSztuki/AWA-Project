@@ -6,6 +6,14 @@ module.exports = {
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
+    screens: {
+      'sm': '640px',   // Small tablets landscape
+      'md': '768px',   // Tablets
+      'lg': '1024px',  // Laptops
+      'xl': '1280px',  // 1080p monitors
+      '2xl': '1536px', // 1440p monitors
+      '3xl': '1920px', // 4K monitors
+    },
     extend: {
       colors: {
         // Perłowo-złoto-srebrna paleta

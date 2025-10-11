@@ -305,28 +305,28 @@ export default function TinderTestPage() {
             )}
           </div>
           {!isComplete && currentImage && (
-            <div className="flex justify-center space-x-4">
+            <div className="flex justify-center space-x-6 lg:space-x-8">
               <GlassSurface
-                width={64}
-                height={64}
-                borderRadius={32}
-                className="cursor-pointer select-none transition-transform duration-200 hover:scale-110 shadow-xl focus:outline-none focus:ring-2 focus:ring-red-400 flex items-center justify-center bg-red-100"
+                width={80}
+                height={80}
+                borderRadius={40}
+                className="cursor-pointer select-none transition-transform duration-200 hover:scale-110 active:scale-95 shadow-xl focus:outline-none focus:ring-2 focus:ring-red-400 flex items-center justify-center bg-red-100 touch-target"
                 onClick={() => handleSwipe('left')}
                 aria-label="Nie podoba mi się"
                 style={{ opacity: 1 }}
               >
-                <X className="text-red-500" size={24} />
+                <X className="text-red-500" size={32} />
               </GlassSurface>
               <GlassSurface
-                width={64}
-                height={64}
-                borderRadius={32}
-                className="cursor-pointer select-none transition-transform duration-200 hover:scale-110 shadow-xl focus:outline-none focus:ring-2 focus:ring-green-400 flex items-center justify-center bg-green-100"
+                width={80}
+                height={80}
+                borderRadius={40}
+                className="cursor-pointer select-none transition-transform duration-200 hover:scale-110 active:scale-95 shadow-xl focus:outline-none focus:ring-2 focus:ring-green-400 flex items-center justify-center bg-green-100 touch-target"
                 onClick={() => handleSwipe('right')}
                 aria-label="Podoba mi się"
                 style={{ opacity: 1 }}
               >
-                <Heart className="text-green-500" size={24} />
+                <Heart className="text-green-500" size={32} />
               </GlassSurface>
             </div>
           )}

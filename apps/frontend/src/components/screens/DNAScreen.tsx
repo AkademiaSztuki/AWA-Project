@@ -56,10 +56,10 @@ export function DNAScreen() {
         <div className="flex-1 flex items-center justify-center">
           <GlassCard className="text-center">
             <div className="text-6xl mb-4 animate-pulse">🧬</div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
+            <h2 className="text-xl lg:text-2xl xl:text-3xl font-bold text-gray-800 mb-3 lg:mb-4">
               Analizuję Twoje Wizualne DNA
             </h2>
-            <p className="text-gray-600">
+            <p className="text-sm lg:text-base xl:text-lg text-gray-600">
               Przetwarzam Twoje preferencje z testu wizualnego...
             </p>
             <div className="mt-6">
@@ -88,10 +88,10 @@ export function DNAScreen() {
           <GlassCard className="w-full">
             <div className="text-center mb-8">
               <div className="text-6xl mb-4">✨</div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-4">
+              <h2 className="text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-800 mb-3 lg:mb-4">
                 Twoje Wizualne DNA
               </h2>
-              <p className="text-gray-600">
+              <p className="text-sm lg:text-base xl:text-lg text-gray-600">
                 Oto co odkryłam o Twoich preferencjach estetycznych
               </p>
             </div>

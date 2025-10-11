@@ -11,6 +11,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useModalAPI } from '@/hooks/useModalAPI';
+import { EXAMPLE_IMAGES_METADATA, getExampleImageMetadata, isExampleImage } from '@/lib/exampleImagesMetadata';
 
 // Helper function to convert file to base64
 const toBase64 = (file: File): Promise<string> =>
@@ -155,9 +156,16 @@ export default function PhotoUploadPage() {
       
     } catch (error) {
       console.error('Error analyzing room:', error);
+      
+      // Check if it's a timeout error (cold start)
+      if (error instanceof Error && error.message.includes('408')) {
+        alert('Model AI jest jeszcze ładowany (pierwsze uruchomienie). Spróbuj ponownie za chwilę lub wybierz typ pomieszczenia ręcznie.');
+      }
+      
       // Fallback to default room type
       setDetectedRoomType('living_room');
       setRoomType('living room');
+      setShowRoomTypeSelection(true); // Show manual selection on error
     } finally {
       setIsAnalyzing(false);
     }
@@ -205,6 +213,9 @@ export default function PhotoUploadPage() {
   const handleExampleSelect = async (imageUrl: string) => {
     setIsLoading(true);
     try {
+      // Check if this is a pre-computed example
+      const metadata = getExampleImageMetadata(imageUrl);
+      
       const response = await fetch(imageUrl);
       const blob = await response.blob();
       const file = new File([blob], imageUrl.split('/').pop() || 'image.jpg', { type: blob.type });
@@ -212,8 +223,27 @@ export default function PhotoUploadPage() {
       await updateSession({ roomImage: base64 });
       setSelectedImage(imageUrl);
       
-      // Automatically analyze the room
-      await analyzeImage(file);
+      if (metadata) {
+        // Use pre-computed metadata - NO GEMMA CALL!
+        console.log('Using pre-computed metadata for example image:', metadata);
+        setRoomAnalysis({
+          detected_room_type: metadata.roomType,
+          confidence: metadata.confidence,
+          room_description: metadata.roomDescription,
+          comment: metadata.comment,
+          suggestions: []
+        });
+        setDetectedRoomType(metadata.roomType);
+        setRoomType(metadata.roomType);
+        setLlmComment({
+          comment: metadata.comment,
+          suggestions: []
+        });
+        setHumanComment(metadata.humanComment);
+      } else {
+        // Custom image - analyze with Gemma
+        await analyzeImage(file);
+      }
     } catch (error) {
       console.error("Error fetching or converting example image", error);
     } finally {

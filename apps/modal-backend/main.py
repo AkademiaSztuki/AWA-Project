@@ -52,16 +52,18 @@ image = (
 with image.imports():
     import torch
     from diffusers import FluxKontextPipeline
+    from diffusers.utils import load_image
     from transformers import AutoProcessor, AutoModelForCausalLM, AutoTokenizer
     from PIL import Image
 
 # Pydantic models for API
 class GenerationRequest(BaseModel):
     prompt: str
+    base_image: Optional[str] = None  # base64 encoded input image for image-to-image
     negative_prompt: str = ""
     num_images: int = 1
     guidance_scale: float = 3.5
-    num_inference_steps: int = 4
+    num_inference_steps: int = 20
     width: int = 1024
     height: int = 1024
     seed: Optional[int] = None
@@ -110,6 +112,7 @@ class FluxKontextModel:
             self.hf_token = os.environ["HF_NEWTOKEN"]
             
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.seed = 42  # Default seed for consistency
             print(f"Using device: {self.device}")
             
             # Load model with official settings
@@ -126,27 +129,54 @@ class FluxKontextModel:
             raise e
 
     @modal.method()
-    def generate_images(self, request: GenerationRequest) -> dict:
-        """Generate images using FLUX Kontext"""
+    def generate_images(self, request: GenerationRequest, image_bytes: bytes = None) -> dict:
+        """Generate images using FLUX Kontext - IMAGE-TO-IMAGE MODE"""
         try:
             print(f"Generating {request.num_images} images with prompt: {request.prompt[:50]}...")
+            
+            if not image_bytes:
+                raise ValueError("FLUX Kontext requires a base image for image-to-image editing!")
+            
+            # Validate prompt length (CLIP limit is 77 tokens)
+            prompt_tokens = len(request.prompt.split())
+            print(f"[PROMPT] Token count: {prompt_tokens}")
+            if prompt_tokens > 77:
+                print(f"[WARNING] Prompt exceeds CLIP limit (77 tokens)! {prompt_tokens - 77} tokens will be truncated!")
+                print(f"[WARNING] Truncated portion: {' '.join(request.prompt.split()[77:])}")
+            elif prompt_tokens > 65:
+                print(f"[WARNING] Prompt is long ({prompt_tokens} tokens). Recommended max: 65 tokens.")
+            else:
+                print(f"[OK] Prompt length OK ({prompt_tokens} tokens < 65 recommended)")
+            
+            # Load and resize the input image (following official example)
+            # Use proper resolution for FLUX Kontext - minimum 1024px for good quality
+            target_size = max(1024, min(request.width, request.height))
+            init_image = Image.open(BytesIO(image_bytes)).convert('RGB').resize((target_size, target_size))
+            print(f"Loaded base image, resized to: {init_image.size}")
             
             # Set random seed if provided
             if request.seed is not None:
                 torch.manual_seed(request.seed)
                 if torch.cuda.is_available():
                     torch.cuda.manual_seed(request.seed)
+            else:
+                # Use fixed seed for consistency
+                self.seed = 42
+                torch.manual_seed(self.seed)
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed(self.seed)
             
-            # Generate images
+            # Generate images in IMAGE-TO-IMAGE mode (following official example)
+            print("Running FLUX Kontext image-to-image inference...")
             with torch.inference_mode():
                 result = self.pipe(
+                    image=init_image,  # ← BASE IMAGE for editing
                     prompt=request.prompt,
-                    negative_prompt=request.negative_prompt,
-                    num_images_per_prompt=request.num_images,
                     guidance_scale=request.guidance_scale,
                     num_inference_steps=request.num_inference_steps,
-                    width=request.width,
-                    height=request.height,
+                    output_type="pil",
+                    generator=torch.Generator(device=self.device).manual_seed(self.seed),
+                    num_images_per_prompt=request.num_images,
                 )
             
             # Convert images to base64
@@ -183,13 +213,19 @@ class FluxKontextModel:
 # Gemma 3 4B-IT Model - MULTIMODAL MODEL WITH EXCELLENT POLISH SUPPORT
 @app.cls(
     image=image,
-    gpu="A10G",  # Good GPU for Gemma 3 4B-IT inference
+    gpu="H100",  # Same H100 as FLUX - both models fit together (H100 has 80GB VRAM)
     volumes=volumes,
     secrets=[modal.Secret.from_name("huggingface-secret-new")],
     scaledown_window=600  # Stay online for 10 minutes to avoid cold starts
 )
 class Gemma3VisionModel:
-    """Gemma 3 4B-IT multimodal model for room analysis and comments with excellent Polish support"""
+    """Gemma 3 4B-IT multimodal model for room analysis and comments with excellent Polish support
+    
+    Using H100 (same as FLUX) for:
+    - Single cold start instead of two separate GPUs
+    - Faster initialization (parallel loading with FLUX)
+    - Better resource utilization (80GB VRAM is plenty for both)
+    """
     
     @modal.enter()
     def enter(self):
@@ -520,13 +556,21 @@ async def generate_images(request: GenerationRequest):
     try:
         print(f"Received generation request: {request.prompt[:100]}...")
         
+        if not request.base_image:
+            raise HTTPException(status_code=400, detail="FLUX Kontext requires a base_image for image-to-image editing")
+        
         # Build comprehensive prompt
         full_prompt = build_prompt(request)
         
-        # Generate images
+        # Decode base64 image to bytes
+        image_bytes = base64.b64decode(request.base_image)
+        print(f"Decoded base image: {len(image_bytes)} bytes")
+        
+        # Generate images in image-to-image mode
         result = flux_model.generate_images.remote(
             GenerationRequest(
                 prompt=full_prompt,
+                base_image=request.base_image,
                 negative_prompt=request.negative_prompt,
                 num_images=request.num_images,
                 guidance_scale=request.guidance_scale,
@@ -534,7 +578,8 @@ async def generate_images(request: GenerationRequest):
                 width=request.width,
                 height=request.height,
                 seed=request.seed,
-            )
+            ),
+            image_bytes  # Pass the decoded bytes
         )
         
         return GenerationResponse(
@@ -562,7 +607,7 @@ async def analyze_room(request: RoomAnalysisRequest):
         import asyncio
         result = await asyncio.wait_for(
             gemma3_vision_model.analyze_room_and_comment.remote.aio(image_bytes),
-            timeout=120.0  # 2 minute timeout
+            timeout=180.0  # 3 minute timeout (H100 cold start can take ~60-90s)
         )
         
         return RoomAnalysisResponse(
@@ -575,8 +620,8 @@ async def analyze_room(request: RoomAnalysisRequest):
         )
         
     except asyncio.TimeoutError:
-        print("Room analysis timed out after 2 minutes")
-        raise HTTPException(status_code=408, detail="Analysis timed out")
+        print("Room analysis timed out after 3 minutes")
+        raise HTTPException(status_code=408, detail="Analysis timed out - model may still be loading (cold start)")
     except Exception as e:
         print(f"API error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -14,6 +14,7 @@ interface AwaDialogueProps {
   onDialogueEnd?: () => void;
   fullWidth?: boolean; // Nowy prop dla pełnej szerokości
   autoHide?: boolean; // Nowy prop dla automatycznego ukrywania
+  customMessage?: string; // Nowy prop dla niestandardowego komunikatu IDA
 }
 
 const DIALOGUE_MAP: Record<FlowStep, string[]> = {
@@ -88,7 +89,8 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   message,
   onDialogueEnd,
   fullWidth = false,
-  autoHide = false
+  autoHide = false,
+  customMessage
 }) => {
   // Zabezpieczenie przed undefined
   if (!currentStep) {
@@ -96,7 +98,8 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     return null;
   }
   
-  const dialogues = DIALOGUE_MAP[currentStep] || ["Cześć! Jestem IDA."];
+  // Use custom message if provided, otherwise use default dialogues
+  const dialogues = customMessage ? [customMessage] : (DIALOGUE_MAP[currentStep] || ["Cześć! Jestem IDA."]);
   const audioFile = AUDIO_MAP[currentStep] || "";
   
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);

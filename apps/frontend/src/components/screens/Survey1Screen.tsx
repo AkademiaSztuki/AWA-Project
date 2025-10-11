@@ -85,11 +85,11 @@ export function Survey1Screen() {
       <div className="flex-1 ml-[400px] flex items-center justify-center p-8">
         <div className="w-full max-w-3xl mx-auto">
           <GlassCard className="w-full">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
+            <h2 className="text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-800 mb-4 lg:mb-6 text-center">
               Twoje Doświadczenia
             </h2>
 
-            <p className="text-center text-gray-600 mb-8">
+            <p className="text-sm lg:text-base xl:text-lg text-center text-gray-600 mb-6 lg:mb-8">
               Oceń swoje doświadczenia z aplikacją na skali 1-7
             </p>
 

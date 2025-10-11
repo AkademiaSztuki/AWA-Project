@@ -51,11 +51,11 @@ export default function VisualDNAPage() {
     const likes = tinderData?.swipes?.filter((s: any) => s.direction === 'right') || [];
 
     const weighted = computeWeightedDNAFromSwipes(likes, tinderData?.totalImages || likes.length || 30);
-    const dominantStyle = weighted.top.styles.join(' + ') || 'Nowoczesny';
-    const colorPalette = weighted.top.colors.join(' + ') || 'Neutralne kolory';
-    const materials = weighted.top.materials.join(' + ') || 'Naturalne materiały';
-    const lighting = weighted.top.lighting.join(' + ') || 'Miękkie światło';
-    const mood = weighted.top.mood.join(' + ') || 'Przytulny';
+    const dominantStyle = weighted.top.styles.join(' + ') || 'Modern';
+    const colorPalette = weighted.top.colors.join(' + ') || 'Neutral colors';
+    const materials = weighted.top.materials.join(' + ') || 'Natural materials';
+    const lighting = weighted.top.lighting.join(' + ') || 'Soft lighting';
+    const mood = weighted.top.mood.join(' + ') || 'Cozy';
 
     const analysis: DNAAnalysis = {
       dominantStyle,
