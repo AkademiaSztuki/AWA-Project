@@ -73,37 +73,101 @@ const LandingScreen: React.FC = () => {
         </div>
       )}
       {showAuraSection && (
-        <div className="flex-1 ml-[0px] flex flex-col items-center justify-center h-screen">
-          <GlassButton
-            size="lg"
-            onClick={async () => {
-              try {
-                await Promise.resolve(stopAllDialogueAudio());
-                
-                // PRE-WARM API (non-blocking)
-                setIsPrewarming(true);
-                console.log('🔥 Pre-warming Modal API (FLUX + Gemma)...');
-                checkHealth().then(ready => {
-                  console.log('🔥 Modal API pre-warm result:', ready ? 'READY' : 'WARMING...');
-                }).catch(err => {
-                  console.log('Pre-warm check failed (expected on first run):', err);
-                });
-                
-              } catch (e) {
-                // ignore audio stop failures
-              } finally {
-                // Navigate directly to path selection
-                router.push('/flow/path-selection');
-              }
-            }}
-            disabled={isPrewarming}
-            className="text-lg lg:text-xl xl:text-2xl px-12 lg:px-16 py-4 lg:py-6 touch-button animate-float z-30"
-          >
-            {isPrewarming 
-              ? (language === 'pl' ? 'Przygotowuję AI...' : 'Preparing AI...')
-              : texts.button
-            }
-          </GlassButton>
+        <div className="flex-1 ml-[0px] flex flex-col items-center justify-center h-screen p-8">
+          <div className="w-full max-w-4xl z-30">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="text-center mb-8"
+            >
+              <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-3">
+                {language === 'pl' ? 'Wybierz Swoją Ścieżkę' : 'Choose Your Path'}
+              </h2>
+              <p className="text-base lg:text-lg text-silver-dark font-modern">
+                {language === 'pl' ? 'Jak chcesz doświadczyć IDA?' : 'How do you want to experience IDA?'}
+              </p>
+            </motion.div>
+
+            {/* Two path buttons */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* FAST TRACK */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+                whileHover={{ scale: 1.05, y: -5 }}
+              >
+                <GlassCard 
+                  className="p-6 lg:p-8 cursor-pointer hover:border-blue-400/50 transition-all group"
+                  onClick={async () => {
+                    stopAllDialogueAudio();
+                    setIsPrewarming(true);
+                    checkHealth().catch(() => {});
+                    await updateSessionData({ pathType: 'fast' });
+                    router.push('/flow/onboarding-fast');
+                  }}
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center">
+                      <Zap size={28} className="text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-blue-600 transition-colors">
+                        {language === 'pl' ? 'Szybka Ścieżka' : 'Fast Track'}
+                      </h3>
+                      <p className="text-xs text-silver-dark">3-5 min • 10 generacji</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-graphite font-modern">
+                    {language === 'pl' 
+                      ? 'Prześlij zdjęcie i generuj od razu!' 
+                      : 'Upload photo and generate right away!'}
+                  </p>
+                </GlassCard>
+              </motion.div>
+
+              {/* FULL EXPERIENCE */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.6 }}
+                whileHover={{ scale: 1.05, y: -5 }}
+              >
+                <GlassCard 
+                  variant="highlighted"
+                  className="p-6 lg:p-8 cursor-pointer hover:border-gold/50 transition-all group relative overflow-hidden"
+                  onClick={async () => {
+                    stopAllDialogueAudio();
+                    setIsPrewarming(true);
+                    checkHealth().catch(() => {});
+                    await updateSessionData({ pathType: 'full' });
+                    router.push('/flow/onboarding');
+                  }}
+                >
+                  <div className="absolute top-3 right-3 bg-gradient-to-r from-gold to-champagne text-white px-3 py-1 rounded-full text-xs font-bold">
+                    ✨ {language === 'pl' ? 'Polecane' : 'Recommended'}
+                  </div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gold via-champagne to-gold flex items-center justify-center">
+                      <Heart size={28} className="text-white" fill="currentColor" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl lg:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent">
+                        {language === 'pl' ? 'Pełne Doświadczenie' : 'Full Experience'}
+                      </h3>
+                      <p className="text-xs text-silver-dark">15-20 min • Unlimited</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-graphite font-modern">
+                    {language === 'pl' 
+                      ? 'Poznaj siebie głęboko, stwórz wnętrze które jest TWOJE' 
+                      : 'Deep dive, create interior that is truly YOURS'}
+                  </p>
+                </GlassCard>
+              </motion.div>
+            </div>
+          </div>
         </div>
       )}
     </div>
