@@ -1,18 +1,21 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { GlassCard, GlassButton } from '@/components/ui';
 import { useRouter } from 'next/navigation';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { Palette, Home, Sparkles } from 'lucide-react';
+import { Zap, Heart, Palette, Home, Sparkles } from 'lucide-react';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useSessionData } from '@/hooks/useSessionData';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
   const { language } = useLanguage();
   const { checkHealth } = useModalAPI();
+  const { updateSessionData } = useSessionData();
   const [showAuraSection, setShowAuraSection] = useState(false);
   const [isPrewarming, setIsPrewarming] = useState(false);
 
@@ -55,11 +58,11 @@ const LandingScreen: React.FC = () => {
   };
 
   // Fallback: jeśli przeglądarka zablokuje autoplay i onDialogueEnd nie wywoła się,
-  // pokaż sekcję akcji po krótkim czasie, by nie wymagać odświeżenia strony.
+  // pokaż sekcję akcji po dłuższym czasie, by dialog zdążył się skończyć
   useEffect(() => {
     const fallback = setTimeout(() => {
       setShowAuraSection((prev) => prev || false ? prev : true);
-    }, 8000);
+    }, 15000); // Increased from 8s to 15s
     return () => clearTimeout(fallback);
   }, []);
 
@@ -89,34 +92,33 @@ const LandingScreen: React.FC = () => {
               </p>
             </motion.div>
 
-            {/* Two path buttons */}
+            {/* Two path buttons - EQUAL HEIGHT */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* FAST TRACK */}
-              <motion.div
+              <motion.button
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.6, delay: 0.4 }}
                 whileHover={{ scale: 1.05, y: -5 }}
+                className="text-left w-full"
+                onClick={async () => {
+                  stopAllDialogueAudio();
+                  setIsPrewarming(true);
+                  checkHealth().catch(() => {});
+                  await updateSessionData({ pathType: 'fast' });
+                  router.push('/flow/onboarding');
+                }}
               >
-                <GlassCard 
-                  className="p-6 lg:p-8 cursor-pointer hover:border-blue-400/50 transition-all group"
-                  onClick={async () => {
-                    stopAllDialogueAudio();
-                    setIsPrewarming(true);
-                    checkHealth().catch(() => {});
-                    await updateSessionData({ pathType: 'fast' });
-                    router.push('/flow/onboarding-fast');
-                  }}
-                >
+                <GlassCard className="p-6 lg:p-8 h-full hover:border-silver/50 transition-all group">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center">
-                      <Zap size={28} className="text-white" />
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center">
+                      <Zap size={28} className="text-graphite" />
                     </div>
                     <div>
-                      <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-blue-600 transition-colors">
+                      <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                         {language === 'pl' ? 'Szybka Ścieżka' : 'Fast Track'}
                       </h3>
-                      <p className="text-xs text-silver-dark">3-5 min • 10 generacji</p>
+                      <p className="text-xs text-silver-dark font-modern">3-5 min • 10 {language === 'pl' ? 'generacji' : 'generations'}</p>
                     </div>
                   </div>
                   <p className="text-sm text-graphite font-modern">
@@ -125,38 +127,39 @@ const LandingScreen: React.FC = () => {
                       : 'Upload photo and generate right away!'}
                   </p>
                 </GlassCard>
-              </motion.div>
+              </motion.button>
 
               {/* FULL EXPERIENCE */}
-              <motion.div
+              <motion.button
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.6, delay: 0.6 }}
                 whileHover={{ scale: 1.05, y: -5 }}
+                className="text-left w-full"
+                onClick={async () => {
+                  stopAllDialogueAudio();
+                  setIsPrewarming(true);
+                  checkHealth().catch(() => {});
+                  await updateSessionData({ pathType: 'full' });
+                  router.push('/flow/onboarding');
+                }}
               >
                 <GlassCard 
                   variant="highlighted"
-                  className="p-6 lg:p-8 cursor-pointer hover:border-gold/50 transition-all group relative overflow-hidden"
-                  onClick={async () => {
-                    stopAllDialogueAudio();
-                    setIsPrewarming(true);
-                    checkHealth().catch(() => {});
-                    await updateSessionData({ pathType: 'full' });
-                    router.push('/flow/onboarding');
-                  }}
+                  className="p-6 lg:p-8 h-full hover:border-gold/50 transition-all group relative overflow-hidden"
                 >
                   <div className="absolute top-3 right-3 bg-gradient-to-r from-gold to-champagne text-white px-3 py-1 rounded-full text-xs font-bold">
                     ✨ {language === 'pl' ? 'Polecane' : 'Recommended'}
                   </div>
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gold via-champagne to-gold flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                       <Heart size={28} className="text-white" fill="currentColor" />
                     </div>
                     <div>
-                      <h3 className="text-xl lg:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent">
+                      <h3 className="text-xl lg:text-2xl font-nasalization text-gold-700">
                         {language === 'pl' ? 'Pełne Doświadczenie' : 'Full Experience'}
                       </h3>
-                      <p className="text-xs text-silver-dark">15-20 min • Unlimited</p>
+                      <p className="text-xs text-silver-dark font-modern">15-20 min • Unlimited</p>
                     </div>
                   </div>
                   <p className="text-sm text-graphite font-modern">
@@ -165,7 +168,7 @@ const LandingScreen: React.FC = () => {
                       : 'Deep dive, create interior that is truly YOURS'}
                   </p>
                 </GlassCard>
-              </motion.div>
+              </motion.button>
             </div>
           </div>
         </div>

@@ -24,7 +24,7 @@ const OnboardingScreen: React.FC = () => {
     gender: '',
     education: ''
   });
-  const { updateSessionData } = useSessionData();
+  const { updateSessionData, sessionData } = useSessionData();
 
   const canProceedConsent = Object.values(consent).every(Boolean);
   const canProceedDemographics = demographics.ageRange && demographics.gender && demographics.education;
@@ -42,8 +42,17 @@ const OnboardingScreen: React.FC = () => {
         consentTimestamp: new Date().toISOString(),
         demographics: demographics
       });
-      // Navigate to Core Profile Wizard (Full Experience)
-      router.push('/setup/profile');
+      
+      // Check path type and route accordingly
+      const pathType = (sessionData as any)?.pathType;
+      
+      if (pathType === 'fast') {
+        // Fast track: skip core profile, go directly to photo upload
+        router.push('/flow/photo');
+      } else {
+        // Full experience: go to core profile wizard
+        router.push('/setup/profile');
+      }
     }
   };
 
@@ -81,18 +90,19 @@ const OnboardingScreen: React.FC = () => {
   const texts = consentTexts[language];
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
+    <div className="min-h-screen flex w-full relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
 
+      {/* IDA model on the right side */}
       <AwaContainer 
         currentStep="onboarding" 
         showDialogue={false}
-        fullWidth={true}
+        fullWidth={false}
         autoHide={false}
       />
 
-      <div className="flex-1 p-4 lg:p-8">
-        <div className="max-w-4xl mx-auto">
+      <div className="flex-1 flex items-center p-4 lg:p-8 lg:mr-32">
+        <div className="w-full max-w-4xl mx-auto">
           {step === 'consent' && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}

@@ -111,40 +111,58 @@ export function PhotoUploadScreen() {
     });
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (selectedImage && detectedRoomType) {
       stopAllDialogueAudio();
-      updateSessionData({
+      
+      // Save photo data
+      await updateSessionData({
         uploadedImage: selectedImage,
-        roomImage: selectedImage, // For generate page compatibility
+        roomImage: selectedImage,
         roomType: detectedRoomType
       });
       
-      // Check path type
+      // Check path type from sessionData
       const pathType = (sessionData as any)?.pathType;
+      console.log('[PhotoUpload] Path type:', pathType);
       
       if (pathType === 'fast') {
         // Fast track: skip tinder/dna/ladder, go directly to generation
+        console.log('[PhotoUpload] Fast track detected - routing to /flow/generate');
+        
+        // Set minimal visualDNA for generate page to work
+        await updateSessionData({
+          visualDNA: {
+            dominantStyle: 'modern',
+            dominantTags: [],
+            preferences: { colors: [], materials: [], styles: [], lighting: [] },
+            accuracyScore: 0
+          },
+          tinderResults: [],
+          ladderPath: ['quick'],
+          coreNeed: 'simple design'
+        });
+        
         router.push('/flow/generate');
       } else {
         // Full experience: continue with tinder swipes
+        console.log('[PhotoUpload] Full experience - routing to /flow/tinder');
         router.push('/flow/tinder');
       }
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
-      
-
+    <div className="min-h-screen flex w-full">
+      {/* IDA model on the right side */}
       <AwaContainer 
         currentStep="upload" 
         showDialogue={false}
-        fullWidth={true}
+        fullWidth={false}
         autoHide={false}
       />
 
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-8 lg:mr-32">
         <div className="w-full max-w-3xl mx-auto">
           <GlassCard className="w-full">
             <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">
