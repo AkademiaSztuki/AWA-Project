@@ -55,6 +55,18 @@ pnpm dev
 3. Verify "Confirm Email" is **OFF**
 4. Check spam folder
 
+### Google shows "DEPLOYMENT_NOT_FOUND" or redirects to wrong URL
+**Problem:** Google OAuth Redirect URI mismatch
+
+**Quick Fix:**
+1. Supabase → Auth → Providers → Google
+2. Enable **"Use development keys"** (for local testing)
+3. OR add to Google Cloud Console Authorized Redirect URIs:
+   - `https://zcaaqbbcqpkzunepnhpb.supabase.co/auth/v1/callback`
+   - `http://localhost:3002/auth/callback`
+
+**Test:** Use **Magic Link (email)** first to verify auth works
+
 ### Both fail
 - Verify `.env.local` has correct Supabase URL and anon key
 - Check Supabase project is not paused
