@@ -34,8 +34,8 @@ export default function OnboardingFastPage() {
         consentTimestamp: new Date().toISOString(),
         pathType: 'fast'
       });
-      // Navigate directly to fast-track flow
-      router.push('/flow/fast-track');
+      // Navigate to photo upload (skip tinder/dna/ladder, go straight to generate after photo)
+      router.push('/flow/photo');
     }
   };
 

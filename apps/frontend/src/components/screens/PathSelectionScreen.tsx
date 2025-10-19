@@ -112,7 +112,7 @@ export default function PathSelectionScreen() {
     });
 
     if (pathType === 'fast') {
-      // Fast track: quick consent → fast-track flow
+      // Fast track: quick consent → photo → generate
       router.push('/flow/onboarding-fast');
     } else {
       // Full experience: full onboarding (consent + demographics) → core profile
@@ -121,19 +121,21 @@ export default function PathSelectionScreen() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
+    <div className="min-h-screen flex w-full relative overflow-hidden">
       {/* Background effects matching existing screens */}
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
+      {/* IDA on the right side like other screens */}
       <AwaContainer 
         currentStep="onboarding" 
         showDialogue={false}
-        fullWidth={true}
+        fullWidth={false}
         autoHide={false}
       />
 
-      <div className="flex-1 p-4 lg:p-8">
-        <div className="max-w-6xl mx-auto">
+      {/* Main content area */}
+      <div className="flex-1 flex items-center p-4 lg:p-8 lg:mr-32">
+        <div className="w-full max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

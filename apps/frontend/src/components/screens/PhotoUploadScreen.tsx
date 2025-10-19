@@ -29,7 +29,7 @@ const ROOM_TYPE_TRANSLATIONS: Record<string, string> = {
 
 export function PhotoUploadScreen() {
   const router = useRouter();
-  const { updateSessionData } = useSessionData();
+  const { updateSessionData, sessionData } = useSessionData();
   const { analyzeRoom } = useModalAPI();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -113,12 +113,23 @@ export function PhotoUploadScreen() {
 
   const handleContinue = () => {
     if (selectedImage && detectedRoomType) {
-      stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+      stopAllDialogueAudio();
       updateSessionData({
         uploadedImage: selectedImage,
+        roomImage: selectedImage, // For generate page compatibility
         roomType: detectedRoomType
       });
-      router.push('/flow/tinder');
+      
+      // Check path type
+      const pathType = (sessionData as any)?.pathType;
+      
+      if (pathType === 'fast') {
+        // Fast track: skip tinder/dna/ladder, go directly to generation
+        router.push('/flow/generate');
+      } else {
+        // Full experience: continue with tinder swipes
+        router.push('/flow/tinder');
+      }
     }
   };
 
