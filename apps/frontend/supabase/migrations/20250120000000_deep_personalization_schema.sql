@@ -11,6 +11,7 @@ create extension if not exists "pgcrypto";
 create table if not exists public.user_profiles (
   id uuid primary key default gen_random_uuid(),
   user_hash text unique not null,
+  auth_user_id uuid, -- Link to auth.users (null if anonymous)
   
   -- Core Profile (Tier 1 - answered ONCE)
   aesthetic_dna jsonb, -- { implicit: {swipes, patterns}, explicit: {colors, materials, styles} }

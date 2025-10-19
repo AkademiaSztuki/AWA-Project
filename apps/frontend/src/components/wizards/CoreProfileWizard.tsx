@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -17,7 +18,10 @@ import {
   NatureMetaphorTest
 } from '@/components/research';
 import { SEMANTIC_DIFFERENTIAL_DIMENSIONS } from '@/lib/questions/validated-scales';
-import { ArrowRight, ArrowLeft, Check, Sparkles, Heart, Zap } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Sparkles, Heart, Zap, X } from 'lucide-react';
+import { getCoreProfileSwipeImages } from '@/lib/tinderImagesMetadata';
+import { useAuth } from '@/contexts/AuthContext';
+import { LoginModal } from '@/components/auth/LoginModal';
 
 type WizardStep = 
   | 'welcome'
@@ -27,6 +31,7 @@ type WizardStep =
   | 'colors_materials'
   | 'sensory_tests'
   | 'nature_metaphor'
+  | 'aspirational_self'
   | 'prs_ideal'
   | 'biophilia'
   | 'summary';
@@ -38,8 +43,9 @@ interface CoreProfileData {
     goals: string[];
   };
   tinderSwipes?: Array<{
-    imageId: string;
+    imageId: number;
     direction: 'left' | 'right';
+    reactionTime: number;
     dwellTime: number;
   }>;
   semanticDifferential?: {
@@ -58,6 +64,10 @@ interface CoreProfileData {
     light: string;
   };
   natureMetaphor?: string;
+  aspirationalSelf?: {
+    feelings: string[];
+    rituals: string[];
+  };
   prsIdeal?: { x: number; y: number };
   biophiliaScore?: number;
 }
@@ -77,12 +87,15 @@ interface CoreProfileData {
  */
 export function CoreProfileWizard() {
   const router = useRouter();
-  const { updateSessionData } = useSessionData();
+  const { updateSessionData, sessionData } = useSessionData();
   const { language } = useLanguage();
+  const { user, linkUserHashToAuth } = useAuth();
   
   const [currentStep, setCurrentStep] = useState<WizardStep>('welcome');
   const [profileData, setProfileData] = useState<CoreProfileData>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentInsight, setCurrentInsight] = useState<string>('');
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const steps: WizardStep[] = [
     'welcome',
@@ -92,6 +105,7 @@ export function CoreProfileWizard() {
     'colors_materials',
     'sensory_tests',
     'nature_metaphor',
+    'aspirational_self',
     'prs_ideal',
     'biophilia',
     'summary'
@@ -104,7 +118,78 @@ export function CoreProfileWizard() {
     setProfileData(prev => ({ ...prev, ...data }));
   };
 
+  // Generate personalized IDA insight based on profile data
+  const generateInsight = (step: WizardStep, data: CoreProfileData): string => {
+    const insights = {
+      lifestyle: () => {
+        if (data.lifestyle?.livingSituation === 'partner') {
+          return language === 'pl' 
+            ? "Rozumiem - projektujemy dla dwojga! To będzie balans między 'my' i 'ja'. 💑"
+            : "I understand - we're designing for two! It'll be a balance between 'us' and 'me'. 💑";
+        }
+        if (data.lifestyle?.goals?.includes('peace')) {
+          return language === 'pl'
+            ? "Spokój to Twój priorytet - stworzymy przestrzeń która odpręża. 🧘"
+            : "Peace is your priority - we'll create a space that relaxes. 🧘";
+        }
+        return '';
+      },
+      tinder_swipes: () => {
+        const rightSwipes = data.tinderSwipes?.filter(s => s.direction === 'right').length || 0;
+        if (rightSwipes > 20) {
+          return language === 'pl'
+            ? "Widzę Twoje preferencje! Ciepłe, przytulne wnętrza to Twój język. 🌳"
+            : "I see your preferences! Warm, cozy interiors are your language. 🌳";
+        }
+        return language === 'pl' 
+          ? "Poznałam Twój gust wizualny - to będzie piękne! ✨"
+          : "I learned your visual taste - this will be beautiful! ✨";
+      },
+      nature_metaphor: () => {
+        const metaphors: Record<string, { pl: string; en: string }> = {
+          ocean: { 
+            pl: "Ocean - płynność, spokój, głębia. Będziemy tworzyć przestrzeń która 'oddycha'. 🌊",
+            en: "Ocean - fluidity, calm, depth. We'll create a space that 'breathes'. 🌊"
+          },
+          forest: {
+            pl: "Las - uziemienie, organiczność. Przestrzeń pełna natury i spokoju. 🌲",
+            en: "Forest - grounding, organic. A space full of nature and peace. 🌲"
+          },
+          mountain: {
+            pl: "Góry - siła, inspiracja. Wyniosła przestrzeń która motywuje. ⛰️",
+            en: "Mountains - strength, inspiration. An elevated space that motivates. ⛰️"
+          }
+        };
+        return metaphors[data.natureMetaphor || '']?.[language] || '';
+      },
+      aspirational_self: () => {
+        if (data.aspirationalSelf?.rituals?.includes('morning_coffee')) {
+          return language === 'pl'
+            ? "Poranek to Twój czas - stworzymy przestrzeń która wspiera ten rytuał. ☀️☕"
+            : "Morning is your time - we'll create a space that supports this ritual. ☀️☕";
+        }
+        return '';
+      },
+      biophilia: () => {
+        if ((data.biophiliaScore || 0) >= 2) {
+          return language === 'pl'
+            ? "Kochasz naturę! Zielone rośliny będą wszędzie. 🌿"
+            : "You love nature! Green plants will be everywhere. 🌿";
+        }
+        return '';
+      }
+    };
+
+    return insights[step as keyof typeof insights]?.() || '';
+  };
+
   const handleNext = () => {
+    // Generate insight for current step
+    const insight = generateInsight(currentStep, profileData);
+    if (insight) {
+      setCurrentInsight(insight);
+    }
+    
     const nextIndex = currentStepIndex + 1;
     if (nextIndex < steps.length) {
       setCurrentStep(steps[nextIndex]);
@@ -112,6 +197,7 @@ export function CoreProfileWizard() {
   };
 
   const handleBack = () => {
+    setCurrentInsight(''); // Clear insight when going back
     const prevIndex = currentStepIndex - 1;
     if (prevIndex >= 0) {
       setCurrentStep(steps[prevIndex]);
@@ -122,19 +208,42 @@ export function CoreProfileWizard() {
     setIsSubmitting(true);
     
     try {
-      // Save to user profile in database
+      // Save to session data
       await updateSessionData({
         coreProfile: profileData,
         coreProfileCompletedAt: new Date().toISOString()
       });
 
-      // Navigate to dashboard or next step
+      // If user is not logged in, show login modal
+      if (!user) {
+        setShowLoginModal(true);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // If logged in, link user_hash and proceed to dashboard
+      if (sessionData?.userHash) {
+        await linkUserHashToAuth(sessionData.userHash);
+      }
+
       router.push('/dashboard');
     } catch (error) {
       console.error('Failed to save core profile:', error);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleLoginSuccess = async () => {
+    setShowLoginModal(false);
+    
+    // Link user_hash to authenticated user
+    if (sessionData?.userHash && user) {
+      await linkUserHashToAuth(sessionData.userHash);
+    }
+    
+    // Navigate to dashboard
+    router.push('/dashboard');
   };
 
   return (
@@ -159,6 +268,30 @@ export function CoreProfileWizard() {
               />
             </div>
           </div>
+
+          {/* IDA Insight - Progressive Reveal */}
+          <AnimatePresence>
+            {currentInsight && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.5 }}
+                className="mb-6"
+              >
+                <div className="glass-panel rounded-xl p-4 bg-gradient-to-r from-gold/10 via-champagne/10 to-platinum/10 border-2 border-gold/30">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Sparkles size={18} className="text-white" />
+                    </div>
+                    <p className="text-sm font-modern text-graphite flex-1">
+                      {currentInsight}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Step Content */}
           <AnimatePresence mode="wait">
@@ -248,6 +381,15 @@ export function CoreProfileWizard() {
                 </div>
               )}
 
+              {currentStep === 'aspirational_self' && (
+                <AspirationalSelfStep 
+                  data={profileData.aspirationalSelf}
+                  onUpdate={(data) => updateProfile({ aspirationalSelf: data })}
+                  onNext={handleNext}
+                  onBack={handleBack}
+                />
+              )}
+
               {currentStep === 'prs_ideal' && (
                 <div>
                   <GlassCard className="p-6 lg:p-8 mb-6">
@@ -324,6 +466,16 @@ export function CoreProfileWizard() {
           autoHide={true}
         />
       </div>
+
+      {/* Login Modal - shown after profile completion if not logged in */}
+      <LoginModal 
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onSuccess={handleLoginSuccess}
+        message={language === 'pl' 
+          ? 'Świetnie! Zaloguj się aby zachować swój profil i wrócić później.'
+          : 'Great! Sign in to save your profile and return later.'}
+      />
     </div>
   );
 }
@@ -379,28 +531,149 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
 
 function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
   const { language } = useLanguage();
-  const [lifestyleData, setLifestyleData] = useState(data || {});
+  const [lifestyleData, setLifestyleData] = useState(data || {
+    livingSituation: '',
+    lifeVibe: '',
+    goals: [] as string[]
+  });
+
+  const updateField = (field: string, value: any) => {
+    const updated = { ...lifestyleData, [field]: value };
+    setLifestyleData(updated);
+  };
+
+  const toggleGoal = (goal: string) => {
+    const goals = lifestyleData.goals || [];
+    const updated = {
+      ...lifestyleData,
+      goals: goals.includes(goal) 
+        ? goals.filter((g: string) => g !== goal)
+        : [...goals, goal]
+    };
+    setLifestyleData(updated);
+  };
+
+  const canProceed = lifestyleData.livingSituation && lifestyleData.lifeVibe && lifestyleData.goals?.length > 0;
+
+  const livingSituationOptions = [
+    { id: 'alone', label: { pl: 'Sam/Sama', en: 'Alone' }, icon: '🧘' },
+    { id: 'partner', label: { pl: 'Z Partnerem', en: 'With Partner' }, icon: '💑' },
+    { id: 'family', label: { pl: 'Rodzina', en: 'Family' }, icon: '👨‍👩‍👧‍👦' },
+    { id: 'roommates', label: { pl: 'Współlokatorzy', en: 'Roommates' }, icon: '🏠' }
+  ];
+
+  const vibeOptions = [
+    { id: 'calm', label: { pl: 'Spokojny', en: 'Calm' } },
+    { id: 'chaotic', label: { pl: 'Chaotyczny', en: 'Chaotic' } },
+    { id: 'creative', label: { pl: 'Kreatywny', en: 'Creative' } },
+    { id: 'organized', label: { pl: 'Zorganizowany', en: 'Organized' } },
+    { id: 'social', label: { pl: 'Społeczny', en: 'Social' } },
+    { id: 'introverted', label: { pl: 'Introwertyczny', en: 'Introverted' } }
+  ];
+
+  const goalOptions = [
+    { id: 'peace', label: { pl: 'Spokój i relaks', en: 'Peace and relaxation' }, icon: '🧘‍♀️' },
+    { id: 'creativity', label: { pl: 'Kreatywność i inspiracja', en: 'Creativity and inspiration' }, icon: '🎨' },
+    { id: 'productivity', label: { pl: 'Produktywność i focus', en: 'Productivity and focus' }, icon: '💼' },
+    { id: 'connection', label: { pl: 'Więź z bliskimi', en: 'Connection with loved ones' }, icon: '❤️' },
+    { id: 'privacy', label: { pl: 'Prywatność i autonomia', en: 'Privacy and autonomy' }, icon: '🔒' },
+    { id: 'beauty', label: { pl: 'Estetyka i piękno', en: 'Aesthetics and beauty' }, icon: '✨' }
+  ];
 
   return (
-    <GlassCard className="p-6 lg:p-8">
-      <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-6">
+    <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
+      <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
         {language === 'pl' ? 'Twój Styl Życia' : 'Your Lifestyle'}
       </h2>
-      <p className="text-graphite font-modern mb-8">
+      <p className="text-graphite font-modern mb-6 text-sm">
         {language === 'pl' ? 'Kilka szybkich pytań o Ciebie...' : 'A few quick questions about you...'}
       </p>
       
-      {/* TODO: Implement lifestyle questions */}
-      <div className="glass-panel rounded-xl p-8 text-center text-silver-dark mb-6">
-        <p>{language === 'pl' ? 'Pytania lifestyle - do implementacji' : 'Lifestyle questions - to be implemented'}</p>
+      <div className="space-y-6">
+        {/* Question 1: Living Situation */}
+        <div>
+          <label className="block text-sm font-semibold text-graphite mb-2">
+            {language === 'pl' ? 'Z kim mieszkasz?' : 'Who do you live with?'}
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {livingSituationOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => updateField('livingSituation', option.id)}
+                className={`rounded-lg p-3 transition-all cursor-pointer ${
+                  lifestyleData.livingSituation === option.id
+                    ? 'bg-gold/20 border-2 border-gold'
+                    : 'bg-white/10 border border-white/30 hover:border-gold/50'
+                }`}
+              >
+                <div className="text-xl mb-1">{option.icon}</div>
+                <p className="text-xs font-modern text-graphite">{option.label[language]}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Question 2: Life Vibe */}
+        <div>
+          <label className="block text-sm font-semibold text-graphite mb-2">
+            {language === 'pl' ? 'Jaki jest vibe Twojego życia teraz?' : 'What\'s your life vibe right now?'}
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {vibeOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => updateField('lifeVibe', option.id)}
+                className={`rounded-lg p-2 text-sm font-modern transition-all cursor-pointer ${
+                  lifestyleData.lifeVibe === option.id
+                    ? 'bg-gold/20 border-2 border-gold text-graphite'
+                    : 'bg-white/10 border border-white/30 text-graphite hover:border-gold/50'
+                }`}
+              >
+                {option.label[language]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Question 3: Goals (multi-select) */}
+        <div>
+          <label className="block text-sm font-semibold text-graphite mb-2">
+            {language === 'pl' ? 'Co jest dla Ciebie najważniejsze w domu?' : 'What matters most to you at home?'}
+            <span className="text-xs text-silver-dark ml-2">
+              ({language === 'pl' ? 'wybierz kilka' : 'select multiple'})
+            </span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {goalOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => toggleGoal(option.id)}
+                className={`rounded-lg p-3 transition-all cursor-pointer ${
+                  lifestyleData.goals?.includes(option.id)
+                    ? 'bg-gold/20 border-2 border-gold'
+                    : 'bg-white/10 border border-white/30 hover:border-gold/50'
+                }`}
+              >
+                <div className="text-xl mb-1">{option.icon}</div>
+                <p className="text-xs font-modern text-graphite">{option.label[language]}</p>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="flex justify-between">
+      <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
         <GlassButton onClick={onBack} variant="secondary">
           <ArrowLeft size={18} className="mr-2" />
           {language === 'pl' ? 'Wstecz' : 'Back'}
         </GlassButton>
-        <GlassButton onClick={() => { onUpdate(lifestyleData); onNext(); }}>
+        <GlassButton 
+          onClick={() => { onUpdate(lifestyleData); onNext(); }}
+          disabled={!canProceed}
+        >
           {language === 'pl' ? 'Dalej' : 'Next'}
           <ArrowRight size={18} className="ml-2" />
         </GlassButton>
@@ -411,28 +684,165 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
 
 function TinderSwipesStep({ onComplete, onBack }: any) {
   const { language } = useLanguage();
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [swipes, setSwipes] = useState<Array<{
+    imageId: number;
+    direction: 'left' | 'right';
+    reactionTime: number;
+    dwellTime: number;
+  }>>([]);
+  const [startTime, setStartTime] = useState(Date.now());
+  const [showInstructions, setShowInstructions] = useState(true);
   
+  // Use 30 images from /images/tinder/ with metadata
+  const images = getCoreProfileSwipeImages();
+
+  const currentImage = images[currentIndex];
+  const progress = (currentIndex / images.length) * 100;
+
+  useEffect(() => {
+    setStartTime(Date.now());
+  }, [currentIndex]);
+
+  const handleSwipe = (direction: 'left' | 'right') => {
+    const reactionTime = Date.now() - startTime;
+    const dwellTime = reactionTime; // Simplified for now
+    
+    const newSwipes = [...swipes, {
+      imageId: currentImage.id,
+      direction,
+      reactionTime,
+      dwellTime
+    }];
+    
+    setSwipes(newSwipes);
+    
+    if (currentIndex + 1 >= images.length) {
+      // Completed!
+      onComplete(newSwipes);
+    } else {
+      setCurrentIndex(currentIndex + 1);
+    }
+  };
+
+  const handleDragEnd = (event: any, info: any) => {
+    const threshold = 100;
+    if (info.offset.x > threshold) {
+      handleSwipe('right');
+    } else if (info.offset.x < -threshold) {
+      handleSwipe('left');
+    }
+  };
+
+  if (showInstructions) {
+    return (
+      <GlassCard className="p-6 md:p-8 text-center max-h-[85vh] overflow-auto scrollbar-hide">
+        <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-3">
+          {language === 'pl' ? 'Wnętrzarski Tinder' : 'Interior Design Tinder'}
+        </h2>
+        <p className="text-graphite font-modern mb-4 text-sm">
+          {language === 'pl' 
+            ? 'Pokażę Ci 30 różnych wnętrz. Reaguj sercem, nie głową!' 
+            : 'I\'ll show you 30 different interiors. React with your heart, not your head!'}
+        </p>
+        
+        <div className="flex justify-center gap-8 mb-6">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <X className="text-red-500" size={20} />
+            </div>
+            <span className="text-sm text-graphite">{language === 'pl' ? 'Nie' : 'No'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <Heart className="text-green-500" size={20} />
+            </div>
+            <span className="text-sm text-graphite">{language === 'pl' ? 'Tak!' : 'Yes!'}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <GlassButton onClick={onBack} variant="secondary">
+            <ArrowLeft size={18} className="mr-2" />
+            {language === 'pl' ? 'Wstecz' : 'Back'}
+          </GlassButton>
+          <GlassButton onClick={() => setShowInstructions(false)}>
+            {language === 'pl' ? 'Rozpocznij' : 'Start'} →
+          </GlassButton>
+        </div>
+      </GlassCard>
+    );
+  }
+
   return (
-    <GlassCard className="p-6 lg:p-8">
-      <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4">
-        {language === 'pl' ? 'Swipes Wizualne' : 'Visual Swipes'}
-      </h2>
-      <p className="text-graphite font-modern mb-8">
-        {language === 'pl' ? '50 obrazów - reaguj sercem!' : '50 images - react with your heart!'}
-      </p>
-      
-      {/* TODO: Implement Tinder swipes */}
-      <div className="glass-panel rounded-xl p-8 text-center text-silver-dark mb-6">
-        <p>{language === 'pl' ? 'Tinder swipes - do implementacji' : 'Tinder swipes - to be implemented'}</p>
+    <div className="w-full max-w-2xl mx-auto">
+      {/* Progress */}
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm text-silver-dark font-modern">
+            {language === 'pl' ? 'Postęp' : 'Progress'}
+          </span>
+          <span className="text-sm text-silver-dark font-modern">
+            {currentIndex + 1} / {images.length}
+          </span>
+        </div>
+        <div className="w-full bg-silver/20 rounded-full h-2">
+          <motion.div
+            className="bg-gradient-to-r from-gold to-champagne h-2 rounded-full"
+            initial={{ width: 0 }}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.3 }}
+          />
+        </div>
       </div>
 
-      <div className="flex justify-between">
-        <GlassButton onClick={onBack} variant="secondary">
-          <ArrowLeft size={18} className="mr-2" />
-          {language === 'pl' ? 'Wstecz' : 'Back'}
+      {/* Swipe Card */}
+      <div className="relative h-[400px] md:h-[500px]">
+        <AnimatePresence mode="wait">
+          {currentImage && (
+            <motion.div
+              key={currentImage.id}
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              onDragEnd={handleDragEnd}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 cursor-grab active:cursor-grabbing"
+            >
+              <GlassCard className="h-full overflow-hidden">
+                <div className="relative h-full">
+                  <Image
+                    src={currentImage.url}
+                    alt="Interior"
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+              </GlassCard>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex justify-center gap-4 mt-6">
+        <GlassButton 
+          onClick={() => handleSwipe('left')}
+          variant="secondary"
+          className="w-16 h-16 rounded-full p-0"
+        >
+          <X size={28} className="text-red-500" />
+        </GlassButton>
+        <GlassButton 
+          onClick={() => handleSwipe('right')}
+          className="w-16 h-16 rounded-full p-0 bg-gradient-to-r from-green-400 to-emerald-500"
+        >
+          <Heart size={28} className="text-white" fill="currentColor" />
         </GlassButton>
       </div>
-    </GlassCard>
+    </div>
   );
 }
 
@@ -495,29 +905,282 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
   );
 }
 
-function ColorsMaterialsStep({ data, onUpdate, onNext, onBack }: any) {
+function AspirationalSelfStep({ data, onUpdate, onNext, onBack }: any) {
   const { language } = useLanguage();
-  
+  const [aspirationalData, setAspirationalData] = useState(data || {
+    feelings: [] as string[],
+    rituals: [] as string[]
+  });
+
+  const toggleFeeling = (feeling: string) => {
+    const feelings = aspirationalData.feelings || [];
+    const updated = {
+      ...aspirationalData,
+      feelings: feelings.includes(feeling)
+        ? feelings.filter((f: string) => f !== feeling)
+        : [...feelings, feeling]
+    };
+    setAspirationalData(updated);
+  };
+
+  const toggleRitual = (ritual: string) => {
+    const rituals = aspirationalData.rituals || [];
+    const updated = {
+      ...aspirationalData,
+      rituals: rituals.includes(ritual)
+        ? rituals.filter((r: string) => r !== ritual)
+        : [...rituals, ritual]
+    };
+    setAspirationalData(updated);
+  };
+
+  const canProceed = aspirationalData.feelings?.length > 0 && aspirationalData.rituals?.length > 0;
+
+  const feelingOptions = [
+    { id: 'calm', label: { pl: 'Spokojny/a i zrelaksowany/a', en: 'Calm and relaxed' }, icon: '🧘' },
+    { id: 'energized', label: { pl: 'Energiczny/a i produktywny/a', en: 'Energized and productive' }, icon: '⚡' },
+    { id: 'creative', label: { pl: 'Kreatywny/a i inspirowany/a', en: 'Creative and inspired' }, icon: '🎨' },
+    { id: 'focused', label: { pl: 'Skupiony/a i jasny umysł', en: 'Focused and clear-minded' }, icon: '🎯' },
+    { id: 'connected', label: { pl: 'Połączony/a z bliskimi', en: 'Connected with loved ones' }, icon: '❤️' },
+    { id: 'grounded', label: { pl: 'Uziemiony/a i zbalansowany/a', en: 'Grounded and balanced' }, icon: '🌿' }
+  ];
+
+  const ritualOptions = [
+    { id: 'morning_coffee', label: { pl: 'Poranna kawa i refleksja', en: 'Morning coffee and reflection' }, icon: '☕' },
+    { id: 'evening_reading', label: { pl: 'Wieczorne czytanie', en: 'Evening reading' }, icon: '📚' },
+    { id: 'yoga', label: { pl: 'Joga/medytacja', en: 'Yoga/meditation' }, icon: '🧘‍♀️' },
+    { id: 'deep_work', label: { pl: 'Praca głęboka', en: 'Deep work' }, icon: '💻' },
+    { id: 'family_time', label: { pl: 'Czas z rodziną', en: 'Family time' }, icon: '👨‍👩‍👧' },
+    { id: 'creative_projects', label: { pl: 'Kreatywne projekty', en: 'Creative projects' }, icon: '🎨' }
+  ];
+
   return (
-    <GlassCard className="p-6 lg:p-8">
-      <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4">
-        {language === 'pl' ? 'Kolory i Materiały' : 'Colors & Materials'}
-      </h2>
-      <p className="text-graphite font-modern mb-8">
-        {language === 'pl' ? 'Wybierz swoje ulubione...' : 'Choose your favorites...'}
-      </p>
+    <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
+      <div className="text-center mb-6">
+        <h2 className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent mb-2">
+          {language === 'pl' ? 'Kim Chcesz Być?' : 'Who Do You Want to Be?'}
+        </h2>
+        <p className="text-graphite font-modern text-sm">
+          {language === 'pl' 
+            ? 'Projektujemy dla Twojego najlepszego ja, nie obecnego' 
+            : 'We design for your best self, not current self'}
+        </p>
+      </div>
       
-      {/* TODO: Implement colors/materials selection */}
-      <div className="glass-panel rounded-xl p-8 text-center text-silver-dark mb-6">
-        <p>{language === 'pl' ? 'Kolory i materiały - do implementacji' : 'Colors & materials - to be implemented'}</p>
+      <div className="space-y-6">
+        {/* Question 1: Desired Feelings */}
+        <div>
+          <label className="block text-sm font-semibold text-graphite mb-2">
+            {language === 'pl' ? 'Jak chcesz się czuć w swoim idealnym pokoju?' : 'How do you want to feel in your ideal room?'}
+            <span className="text-xs text-silver-dark ml-2">
+              ({language === 'pl' ? 'wybierz kilka' : 'select multiple'})
+            </span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {feelingOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => toggleFeeling(option.id)}
+                className={`rounded-lg p-3 transition-all cursor-pointer ${
+                  aspirationalData.feelings?.includes(option.id)
+                    ? 'bg-purple-500/20 border-2 border-purple-500'
+                    : 'bg-white/10 border border-white/30 hover:border-purple-400/50'
+                }`}
+              >
+                <div className="text-xl mb-1">{option.icon}</div>
+                <p className="text-xs font-modern text-graphite">{option.label[language]}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Question 2: Rituals */}
+        <div>
+          <label className="block text-sm font-semibold text-graphite mb-2">
+            {language === 'pl' ? 'Jakie rytuały chcesz tu praktykować?' : 'What rituals do you want to practice here?'}
+            <span className="text-xs text-silver-dark ml-2">
+              ({language === 'pl' ? 'wybierz kilka' : 'select multiple'})
+            </span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {ritualOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => toggleRitual(option.id)}
+                className={`rounded-lg p-3 transition-all cursor-pointer ${
+                  aspirationalData.rituals?.includes(option.id)
+                    ? 'bg-pink-500/20 border-2 border-pink-500'
+                    : 'bg-white/10 border border-white/30 hover:border-pink-400/50'
+                }`}
+              >
+                <div className="text-xl mb-1">{option.icon}</div>
+                <p className="text-xs font-modern text-graphite">{option.label[language]}</p>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="flex justify-between">
+      <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
         <GlassButton onClick={onBack} variant="secondary">
           <ArrowLeft size={18} className="mr-2" />
           {language === 'pl' ? 'Wstecz' : 'Back'}
         </GlassButton>
-        <GlassButton onClick={() => { onUpdate({}); onNext(); }}>
+        <GlassButton 
+          onClick={() => { onUpdate(aspirationalData); onNext(); }}
+          disabled={!canProceed}
+        >
+          {language === 'pl' ? 'Dalej' : 'Next'}
+          <ArrowRight size={18} className="ml-2" />
+        </GlassButton>
+      </div>
+    </GlassCard>
+  );
+}
+
+function ColorsMaterialsStep({ data, onUpdate, onNext, onBack }: any) {
+  const { language } = useLanguage();
+  const [colorsData, setColorsData] = useState(data || {
+    selectedPalette: '',
+    topMaterials: [] as string[]
+  });
+
+  const toggleMaterial = (material: string) => {
+    const materials = colorsData.topMaterials || [];
+    const updated = {
+      ...colorsData,
+      topMaterials: materials.includes(material)
+        ? materials.filter((m: string) => m !== material)
+        : [...materials, material]
+    };
+    setColorsData(updated);
+  };
+
+  const canProceed = colorsData.selectedPalette && colorsData.topMaterials?.length > 0;
+
+  const paletteOptions = [
+    { 
+      id: 'warm-earth', 
+      colors: ['#8B7355', '#D4A574', '#F5DEB3', '#E6D5B8'],
+      label: { pl: 'Ciepła Ziemia', en: 'Warm Earth' }
+    },
+    { 
+      id: 'cool-nordic', 
+      colors: ['#E8F1F5', '#B0C4DE', '#778899', '#A9B8C2'],
+      label: { pl: 'Nordycki Chłód', en: 'Cool Nordic' }
+    },
+    { 
+      id: 'vibrant-bold', 
+      colors: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3'],
+      label: { pl: 'Odważne Kolory', en: 'Vibrant Bold' }
+    },
+    { 
+      id: 'natural-green', 
+      colors: ['#6B8E23', '#8FBC8F', '#F5F5DC', '#DEB887'],
+      label: { pl: 'Naturalna Zieleń', en: 'Natural Green' }
+    },
+    { 
+      id: 'monochrome', 
+      colors: ['#2C2C2C', '#5C5C5C', '#8C8C8C', '#E8E8E8'],
+      label: { pl: 'Monochromatyczne', en: 'Monochrome' }
+    },
+    { 
+      id: 'soft-pastels', 
+      colors: ['#FFB6C1', '#E6E6FA', '#FFE4E1', '#F0E68C'],
+      label: { pl: 'Miękkie Pastele', en: 'Soft Pastels' }
+    }
+  ];
+
+  const materialOptions = [
+    { id: 'wood', label: { pl: 'Drewno', en: 'Wood' }, icon: '🪵', emoji: '🌳' },
+    { id: 'metal', label: { pl: 'Metal', en: 'Metal' }, icon: '⚙️', emoji: '🔩' },
+    { id: 'fabric', label: { pl: 'Tkaniny', en: 'Fabric' }, icon: '🧶', emoji: '🛋️' },
+    { id: 'stone', label: { pl: 'Kamień', en: 'Stone' }, icon: '🪨', emoji: '🗿' },
+    { id: 'glass', label: { pl: 'Szkło', en: 'Glass' }, icon: '🪟', emoji: '✨' },
+    { id: 'leather', label: { pl: 'Skóra', en: 'Leather' }, icon: '👜', emoji: '🎒' }
+  ];
+
+  return (
+    <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
+      <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
+        {language === 'pl' ? 'Kolory i Materiały' : 'Colors & Materials'}
+      </h2>
+      <p className="text-graphite font-modern mb-6 text-sm">
+        {language === 'pl' ? 'Wybierz swoją paletę i ulubione materiały...' : 'Choose your palette and favorite materials...'}
+      </p>
+      
+      <div className="space-y-6">
+        {/* Color Palettes */}
+        <div>
+          <label className="block text-sm font-semibold text-graphite mb-2">
+            {language === 'pl' ? 'Która paleta kolorów najbardziej Ciebie odzwierciedla?' : 'Which color palette reflects you most?'}
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {paletteOptions.map((palette) => (
+              <button
+                key={palette.id}
+                type="button"
+                onClick={() => setColorsData({ ...colorsData, selectedPalette: palette.id })}
+                className={`rounded-lg p-3 transition-all cursor-pointer ${
+                  colorsData.selectedPalette === palette.id
+                    ? 'border-2 border-gold'
+                    : 'border border-white/30 hover:border-gold/50'
+                }`}
+              >
+                <div className="flex gap-1 mb-2 h-8">
+                  {palette.colors.map((color, i) => (
+                    <div 
+                      key={i} 
+                      className="flex-1 rounded"
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs font-modern text-graphite text-center">{palette.label[language]}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Materials (multi-select) */}
+        <div>
+          <label className="block text-sm font-semibold text-graphite mb-2">
+            {language === 'pl' ? 'Jakich materiałów chcesz dotykać?' : 'What materials do you want to touch?'}
+            <span className="text-xs text-silver-dark ml-2">
+              ({language === 'pl' ? 'wybierz kilka' : 'select multiple'})
+            </span>
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {materialOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => toggleMaterial(option.id)}
+                className={`rounded-lg p-3 transition-all cursor-pointer ${
+                  colorsData.topMaterials?.includes(option.id)
+                    ? 'bg-gold/20 border-2 border-gold'
+                    : 'bg-white/10 border border-white/30 hover:border-gold/50'
+                }`}
+              >
+                <div className="text-2xl mb-1">{option.emoji}</div>
+                <p className="text-xs font-modern text-graphite">{option.label[language]}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
+        <GlassButton onClick={onBack} variant="secondary">
+          <ArrowLeft size={18} className="mr-2" />
+          {language === 'pl' ? 'Wstecz' : 'Back'}
+        </GlassButton>
+        <GlassButton 
+          onClick={() => { onUpdate(colorsData); onNext(); }}
+          disabled={!canProceed}
+        >
           {language === 'pl' ? 'Dalej' : 'Next'}
           <ArrowRight size={18} className="ml-2" />
         </GlassButton>

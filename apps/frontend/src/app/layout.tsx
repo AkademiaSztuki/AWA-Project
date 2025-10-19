@@ -10,6 +10,8 @@ import MusicTestButton from '@/components/ui/MusicTestButton';
 import { AwaBackground } from '@/components/awa';
 import { LandscapeGuard } from '@/components/ui/LandscapeGuard';
 import { LanguageProvider, LanguageToggle } from '@/contexts/LanguageContext';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { UserAuthButton } from '@/components/auth/UserAuthButton';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const audiowide = Audiowide({ 
@@ -37,25 +39,28 @@ export default function RootLayout({
     <html lang="pl" className={`${inter.variable} ${audiowide.variable} ${exo2.variable}`}>
       <body className="h-screen font-nasalization">
         <LanguageProvider>
-          <LandscapeGuard>
-            {/* Language toggle in top-right corner */}
-            <div className="fixed top-4 right-4 z-50">
+          <AuthProvider>
+            <LandscapeGuard>
+            {/* Language toggle and auth in top-right corner */}
+            <div className="fixed top-4 right-4 z-50 flex gap-2">
+              <UserAuthButton />
               <LanguageToggle />
             </div>
-            
-            <AwaBackground />
-            <AuroraBackgroundClient />
-            <AuroraBubbles />
-            <ParticlesBackground />
-            <AmbientMusic volume={0.4} audioFile="/audio/ambient.mp3" />
-            <MusicTestButton />
-            <div className="flex items-center justify-end h-screen w-full">
-              <div className="w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl lg:mr-32">
-                {children}
+              
+              <AwaBackground />
+              <AuroraBackgroundClient />
+              <AuroraBubbles />
+              <ParticlesBackground />
+              <AmbientMusic volume={0.4} audioFile="/audio/ambient.mp3" />
+              <MusicTestButton />
+              <div className="flex items-center justify-end h-screen w-full">
+                <div className="w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl lg:mr-32">
+                  {children}
+                </div>
               </div>
-            </div>
-            <SpeedInsights />
-          </LandscapeGuard>
+              <SpeedInsights />
+            </LandscapeGuard>
+          </AuthProvider>
         </LanguageProvider>
       </body>
     </html>

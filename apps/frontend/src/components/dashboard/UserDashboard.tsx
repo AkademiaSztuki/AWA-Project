@@ -8,6 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaContainer } from '@/components/awa/AwaContainer';
+import { supabase } from '@/lib/supabase';
 import { 
   Home, 
   Plus, 
@@ -61,29 +62,54 @@ export function UserDashboard() {
     setIsLoading(true);
     
     try {
-      // TODO: Fetch from Supabase using get_user_complete_profile()
-      // For now, mock data
-      const mockHouseholds: Household[] = [
-        {
-          id: 'house-1',
-          name: language === 'pl' ? 'Mój Dom' : 'My Home',
-          type: 'home',
-          rooms: [
-            {
-              id: 'room-1',
-              name: language === 'pl' ? 'Salon' : 'Living Room',
-              roomType: 'living_room',
-              sessionsCount: 2,
-              lastSessionDate: new Date().toISOString(),
-              thumbnailUrl: undefined
-            }
-          ]
-        }
-      ];
+      const userHash = sessionData?.userHash || 
+                       (typeof window !== 'undefined' && window.sessionStorage?.getItem('aura_user_hash')) || 
+                       '';
       
-      setHouseholds(mockHouseholds);
+      if (!userHash) {
+        console.log('No user hash found - showing empty dashboard');
+        setHouseholds([]);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('[Dashboard] Loading data for user:', userHash);
+      
+      // Call Supabase function to get complete profile
+      const { data, error } = await supabase
+        .rpc('get_user_complete_profile', { p_user_hash: userHash });
+      
+      if (error) {
+        console.error('[Dashboard] Supabase error:', error);
+        // Fallback to empty state
+        setHouseholds([]);
+      } else if (data) {
+        console.log('[Dashboard] Loaded profile data:', data);
+        
+        // Transform Supabase data to UI format
+        const transformedHouseholds: Household[] = (data.households || []).map((h: any) => ({
+          id: h.household.id,
+          name: h.household.name,
+          type: h.household.household_type || 'home',
+          rooms: (h.rooms || []).map((r: any) => ({
+            id: r.room.id,
+            name: r.room.name,
+            roomType: r.room.room_type,
+            sessionsCount: r.sessions?.length || 0,
+            lastSessionDate: r.sessions?.[r.sessions.length - 1]?.created_at,
+            thumbnailUrl: r.sessions?.[r.sessions.length - 1]?.generated_images?.[0]?.url
+          }))
+        }));
+        
+        setHouseholds(transformedHouseholds);
+      } else {
+        // No profile yet - empty state
+        console.log('[Dashboard] No profile data found');
+        setHouseholds([]);
+      }
     } catch (error) {
-      console.error('Failed to load user data:', error);
+      console.error('[Dashboard] Failed to load user data:', error);
+      setHouseholds([]);
     } finally {
       setIsLoading(false);
     }
