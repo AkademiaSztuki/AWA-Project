@@ -8,6 +8,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaContainer } from '@/components/awa/AwaContainer';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { useSessionData } from '@/hooks/useSessionData';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { 
   Zap, 
@@ -26,6 +27,7 @@ import {
  */
 export default function PathSelectionScreen() {
   const router = useRouter();
+  const { language } = useLanguage();
   const { updateSessionData } = useSessionData();
 
   const handlePathSelection = async (pathType: 'fast' | 'full') => {
