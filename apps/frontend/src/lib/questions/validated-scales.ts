@@ -87,17 +87,23 @@ export const PRS_MOOD_GRID_CONFIG = {
 
 export const BIOPHILIA_TEST: ValidatedScale = {
   id: 'biophilia_visual_dosage',
-  name: 'Biophilic Orientation (Visual Dosage)',
+  name: {
+    pl: 'Orientacja Biofiliczna (Test Wizualny)',
+    en: 'Biophilic Orientation (Visual Dosage)'
+  },
   source: 'Kellert (2008) - Patterns of Biophilic Design',
   type: 'visual_choice',
-  question: 'Która wersja najbardziej TY?'
+  question: {
+    pl: 'Która wersja najbardziej TY?',
+    en: 'Which version is most YOU?'
+  }
 };
 
 export interface BiophiliaOption {
   id: string;
   score: number; // 0-3
-  label: string;
-  description: string;
+  label: LocalizedText;
+  description: LocalizedText;
   imageUrl: string;
 }
 
@@ -105,29 +111,41 @@ export const BIOPHILIA_OPTIONS: BiophiliaOption[] = [
   {
     id: 'none',
     score: 0,
-    label: 'Bez natury',
-    description: 'Urban, sleek, no natural elements',
+    label: { pl: 'Bez natury', en: 'No nature' },
+    description: { 
+      pl: 'Miejski, elegancki, bez elementów naturalnych',
+      en: 'Urban, sleek, no natural elements'
+    },
     imageUrl: '/research/biophilia/level-0-none.jpg'
   },
   {
     id: 'minimal',
     score: 1,
-    label: 'Minimalna',
-    description: '1-2 plants, subtle natural materials',
+    label: { pl: 'Minimalna', en: 'Minimal' },
+    description: { 
+      pl: '1-2 rośliny, subtelne materiały naturalne',
+      en: '1-2 plants, subtle natural materials'
+    },
     imageUrl: '/research/biophilia/level-1-minimal.jpg'
   },
   {
     id: 'moderate',
     score: 2,
-    label: 'Umiarkowana',
-    description: 'Several plants, wood materials, natural light',
+    label: { pl: 'Umiarkowana', en: 'Moderate' },
+    description: { 
+      pl: 'Kilka roślin, drewniane materiały, naturalne światło',
+      en: 'Several plants, wood materials, natural light'
+    },
     imageUrl: '/research/biophilia/level-2-moderate.jpg'
   },
   {
     id: 'maximum',
     score: 3,
-    label: 'Maksymalna',
-    description: 'Urban jungle, abundant organic materials, maximum greenery',
+    label: { pl: 'Maksymalna', en: 'Maximum' },
+    description: { 
+      pl: 'Miejska dżungla, obfite organiczne materiały, maksimum zieleni',
+      en: 'Urban jungle, abundant organic materials, maximum greenery'
+    },
     imageUrl: '/research/biophilia/level-3-maximum.jpg'
   }
 ];
@@ -139,11 +157,20 @@ export const BIOPHILIA_OPTIONS: BiophiliaOption[] = [
 
 export const IMPLICIT_PREFERENCES_TEST: ValidatedScale = {
   id: 'implicit_tinder_swipes',
-  name: 'Implicit Aesthetic Preferences',
+  name: {
+    pl: 'Niejawne Preferencje Estetyczne',
+    en: 'Implicit Aesthetic Preferences'
+  },
   source: 'IAT methodology (Greenwald et al., 1998) adapted for interior design',
   type: 'binary_choice',
-  question: 'Reaguj sercem, nie głową - leci!',
-  description: 'Rapid binary choices reveal implicit preferences better than self-report'
+  question: {
+    pl: 'Reaguj sercem, nie głową - leci!',
+    en: 'React with your heart, not your head - go!'
+  },
+  description: {
+    pl: 'Szybkie binarne wybory ujawniają niejawne preferencje lepiej niż samo-opis',
+    en: 'Rapid binary choices reveal implicit preferences better than self-report'
+  }
 };
 
 export interface SwipeMetadata {
@@ -166,27 +193,27 @@ export interface SwipeMetadata {
 export const SEMANTIC_DIFFERENTIAL_DIMENSIONS = [
   {
     id: 'warmth',
-    label: 'Temperatura kolorów',
-    min: { value: 0, label: 'Zimne' },
-    max: { value: 1, label: 'Ciepłe' }
+    label: { pl: 'Temperatura kolorów', en: 'Color temperature' },
+    min: { value: 0, label: { pl: 'Zimne', en: 'Cool' } },
+    max: { value: 1, label: { pl: 'Ciepłe', en: 'Warm' } }
   },
   {
     id: 'brightness',
-    label: 'Jasność',
-    min: { value: 0, label: 'Ciemne' },
-    max: { value: 1, label: 'Jasne' }
+    label: { pl: 'Jasność', en: 'Brightness' },
+    min: { value: 0, label: { pl: 'Ciemne', en: 'Dark' } },
+    max: { value: 1, label: { pl: 'Jasne', en: 'Bright' } }
   },
   {
     id: 'complexity',
-    label: 'Złożoność',
-    min: { value: 0, label: 'Proste' },
-    max: { value: 1, label: 'Złożone' }
+    label: { pl: 'Złożoność', en: 'Complexity' },
+    min: { value: 0, label: { pl: 'Proste', en: 'Simple' } },
+    max: { value: 1, label: { pl: 'Złożone', en: 'Complex' } }
   },
   {
     id: 'texture',
-    label: 'Tekstury',
-    min: { value: 0, label: 'Gładkie' },
-    max: { value: 1, label: 'Teksturowane' }
+    label: { pl: 'Tekstury', en: 'Textures' },
+    min: { value: 0, label: { pl: 'Gładkie', en: 'Smooth' } },
+    max: { value: 1, label: { pl: 'Teksturowane', en: 'Textured' } }
   }
 ];
 
@@ -197,16 +224,40 @@ export const SEMANTIC_DIFFERENTIAL_DIMENSIONS = [
 
 export const PLACE_IDENTITY_PAIRS = {
   structural: [ // Appearance dimension
-    { id: 'reflects_me', left: 'Odzwierciedla mnie', right: 'Nie do końca moje' },
-    { id: 'my_style', left: 'Mój styl', right: 'Cudzy styl' }
+    { 
+      id: 'reflects_me', 
+      left: { pl: 'Odzwierciedla mnie', en: 'Reflects me' }, 
+      right: { pl: 'Nie do końca moje', en: 'Not quite me' }
+    },
+    { 
+      id: 'my_style', 
+      left: { pl: 'Mój styl', en: 'My style' }, 
+      right: { pl: 'Cudzy styl', en: 'Someone else\'s style' }
+    }
   ],
   functional: [ // Activities dimension
-    { id: 'supports_life', left: 'Wspiera moje życie', right: 'Utrudnia codzienność' },
-    { id: 'everything_place', left: 'Wszystko ma miejsce', right: 'Ciągłe szukanie' }
+    { 
+      id: 'supports_life', 
+      left: { pl: 'Wspiera moje życie', en: 'Supports my life' }, 
+      right: { pl: 'Utrudnia codzienność', en: 'Makes life harder' }
+    },
+    { 
+      id: 'everything_place', 
+      left: { pl: 'Wszystko ma miejsce', en: 'Everything has a place' }, 
+      right: { pl: 'Ciągłe szukanie', en: 'Constantly searching' }
+    }
   ],
   affective: [ // Emotional dimension
-    { id: 'proud', left: 'Dumny z tego', right: 'Wolę ukrywać' },
-    { id: 'feel_myself', left: 'Czuję się sobą', right: 'Czuję się nie na miejscu' }
+    { 
+      id: 'proud', 
+      left: { pl: 'Dumny z tego', en: 'Proud of it' }, 
+      right: { pl: 'Wolę ukrywać', en: 'Prefer to hide it' }
+    },
+    { 
+      id: 'feel_myself', 
+      left: { pl: 'Czuję się sobą', en: 'Feel like myself' }, 
+      right: { pl: 'Czuję się nie na miejscu', en: 'Feel out of place' }
+    }
   ]
 };
 
@@ -217,35 +268,115 @@ export const PLACE_IDENTITY_PAIRS = {
 
 export interface SensoryOption {
   id: string;
-  label: string;
+  label: LocalizedText;
   audioUrl?: string;
   imageUrl?: string;
-  description: string;
+  description: LocalizedText;
 }
 
 export const MUSIC_PREFERENCES: SensoryOption[] = [
-  { id: 'jazz', label: 'Jazz', audioUrl: '/research/sensory/music-jazz.mp3', description: 'Smooth, sophisticated, relaxed' },
-  { id: 'classical', label: 'Klasyczna', audioUrl: '/research/sensory/music-classical.mp3', description: 'Elegant, timeless, calm' },
-  { id: 'electronic', label: 'Elektroniczna', audioUrl: '/research/sensory/music-electronic.mp3', description: 'Modern, energetic, focused' },
-  { id: 'nature', label: 'Dźwięki natury', audioUrl: '/research/sensory/music-nature.mp3', description: 'Organic, peaceful, grounding' },
-  { id: 'silence', label: 'Cisza', audioUrl: '', description: 'Quiet, minimal, meditative' },
-  { id: 'lofi', label: 'Lo-fi', audioUrl: '/research/sensory/music-lofi.mp3', description: 'Cozy, creative, ambient' }
+  { 
+    id: 'jazz', 
+    label: { pl: 'Jazz', en: 'Jazz' }, 
+    audioUrl: '/research/sensory/music-jazz.mp3', 
+    description: { pl: 'Gładki, wyrafinowany, zrelaksowany', en: 'Smooth, sophisticated, relaxed' }
+  },
+  { 
+    id: 'classical', 
+    label: { pl: 'Klasyczna', en: 'Classical' }, 
+    audioUrl: '/research/sensory/music-classical.mp3', 
+    description: { pl: 'Elegancka, ponadczasowa, spokojna', en: 'Elegant, timeless, calm' }
+  },
+  { 
+    id: 'electronic', 
+    label: { pl: 'Elektroniczna', en: 'Electronic' }, 
+    audioUrl: '/research/sensory/music-electronic.mp3', 
+    description: { pl: 'Nowoczesna, energetyczna, skoncentrowana', en: 'Modern, energetic, focused' }
+  },
+  { 
+    id: 'nature', 
+    label: { pl: 'Dźwięki natury', en: 'Nature sounds' }, 
+    audioUrl: '/research/sensory/music-nature.mp3', 
+    description: { pl: 'Organiczne, spokojne, uziemiające', en: 'Organic, peaceful, grounding' }
+  },
+  { 
+    id: 'silence', 
+    label: { pl: 'Cisza', en: 'Silence' }, 
+    audioUrl: '', 
+    description: { pl: 'Cicha, minimalna, medytacyjna', en: 'Quiet, minimal, meditative' }
+  },
+  { 
+    id: 'lofi', 
+    label: { pl: 'Lo-fi', en: 'Lo-fi' }, 
+    audioUrl: '/research/sensory/music-lofi.mp3', 
+    description: { pl: 'Przytulna, kreatywna, otaczająca', en: 'Cozy, creative, ambient' }
+  }
 ];
 
 export const TEXTURE_PREFERENCES: SensoryOption[] = [
-  { id: 'soft_fabric', label: 'Miękka tkanina', imageUrl: '/research/sensory/texture-soft-fabric.jpg', description: 'Cozy, comfort, warmth' },
-  { id: 'smooth_wood', label: 'Gładkie drewno', imageUrl: '/research/sensory/texture-smooth-wood.jpg', description: 'Natural, warm, organic' },
-  { id: 'cold_metal', label: 'Zimny metal', imageUrl: '/research/sensory/texture-cold-metal.jpg', description: 'Modern, sleek, industrial' },
-  { id: 'rough_stone', label: 'Szorstki kamień', imageUrl: '/research/sensory/texture-rough-stone.jpg', description: 'Solid, grounded, raw' },
-  { id: 'warm_leather', label: 'Ciepła skóra', imageUrl: '/research/sensory/texture-warm-leather.jpg', description: 'Luxurious, rich, sophisticated' },
-  { id: 'glass', label: 'Szkło', imageUrl: '/research/sensory/texture-glass.jpg', description: 'Clean, transparent, airy' }
+  { 
+    id: 'soft_fabric', 
+    label: { pl: 'Miękka tkanina', en: 'Soft fabric' }, 
+    imageUrl: '/research/sensory/texture-soft-fabric.jpg', 
+    description: { pl: 'Przytulna, komfortowa, ciepła', en: 'Cozy, comfort, warmth' }
+  },
+  { 
+    id: 'smooth_wood', 
+    label: { pl: 'Gładkie drewno', en: 'Smooth wood' }, 
+    imageUrl: '/research/sensory/texture-smooth-wood.jpg', 
+    description: { pl: 'Naturalne, ciepłe, organiczne', en: 'Natural, warm, organic' }
+  },
+  { 
+    id: 'cold_metal', 
+    label: { pl: 'Zimny metal', en: 'Cold metal' }, 
+    imageUrl: '/research/sensory/texture-cold-metal.jpg', 
+    description: { pl: 'Nowoczesny, elegancki, industrialny', en: 'Modern, sleek, industrial' }
+  },
+  { 
+    id: 'rough_stone', 
+    label: { pl: 'Szorstki kamień', en: 'Rough stone' }, 
+    imageUrl: '/research/sensory/texture-rough-stone.jpg', 
+    description: { pl: 'Solidny, uziemiony, surowy', en: 'Solid, grounded, raw' }
+  },
+  { 
+    id: 'warm_leather', 
+    label: { pl: 'Ciepła skóra', en: 'Warm leather' }, 
+    imageUrl: '/research/sensory/texture-warm-leather.jpg', 
+    description: { pl: 'Luksusowa, bogata, wyrafinowana', en: 'Luxurious, rich, sophisticated' }
+  },
+  { 
+    id: 'glass', 
+    label: { pl: 'Szkło', en: 'Glass' }, 
+    imageUrl: '/research/sensory/texture-glass.jpg', 
+    description: { pl: 'Czyste, przezroczyste, przestronne', en: 'Clean, transparent, airy' }
+  }
 ];
 
 export const LIGHT_PREFERENCES: SensoryOption[] = [
-  { id: 'warm_low', label: 'Ciepłe, przyciemnione', imageUrl: '/research/sensory/light-warm-low.jpg', description: '2700K, cozy evening vibe' },
-  { id: 'warm_bright', label: 'Ciepłe, jasne', imageUrl: '/research/sensory/light-warm-bright.jpg', description: '3000K, inviting and energizing' },
-  { id: 'neutral', label: 'Neutralne', imageUrl: '/research/sensory/light-neutral.jpg', description: '4000K, balanced daylight' },
-  { id: 'cool_bright', label: 'Zimne, jasne', imageUrl: '/research/sensory/light-cool-bright.jpg', description: '5000K+, focused and crisp' }
+  { 
+    id: 'warm_low', 
+    label: { pl: 'Ciepłe, przyciemnione', en: 'Warm, dimmed' }, 
+    imageUrl: '/research/sensory/light-warm-low.jpg', 
+    description: { pl: '2700K, przytulny wieczorny nastrój', en: '2700K, cozy evening vibe' }
+  },
+  { 
+    id: 'warm_bright', 
+    label: { pl: 'Ciepłe, jasne', en: 'Warm, bright' }, 
+    imageUrl: '/research/sensory/light-warm-bright.jpg', 
+    description: { pl: '3000K, zachęcające i energetyzujące', en: '3000K, inviting and energizing' }
+  },
+  { 
+    id: 'neutral', 
+    label: { pl: 'Neutralne', en: 'Neutral' }, 
+    imageUrl: '/research/sensory/light-neutral.jpg', 
+    description: { pl: '4000K, zbalansowane światło dzienne', en: '4000K, balanced daylight' }
+  },
+  { 
+    id: 'cool_bright', 
+    label: { pl: 'Zimne, jasne', en: 'Cool, bright' }, 
+    imageUrl: '/research/sensory/light-cool-bright.jpg', 
+    description: { pl: '5000K+, skoncentrowane i ostre', en: '5000K+, focused and crisp' }
+  }
 ];
 
 // =========================
@@ -254,12 +385,42 @@ export const LIGHT_PREFERENCES: SensoryOption[] = [
 // =========================
 
 export const NATURE_METAPHOR_OPTIONS: SensoryOption[] = [
-  { id: 'ocean', label: 'Ocean', imageUrl: '/research/projective/nature-ocean.jpg', description: 'Vast, flowing, calming, mysterious' },
-  { id: 'forest', label: 'Las', imageUrl: '/research/projective/nature-forest.jpg', description: 'Grounded, organic, peaceful, complex' },
-  { id: 'mountain', label: 'Góry', imageUrl: '/research/projective/nature-mountain.jpg', description: 'Strong, elevated, inspiring, solid' },
-  { id: 'desert', label: 'Pustynia', imageUrl: '/research/projective/nature-desert.jpg', description: 'Minimal, warm, spacious, serene' },
-  { id: 'garden', label: 'Ogród', imageUrl: '/research/projective/nature-garden.jpg', description: 'Cultivated, balanced, nurturing, alive' },
-  { id: 'sunset', label: 'Zachód słońca', imageUrl: '/research/projective/nature-sunset.jpg', description: 'Warm, transitional, reflective, soft' }
+  { 
+    id: 'ocean', 
+    label: { pl: 'Ocean', en: 'Ocean' }, 
+    imageUrl: '/research/projective/nature-ocean.jpg', 
+    description: { pl: 'Rozległy, płynny, kojący, tajemniczy', en: 'Vast, flowing, calming, mysterious' }
+  },
+  { 
+    id: 'forest', 
+    label: { pl: 'Las', en: 'Forest' }, 
+    imageUrl: '/research/projective/nature-forest.jpg', 
+    description: { pl: 'Uziemiony, organiczny, spokojny, złożony', en: 'Grounded, organic, peaceful, complex' }
+  },
+  { 
+    id: 'mountain', 
+    label: { pl: 'Góry', en: 'Mountains' }, 
+    imageUrl: '/research/projective/nature-mountain.jpg', 
+    description: { pl: 'Silne, wyniosłe, inspirujące, solidne', en: 'Strong, elevated, inspiring, solid' }
+  },
+  { 
+    id: 'desert', 
+    label: { pl: 'Pustynia', en: 'Desert' }, 
+    imageUrl: '/research/projective/nature-desert.jpg', 
+    description: { pl: 'Minimalistyczna, ciepła, przestronna, spokojna', en: 'Minimal, warm, spacious, serene' }
+  },
+  { 
+    id: 'garden', 
+    label: { pl: 'Ogród', en: 'Garden' }, 
+    imageUrl: '/research/projective/nature-garden.jpg', 
+    description: { pl: 'Kultywowany, zbalansowany, pielęgnujący, żywy', en: 'Cultivated, balanced, nurturing, alive' }
+  },
+  { 
+    id: 'sunset', 
+    label: { pl: 'Zachód słońca', en: 'Sunset' }, 
+    imageUrl: '/research/projective/nature-sunset.jpg', 
+    description: { pl: 'Ciepły, przejściowy, refleksyjny, miękki', en: 'Warm, transitional, reflective, soft' }
+  }
 ];
 
 // =========================
@@ -277,6 +438,14 @@ export const VALIDATED_SCALES = {
   sensory_light: LIGHT_PREFERENCES,
   projective_nature: NATURE_METAPHOR_OPTIONS
 };
+
+// =========================
+// Helper function to get localized text
+// =========================
+
+export function getLocalizedText(text: LocalizedText, lang: Language = 'pl'): string {
+  return text[lang];
+}
 
 // Research note: All scales maintain construct validity while being gamified
 // for improved completion rates and user experience
