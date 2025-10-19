@@ -36,6 +36,10 @@ export function PhotoUploadScreen() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detectedRoomType, setDetectedRoomType] = useState<string | null>(null);
   const [roomAnalysis, setRoomAnalysis] = useState<any>(null);
+  
+  // Check URL params for skipFlow flag (Fast Track)
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const skipFlow = searchParams?.get('skipFlow') === 'true';
 
   const analyzeImage = useCallback(async (file: File) => {
     setIsAnalyzing(true);
@@ -122,15 +126,17 @@ export function PhotoUploadScreen() {
         roomType: detectedRoomType
       });
       
-      // Check path type from sessionData
-      const pathType = (sessionData as any)?.pathType;
-      console.log('[PhotoUpload] Path type:', pathType);
+      // Check URL param first (most reliable), then sessionData
+      const isFastTrack = skipFlow || (sessionData as any)?.pathType === 'fast';
+      console.log('[PhotoUpload] Skip flow?', skipFlow);
+      console.log('[PhotoUpload] Path type from session:', (sessionData as any)?.pathType);
+      console.log('[PhotoUpload] Is Fast Track?', isFastTrack);
       
-      if (pathType === 'fast') {
-        // Fast track: skip tinder/dna/ladder, go directly to generation
-        console.log('[PhotoUpload] Fast track detected - routing to /flow/generate');
+      if (isFastTrack) {
+        // FAST TRACK: skip tinder/dna/ladder, go directly to generation
+        console.log('[PhotoUpload] ⚡ FAST TRACK - Skipping to generation');
         
-        // Set minimal visualDNA for generate page to work
+        // Set minimal data that generate page needs
         await updateSessionData({
           visualDNA: {
             dominantStyle: 'modern',
@@ -140,13 +146,13 @@ export function PhotoUploadScreen() {
           },
           tinderResults: [],
           ladderPath: ['quick'],
-          coreNeed: 'simple design'
+          coreNeed: 'comfortable and functional interior'
         });
         
         router.push('/flow/generate');
       } else {
-        // Full experience: continue with tinder swipes
-        console.log('[PhotoUpload] Full experience - routing to /flow/tinder');
+        // FULL EXPERIENCE: continue with complete flow
+        console.log('[PhotoUpload] 🌟 FULL EXPERIENCE - Continuing to tinder');
         router.push('/flow/tinder');
       }
     }

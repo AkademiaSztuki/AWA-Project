@@ -105,7 +105,13 @@ const LandingScreen: React.FC = () => {
                   stopAllDialogueAudio();
                   setIsPrewarming(true);
                   checkHealth().catch(() => {});
-                  await updateSessionData({ pathType: 'fast' });
+                  
+                  console.log('[Landing] Setting pathType to FAST');
+                  await updateSessionData({ 
+                    pathType: 'fast',
+                    pathSelectedAt: new Date().toISOString() 
+                  });
+                  
                   router.push('/flow/onboarding');
                 }}
               >

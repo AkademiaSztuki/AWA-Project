@@ -45,12 +45,15 @@ const OnboardingScreen: React.FC = () => {
       
       // Check path type and route accordingly
       const pathType = (sessionData as any)?.pathType;
+      console.log('[Onboarding] Demographics complete, pathType:', pathType);
       
       if (pathType === 'fast') {
-        // Fast track: skip core profile, go directly to photo upload
-        router.push('/flow/photo');
+        // Fast track: skip core profile, go directly to photo upload with skip flag
+        console.log('[Onboarding] Routing to photo with skipFlow flag');
+        router.push('/flow/photo?skipFlow=true');
       } else {
         // Full experience: go to core profile wizard
+        console.log('[Onboarding] Routing to core profile');
         router.push('/setup/profile');
       }
     }
