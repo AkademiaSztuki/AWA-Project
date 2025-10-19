@@ -101,7 +101,7 @@ export function MoodGrid({
 
         <div className="flex items-center gap-4">
           {/* X-axis label (left) */}
-          <div className="text-sm font-modern text-gray-600 writing-mode-vertical transform rotate-180">
+          <div className="text-sm font-modern text-gray-600 -rotate-90">
             {t(config.axes.x.labels.min)}
           </div>
 

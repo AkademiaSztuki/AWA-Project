@@ -391,25 +391,27 @@ export function CoreProfileWizard() {
               )}
 
               {currentStep === 'prs_ideal' && (
-                <div>
-                  <GlassCard className="p-6 lg:p-8 mb-6">
-                    <div className="text-center mb-6">
-                      <h2 className="text-2xl lg:text-3xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
-                        {language === 'pl' ? 'Twoja Idealna Przestrzeń' : 'Your Ideal Space'}
-                      </h2>
-                      <p className="text-graphite font-modern">
-                        {language === 'pl'
-                          ? 'Gdzie chciałbyś żeby Twoje przestrzenie były idealnie?'
-                          : 'Where would you like your spaces to be ideally?'}
-                      </p>
-                    </div>
+                <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
+                  <div className="text-center mb-6">
+                    <h2 className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
+                      {language === 'pl' ? 'Twoja Idealna Przestrzeń' : 'Your Ideal Space'}
+                    </h2>
+                    <p className="text-graphite font-modern text-sm">
+                      {language === 'pl'
+                        ? 'Gdzie chciałbyś żeby Twoje przestrzenie były idealnie?'
+                        : 'Where would you like your spaces to be ideally?'}
+                    </p>
+                  </div>
+                  
+                  <div className="mb-6">
                     <MoodGrid 
                       initialPosition={profileData.prsIdeal}
                       onPositionChange={(pos) => updateProfile({ prsIdeal: pos })}
                       mode="target"
                     />
-                  </GlassCard>
-                  <div className="flex justify-between">
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
                     <GlassButton onClick={handleBack} variant="secondary">
                       <ArrowLeft size={18} className="mr-2" />
                       {language === 'pl' ? 'Wstecz' : 'Back'}
@@ -422,7 +424,7 @@ export function CoreProfileWizard() {
                       <ArrowRight size={18} className="ml-2" />
                     </GlassButton>
                   </div>
-                </div>
+                </GlassCard>
               )}
 
               {currentStep === 'biophilia' && (
@@ -502,8 +504,8 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
 
       <p className="text-base lg:text-lg text-graphite font-modern max-w-2xl mx-auto mb-8">
         {language === 'pl'
-          ? 'Poświęć 15 minut aby stworzyć swój Profil. To jednorazowe - raz wypełnisz, będziesz używać w każdym pokoju.'
-          : 'Spend 15 minutes to create your Core Profile. One-time only - fill once, use for every room.'}
+          ? 'Poświęć 15 minut aby stworzyć swój Profil. To jednorazowe - raz wypełnione, pozostanie w Twoim profilu.'
+          : 'Spend 15 minutes to create your Core Profile. One-time only - once filled, stays in your profile.'}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto mb-8">
@@ -775,9 +777,9 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full h-full">
       {/* Progress */}
-      <div className="mb-4">
+      <div className="mb-6">
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm text-silver-dark font-modern">
             {language === 'pl' ? 'Postęp' : 'Progress'}
@@ -796,8 +798,8 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
         </div>
       </div>
 
-      {/* Swipe Card */}
-      <div className="relative h-[400px] md:h-[500px]">
+      {/* Swipe Card - Larger */}
+      <div className="relative h-[450px] md:h-[550px] mb-6">
         <AnimatePresence mode="wait">
           {currentImage && (
             <motion.div
@@ -805,100 +807,155 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
               onDragEnd={handleDragEnd}
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.3 }}
               className="absolute inset-0 cursor-grab active:cursor-grabbing"
             >
-              <GlassCard className="h-full overflow-hidden">
+              <div className="h-full rounded-2xl overflow-hidden shadow-2xl border-4 border-white/20">
                 <div className="relative h-full">
                   <Image
                     src={currentImage.url}
                     alt="Interior"
                     fill
                     className="object-cover"
+                    priority
                   />
                 </div>
-              </GlassCard>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex justify-center gap-4 mt-6">
-        <GlassButton 
+      {/* Action Buttons - Bigger */}
+      <div className="flex justify-center gap-6">
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
           onClick={() => handleSwipe('left')}
-          variant="secondary"
-          className="w-16 h-16 rounded-full p-0"
+          className="w-20 h-20 rounded-full bg-gradient-to-br from-red-100 to-red-200 hover:from-red-200 hover:to-red-300 shadow-xl flex items-center justify-center transition-all"
         >
-          <X size={28} className="text-red-500" />
-        </GlassButton>
-        <GlassButton 
+          <X size={36} className="text-red-600" />
+        </motion.button>
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
           onClick={() => handleSwipe('right')}
-          className="w-16 h-16 rounded-full p-0 bg-gradient-to-r from-green-400 to-emerald-500"
+          className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 shadow-xl flex items-center justify-center transition-all"
         >
-          <Heart size={28} className="text-white" fill="currentColor" />
-        </GlassButton>
+          <Heart size={36} className="text-white" fill="currentColor" />
+        </motion.button>
       </div>
     </div>
   );
 }
 
 function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
-  const { t, language } = useLanguage();
-  const [values, setValues] = useState(data || {
-    warmth: 0.5,
-    brightness: 0.5,
-    complexity: 0.5,
-    texture: 0.5
-  });
+  const { language } = useLanguage();
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState(data || {});
 
-  const handleChange = (dimension: string, value: number) => {
-    const newValues = { ...values, [dimension]: value };
-    setValues(newValues);
-    onUpdate(newValues);
+  const questions = [
+    {
+      id: 'warmth',
+      question: { pl: 'Które wnętrze bardziej TY?', en: 'Which interior is more YOU?' },
+      leftLabel: { pl: 'Zimne', en: 'Cool' },
+      rightLabel: { pl: 'Ciepłe', en: 'Warm' },
+      leftImage: '/images/tinder/Living Room (2).jpg',
+      rightImage: '/images/tinder/Living Room (1).jpg'
+    },
+    {
+      id: 'brightness',
+      question: { pl: 'Które wnętrze bardziej TY?', en: 'Which interior is more YOU?' },
+      leftLabel: { pl: 'Ciemne', en: 'Dark' },
+      rightLabel: { pl: 'Jasne', en: 'Bright' },
+      leftImage: '/images/tinder/Living Room (3).jpg',
+      rightImage: '/images/tinder/Living Room (1).jpg'
+    },
+    {
+      id: 'complexity',
+      question: { pl: 'Które wnętrze bardziej TY?', en: 'Which interior is more YOU?' },
+      leftLabel: { pl: 'Proste', en: 'Simple' },
+      rightLabel: { pl: 'Złożone', en: 'Complex' },
+      leftImage: '/images/tinder/Living Room (2).jpg',
+      rightImage: '/images/tinder/Living Room (3).jpg'
+    }
+  ];
+
+  const currentQ = questions[currentQuestion];
+
+  const handleChoice = (side: 'left' | 'right') => {
+    const value = side === 'left' ? 0.2 : 0.8;
+    const newAnswers = { ...answers, [currentQ.id]: value };
+    setAnswers(newAnswers);
+    onUpdate(newAnswers);
+    
+    if (currentQuestion + 1 < questions.length) {
+      setCurrentQuestion(currentQuestion + 1);
+    } else {
+      setTimeout(() => onNext(), 300);
+    }
   };
 
   return (
-    <GlassCard className="p-6 lg:p-8">
-      <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4">
-        {language === 'pl' ? 'Twoje Preferencje' : 'Your Preferences'}
+    <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
+      <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2 text-center">
+        {currentQ.question[language]}
       </h2>
-      <p className="text-graphite font-modern mb-8">
-        {language === 'pl' ? 'Gdzie się widzisz na tych skalach?' : 'Where do you see yourself on these scales?'}
+      <p className="text-graphite font-modern mb-6 text-sm text-center">
+        {language === 'pl' ? 'Reaguj intuicyjnie, nie myśl za długo' : 'React intuitively, don\'t overthink'}
       </p>
-
-      <div className="space-y-8 mb-8">
-        {SEMANTIC_DIFFERENTIAL_DIMENSIONS.map((dim) => (
-          <div key={dim.id} className="glass-panel rounded-xl p-6">
-            <p className="text-base font-semibold text-graphite mb-4">
-              {t(dim.label)}
-            </p>
-            <div className="flex items-center justify-between text-sm text-silver-dark mb-3">
-              <span>{t(dim.min.label)}</span>
-              <span>{t(dim.max.label)}</span>
-            </div>
-            <GlassSlider
-              min={0}
-              max={1}
-              step={0.01}
-              value={values[dim.id]}
-              onChange={(val) => handleChange(dim.id, val)}
-            />
-          </div>
-        ))}
+      
+      <div className="mb-6">
+        <div className="text-xs text-silver-dark text-center mb-2 font-modern">
+          {language === 'pl' ? 'Pytanie' : 'Question'} {currentQuestion + 1} / {questions.length}
+        </div>
       </div>
 
-      <div className="flex justify-between">
-        <GlassButton onClick={onBack} variant="secondary">
-          <ArrowLeft size={18} className="mr-2" />
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <button
+          type="button"
+          onClick={() => handleChoice('left')}
+          className="group relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-white/30 hover:border-gold/50 transition-all hover:scale-[1.02] cursor-pointer"
+        >
+          <Image
+            src={currentQ.leftImage}
+            alt={currentQ.leftLabel[language]}
+            fill
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+            <p className="text-white font-modern text-sm font-semibold">
+              {currentQ.leftLabel[language]}
+            </p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleChoice('right')}
+          className="group relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-white/30 hover:border-gold/50 transition-all hover:scale-[1.02] cursor-pointer"
+        >
+          <Image
+            src={currentQ.rightImage}
+            alt={currentQ.rightLabel[language]}
+            fill
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+            <p className="text-white font-modern text-sm font-semibold">
+              {currentQ.rightLabel[language]}
+            </p>
+          </div>
+        </button>
+      </div>
+
+      <div className="flex justify-center">
+        <GlassButton onClick={onBack} variant="secondary" size="sm">
+          <ArrowLeft size={16} className="mr-2" />
           {language === 'pl' ? 'Wstecz' : 'Back'}
-        </GlassButton>
-        <GlassButton onClick={onNext}>
-          {language === 'pl' ? 'Dalej' : 'Next'}
-          <ArrowRight size={18} className="ml-2" />
         </GlassButton>
       </div>
     </GlassCard>
@@ -1198,12 +1255,12 @@ function SummaryStep({ data, onComplete, onBack, isSubmitting }: any) {
         initial={{ scale: 0, rotate: -180 }}
         animate={{ scale: 1, rotate: 0 }}
         transition={{ duration: 0.6, type: "spring" }}
-        className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center"
+        className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-gold via-champagne to-platinum flex items-center justify-center shadow-xl"
       >
         <Check size={40} className="text-white" />
       </motion.div>
 
-      <h1 className="text-3xl lg:text-4xl xl:text-5xl font-nasalization bg-gradient-to-r from-green-600 to-emerald-500 bg-clip-text text-transparent mb-6">
+      <h1 className="text-3xl lg:text-4xl xl:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-6">
         {language === 'pl' ? 'Gotowe!' : 'All Set!'}
       </h1>
 
