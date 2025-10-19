@@ -141,7 +141,8 @@ const LandingScreen: React.FC = () => {
                     } catch (e) {
                       // ignore audio stop failures
                     } finally {
-                      router.push('/flow/onboarding');
+                      // Navigate directly to path selection
+                      router.push('/flow/path-selection');
                     }
                   }}
                   disabled={isPrewarming}

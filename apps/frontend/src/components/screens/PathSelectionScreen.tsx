@@ -30,6 +30,79 @@ export default function PathSelectionScreen() {
   const { language } = useLanguage();
   const { updateSessionData } = useSessionData();
 
+  const pathTexts = {
+    pl: {
+      title: 'Wybierz Swoją Ścieżkę',
+      subtitle: 'Zdecyduj jak chcesz doświadczyć',
+      ida: 'IDA',
+      subtext: '- szybko czy dogłębnie',
+      fastTrack: 'Szybka Ścieżka',
+      fastTrackEn: 'Fast Track',
+      fastDesc: 'Wypróbuj IDA szybko - prześlij zdjęcie, przesuń kilka inspiracji i generuj!',
+      minutes35: '~3-5 minut',
+      minQuestions: 'Minimalna ilość pytań',
+      gen10: '10 generacji',
+      expMods: 'Eksperymentuj z modyfikacjami',
+      basicPers: 'Bazowa personalizacja',
+      styleSwipes: 'Styl wizualny z szybkich swipes',
+      idealFor: 'Idealne dla:',
+      fastIdeal: 'Szybkiego testu, ciekawości, pierwszego kontaktu z AI design',
+      startFast: 'Zacznij Szybko',
+      fullExp: 'Pełne Doświadczenie',
+      fullExpEn: 'Full Experience',
+      recommended: 'Polecane',
+      fullDesc: 'Pozwól IDA poznać Cię głęboko - stwórz wnętrze które naprawdę odzwierciedla',
+      whoYouAre: 'KIM jesteś',
+      minutes1520: '~15-20 minut',
+      deepInterview: 'Pogłębiony wywiad z IDA',
+      unlimitedGen: 'Nieograniczone generacje',
+      createUnlimited: 'Twórz i modyfikuj bez limitów',
+      deepPers: 'Głęboka personalizacja',
+      psychPrefs: 'Psychologia + preferencje + styl życia',
+      fullIdeal: 'Prawdziwej personalizacji, projektowania wnętrza które jest TWOJE, wkładu w badania naukowe',
+      whatYouGet: 'Co zyskujesz:',
+      features: ['Tinder swipes', 'Mapa nastroju', 'Test zmysłów', 'Analiza pokoju', 'Drabina potrzeb', 'Multi-room'],
+      startFull: 'Zacznij Pełne Doświadczenie',
+      footnote: 'Zawsze możesz wrócić i spróbować drugiej ścieżki później'
+    },
+    en: {
+      title: 'Choose Your Path',
+      subtitle: 'Decide how you want to experience',
+      ida: 'IDA',
+      subtext: '- quick or deep',
+      fastTrack: 'Fast Track',
+      fastTrackEn: 'Fast Track',
+      fastDesc: 'Try IDA quickly - upload photo, swipe a few inspirations and generate!',
+      minutes35: '~3-5 minutes',
+      minQuestions: 'Minimal questions',
+      gen10: '10 generations',
+      expMods: 'Experiment with modifications',
+      basicPers: 'Basic personalization',
+      styleSwipes: 'Visual style from quick swipes',
+      idealFor: 'Perfect for:',
+      fastIdeal: 'Quick test, curiosity, first contact with AI design',
+      startFast: 'Start Quick',
+      fullExp: 'Full Experience',
+      fullExpEn: 'Full Experience',
+      recommended: 'Recommended',
+      fullDesc: 'Let IDA get to know you deeply - create an interior that truly reflects',
+      whoYouAre: 'WHO you are',
+      minutes1520: '~15-20 minutes',
+      deepInterview: 'In-depth interview with IDA',
+      unlimitedGen: 'Unlimited generations',
+      createUnlimited: 'Create and modify without limits',
+      deepPers: 'Deep personalization',
+      psychPrefs: 'Psychology + preferences + lifestyle',
+      fullIdeal: 'True personalization, designing interior that is YOURS, contributing to research',
+      whatYouGet: 'What you get:',
+      features: ['Tinder swipes', 'Mood map', 'Sensory test', 'Room analysis', 'Needs ladder', 'Multi-room'],
+      startFull: 'Start Full Experience',
+      footnote: 'You can always come back and try the other path later'
+    }
+  };
+
+  const texts = pathTexts[language];
+
   const handlePathSelection = async (pathType: 'fast' | 'full') => {
     stopAllDialogueAudio();
     
@@ -39,11 +112,11 @@ export default function PathSelectionScreen() {
     });
 
     if (pathType === 'fast') {
-      // Fast track: minimal flow
-      router.push('/flow/fast-track');
+      // Fast track: quick consent → fast-track flow
+      router.push('/flow/onboarding-fast');
     } else {
-      // Full experience: complete personalization
-      router.push('/flow/photo');
+      // Full experience: full onboarding (consent + demographics) → core profile
+      router.push('/flow/onboarding');
     }
   };
 
@@ -75,7 +148,7 @@ export default function PathSelectionScreen() {
                 transition={{ duration: 0.8 }}
                 className="text-3xl lg:text-4xl xl:text-5xl 2xl:text-6xl font-nasalization mb-4 bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent"
               >
-                Wybierz Swoją Ścieżkę
+                {texts.title}
               </motion.h1>
               <motion.p 
                 initial={{ opacity: 0 }}
@@ -83,7 +156,7 @@ export default function PathSelectionScreen() {
                 transition={{ duration: 0.8, delay: 0.2 }}
                 className="text-base lg:text-lg xl:text-xl text-graphite font-modern max-w-2xl mx-auto"
               >
-                Zdecyduj jak chcesz doświadczyć <span className="font-semibold text-gold">IDA</span> - szybko czy dogłębnie
+                {texts.subtitle} <span className="font-semibold text-gold">{texts.ida}</span>{texts.subtext}
               </motion.p>
             </div>
 
@@ -111,15 +184,15 @@ export default function PathSelectionScreen() {
                     </div>
                     <div>
                       <h2 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization text-graphite group-hover:text-blue-600 transition-colors">
-                        Szybka Ścieżka
+                        {texts.fastTrack}
                       </h2>
-                      <p className="text-xs lg:text-sm text-silver-dark font-modern">Fast Track</p>
+                      <p className="text-xs lg:text-sm text-silver-dark font-modern">{texts.fastTrackEn}</p>
                     </div>
                   </div>
 
                   <div className="flex-1 space-y-5 mb-6 relative z-10">
                     <p className="text-graphite font-modern text-base lg:text-lg leading-relaxed">
-                      Wypróbuj IDA szybko - prześlij zdjęcie, przesuń kilka inspiracji i generuj!
+                      {texts.fastDesc}
                     </p>
 
                     <div className="space-y-4">
@@ -128,8 +201,8 @@ export default function PathSelectionScreen() {
                           <Clock size={18} className="text-blue-600" />
                         </div>
                         <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">~3-5 minut</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">Minimalna ilość pytań</p>
+                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.minutes35}</p>
+                          <p className="text-xs lg:text-sm text-silver-dark">{texts.minQuestions}</p>
                         </div>
                       </div>
 
@@ -138,8 +211,8 @@ export default function PathSelectionScreen() {
                           <ImageIcon size={18} className="text-blue-600" />
                         </div>
                         <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">10 generacji</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">Eksperymentuj z modyfikacjami</p>
+                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.gen10}</p>
+                          <p className="text-xs lg:text-sm text-silver-dark">{texts.expMods}</p>
                         </div>
                       </div>
 
@@ -148,15 +221,15 @@ export default function PathSelectionScreen() {
                           <Sparkles size={18} className="text-blue-600" />
                         </div>
                         <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">Bazowa personalizacja</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">Styl wizualny z szybkich swipes</p>
+                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.basicPers}</p>
+                          <p className="text-xs lg:text-sm text-silver-dark">{texts.styleSwipes}</p>
                         </div>
                       </div>
                     </div>
 
                     <div className="glass-panel rounded-xl p-4 bg-gradient-to-br from-blue-50/50 to-cyan-50/50 border-blue-200/30">
                       <p className="text-xs lg:text-sm text-graphite font-modern">
-                        <strong className="text-blue-600">Idealne dla:</strong> Szybkiego testu, ciekawości, pierwszego kontaktu z AI design
+                        <strong className="text-blue-600">{texts.idealFor}</strong> {texts.fastIdeal}
                       </p>
                     </div>
                   </div>
@@ -170,7 +243,7 @@ export default function PathSelectionScreen() {
                     variant="secondary"
                   >
                     <Zap size={18} className="mr-2" />
-                    Zacznij Szybko
+                    {texts.startFast}
                   </GlassButton>
                 </GlassCard>
               </motion.div>
@@ -199,7 +272,7 @@ export default function PathSelectionScreen() {
                     transition={{ duration: 0.6, delay: 0.8, type: "spring" }}
                     className="absolute top-4 right-4 bg-gradient-to-r from-gold via-champagne to-gold text-white px-4 py-2 rounded-full text-xs lg:text-sm font-bold shadow-lg z-20 animate-pulse"
                   >
-                    ✨ Polecane
+                    ✨ {texts.recommended}
                   </motion.div>
 
                   <div className="flex items-center gap-4 mb-6 relative z-10">
@@ -208,15 +281,15 @@ export default function PathSelectionScreen() {
                     </div>
                     <div>
                       <h2 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent group-hover:from-gold-600 group-hover:to-champagne-600 transition-all">
-                        Pełne Doświadczenie
+                        {texts.fullExp}
                       </h2>
-                      <p className="text-xs lg:text-sm text-silver-dark font-modern">Full Experience</p>
+                      <p className="text-xs lg:text-sm text-silver-dark font-modern">{texts.fullExpEn}</p>
                     </div>
                   </div>
 
                   <div className="flex-1 space-y-5 mb-6 relative z-10">
                     <p className="text-graphite font-modern text-base lg:text-lg leading-relaxed">
-                      Pozwól IDA poznać Cię głęboko - stwórz wnętrze które naprawdę odzwierciedla <strong className="text-gold">KIM jesteś</strong>.
+                      {texts.fullDesc} <strong className="text-gold">{texts.whoYouAre}</strong>.
                     </p>
 
                     <div className="space-y-4">
@@ -225,8 +298,8 @@ export default function PathSelectionScreen() {
                           <Clock size={18} className="text-gold-600" />
                         </div>
                         <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">~15-20 minut</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">Pogłębiony wywiad z IDA</p>
+                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.minutes1520}</p>
+                          <p className="text-xs lg:text-sm text-silver-dark">{texts.deepInterview}</p>
                         </div>
                       </div>
 
@@ -235,8 +308,8 @@ export default function PathSelectionScreen() {
                           <Layers size={18} className="text-gold-600" />
                         </div>
                         <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">Nieograniczone generacje</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">Twórz i modyfikuj bez limitów</p>
+                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.unlimitedGen}</p>
+                          <p className="text-xs lg:text-sm text-silver-dark">{texts.createUnlimited}</p>
                         </div>
                       </div>
 
@@ -245,25 +318,25 @@ export default function PathSelectionScreen() {
                           <Heart size={18} className="text-gold-600" fill="currentColor" />
                         </div>
                         <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">Głęboka personalizacja</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">Psychologia + preferencje + styl życia</p>
+                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.deepPers}</p>
+                          <p className="text-xs lg:text-sm text-silver-dark">{texts.psychPrefs}</p>
                         </div>
                       </div>
                     </div>
 
                     <div className="glass-panel rounded-xl p-4 bg-gradient-to-br from-gold-50/50 to-champagne-50/50 border-gold-200/30">
                       <p className="text-xs lg:text-sm text-graphite font-modern">
-                        <strong className="text-gold-600">Idealne dla:</strong> Prawdziwej personalizacji, projektowania wnętrza które jest TWOJE, wkładu w badania naukowe
+                        <strong className="text-gold-600">{texts.idealFor}</strong> {texts.fullIdeal}
                       </p>
                     </div>
 
                     <div className="space-y-3 pt-2">
                       <p className="text-xs lg:text-sm font-semibold text-graphite flex items-center gap-2">
                         <Sparkles size={16} className="text-gold" />
-                        Co zyskujesz:
+                        {texts.whatYouGet}
                       </p>
                       <div className="grid grid-cols-2 gap-2">
-                        {['Tinder swipes', 'Mapa nastroju', 'Test zmysłów', 'Analiza pokoju', 'Drabina potrzeb', 'Multi-room'].map((feature, i) => (
+                        {texts.features.map((feature, i) => (
                           <div key={i} className="flex items-center gap-2 text-xs lg:text-sm text-silver-dark">
                             <div className="w-1.5 h-1.5 rounded-full bg-gold" />
                             {feature}
@@ -281,7 +354,7 @@ export default function PathSelectionScreen() {
                     className="w-full group-hover:scale-105 transition-transform"
                   >
                     <Heart size={18} className="mr-2" />
-                    Zacznij Pełne Doświadczenie
+                    {texts.startFull}
                   </GlassButton>
                 </GlassCard>
               </motion.div>
@@ -289,8 +362,8 @@ export default function PathSelectionScreen() {
 
             {/* Footer note */}
             <div className="text-center mt-8">
-              <p className="text-sm text-gray-500 font-modern">
-                💡 Zawsze możesz wrócić i spróbować drugiej ścieżki później
+              <p className="text-sm text-silver-dark font-modern">
+                💡 {texts.footnote}
               </p>
             </div>
           </motion.div>

@@ -42,8 +42,8 @@ const OnboardingScreen: React.FC = () => {
         consentTimestamp: new Date().toISOString(),
         demographics: demographics
       });
-      // Navigate to path selection (Fast Track vs Full Experience)
-      router.push('/flow/path-selection');
+      // Navigate to Core Profile Wizard (Full Experience)
+      router.push('/setup/profile');
     }
   };
 
