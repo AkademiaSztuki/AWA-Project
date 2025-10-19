@@ -9,6 +9,7 @@ import AmbientMusic from '@/components/ui/AmbientMusic';
 import MusicTestButton from '@/components/ui/MusicTestButton';
 import { AwaBackground } from '@/components/awa';
 import { LandscapeGuard } from '@/components/ui/LandscapeGuard';
+import { LanguageProvider, LanguageToggle } from '@/contexts/LanguageContext';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const audiowide = Audiowide({ 
@@ -35,20 +36,27 @@ export default function RootLayout({
   return (
     <html lang="pl" className={`${inter.variable} ${audiowide.variable} ${exo2.variable}`}>
       <body className="h-screen font-nasalization">
-        <LandscapeGuard>
-          <AwaBackground />
-          <AuroraBackgroundClient />
-          <AuroraBubbles />
-          <ParticlesBackground />
-          <AmbientMusic volume={0.4} audioFile="/audio/ambient.mp3" />
-          <MusicTestButton />
-          <div className="flex items-center justify-end h-screen w-full">
-            <div className="w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl lg:mr-32">
-              {children}
+        <LanguageProvider>
+          <LandscapeGuard>
+            {/* Language toggle in top-right corner */}
+            <div className="fixed top-4 right-4 z-50">
+              <LanguageToggle />
             </div>
-          </div>
-          <SpeedInsights />
-        </LandscapeGuard>
+            
+            <AwaBackground />
+            <AuroraBackgroundClient />
+            <AuroraBubbles />
+            <ParticlesBackground />
+            <AmbientMusic volume={0.4} audioFile="/audio/ambient.mp3" />
+            <MusicTestButton />
+            <div className="flex items-center justify-end h-screen w-full">
+              <div className="w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl lg:mr-32">
+                {children}
+              </div>
+            </div>
+            <SpeedInsights />
+          </LandscapeGuard>
+        </LanguageProvider>
       </body>
     </html>
   );

@@ -662,3 +662,95 @@ async def generate_llm_comment(request: LLMCommentRequest):
 async def llm_comment_options():
     """Handle preflight request for LLM comment"""
     return {"message": "OK"}
+
+# =========================================
+# PROMPT REFINEMENT (for prompt synthesis)
+# =========================================
+
+class PromptRefinementRequest(BaseModel):
+    prompt: str
+    target_tokens: int = 65
+    instructions: List[str] = []
+
+class PromptRefinementResponse(BaseModel):
+    refined_prompt: str
+    original_tokens: int
+    refined_tokens: int
+    improvement: str
+
+@web_app.post("/refine-prompt", response_model=PromptRefinementResponse)
+async def refine_prompt(request: PromptRefinementRequest):
+    """
+    Refine FLUX prompt using lightweight LLM
+    
+    Purpose:
+    - Condense verbose template prompts
+    - Remove redundancy
+    - Keep token count under 65 (CLIP optimal)
+    - Maintain semantic meaning
+    """
+    try:
+        print(f"Refining prompt (length: {len(request.prompt)} chars)")
+        
+        original_tokens = len(request.prompt.split())
+        print(f"Original tokens: {original_tokens}")
+        
+        # If already short enough, return as-is
+        if original_tokens <= request.target_tokens:
+            return PromptRefinementResponse(
+                refined_prompt=request.prompt,
+                original_tokens=original_tokens,
+                refined_tokens=original_tokens,
+                improvement="Already optimal"
+            )
+        
+        # Simple rule-based refinement (no LLM needed for basic cases)
+        refined = request.prompt
+        
+        # Remove redundant words
+        redundant_phrases = [
+            ("featuring a ", "with "),
+            ("that has ", "with "),
+            ("which includes ", "including "),
+            (", and also ", ", "),
+            ("very ", ""),
+            ("really ", ""),
+            ("quite ", "")
+        ]
+        
+        for old, new in redundant_phrases:
+            refined = refined.replace(old, new)
+        
+        # Remove double spaces
+        refined = ' '.join(refined.split())
+        
+        refined_tokens = len(refined.split())
+        print(f"Refined tokens: {refined_tokens}")
+        
+        # If still too long, use more aggressive truncation
+        if refined_tokens > request.target_tokens:
+            words = refined.split()
+            refined = ' '.join(words[:request.target_tokens])
+            refined_tokens = request.target_tokens
+        
+        return PromptRefinementResponse(
+            refined_prompt=refined,
+            original_tokens=original_tokens,
+            refined_tokens=refined_tokens,
+            improvement=f"Reduced by {original_tokens - refined_tokens} tokens"
+        )
+        
+    except Exception as e:
+        print(f"Prompt refinement error: {str(e)}")
+        # Fallback: return original
+        return PromptRefinementResponse(
+            refined_prompt=request.prompt,
+            original_tokens=len(request.prompt.split()),
+            refined_tokens=len(request.prompt.split()),
+            improvement="Error, returned original"
+        )
+
+@web_app.options("/refine-prompt")
+async def refine_prompt_options():
+    """Handle preflight request for prompt refinement"""
+    return {"message": "OK"}
