@@ -14,11 +14,6 @@ const OnboardingScreen: React.FC = () => {
   const router = useRouter();
   const { language, t } = useLanguage();
   const [step, setStep] = useState<'consent' | 'demographics'>('consent');
-  const [consent, setConsent] = useState({
-    dataProcessing: false,
-    research: false,
-    anonymity: false
-  });
   const [demographics, setDemographics] = useState({
     ageRange: '',
     gender: '',
@@ -26,13 +21,12 @@ const OnboardingScreen: React.FC = () => {
   });
   const { updateSessionData, sessionData } = useSessionData();
 
-  const canProceedConsent = Object.values(consent).every(Boolean);
   const canProceedDemographics = demographics.ageRange && demographics.gender && demographics.education;
 
   const handleConsentSubmit = () => {
-    if (canProceedConsent) {
-      setStep('demographics');
-    }
+    console.log('[Onboarding] Consent submit clicked');
+    console.log('[Onboarding] ✅ Moving to demographics step');
+    setStep('demographics');
   };
 
   const handleDemographicsSubmit = () => {
@@ -93,18 +87,9 @@ const OnboardingScreen: React.FC = () => {
   const texts = consentTexts[language];
 
   return (
-    <div className="min-h-screen flex w-full relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
-
-      {/* IDA model on the right side */}
-      <AwaContainer 
-        currentStep="onboarding" 
-        showDialogue={false}
-        fullWidth={false}
-        autoHide={false}
-      />
-
-      <div className="flex-1 flex items-center p-4 lg:p-8 lg:mr-32">
+    <div className="min-h-screen flex flex-col w-full">
+      {/* Formularz zgody/demographics */}
+      <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-4xl mx-auto">
           {step === 'consent' && (
             <motion.div
@@ -112,12 +97,12 @@ const OnboardingScreen: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <GlassCard className="mb-8">
-                <h1 className="text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-4 lg:mb-6">
+              <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
+                <h1 className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-3">
                   {texts.title}
                 </h1>
 
-                <div className="space-y-4 lg:space-y-6 text-graphite font-modern text-sm lg:text-base xl:text-lg">
+                <div className="space-y-3 text-graphite font-modern text-xs md:text-sm">
                   <div>
                     <h3 className="text-lg font-semibold text-gold mb-2">
                       {texts.purpose}
@@ -144,35 +129,8 @@ const OnboardingScreen: React.FC = () => {
                     </ul>
                   </div>
                 </div>
-              </GlassCard>
-
-              <GlassCard variant="highlighted">
-                <h3 className="text-lg lg:text-xl xl:text-2xl font-nasalization text-gold mb-3 lg:mb-4">
-                  {texts.agree}
-                </h3>
-
-                <div className="space-y-3 lg:space-y-4">
-                  {[
-                    { key: 'dataProcessing', text: texts.consent1 },
-                    { key: 'research', text: texts.consent2 },
-                    { key: 'anonymity', text: texts.consent3 }
-                  ].map(({ key, text }) => (
-                    <label key={key} className="flex items-start gap-3 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={consent[key as keyof typeof consent]}
-                        onChange={(e) => setConsent(prev => ({
-                          ...prev,
-                          [key]: e.target.checked
-                        }))}
-                        className="mt-1 w-5 h-5 text-gold-600 bg-pearl-100/20 border-gold-400/50 rounded focus:ring-gold-500 focus:ring-2"
-                      />
-                      <span className="text-graphite font-modern group-hover:text-gold transition-colors">{text}</span>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="flex justify-between items-center mt-8">
+                
+                <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
                   <GlassButton
                     variant="secondary"
                     onClick={() => {
@@ -180,15 +138,14 @@ const OnboardingScreen: React.FC = () => {
                       router.push('/');
                     }}
                   >
-                    {texts.back}
+                    ← {texts.back}
                   </GlassButton>
 
                   <GlassButton
-                    disabled={!canProceedConsent}
                     onClick={handleConsentSubmit}
                     size="lg"
                   >
-                    {texts.submit}
+                    {texts.submit} →
                   </GlassButton>
                 </div>
               </GlassCard>
@@ -252,32 +209,33 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <GlassCard className="p-6 lg:p-8">
-        <h2 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-3">
+      <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
+        <h2 className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
           {texts.title}
         </h2>
-        <p className="text-graphite font-modern mb-8">
+        <p className="text-graphite font-modern mb-6 text-sm">
           {texts.subtitle}
         </p>
 
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* Age Range */}
           <div>
-            <label className="block text-sm font-semibold text-graphite mb-3">
+            <label className="block text-sm font-semibold text-graphite mb-2">
               {texts.age}
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               {['18-24', '25-34', '35-44', '45-54', '55-64', '65+'].map((range) => (
                 <button
                   key={range}
+                  type="button"
                   onClick={() => onUpdate({ ...data, ageRange: range })}
-                  className={`glass-panel rounded-xl p-3 transition-all duration-300 ${
+                  className={`rounded-lg p-2 text-sm font-modern transition-all cursor-pointer ${
                     data.ageRange === range
-                      ? 'border-2 border-gold bg-gold/10'
-                      : 'border border-white/30 hover:border-gold/30'
+                      ? 'bg-gold/20 border-2 border-gold text-graphite'
+                      : 'bg-white/10 border border-white/30 text-graphite hover:border-gold/50'
                   }`}
                 >
-                  <p className="text-sm font-modern text-graphite">{range}</p>
+                  {range}
                 </button>
               ))}
             </div>
@@ -285,10 +243,10 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
 
           {/* Gender */}
           <div>
-            <label className="block text-sm font-semibold text-graphite mb-3">
+            <label className="block text-sm font-semibold text-graphite mb-2">
               {texts.gender}
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { id: 'female', label: language === 'pl' ? 'Kobieta' : 'Female', icon: '👩' },
                 { id: 'male', label: language === 'pl' ? 'Mężczyzna' : 'Male', icon: '👨' },
@@ -297,14 +255,15 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
               ].map((option) => (
                 <button
                   key={option.id}
+                  type="button"
                   onClick={() => onUpdate({ ...data, gender: option.id })}
-                  className={`glass-panel rounded-xl p-4 transition-all duration-300 ${
+                  className={`rounded-lg p-3 transition-all cursor-pointer ${
                     data.gender === option.id
-                      ? 'border-2 border-gold bg-gold/10'
-                      : 'border border-white/30 hover:border-gold/30'
+                      ? 'bg-gold/20 border-2 border-gold'
+                      : 'bg-white/10 border border-white/30 hover:border-gold/50'
                   }`}
                 >
-                  <div className="text-2xl mb-2">{option.icon}</div>
+                  <div className="text-xl mb-1">{option.icon}</div>
                   <p className="text-xs font-modern text-graphite">{option.label}</p>
                 </button>
               ))}
@@ -313,10 +272,10 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
 
           {/* Education */}
           <div>
-            <label className="block text-sm font-semibold text-graphite mb-3">
+            <label className="block text-sm font-semibold text-graphite mb-2">
               {texts.education}
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { id: 'high-school', label: language === 'pl' ? 'Średnie' : 'High School' },
                 { id: 'bachelor', label: language === 'pl' ? 'Licencjat' : 'Bachelor\'s' },
@@ -325,23 +284,24 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
               ].map((option) => (
                 <button
                   key={option.id}
+                  type="button"
                   onClick={() => onUpdate({ ...data, education: option.id })}
-                  className={`glass-panel rounded-xl p-3 transition-all duration-300 ${
+                  className={`rounded-lg p-2 text-sm font-modern transition-all cursor-pointer ${
                     data.education === option.id
-                      ? 'border-2 border-gold bg-gold/10'
-                      : 'border border-white/30 hover:border-gold/30'
+                      ? 'bg-gold/20 border-2 border-gold text-graphite'
+                      : 'bg-white/10 border border-white/30 text-graphite hover:border-gold/50'
                   }`}
                 >
-                  <p className="text-sm font-modern text-graphite">{option.label}</p>
+                  {option.label}
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        <div className="flex justify-between items-center mt-8">
+        <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
           <GlassButton variant="secondary" onClick={onBack}>
-            {texts.back}
+            ← {texts.back}
           </GlassButton>
 
           <GlassButton
@@ -349,7 +309,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
             onClick={onSubmit}
             size="lg"
           >
-            {texts.continue}
+            {texts.continue} →
           </GlassButton>
         </div>
       </GlassCard>

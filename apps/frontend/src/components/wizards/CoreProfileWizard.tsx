@@ -138,19 +138,10 @@ export function CoreProfileWizard() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
-      
-      <AwaContainer 
-        currentStep="onboarding" 
-        showDialogue={false}
-        fullWidth={true}
-        autoHide={false}
-      />
-
-      <div className="flex-1 p-4 lg:p-8">
-        <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen flex flex-col w-full">
+      {/* Main Content */}
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-4xl mx-auto">
           {/* Progress Bar */}
           <div className="mb-8">
             <div className="flex items-center justify-between text-sm text-silver-dark mb-2 font-modern">

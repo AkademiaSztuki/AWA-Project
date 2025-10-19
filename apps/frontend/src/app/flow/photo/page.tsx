@@ -251,11 +251,45 @@ export default function PhotoUploadPage() {
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (selectedImage) {
-      stopAllDialogueAudio(); // Zatrzymaj dzwiek przed nawigacja
+      stopAllDialogueAudio();
       updateSession({ roomType });
-      router.push('/flow/tinder');
+      
+      // Check URL param for skipFlow (Fast Track)
+      const urlParams = new URLSearchParams(window.location.search);
+      const skipFlow = urlParams.get('skipFlow') === 'true';
+      const pathType = (sessionData as any)?.pathType;
+      
+      console.log('[PhotoUpload] Skip flow?', skipFlow);
+      console.log('[PhotoUpload] Path type from session:', pathType);
+      
+      const isFastTrack = skipFlow || pathType === 'fast';
+      console.log('[PhotoUpload] Is Fast Track?', isFastTrack);
+      
+      if (isFastTrack) {
+        // FAST TRACK: skip tinder/dna/ladder, go directly to generation
+        console.log('[PhotoUpload] ⚡ FAST TRACK - Skipping to generation');
+        
+        // Set minimal data that generate page needs
+        await updateSession({
+          visualDNA: {
+            dominantStyle: 'modern',
+            dominantTags: [],
+            preferences: { colors: [], materials: [], styles: [], lighting: [] },
+            accuracyScore: 0
+          },
+          tinderResults: [],
+          ladderPath: ['quick'],
+          coreNeed: 'comfortable and functional interior'
+        });
+        
+        router.push('/flow/generate');
+      } else {
+        // FULL EXPERIENCE: continue with complete flow
+        console.log('[PhotoUpload] 🌟 FULL EXPERIENCE - Continuing to tinder');
+        router.push('/flow/tinder');
+      }
     }
   };
 
