@@ -172,14 +172,14 @@ function estimateTokens(text: string): number {
 // EXPORTS
 // =========================
 
-export {
+export type {
   PromptInputs,
   PromptWeights,
   PromptComponents,
+};
+export {
   calculatePromptWeights,
   buildPromptFromWeights,
   validatePromptLength
 };
-
-export type { SynthesisOptions };
 

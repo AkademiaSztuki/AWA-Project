@@ -210,8 +210,9 @@ export function CoreProfileWizard() {
     try {
       // Save to session data
       await updateSessionData({
-        coreProfile: profileData,
-        coreProfileCompletedAt: new Date().toISOString()
+        tinderData: {
+          swipes: profileData.tinderSwipes || []
+        },
       });
 
       // If user is not logged in, show login modal
@@ -309,7 +310,7 @@ export function CoreProfileWizard() {
               {currentStep === 'lifestyle' && (
                 <LifestyleStep 
                   data={profileData.lifestyle}
-                  onUpdate={(data) => updateProfile({ lifestyle: data })}
+                  onUpdate={(data: { livingSituation: string; lifeVibe: string; goals: string[] }) => updateProfile({ lifestyle: data })}
                   onNext={handleNext}
                   onBack={handleBack}
                 />
@@ -317,7 +318,7 @@ export function CoreProfileWizard() {
 
               {currentStep === 'tinder_swipes' && (
                 <TinderSwipesStep 
-                  onComplete={(swipes) => {
+                  onComplete={(swipes: Array<{ imageId: number; direction: 'left' | 'right'; reactionTime: number; dwellTime: number }>) => {
                     updateProfile({ tinderSwipes: swipes });
                     handleNext();
                   }}
@@ -328,7 +329,7 @@ export function CoreProfileWizard() {
               {currentStep === 'semantic_diff' && (
                 <SemanticDifferentialStep 
                   data={profileData.semanticDifferential}
-                  onUpdate={(data) => updateProfile({ semanticDifferential: data })}
+                  onUpdate={(data: { warmth: number; brightness: number; complexity: number; texture: number }) => updateProfile({ semanticDifferential: data })}
                   onNext={handleNext}
                   onBack={handleBack}
                 />
@@ -337,7 +338,7 @@ export function CoreProfileWizard() {
               {currentStep === 'colors_materials' && (
                 <ColorsMaterialsStep 
                   data={profileData.colorsAndMaterials}
-                  onUpdate={(data) => updateProfile({ colorsAndMaterials: data })}
+                  onUpdate={(data: { selectedPalette: string; topMaterials: string[] }) => updateProfile({ colorsAndMaterials: data })}
                   onNext={handleNext}
                   onBack={handleBack}
                 />
@@ -384,7 +385,7 @@ export function CoreProfileWizard() {
               {currentStep === 'aspirational_self' && (
                 <AspirationalSelfStep 
                   data={profileData.aspirationalSelf}
-                  onUpdate={(data) => updateProfile({ aspirationalSelf: data })}
+                  onUpdate={(data: { feelings: string[]; rituals: string[] }) => updateProfile({ aspirationalSelf: data })}
                   onNext={handleNext}
                   onBack={handleBack}
                 />

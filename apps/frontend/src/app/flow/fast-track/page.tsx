@@ -205,7 +205,11 @@ export default function FastTrackPage() {
 
                       {isLoading && (
                         <div className="text-center">
-                          <LoadingProgress message={language === 'pl' ? 'Analizuję pokój...' : 'Analyzing room...'} />
+                          <LoadingProgress 
+                            currentStage={currentStep === 'upload' ? 1 : 2}
+                            message={language === 'pl' ? 'Analizuję pokój...' : 'Analyzing room...'} 
+                            progress={currentStep === 'upload' ? 35 : 60}
+                          />
                         </div>
                       )}
 
@@ -261,7 +265,11 @@ export default function FastTrackPage() {
                     )}
 
                     {isLoading && (
-                      <LoadingProgress message={language === 'pl' ? 'Generuję...' : 'Generating...'} />
+                      <LoadingProgress 
+                        currentStage={2}
+                        message={language === 'pl' ? 'Generuję...' : 'Generating...'} 
+                        progress={70}
+                      />
                     )}
 
                     {error && (

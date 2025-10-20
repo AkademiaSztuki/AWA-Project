@@ -8,7 +8,8 @@ import {
   Room,
   DesignSession,
   CompletionStatus,
-  EnhancedSwipeData
+  EnhancedSwipeData,
+  SwipePattern
 } from '@/types/deep-personalization';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;

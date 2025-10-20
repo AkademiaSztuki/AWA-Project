@@ -106,16 +106,10 @@ export default function PathSelectionScreen() {
   const handlePathSelection = async (pathType: 'fast' | 'full') => {
     stopAllDialogueAudio();
     
-    await updateSessionData({
-      pathType,
-      pathSelectedAt: new Date().toISOString()
-    });
-
     if (pathType === 'fast') {
-      // Fast track: quick consent → photo → generate
-      router.push('/flow/onboarding-fast');
+      router.push('/flow/fast-track');
     } else {
-      // Full experience: full onboarding (consent + demographics) → core profile
+      await updateSessionData({ currentStep: 'onboarding' });
       router.push('/flow/onboarding');
     }
   };
@@ -173,81 +167,82 @@ export default function PathSelectionScreen() {
                 whileHover={{ scale: 1.02, y: -5 }}
                 className="h-full"
               >
-                <GlassCard 
-                  className="p-6 lg:p-8 h-full flex flex-col hover:shadow-2xl hover:border-blue-300/50 transition-all duration-500 cursor-pointer group relative overflow-hidden"
-                  onClick={() => handlePathSelection('fast')}
-                >
-                  {/* Animated gradient overlay on hover */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-400/5 to-cyan-400/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                  
-                  <div className="flex items-center gap-4 mb-6 relative z-10">
-                    <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl bg-gradient-to-br from-blue-400 via-cyan-400 to-blue-500 flex items-center justify-center shadow-lg group-hover:shadow-blue-300/50 transition-shadow duration-300">
-                      <Zap className="text-white group-hover:scale-110 transition-transform duration-300" size={28} />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization text-graphite group-hover:text-blue-600 transition-colors">
-                        {texts.fastTrack}
-                      </h2>
-                      <p className="text-xs lg:text-sm text-silver-dark font-modern">{texts.fastTrackEn}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 space-y-5 mb-6 relative z-10">
-                    <p className="text-graphite font-modern text-base lg:text-lg leading-relaxed">
-                      {texts.fastDesc}
-                    </p>
-
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center flex-shrink-0">
-                          <Clock size={18} className="text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.minutes35}</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">{texts.minQuestions}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center flex-shrink-0">
-                          <ImageIcon size={18} className="text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.gen10}</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">{texts.expMods}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center flex-shrink-0">
-                          <Sparkles size={18} className="text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.basicPers}</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">{texts.styleSwipes}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="glass-panel rounded-xl p-4 bg-gradient-to-br from-blue-50/50 to-cyan-50/50 border-blue-200/30">
-                      <p className="text-xs lg:text-sm text-graphite font-modern">
-                        <strong className="text-blue-600">{texts.idealFor}</strong> {texts.fastIdeal}
-                      </p>
-                    </div>
-                  </div>
-
-                  <GlassButton 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePathSelection('fast');
-                    }}
-                    className="w-full group-hover:scale-105 transition-transform"
-                    variant="secondary"
+                <div onClick={() => handlePathSelection('fast')} className="h-full">
+                  <GlassCard 
+                    className="p-6 lg:p-8 h-full flex flex-col hover:shadow-2xl hover:border-blue-300/50 transition-all duration-500 cursor-pointer group relative overflow-hidden"
                   >
-                    <Zap size={18} className="mr-2" />
-                    {texts.startFast}
-                  </GlassButton>
-                </GlassCard>
+                    {/* Animated gradient overlay on hover */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-400/5 to-cyan-400/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                    
+                    <div className="flex items-center gap-4 mb-6 relative z-10">
+                      <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl bg-gradient-to-br from-blue-400 via-cyan-400 to-blue-500 flex items-center justify-center shadow-lg group-hover:shadow-blue-300/50 transition-shadow duration-300">
+                        <Zap className="text-white group-hover:scale-110 transition-transform duration-300" size={28} />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization text-graphite group-hover:text-blue-600 transition-colors">
+                          {texts.fastTrack}
+                        </h2>
+                        <p className="text-xs lg:text-sm text-silver-dark font-modern">{texts.fastTrackEn}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 space-y-5 mb-6 relative z-10">
+                      <p className="text-graphite font-modern text-base lg:text-lg leading-relaxed">
+                        {texts.fastDesc}
+                      </p>
+
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center flex-shrink-0">
+                            <Clock size={18} className="text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm lg:text-base font-semibold text-graphite">{texts.minutes35}</p>
+                            <p className="text-xs lg:text-sm text-silver-dark">{texts.minQuestions}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center flex-shrink-0">
+                            <ImageIcon size={18} className="text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm lg:text-base font-semibold text-graphite">{texts.gen10}</p>
+                            <p className="text-xs lg:text-sm text-silver-dark">{texts.expMods}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center flex-shrink-0">
+                            <Sparkles size={18} className="text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm lg:text-base font-semibold text-graphite">{texts.basicPers}</p>
+                            <p className="text-xs lg:text-sm text-silver-dark">{texts.styleSwipes}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="glass-panel rounded-xl p-4 bg-gradient-to-br from-blue-50/50 to-cyan-50/50 border-blue-200/30">
+                        <p className="text-xs lg:text-sm text-graphite font-modern">
+                          <strong className="text-blue-600">{texts.idealFor}</strong> {texts.fastIdeal}
+                        </p>
+                      </div>
+                    </div>
+
+                    <GlassButton 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePathSelection('fast');
+                      }}
+                      className="w-full group-hover:scale-105 transition-transform"
+                      variant="secondary"
+                    >
+                      <Zap size={18} className="mr-2" />
+                      {texts.startFast}
+                    </GlassButton>
+                  </GlassCard>
+                </div>
               </motion.div>
 
               {/* FULL EXPERIENCE */}
@@ -258,107 +253,108 @@ export default function PathSelectionScreen() {
                 whileHover={{ scale: 1.02, y: -5 }}
                 className="h-full"
               >
-                <GlassCard 
-                  variant="highlighted"
-                  className="p-6 lg:p-8 h-full flex flex-col hover:shadow-2xl hover:border-gold/50 transition-all duration-500 cursor-pointer group relative overflow-hidden"
-                  onClick={() => handlePathSelection('full')}
-                >
-                  {/* Animated gradient overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-gold/10 via-champagne/5 to-platinum/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                  <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-gold/20 to-champagne/20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
-                  
-                  {/* Recommended badge */}
-                  <motion.div 
-                    initial={{ scale: 0, rotate: -180 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ duration: 0.6, delay: 0.8, type: "spring" }}
-                    className="absolute top-4 right-4 bg-gradient-to-r from-gold via-champagne to-gold text-white px-4 py-2 rounded-full text-xs lg:text-sm font-bold shadow-lg z-20 animate-pulse"
+                <div onClick={() => handlePathSelection('full')} className="h-full">
+                  <GlassCard 
+                    variant="highlighted"
+                    className="p-6 lg:p-8 h-full flex flex-col hover:shadow-2xl hover:border-gold/50 transition-all duration-500 cursor-pointer group relative overflow-hidden"
                   >
-                    ✨ {texts.recommended}
-                  </motion.div>
+                    {/* Animated gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-gold/10 via-champagne/5 to-platinum/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                    <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-gold/20 to-champagne/20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
+                    
+                    {/* Recommended badge */}
+                    <motion.div 
+                      initial={{ scale: 0, rotate: -180 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ duration: 0.6, delay: 0.8, type: "spring" }}
+                      className="absolute top-4 right-4 bg-gradient-to-r from-gold via-champagne to-gold text-white px-4 py-2 rounded-full text-xs lg:text-sm font-bold shadow-lg z-20 animate-pulse"
+                    >
+                      ✨ {texts.recommended}
+                    </motion.div>
 
-                  <div className="flex items-center gap-4 mb-6 relative z-10">
-                    <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl bg-gradient-to-br from-gold via-champagne to-gold flex items-center justify-center shadow-xl group-hover:shadow-gold/50 transition-shadow duration-300">
-                      <Heart className="text-white group-hover:scale-110 transition-transform duration-300" size={28} fill="currentColor" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent group-hover:from-gold-600 group-hover:to-champagne-600 transition-all">
-                        {texts.fullExp}
-                      </h2>
-                      <p className="text-xs lg:text-sm text-silver-dark font-modern">{texts.fullExpEn}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 space-y-5 mb-6 relative z-10">
-                    <p className="text-graphite font-modern text-base lg:text-lg leading-relaxed">
-                      {texts.fullDesc} <strong className="text-gold">{texts.whoYouAre}</strong>.
-                    </p>
-
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold-100 to-champagne-100 flex items-center justify-center flex-shrink-0">
-                          <Clock size={18} className="text-gold-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.minutes1520}</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">{texts.deepInterview}</p>
-                        </div>
+                    <div className="flex items-center gap-4 mb-6 relative z-10">
+                      <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl bg-gradient-to-br from-gold via-champagne to-gold flex items-center justify-center shadow-xl group-hover:shadow-gold/50 transition-shadow duration-300">
+                        <Heart className="text-white group-hover:scale-110 transition-transform duration-300" size={28} fill="currentColor" />
                       </div>
-
-                      <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold-100 to-champagne-100 flex items-center justify-center flex-shrink-0">
-                          <Layers size={18} className="text-gold-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.unlimitedGen}</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">{texts.createUnlimited}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold-100 to-champagne-100 flex items-center justify-center flex-shrink-0">
-                          <Heart size={18} className="text-gold-600" fill="currentColor" />
-                        </div>
-                        <div>
-                          <p className="text-sm lg:text-base font-semibold text-graphite">{texts.deepPers}</p>
-                          <p className="text-xs lg:text-sm text-silver-dark">{texts.psychPrefs}</p>
-                        </div>
+                      <div>
+                        <h2 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent group-hover:from-gold-600 group-hover:to-champagne-600 transition-all">
+                          {texts.fullExp}
+                        </h2>
+                        <p className="text-xs lg:text-sm text-silver-dark font-modern">{texts.fullExpEn}</p>
                       </div>
                     </div>
 
-                    <div className="glass-panel rounded-xl p-4 bg-gradient-to-br from-gold-50/50 to-champagne-50/50 border-gold-200/30">
-                      <p className="text-xs lg:text-sm text-graphite font-modern">
-                        <strong className="text-gold-600">{texts.idealFor}</strong> {texts.fullIdeal}
+                    <div className="flex-1 space-y-5 mb-6 relative z-10">
+                      <p className="text-graphite font-modern text-base lg:text-lg leading-relaxed">
+                        {texts.fullDesc} <strong className="text-gold">{texts.whoYouAre}</strong>.
                       </p>
-                    </div>
 
-                    <div className="space-y-3 pt-2">
-                      <p className="text-xs lg:text-sm font-semibold text-graphite flex items-center gap-2">
-                        <Sparkles size={16} className="text-gold" />
-                        {texts.whatYouGet}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {texts.features.map((feature, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs lg:text-sm text-silver-dark">
-                            <div className="w-1.5 h-1.5 rounded-full bg-gold" />
-                            {feature}
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold-100 to-champagne-100 flex items-center justify-center flex-shrink-0">
+                            <Clock size={18} className="text-gold-600" />
                           </div>
-                        ))}
+                          <div>
+                            <p className="text-sm lg:text-base font-semibold text-graphite">{texts.minutes1520}</p>
+                            <p className="text-xs lg:text-sm text-silver-dark">{texts.deepInterview}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold-100 to-champagne-100 flex items-center justify-center flex-shrink-0">
+                            <Layers size={18} className="text-gold-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm lg:text-base font-semibold text-graphite">{texts.unlimitedGen}</p>
+                            <p className="text-xs lg:text-sm text-silver-dark">{texts.createUnlimited}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3 glass-panel rounded-xl p-3 group-hover:bg-white/40 transition-colors">
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold-100 to-champagne-100 flex items-center justify-center flex-shrink-0">
+                            <Heart size={18} className="text-gold-600" fill="currentColor" />
+                          </div>
+                          <div>
+                            <p className="text-sm lg:text-base font-semibold text-graphite">{texts.deepPers}</p>
+                            <p className="text-xs lg:text-sm text-silver-dark">{texts.psychPrefs}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="glass-panel rounded-xl p-4 bg-gradient-to-br from-gold-50/50 to-champagne-50/50 border-gold-200/30">
+                        <p className="text-xs lg:text-sm text-graphite font-modern">
+                          <strong className="text-gold-600">{texts.idealFor}</strong> {texts.fullIdeal}
+                        </p>
+                      </div>
+
+                      <div className="space-y-3 pt-2">
+                        <p className="text-xs lg:text-sm font-semibold text-graphite flex items-center gap-2">
+                          <Sparkles size={16} className="text-gold" />
+                          {texts.whatYouGet}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {texts.features.map((feature, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs lg:text-sm text-silver-dark">
+                              <div className="w-1.5 h-1.5 rounded-full bg-gold" />
+                              {feature}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <GlassButton 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePathSelection('full');
-                    }}
-                    className="w-full group-hover:scale-105 transition-transform"
-                  >
-                    <Heart size={18} className="mr-2" />
-                    {texts.startFull}
-                  </GlassButton>
-                </GlassCard>
+                    <GlassButton 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePathSelection('full');
+                      }}
+                      className="w-full group-hover:scale-105 transition-transform"
+                    >
+                      <Heart size={18} className="mr-2" />
+                      {texts.startFull}
+                    </GlassButton>
+                  </GlassCard>
+                </div>
               </motion.div>
             </div>
 

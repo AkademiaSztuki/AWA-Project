@@ -351,7 +351,7 @@ export const FOLLOW_UP_QUESTIONS: Record<string, FollowUpQuestion> = {
 
   alone_or_together: {
     id: 'alone_or_together',
-    condition: (context) => context.activities?.includes('relax'),
+    condition: (context) => Array.isArray(context.activities) ? context.activities.includes('relax') : false,
     question: { 
       pl: 'Relaks - sam czy z kimś?',
       en: 'Relaxing - alone or with others?'

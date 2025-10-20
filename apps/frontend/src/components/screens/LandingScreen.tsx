@@ -106,13 +106,8 @@ const LandingScreen: React.FC = () => {
                   setIsPrewarming(true);
                   checkHealth().catch(() => {});
                   
-                  console.log('[Landing] Setting pathType to FAST');
-                  await updateSessionData({ 
-                    pathType: 'fast',
-                    pathSelectedAt: new Date().toISOString() 
-                  });
-                  
-                  router.push('/flow/onboarding');
+                  console.log('[Landing] Navigating to FAST TRACK');
+                  router.push('/flow/fast-track');
                 }}
               >
                 <GlassCard className="p-6 lg:p-8 h-full hover:border-silver/50 transition-all group">
@@ -146,7 +141,7 @@ const LandingScreen: React.FC = () => {
                   stopAllDialogueAudio();
                   setIsPrewarming(true);
                   checkHealth().catch(() => {});
-                  await updateSessionData({ pathType: 'full' });
+                  await updateSessionData({ currentStep: 'onboarding' });
                   router.push('/flow/onboarding');
                 }}
               >

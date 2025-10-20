@@ -148,7 +148,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
             {currentStep === 'photo_upload' && (
               <PhotoUploadStep 
                 photos={roomData.photos}
-                onUpdate={(photos) => setRoomData({ ...roomData, photos })}
+                onUpdate={(photos: string[]) => setRoomData({ ...roomData, photos })}
                 onNext={handleNext}
                 onBack={handleBack}
               />
@@ -197,7 +197,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
             {currentStep === 'pain_points' && (
               <PainPointsStep 
                 selected={roomData.painPoints}
-                onUpdate={(points) => setRoomData({ ...roomData, painPoints: points })}
+                onUpdate={(points: string[]) => setRoomData({ ...roomData, painPoints: points })}
                 onNext={handleNext}
                 onBack={handleBack}
               />
@@ -208,7 +208,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                 roomType={roomData.roomType}
                 selected={roomData.activities}
                 satisfaction={roomData.activitySatisfaction}
-                onUpdate={(activities, satisfaction) => 
+                onUpdate={(activities: string[], satisfaction: Record<string, string>) => 
                   setRoomData({ ...roomData, activities, activitySatisfaction: satisfaction })
                 }
                 onNext={handleNext}
@@ -219,7 +219,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
             {currentStep === 'room_swipes' && (
               <RoomSwipesStep 
                 roomType={roomData.roomType}
-                onComplete={(swipes) => {
+                onComplete={(swipes: any[]) => {
                   setRoomData({ ...roomData, roomSwipes: swipes });
                   handleNext();
                 }}
