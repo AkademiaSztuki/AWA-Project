@@ -90,7 +90,10 @@ export default function FastTrackPage() {
         base_image: uploadedPhoto,
         style: 'modern',
         modifications: [],
-        num_images: 1
+        num_images: 1,
+        strength: 0.65,
+        steps: 28,
+        guidance: 3.5,
       });
 
       if (response && response.images) {
