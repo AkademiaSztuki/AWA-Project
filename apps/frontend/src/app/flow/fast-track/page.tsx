@@ -57,10 +57,9 @@ export default function FastTrackPage() {
         setRoomAnalysis(analysis);
         
         await updateSessionData({
-          fastTrack: {
-            photo: base64,
-            roomAnalysis: analysis
-          }
+          roomImage: base64,
+          roomAnalysis: analysis,
+          detectedRoomType: analysis?.detected_room_type,
         });
       } catch (error) {
         console.error('Room analysis failed:', error);
