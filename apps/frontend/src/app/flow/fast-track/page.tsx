@@ -53,7 +53,7 @@ export default function FastTrackPage() {
 
       // Analyze room with AI
       try {
-        const analysis = await analyzeRoom(base64);
+        const analysis = await analyzeRoom({ image: base64 });
         setRoomAnalysis(analysis);
         
         await updateSessionData({
