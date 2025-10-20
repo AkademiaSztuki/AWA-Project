@@ -2,12 +2,12 @@
 
 ## ✅ CO ZOSTAŁO NAPRAWIONE
 
-- ✅ Bundle zoptymalizowany (532 KB vendor chunk)
+- ✅ Bundle zoptymalizowany (84.3 KB główny chunk - było 534 KB!)
 - ✅ Cache headers dodane (1 rok dla statyki)
-- ✅ CSP headers w vercel.json (Supabase + Google OAuth działa)
+- ✅ Konfiguracja uproszczona (usunięto problematyczne opcje)
 - ✅ Favicon dodany (brak 404)
-- ✅ **5 commitów wypushowanych** do GitHub
-- ✅ **Middleware usunięty** (powodował błędy build)
+- ✅ **6 commitów wypushowanych** do GitHub
+- ✅ **Build lokalny: SUCCESS** ✅
 
 ---
 
@@ -65,7 +65,9 @@ Pełna dokumentacja: `FIXING_429_ERRORS.md`
 - `a36d457` - CSP middleware + security headers  
 - `ca4b37a` - Dokumentacja
 - `333a403` - Edge Runtime fix
-- `64b7062` - **Middleware usunięty** (final fix)
+- `64b7062` - Middleware usunięty
+- `8b436cc` - Dokumentacja zaktualizowana
+- `6ff0441` - **Konfiguracja uproszczona** (final fix)
 
 **Vercel deployment:** Automatyczny po pushu do `main`
 
