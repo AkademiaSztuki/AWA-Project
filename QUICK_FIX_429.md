@@ -6,8 +6,9 @@
 - ✅ Cache headers dodane (1 rok dla statyki)
 - ✅ Konfiguracja uproszczona (usunięto problematyczne opcje)
 - ✅ Favicon dodany (brak 404)
-- ✅ **6 commitów wypushowanych** do GitHub
+- ✅ **Rozmiar deploymentu zmniejszony** (usunięto 4.7 MB dużych plików)
 - ✅ **Build lokalny: SUCCESS** ✅
+- ✅ **7 commitów wypushowanych** do GitHub
 
 ---
 
@@ -67,7 +68,9 @@ Pełna dokumentacja: `FIXING_429_ERRORS.md`
 - `333a403` - Edge Runtime fix
 - `64b7062` - Middleware usunięty
 - `8b436cc` - Dokumentacja zaktualizowana
-- `6ff0441` - **Konfiguracja uproszczona** (final fix)
+- `6ff0441` - Konfiguracja uproszczona
+- `05c479e` - Dokumentacja finalna
+- `1cd62f8` - **Rozmiar deploymentu zmniejszony** (final fix)
 
 **Vercel deployment:** Automatyczny po pushu do `main`
 
