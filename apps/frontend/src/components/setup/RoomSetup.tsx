@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -12,7 +12,7 @@ import { ACTIVITY_QUESTIONS, PAIN_POINTS } from '@/lib/questions/adaptive-questi
 import { ArrowRight, ArrowLeft, Camera, Activity, AlertCircle, Target, Image as ImageIcon } from 'lucide-react';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { saveRoom } from '@/lib/supabase-deep-personalization';
-import { useSession } from '@/hooks';
+import { useSession, useSessionData } from '@/hooks';
 
 // Helper function to convert file to base64
 const toBase64 = (file: File): Promise<string> =>
@@ -77,6 +77,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   const router = useRouter();
   const { language } = useLanguage();
   const { sessionData } = useSession();
+  const { updateSessionData } = useSessionData();
   
   const [currentStep, setCurrentStep] = useState<SetupStep>('photo_upload');
   const [roomData, setRoomData] = useState<RoomData>({
@@ -162,6 +163,12 @@ export function RoomSetup({ householdId }: { householdId: string }) {
       }
       
       console.log('[RoomSetup] Navigating to generate flow');
+      
+      // Save room photo to session for generate flow
+      if (roomData.photos && roomData.photos.length > 0) {
+        console.log('[RoomSetup] Saving room photo to session');
+        await updateSessionData({ roomImage: roomData.photos[0] });
+      }
       
       // Navigate to generate flow
       router.push(`/flow/generate`);
@@ -1125,15 +1132,47 @@ function ActivitiesStep({ roomType, selected, satisfaction, onUpdate, onNext, on
 function RoomSwipesStep({ roomType, onComplete, onBack }: any) {
   const { language } = useLanguage();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [swipes, setSwipes] = useState<Array<{ image: string; action: 'like' | 'dislike'; timestamp: number }>>([]);
+  const [swipes, setSwipes] = useState<Array<{
+    imageId: number;
+    action: 'like' | 'dislike';
+    timestamp: number;
+    reactionTime: number;
+    tags: string[];
+    categories: any;
+  }>>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [startTime, setStartTime] = useState(Date.now());
+  const [roomImages, setRoomImages] = useState<Array<{
+    id: number;
+    url: string;
+    filename: string;
+    tags: string[];
+    categories: any;
+  }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock room-specific images - in real app these would come from API
-  const roomImages = Array.from({ length: 30 }, (_, i) => ({
-    id: i + 1,
-    url: `https://picsum.photos/400/600?random=${i + 1}`,
-    roomType: roomType
-  }));
+  // Fetch real images with tags from API (like Tinder)
+  useEffect(() => {
+    const fetchImages = async () => {
+      try {
+        setIsLoading(true);
+        const res = await fetch('/api/tinder/livingroom', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load images');
+        const data = await res.json();
+        setRoomImages(data);
+      } catch (error) {
+        console.error('Failed to load room images:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchImages();
+  }, []);
+
+  // Reset reaction timer when image changes
+  useEffect(() => {
+    setStartTime(Date.now());
+  }, [currentImageIndex]);
 
   const currentImage = roomImages[currentImageIndex];
 
@@ -1152,19 +1191,24 @@ function RoomSwipesStep({ roomType, onComplete, onBack }: any) {
   const handleSwipe = (action: 'like' | 'dislike') => {
     if (!currentImage) return;
 
+    const reactionTime = Date.now() - startTime;
     const newSwipe = {
-      image: currentImage.url,
+      imageId: currentImage.id,
       action,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      reactionTime,
+      tags: currentImage.tags,
+      categories: currentImage.categories
     };
 
-    setSwipes([...swipes, newSwipe]);
+    const updatedSwipes = [...swipes, newSwipe];
+    setSwipes(updatedSwipes);
     
     if (currentImageIndex < roomImages.length - 1) {
       setCurrentImageIndex(currentImageIndex + 1);
     } else {
       // All images swiped
-      onComplete(swipes);
+      onComplete(updatedSwipes);
     }
   };
 
@@ -1190,10 +1234,16 @@ function RoomSwipesStep({ roomType, onComplete, onBack }: any) {
 
         <p className="text-graphite font-modern mb-6">
           {language === 'pl'
-            ? `30 obrazów wnętrz ${roomType === 'bedroom' ? 'sypialni' : roomType === 'kitchen' ? 'kuchni' : roomType === 'living_room' ? 'salonów' : 'pomieszczeń'}. Reaguj sercem!`
-            : `30 ${roomType} interior images. React with your heart!`}
+            ? `${isLoading ? 'Ładowanie...' : `${roomImages.length} obrazów wnętrz ${roomType === 'bedroom' ? 'sypialni' : roomType === 'kitchen' ? 'kuchni' : roomType === 'living_room' ? 'salonów' : 'pomieszczeń'}. Reaguj sercem!`}`
+            : `${isLoading ? 'Loading...' : `${roomImages.length} ${roomType} interior images. React with your heart!`}`}
         </p>
 
+        {isLoading ? (
+          <div className="flex items-center justify-center h-96 text-silver-dark">
+            {language === 'pl' ? 'Ładowanie zdjęć...' : 'Loading images...'}
+          </div>
+        ) : (
+          <>
         {/* Progress */}
         <div className="mb-6">
           <div className="flex justify-between text-sm text-silver-dark mb-2 font-modern">
@@ -1263,13 +1313,15 @@ function RoomSwipesStep({ roomType, onComplete, onBack }: any) {
             <span className="text-2xl">👍</span>
           </button>
         </div>
+        </>
+        )}
 
-        <div className="flex justify-between">
+        <div className="flex justify-between mt-6">
           <GlassButton onClick={onBack} variant="secondary">
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
-          <GlassButton onClick={() => onComplete(swipes)}>
+          <GlassButton onClick={() => onComplete(swipes)} disabled={isLoading || roomImages.length === 0}>
             {language === 'pl' ? 'Dalej' : 'Next'}
             <ArrowRight size={18} />
           </GlassButton>

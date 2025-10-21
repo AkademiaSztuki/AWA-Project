@@ -214,11 +214,15 @@ export default function GeneratePage() {
     if (!force && generationCount > 0) return;
     
     console.log("handleInitialGeneration: Rozpoczynam generowanie obrazów.");
+    console.log("SessionData pełne dane:", JSON.stringify(sessionData, null, 2));
     
     const typedSessionData = sessionData as any;
 
     if (!typedSessionData || !typedSessionData.roomImage) {
       console.error("KRYTYCZNY BŁĄD: Brak 'roomImage' w danych sesji.");
+      console.error("Dostępne klucze w sessionData:", Object.keys(typedSessionData || {}));
+      console.error("Typ roomImage:", typeof typedSessionData?.roomImage);
+      console.error("Wartość roomImage (pierwsze 100 znaków):", typedSessionData?.roomImage?.substring(0, 100));
       setError("Nie można rozpocząć generowania, ponieważ w sesji brakuje zdjęcia Twojego pokoju.");
       setStatusMessage("Błąd danych wejściowych.");
       return;

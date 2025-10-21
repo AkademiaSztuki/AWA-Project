@@ -39,15 +39,18 @@ const OnboardingScreen: React.FC = () => {
       
       // Check path type and route accordingly
       const pathType = (sessionData as any)?.pathType;
-      console.log('[Onboarding] Demographics complete, pathType:', pathType);
+      console.log('[Onboarding] Demographics complete');
+      console.log('[Onboarding] pathType:', pathType);
+      console.log('[Onboarding] pathType === "fast":', pathType === 'fast');
+      console.log('[Onboarding] Full sessionData:', sessionData);
       
       if (pathType === 'fast') {
         // Fast track: photo already uploaded, now go to style selection
-        console.log('[Onboarding] Fast track - routing to style selection');
+        console.log('[Onboarding] ⚡ FAST TRACK - routing to style selection');
         router.push('/flow/style-selection');
       } else {
         // Full experience: go to core profile wizard
-        console.log('[Onboarding] Routing to core profile');
+        console.log('[Onboarding] 🌟 FULL EXPERIENCE - routing to core profile setup');
         router.push('/setup/profile');
       }
     }

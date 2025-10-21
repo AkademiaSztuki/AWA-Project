@@ -19,7 +19,6 @@ import {
 } from '@/components/research';
 import { SEMANTIC_DIFFERENTIAL_DIMENSIONS } from '@/lib/questions/validated-scales';
 import { ArrowRight, ArrowLeft, Check, Sparkles, Heart, Zap, X } from 'lucide-react';
-import { getCoreProfileSwipeImages } from '@/lib/tinderImagesMetadata';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal } from '@/components/auth/LoginModal';
 
@@ -692,21 +691,48 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
     direction: 'left' | 'right';
     reactionTime: number;
     dwellTime: number;
+    tags: string[];
+    categories: any;
   }>>([]);
   const [startTime, setStartTime] = useState(Date.now());
   const [showInstructions, setShowInstructions] = useState(true);
+  const [images, setImages] = useState<Array<{
+    id: number;
+    url: string;
+    filename: string;
+    tags: string[];
+    categories: any;
+  }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Use 30 images from /images/tinder/ with metadata
-  const images = getCoreProfileSwipeImages();
+  // Fetch real images with tags from API (like Tinder)
+  useEffect(() => {
+    const fetchImages = async () => {
+      try {
+        setIsLoading(true);
+        const res = await fetch('/api/tinder/livingroom', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load images');
+        const data = await res.json();
+        setImages(data);
+      } catch (error) {
+        console.error('Failed to load tinder images:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchImages();
+  }, []);
 
   const currentImage = images[currentIndex];
-  const progress = (currentIndex / images.length) * 100;
+  const progress = images.length > 0 ? (currentIndex / images.length) * 100 : 0;
 
   useEffect(() => {
     setStartTime(Date.now());
   }, [currentIndex]);
 
   const handleSwipe = (direction: 'left' | 'right') => {
+    if (!currentImage) return;
+    
     const reactionTime = Date.now() - startTime;
     const dwellTime = reactionTime; // Simplified for now
     
@@ -714,7 +740,9 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
       imageId: currentImage.id,
       direction,
       reactionTime,
-      dwellTime
+      dwellTime,
+      tags: currentImage.tags,
+      categories: currentImage.categories
     }];
     
     setSwipes(newSwipes);
@@ -744,8 +772,8 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
       </h2>
         <p className="text-graphite font-modern mb-4 text-sm">
           {language === 'pl' 
-            ? 'Pokażę Ci 30 różnych wnętrz. Reaguj sercem, nie głową!' 
-            : 'I\'ll show you 30 different interiors. React with your heart, not your head!'}
+            ? `${isLoading ? 'Ładowanie...' : `Pokażę Ci ${images.length} różnych wnętrz. Reaguj sercem, nie głową!`}`
+            : `${isLoading ? 'Loading...' : `I'll show you ${images.length} different interiors. React with your heart, not your head!`}`}
         </p>
         
         <div className="flex justify-center gap-8 mb-6">
@@ -778,6 +806,12 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
 
   return (
     <div className="w-full h-full">
+      {isLoading ? (
+        <div className="flex items-center justify-center h-96 text-silver-dark">
+          {language === 'pl' ? 'Ładowanie zdjęć...' : 'Loading images...'}
+        </div>
+      ) : (
+        <>
       {/* Progress */}
       <div className="mb-6">
         <div className="flex justify-between items-center mb-2">
@@ -854,6 +888,8 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
           <Heart size={36} className="text-white" fill="currentColor" />
         </motion.button>
       </div>
+      </>
+      )}
     </div>
   );
 }
