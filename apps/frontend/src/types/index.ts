@@ -3,6 +3,7 @@ export interface SessionData {
   userHash: string;
   consentTimestamp: string;
   currentStep: FlowStep;
+  pathType?: 'fast' | 'full';
   uploadedImage?: string;
   roomType?: string;
   tinderResults: TinderSwipe[];

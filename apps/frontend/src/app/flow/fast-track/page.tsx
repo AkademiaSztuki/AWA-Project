@@ -45,7 +45,7 @@ export default function FastTrackPage() {
     
     await updateSession({
       roomType: detectedRoomType,
-      roomImage: roomImage,
+      roomImage: roomImage ?? undefined,
       pathType: 'fast' // Mark as fast track
     });
   };
