@@ -145,7 +145,7 @@ export function SensoryTest({ type, onSelect, className = '' }: SensoryTestProps
               className="relative"
             >
               <div
-                className={`glass-panel rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 ${
+                className={`glass-panel rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 min-h-[280px] flex flex-col ${
                   isSelected
                     ? 'border-2 border-gold shadow-xl shadow-gold/20'
                     : isHovered
@@ -185,7 +185,7 @@ export function SensoryTest({ type, onSelect, className = '' }: SensoryTestProps
                 )}
 
                 {/* Content */}
-                <div className="p-4">
+                <div className="p-4 flex-1 flex flex-col">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h4 className="font-nasalization text-base lg:text-lg text-graphite">
                       {t(option.label)}

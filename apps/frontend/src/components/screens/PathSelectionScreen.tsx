@@ -51,7 +51,7 @@ export default function PathSelectionScreen() {
       fullExp: 'Pełne Doświadczenie',
       fullExpEn: 'Full Experience',
       recommended: 'Polecane',
-      fullDesc: 'Pozwól IDA poznać Cię głęboko - stwórz wnętrze które naprawdę odzwierciedla',
+      fullDesc: 'Poznaj siebie głęboko, stwórz wnętrze które jest TWOJE',
       whoYouAre: 'KIM jesteś',
       minutes1520: '~15-20 minut',
       deepInterview: 'Pogłębiony wywiad z IDA',
@@ -169,7 +169,7 @@ export default function PathSelectionScreen() {
               >
                 <div onClick={() => handlePathSelection('fast')} className="h-full">
                   <GlassCard 
-                    className="p-6 lg:p-8 h-full flex flex-col hover:shadow-2xl hover:border-blue-300/50 transition-all duration-500 cursor-pointer group relative overflow-hidden"
+                    className="p-6 lg:p-8 h-full flex flex-col hover:shadow-2xl hover:border-blue-300/50 transition-all duration-500 cursor-pointer group relative overflow-hidden rounded-2xl"
                   >
                     {/* Animated gradient overlay on hover */}
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-400/5 to-cyan-400/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
@@ -256,7 +256,7 @@ export default function PathSelectionScreen() {
                 <div onClick={() => handlePathSelection('full')} className="h-full">
                   <GlassCard 
                     variant="highlighted"
-                    className="p-6 lg:p-8 h-full flex flex-col hover:shadow-2xl hover:border-gold/50 transition-all duration-500 cursor-pointer group relative overflow-hidden"
+                    className="p-6 lg:p-8 h-full flex flex-col hover:shadow-2xl hover:border-gold/50 transition-all duration-500 cursor-pointer group relative overflow-hidden rounded-3xl"
                   >
                     {/* Animated gradient overlay */}
                     <div className="absolute inset-0 bg-gradient-to-br from-gold/10 via-champagne/5 to-platinum/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
@@ -277,7 +277,7 @@ export default function PathSelectionScreen() {
                         <Heart className="text-white group-hover:scale-110 transition-transform duration-300" size={28} fill="currentColor" />
                       </div>
                       <div>
-                        <h2 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent group-hover:from-gold-600 group-hover:to-champagne-600 transition-all">
+                        <h2 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization text-graphite group-hover:text-gold-700 transition-colors">
                           {texts.fullExp}
                         </h2>
                         <p className="text-xs lg:text-sm text-silver-dark font-modern">{texts.fullExpEn}</p>
@@ -286,7 +286,7 @@ export default function PathSelectionScreen() {
 
                     <div className="flex-1 space-y-5 mb-6 relative z-10">
                       <p className="text-graphite font-modern text-base lg:text-lg leading-relaxed">
-                        {texts.fullDesc} <strong className="text-gold">{texts.whoYouAre}</strong>.
+                        {texts.fullDesc}.
                       </p>
 
                       <div className="space-y-4">

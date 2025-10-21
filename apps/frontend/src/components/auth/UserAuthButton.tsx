@@ -17,7 +17,7 @@ export function UserAuthButton() {
       <>
         <button
           onClick={() => setShowLoginModal(true)}
-          className="px-4 py-2 rounded-lg glass-panel border border-white/30 hover:border-gold/50 transition-all text-sm font-modern text-graphite flex items-center gap-2"
+          className="px-3 py-2 rounded-full glass-panel transition-all text-sm font-modern text-graphite flex items-center gap-2"
         >
           <User size={16} />
           {language === 'pl' ? 'Zaloguj' : 'Sign In'}
@@ -35,9 +35,10 @@ export function UserAuthButton() {
     <div className="relative">
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center text-white font-bold text-sm"
+        className="px-3 py-2 rounded-full glass-panel transition-all text-sm font-modern text-graphite flex items-center gap-2"
       >
-        {user.email?.charAt(0).toUpperCase() || 'U'}
+        <User size={16} />
+        {language === 'pl' ? 'Profil' : 'Profile'}
       </button>
 
       {showMenu && (

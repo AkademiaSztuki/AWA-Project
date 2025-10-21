@@ -6,8 +6,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { AwaContainer } from '@/components/awa/AwaContainer';
+import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { Home, Users, Target, ArrowRight, ArrowLeft } from 'lucide-react';
+import { saveHousehold } from '@/lib/supabase-deep-personalization';
+import { useSession } from '@/hooks';
 
 interface HouseholdData {
   name: string;
@@ -35,6 +37,7 @@ interface HouseholdData {
 export function HouseholdSetup() {
   const router = useRouter();
   const { language } = useLanguage();
+  const { sessionData } = useSession();
   
   const [step, setStep] = useState(1);
   const [householdData, setHouseholdData] = useState<HouseholdData>({
@@ -43,33 +46,76 @@ export function HouseholdSetup() {
     livingSituation: '',
     goals: []
   });
+  const [isSaving, setIsSaving] = useState(false);
 
   const totalSteps = householdData.livingSituation === 'alone' ? 3 : 4;
 
   const handleSubmit = async () => {
-    // TODO: Save to Supabase households table
-    console.log('Saving household:', householdData);
-    
-    // Navigate to add first room
-    router.push(`/setup/room/new-household-id`);
+    setIsSaving(true);
+    try {
+      console.log('[HouseholdSetup] Saving household:', householdData);
+      
+      // Get user_hash from session
+      const userHash = sessionData?.userHash || (window as any)?.sessionStorage?.getItem('aura_user_hash') || '';
+      
+      if (!userHash) {
+        console.error('[HouseholdSetup] No user hash found!');
+        alert('Musisz być zalogowany aby kontynuować');
+        return;
+      }
+      
+      let householdId = `household-${Date.now()}`; // Fallback ID
+      
+      // Try to save to Supabase, but don't block if it fails
+      try {
+        const savedHousehold = await saveHousehold({
+          userHash,
+          name: householdData.name,
+          householdType: householdData.type,
+          livingSituation: householdData.livingSituation,
+          householdDynamics: householdData.householdDynamics,
+          householdGoals: householdData.goals
+        });
+        
+        if (savedHousehold) {
+          householdId = savedHousehold.id;
+          console.log('[HouseholdSetup] Household saved with ID:', savedHousehold.id);
+        }
+      } catch (dbError) {
+        console.warn('[HouseholdSetup] Could not save to DB (migrations not applied?), using mock ID:', dbError);
+        // Continue with mock ID
+      }
+      
+      // Navigate to add first room
+      console.log('[HouseholdSetup] Navigating to room setup:', `/setup/room/${householdId}`);
+      router.push(`/setup/room/${householdId}`);
+      
+    } catch (error) {
+      console.error('[HouseholdSetup] Error in handleSubmit:', error);
+      alert('Błąd podczas zapisywania. Spróbuj ponownie.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
     <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
-      <AwaContainer 
-        currentStep="onboarding" 
-        showDialogue={false}
-        fullWidth={true}
-        autoHide={false}
-      />
+      {/* Dialog IDA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="onboarding" 
+          fullWidth={true}
+          autoHide={true}
+        />
+      </div>
 
-      <div className="flex-1 p-4 lg:p-8">
+      <div className="flex-1 p-4 lg:p-8 pb-32">
         <div className="max-w-3xl mx-auto">
           {/* Progress */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between text-sm text-silver-dark mb-2 font-modern">
+          <div className="mb-8 h-12">
+            <div className="flex items-center justify-between text-sm text-silver-dark mb-2 font-modern h-6">
               <span>
                 {language === 'pl' ? 'Krok' : 'Step'} {step} / {totalSteps}
               </span>
@@ -92,7 +138,7 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8">
+                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                       <Home size={24} className="text-white" />
@@ -122,22 +168,21 @@ export function HouseholdSetup() {
 
                   <div className="grid grid-cols-2 gap-3 mb-8">
                     {[
-                      { id: 'home', label: language === 'pl' ? 'Dom/Mieszkanie' : 'Home/Apartment', icon: '🏠' },
-                      { id: 'office', label: language === 'pl' ? 'Biuro' : 'Office', icon: '🏢' },
-                      { id: 'vacation', label: language === 'pl' ? 'Dom wakacyjny' : 'Vacation Home', icon: '🏖️' },
-                      { id: 'other', label: language === 'pl' ? 'Inne' : 'Other', icon: '✨' }
+                      { id: 'home', label: language === 'pl' ? 'Dom/Mieszkanie' : 'Home/Apartment' },
+                      { id: 'office', label: language === 'pl' ? 'Biuro' : 'Office' },
+                      { id: 'vacation', label: language === 'pl' ? 'Dom wakacyjny' : 'Vacation Home' },
+                      { id: 'other', label: language === 'pl' ? 'Inne' : 'Other' }
                     ].map((type) => (
                       <button
                         key={type.id}
                         onClick={() => setHouseholdData({ ...householdData, type: type.id })}
-                        className={`glass-panel rounded-xl p-4 transition-all duration-300 ${
+                        className={`rounded-xl p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                           householdData.type === type.id
-                            ? 'border-2 border-gold bg-gold/10'
-                            : 'border border-white/30 hover:border-gold/30'
+                            ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                            : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
                         }`}
                       >
-                        <div className="text-3xl mb-2">{type.icon}</div>
-                        <p className="text-sm font-modern text-graphite">{type.label}</p>
+                        {type.label}
                       </button>
                     ))}
                   </div>
@@ -148,7 +193,7 @@ export function HouseholdSetup() {
                       disabled={!householdData.name.trim()}
                     >
                       {language === 'pl' ? 'Dalej' : 'Next'}
-                      <ArrowRight size={18} className="ml-2" />
+                      <ArrowRight size={18} />
                     </GlassButton>
                   </div>
                 </GlassCard>
@@ -162,9 +207,9 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8">
+                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                       <Users size={24} className="text-white" />
                     </div>
                     <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
@@ -174,29 +219,28 @@ export function HouseholdSetup() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                     {[
-                      { id: 'alone', label: language === 'pl' ? 'Sam/sama' : 'Alone', icon: '🧑' },
-                      { id: 'partner', label: language === 'pl' ? 'Z partnerem/partnerką' : 'With partner', icon: '👫' },
-                      { id: 'family', label: language === 'pl' ? 'Z rodziną' : 'With family', icon: '👨‍👩‍👧‍👦' },
-                      { id: 'roommates', label: language === 'pl' ? 'Ze współlokatorami' : 'With roommates', icon: '👥' }
+                      { id: 'alone', label: language === 'pl' ? 'Sam/sama' : 'Alone' },
+                      { id: 'partner', label: language === 'pl' ? 'Z partnerem/partnerką' : 'With partner' },
+                      { id: 'family', label: language === 'pl' ? 'Z rodziną' : 'With family' },
+                      { id: 'roommates', label: language === 'pl' ? 'Ze współlokatorami' : 'With roommates' }
                     ].map((situation) => (
                       <button
                         key={situation.id}
                         onClick={() => setHouseholdData({ ...householdData, livingSituation: situation.id })}
-                        className={`glass-panel rounded-xl p-6 transition-all duration-300 ${
+                        className={`rounded-xl p-6 font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                           householdData.livingSituation === situation.id
-                            ? 'border-2 border-gold bg-gold/10'
-                            : 'border border-white/30 hover:border-gold/30'
+                            ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                            : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
                         }`}
                       >
-                        <div className="text-4xl mb-3">{situation.icon}</div>
-                        <p className="font-modern text-graphite">{situation.label}</p>
+                        {situation.label}
                       </button>
                     ))}
                   </div>
 
                   <div className="flex justify-between">
                     <GlassButton onClick={() => setStep(1)} variant="secondary">
-                      <ArrowLeft size={18} className="mr-2" />
+                      <ArrowLeft size={18} />
                       {language === 'pl' ? 'Wstecz' : 'Back'}
                     </GlassButton>
                     <GlassButton 
@@ -204,7 +248,7 @@ export function HouseholdSetup() {
                       disabled={!householdData.livingSituation}
                     >
                       {language === 'pl' ? 'Dalej' : 'Next'}
-                      <ArrowRight size={18} className="ml-2" />
+                      <ArrowRight size={18} />
                     </GlassButton>
                   </div>
                 </GlassCard>
@@ -218,9 +262,9 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8">
+                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                       <Target size={24} className="text-white" />
                     </div>
                     <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
@@ -236,14 +280,14 @@ export function HouseholdSetup() {
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
                     {[
-                      { id: 'connection', label: language === 'pl' ? 'Więź' : 'Connection', icon: '❤️' },
-                      { id: 'independence', label: language === 'pl' ? 'Niezależność' : 'Independence', icon: '🦅' },
-                      { id: 'productivity', label: language === 'pl' ? 'Produktywność' : 'Productivity', icon: '⚡' },
-                      { id: 'relaxation', label: language === 'pl' ? 'Relaks' : 'Relaxation', icon: '😌' },
-                      { id: 'creativity', label: language === 'pl' ? 'Kreatywność' : 'Creativity', icon: '🎨' },
-                      { id: 'entertaining', label: language === 'pl' ? 'Goszczenie' : 'Entertaining', icon: '🎉' },
-                      { id: 'family_time', label: language === 'pl' ? 'Czas z rodziną' : 'Family time', icon: '👨‍👩‍👧' },
-                      { id: 'growth', label: language === 'pl' ? 'Rozwój' : 'Personal growth', icon: '🌱' }
+                      { id: 'connection', label: language === 'pl' ? 'Więź' : 'Connection' },
+                      { id: 'independence', label: language === 'pl' ? 'Niezależność' : 'Independence' },
+                      { id: 'productivity', label: language === 'pl' ? 'Produktywność' : 'Productivity' },
+                      { id: 'relaxation', label: language === 'pl' ? 'Relaks' : 'Relaxation' },
+                      { id: 'creativity', label: language === 'pl' ? 'Kreatywność' : 'Creativity' },
+                      { id: 'entertaining', label: language === 'pl' ? 'Goszczenie' : 'Entertaining' },
+                      { id: 'family_time', label: language === 'pl' ? 'Czas z rodziną' : 'Family time' },
+                      { id: 'growth', label: language === 'pl' ? 'Rozwój' : 'Personal growth' }
                     ].map((goal) => {
                       const isSelected = householdData.goals.includes(goal.id);
                       return (
@@ -255,14 +299,13 @@ export function HouseholdSetup() {
                               : [...householdData.goals, goal.id];
                             setHouseholdData({ ...householdData, goals });
                           }}
-                          className={`glass-panel rounded-xl p-4 transition-all duration-300 ${
+                          className={`rounded-xl p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                             isSelected
-                              ? 'border-2 border-gold bg-gold/10 scale-105'
-                              : 'border border-white/30 hover:border-gold/30 hover:scale-105'
+                              ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                              : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700 hover:scale-105'
                           }`}
                         >
-                          <div className="text-3xl mb-2">{goal.icon}</div>
-                          <p className="text-xs font-modern text-graphite">{goal.label}</p>
+                          {goal.label}
                         </button>
                       );
                     })}
@@ -270,15 +313,18 @@ export function HouseholdSetup() {
 
                   <div className="flex justify-between">
                     <GlassButton onClick={() => setStep(2)} variant="secondary">
-                      <ArrowLeft size={18} className="mr-2" />
+                      <ArrowLeft size={18} />
                       {language === 'pl' ? 'Wstecz' : 'Back'}
                     </GlassButton>
                     <GlassButton 
                       onClick={handleSubmit}
-                      disabled={householdData.goals.length === 0}
+                      disabled={householdData.goals.length === 0 || isSaving}
                     >
-                      {language === 'pl' ? 'Zapisz i Dodaj Pokój' : 'Save & Add Room'}
-                      <ArrowRight size={18} className="ml-2" />
+                      {isSaving 
+                        ? (language === 'pl' ? 'Zapisuję...' : 'Saving...')
+                        : (language === 'pl' ? 'Zapisz i Dodaj Pokój' : 'Save & Add Room')
+                      }
+                      <ArrowRight size={18} />
                     </GlassButton>
                   </div>
                 </GlassCard>

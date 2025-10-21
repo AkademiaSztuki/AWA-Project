@@ -5,17 +5,19 @@ import { motion } from 'framer-motion';
 import { GlassCard, GlassButton } from '@/components/ui';
 import { useRouter } from 'next/navigation';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { Zap, Heart, Palette, Home, Sparkles } from 'lucide-react';
+import { Zap, Heart, Palette, Home, Sparkles, LayoutDashboard } from 'lucide-react';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSessionData } from '@/hooks/useSessionData';
+import { useAuth } from '@/contexts/AuthContext';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
   const { language } = useLanguage();
   const { checkHealth } = useModalAPI();
   const { updateSessionData } = useSessionData();
+  const { user } = useAuth();
   const [showAuraSection, setShowAuraSection] = useState(false);
   const [isPrewarming, setIsPrewarming] = useState(false);
 
@@ -67,7 +69,27 @@ const LandingScreen: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex relative">
+      {/* Dashboard link for logged-in users - top right */}
+      {user && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="absolute top-6 right-6 z-50"
+        >
+          <GlassButton
+            onClick={() => router.push('/dashboard')}
+            variant="secondary"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <LayoutDashboard size={18} />
+            {language === 'pl' ? 'Dashboard' : 'Dashboard'}
+          </GlassButton>
+        </motion.div>
+      )}
+
       {!showAuraSection && (
         <div className="flex-1 ml-[0px] flex items-center justify-center h-screen">
           <div className="w-full max-w-3xl">
@@ -110,7 +132,7 @@ const LandingScreen: React.FC = () => {
                   router.push('/flow/fast-track');
                 }}
               >
-                <GlassCard className="p-6 lg:p-8 h-full hover:border-silver/50 transition-all group">
+                <GlassCard className="p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-2xl">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center">
                       <Zap size={28} className="text-graphite" />
@@ -147,7 +169,7 @@ const LandingScreen: React.FC = () => {
               >
                 <GlassCard 
                   variant="highlighted"
-                  className="p-6 lg:p-8 h-full hover:border-gold/50 transition-all group relative overflow-hidden"
+                  className="p-6 lg:p-8 h-full hover:border-gold/50 transition-all group relative overflow-hidden rounded-3xl"
                 >
                   <div className="absolute top-3 right-3 bg-gradient-to-r from-gold to-champagne text-white px-3 py-1 rounded-full text-xs font-bold">
                     ✨ {language === 'pl' ? 'Polecane' : 'Recommended'}
@@ -157,7 +179,7 @@ const LandingScreen: React.FC = () => {
                       <Heart size={28} className="text-white" fill="currentColor" />
                     </div>
                     <div>
-                      <h3 className="text-xl lg:text-2xl font-nasalization text-gold-700">
+                      <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-gold-700 transition-colors">
                         {language === 'pl' ? 'Pełne Doświadczenie' : 'Full Experience'}
                       </h3>
                       <p className="text-xs text-silver-dark font-modern">15-20 min • Unlimited</p>

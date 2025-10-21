@@ -29,10 +29,10 @@ const OnboardingScreen: React.FC = () => {
     setStep('demographics');
   };
 
-  const handleDemographicsSubmit = () => {
+  const handleDemographicsSubmit = async () => {
     if (canProceedDemographics) {
       stopAllDialogueAudio();
-      updateSessionData({
+      await updateSessionData({
         consentTimestamp: new Date().toISOString(),
         demographics: demographics
       });
@@ -42,9 +42,9 @@ const OnboardingScreen: React.FC = () => {
       console.log('[Onboarding] Demographics complete, pathType:', pathType);
       
       if (pathType === 'fast') {
-        // Fast track: skip core profile, go directly to photo upload with skip flag
-        console.log('[Onboarding] Routing to photo with skipFlow flag');
-        router.push('/flow/photo?skipFlow=true');
+        // Fast track: photo already uploaded, now go to style selection
+        console.log('[Onboarding] Fast track - routing to style selection');
+        router.push('/flow/style-selection');
       } else {
         // Full experience: go to core profile wizard
         console.log('[Onboarding] Routing to core profile');
@@ -229,10 +229,10 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
                   key={range}
                   type="button"
                   onClick={() => onUpdate({ ...data, ageRange: range })}
-                  className={`rounded-lg p-2 text-sm font-modern transition-all cursor-pointer ${
+                  className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                     data.ageRange === range
-                      ? 'bg-gold/20 border-2 border-gold text-graphite'
-                      : 'bg-white/10 border border-white/30 text-graphite hover:border-gold/50'
+                      ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                      : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
                   }`}
                 >
                   {range}
@@ -248,23 +248,22 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
             </label>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { id: 'female', label: language === 'pl' ? 'Kobieta' : 'Female', icon: '👩' },
-                { id: 'male', label: language === 'pl' ? 'Mężczyzna' : 'Male', icon: '👨' },
-                { id: 'non-binary', label: language === 'pl' ? 'Niebinarna' : 'Non-binary', icon: '🧑' },
-                { id: 'prefer-not-say', label: language === 'pl' ? 'Wolę nie mówić' : 'Prefer not to say', icon: '✨' }
+                { id: 'female', label: language === 'pl' ? 'Kobieta' : 'Female' },
+                { id: 'male', label: language === 'pl' ? 'Mężczyzna' : 'Male' },
+                { id: 'non-binary', label: language === 'pl' ? 'Niebinarna' : 'Non-binary' },
+                { id: 'prefer-not-say', label: language === 'pl' ? 'Wolę nie mówić' : 'Prefer not to say' }
               ].map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onUpdate({ ...data, gender: option.id })}
-                  className={`rounded-lg p-3 transition-all cursor-pointer ${
+                  className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                     data.gender === option.id
-                      ? 'bg-gold/20 border-2 border-gold'
-                      : 'bg-white/10 border border-white/30 hover:border-gold/50'
+                      ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                      : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
                   }`}
                 >
-                  <div className="text-xl mb-1">{option.icon}</div>
-                  <p className="text-xs font-modern text-graphite">{option.label}</p>
+                  {option.label}
                 </button>
               ))}
             </div>
@@ -286,10 +285,10 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
                   key={option.id}
                   type="button"
                   onClick={() => onUpdate({ ...data, education: option.id })}
-                  className={`rounded-lg p-2 text-sm font-modern transition-all cursor-pointer ${
+                  className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                     data.education === option.id
-                      ? 'bg-gold/20 border-2 border-gold text-graphite'
-                      : 'bg-white/10 border border-white/30 text-graphite hover:border-gold/50'
+                      ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                      : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
                   }`}
                 >
                   {option.label}

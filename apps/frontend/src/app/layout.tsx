@@ -12,6 +12,7 @@ import { LandscapeGuard } from '@/components/ui/LandscapeGuard';
 import { LanguageProvider, LanguageToggle } from '@/contexts/LanguageContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { UserAuthButton } from '@/components/auth/UserAuthButton';
+import { DashboardButton } from '@/components/ui/DashboardButton';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const audiowide = Audiowide({ 
@@ -42,7 +43,8 @@ export default function RootLayout({
           <AuthProvider>
             <LandscapeGuard>
             {/* Language toggle and auth in top-right corner */}
-            <div className="fixed top-4 right-4 z-50 flex gap-2">
+            <div className="fixed top-4 right-4 z-50 flex items-center gap-3">
+              <DashboardButton />
               <UserAuthButton />
               <LanguageToggle />
             </div>

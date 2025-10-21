@@ -93,20 +93,20 @@ export function MoodGrid({
       </div>
 
       {/* Grid Container */}
-      <div className="flex flex-col items-center">
+      <div className="flex flex-col items-center w-full max-w-[500px] mx-auto">
         {/* Y-axis label (top) */}
-        <div className="text-sm font-modern text-gray-600 mb-2">
+        <div className="text-sm font-modern text-graphite font-semibold mb-3 text-center">
           {t(config.axes.y.labels.max)}
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-center gap-3 w-full">
           {/* X-axis label (left) */}
-          <div className="text-sm font-modern text-gray-600 -rotate-90">
+          <div className="text-sm font-modern text-graphite font-semibold w-20 text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
             {t(config.axes.x.labels.min)}
           </div>
 
           {/* Main Grid */}
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             <div
               className="relative bg-gradient-to-br from-white/40 to-white/10 backdrop-blur-sm border-2 border-white/30 rounded-lg cursor-crosshair overflow-hidden shadow-lg"
               style={{ width: gridSize, height: gridSize }}
@@ -139,16 +139,16 @@ export function MoodGrid({
               {/* Center dot */}
               <div className="absolute top-1/2 left-1/2 w-2 h-2 bg-gray-400 rounded-full transform -translate-x-1/2 -translate-y-1/2" />
             </div>
+          </div>
 
-            {/* X-axis label (right) */}
-            <div className="text-sm font-modern text-gray-600 writing-mode-vertical ml-2">
-              {t(config.axes.x.labels.max)}
-            </div>
+          {/* X-axis label (right) */}
+          <div className="text-sm font-modern text-graphite font-semibold w-20 text-center" style={{ writingMode: 'vertical-lr' }}>
+            {t(config.axes.x.labels.max)}
           </div>
         </div>
 
         {/* Y-axis label (bottom) */}
-        <div className="text-sm font-modern text-gray-600 mt-2">
+        <div className="text-sm font-modern text-graphite font-semibold mt-3 text-center">
           {t(config.axes.y.labels.min)}
         </div>
       </div>

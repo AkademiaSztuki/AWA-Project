@@ -7,7 +7,7 @@ import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { AwaContainer } from '@/components/awa/AwaContainer';
+import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { supabase } from '@/lib/supabase';
 import { 
   Home, 
@@ -128,7 +128,7 @@ export function UserDashboard() {
   };
 
   const handleEditProfile = () => {
-    router.push('/setup/profile/edit');
+    router.push('/setup/profile');
   };
 
   return (
@@ -136,14 +136,16 @@ export function UserDashboard() {
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
-      <AwaContainer 
-        currentStep="onboarding" 
-        showDialogue={false}
-        fullWidth={true}
-        autoHide={false}
-      />
+      {/* Dialog IDA na dole - cała szerokość */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="onboarding" 
+          fullWidth={true}
+          autoHide={true}
+        />
+      </div>
 
-      <div className="flex-1 p-4 lg:p-8">
+      <div className="flex-1 p-4 lg:p-8 pb-32">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <motion.div
@@ -152,7 +154,7 @@ export function UserDashboard() {
             transition={{ duration: 0.6 }}
             className="mb-8"
           >
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
               <div>
                 <h1 className="text-3xl lg:text-4xl xl:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-2">
                   {language === 'pl' ? 'Moje Przestrzenie' : 'My Spaces'}
@@ -162,14 +164,16 @@ export function UserDashboard() {
                 </p>
               </div>
               
-              <GlassButton onClick={handleEditProfile} variant="secondary">
-                <Settings size={20} className="mr-2" />
-                {language === 'pl' ? 'Profil' : 'Profile'}
-              </GlassButton>
+              <div className="flex-shrink-0">
+                <GlassButton onClick={handleEditProfile} variant="secondary">
+                  <Settings size={20} className="mr-2" />
+                  {language === 'pl' ? 'Profil' : 'Profile'}
+                </GlassButton>
+              </div>
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <GlassCard className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
@@ -186,7 +190,7 @@ export function UserDashboard() {
 
               <GlassCard className="p-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                     <ImageIcon size={20} className="text-white" />
                   </div>
                   <div>
@@ -202,7 +206,7 @@ export function UserDashboard() {
 
               <GlassCard className="p-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                     <Sparkles size={20} className="text-white" />
                   </div>
                   <div>
@@ -306,7 +310,7 @@ function HouseholdCard({ household, index, onAddRoom, onOpenRoom }: {
 
         {/* Rooms Grid */}
         {household.rooms.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
             {household.rooms.map((room, roomIndex) => (
               <RoomCard
                 key={room.id}
@@ -321,7 +325,7 @@ function HouseholdCard({ household, index, onAddRoom, onOpenRoom }: {
               onClick={onAddRoom}
               className="glass-panel rounded-xl p-6 hover:bg-white/40 transition-all duration-300 group min-h-[200px] flex flex-col items-center justify-center gap-3"
             >
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Plus size={24} className="text-white" />
               </div>
               <span className="font-modern text-graphite">
@@ -352,17 +356,17 @@ function RoomCard({ room, index, onClick }: {
 }) {
   const { language } = useLanguage();
 
-  const roomTypeIcons: Record<string, string> = {
-    bedroom: '🛏️',
-    living_room: '🛋️',
-    kitchen: '🍳',
-    bathroom: '🛁',
-    home_office: '💼',
-    dining_room: '🍽️',
-    kids_room: '🧸'
+  const roomTypeIcons: Record<string, React.ReactNode> = {
+    bedroom: <Home size={32} className="text-gold" />,
+    living_room: <Home size={32} className="text-gold" />,
+    kitchen: <Home size={32} className="text-gold" />,
+    bathroom: <Home size={32} className="text-gold" />,
+    home_office: <Home size={32} className="text-gold" />,
+    dining_room: <Home size={32} className="text-gold" />,
+    kids_room: <Home size={32} className="text-gold" />
   };
 
-  const icon = roomTypeIcons[room.roomType] || '🏠';
+  const icon = roomTypeIcons[room.roomType] || <Home size={32} className="text-gold" />;
 
   return (
     <motion.button
@@ -383,7 +387,7 @@ function RoomCard({ room, index, onClick }: {
             className="object-cover"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-5xl">
+          <div className="absolute inset-0 flex items-center justify-center">
             {icon}
           </div>
         )}
