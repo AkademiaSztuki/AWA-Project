@@ -7,6 +7,8 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
+  swcMinify: true,
+  
   webpack: (config) => {
     config.module.rules.push({
       test: /\.(gltf|glb)$/,

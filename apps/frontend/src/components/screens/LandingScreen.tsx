@@ -59,15 +59,6 @@ const LandingScreen: React.FC = () => {
     }, 1500);
   };
 
-  // Fallback: jeśli przeglądarka zablokuje autoplay i onDialogueEnd nie wywoła się,
-  // pokaż sekcję akcji po dłuższym czasie, by dialog zdążył się skończyć
-  useEffect(() => {
-    const fallback = setTimeout(() => {
-      setShowAuraSection((prev) => prev || false ? prev : true);
-    }, 15000); // Increased from 8s to 15s
-    return () => clearTimeout(fallback);
-  }, []);
-
   return (
     <div className="min-h-screen flex relative">
       {/* Dashboard link for logged-in users - top right */}

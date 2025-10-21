@@ -173,51 +173,40 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     };
   }, [audioManager]);
 
-  // Sprawdź audio i rozpocznij dialog gdy audio jest gotowe
-  useEffect(() => {
-    if (currentSentenceIndex === 0 && !hasStarted) {
-      setHasStarted(true);
-      
-      if (audioFile && voiceEnabled) {
-        console.log('Checking audio and preparing to start dialogue:', audioFile);
-        
-        // Sprawdź czy plik istnieje przed próbą odtwarzania
-        fetch(audioFile, { method: 'HEAD' })
-          .then(response => {
-            if (response.ok) {
-              // Spróbuj odtworzyć audio
-              // const audio = new Audio(audioFile); // audioRef.current nie istnieje
-              // audioRef.current = audio;
-              // audioManager.registerDialogueAudio(audio); // audioRef.current nie istnieje
-              // audio.dataset.type = 'dialogue';
-              // audio.volume = voiceVolume;
-              setAudioReady(true); // Audio się odtwarza, dialog może się rozpocząć
-            } else {
-              console.log('Audio file not found:', audioFile);
-              setAudioReady(true); // Jeśli plik nie istnieje, dialog może się rozpocząć
-            }
-          })
-          .catch(error => {
-            console.log('Error checking audio file:', audioFile, error);
-            setAudioReady(true); // Jeśli błąd, dialog może się rozpocząć
-          });
-      } else {
-        // Jeśli nie ma audio lub głos wyłączony, od razu gotowe
-        console.log('No audio file specified or voice disabled, starting dialogue immediately');
-        setAudioReady(true);
-      }
-    }
-  }, [currentSentenceIndex, hasStarted, audioFile]);
+  // Handler kliknięcia aby odblokować audio i rozpocząć dialog (dla landing page)
+  const handleClickToStart = () => {
+    console.log('User clicked to start dialogue');
+    setHasStarted(true);
+    setAudioReady(true);
+  };
 
-  // Jeśli nie ma audio lub audio jest gotowe, pokaż dialog
+  // Automatyczne uruchomienie dla wszystkich stron POZA landing
+  // Landing wymaga kliknięcia aby użytkownik był skupiony
+  useEffect(() => {
+    if (currentStep !== 'landing' && currentSentenceIndex === 0 && !hasStarted) {
+      console.log('Auto-starting dialogue for step:', currentStep);
+      setHasStarted(true);
+      setAudioReady(true); // Natychmiast rozpocznij dla stron które nie są landing
+    }
+  }, [currentStep, currentSentenceIndex, hasStarted]);
+
+  // Jeśli audio nie jest gotowe
   if (!audioReady) {
-    return (
-      <div className={`z-50 flex flex-col items-center justify-start min-h-[220px] w-full p-8 text-center ${fullWidth ? 'fixed bottom-0 left-0 right-0' : ''}`}>
-        <span className="inline-block whitespace-pre-wrap tracking-tight w-full text-3xl md:text-4xl font-nasalization font-bold text-white drop-shadow-lg select-none text-center">
-          Kliknij gdziekolwiek, aby rozpocząć...
-        </span>
-      </div>
-    );
+    // Dla landing page pokaż "Kliknij aby rozpocząć"
+    if (currentStep === 'landing') {
+      return (
+        <div 
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center text-center cursor-pointer"
+          onClick={handleClickToStart}
+        >
+          <span className="inline-block whitespace-pre-wrap tracking-tight w-full text-3xl md:text-4xl font-nasalization font-bold text-white drop-shadow-lg select-none text-center hover:text-champagne transition-colors px-8">
+            Kliknij gdziekolwiek, aby rozpocząć...
+          </span>
+        </div>
+      );
+    }
+    // Dla innych stron pokaż loading (audio się ładuje automatycznie)
+    return null;
   }
 
   // Jeśli autoHide jest włączone i dialog ma zniknąć
