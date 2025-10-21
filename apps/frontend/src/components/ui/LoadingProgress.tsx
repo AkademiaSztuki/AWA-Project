@@ -3,6 +3,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Wand2, Sparkles, CheckCircle } from 'lucide-react';
+import { GlassCard } from './GlassCard';
 
 interface LoadingProgressProps {
   currentStage: 1 | 2 | 3;
@@ -45,13 +46,14 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-panel p-8 rounded-3xl"
-      >
-        {/* Stage indicator */}
-        <div className="flex justify-center items-center gap-4 mb-8">
+      <GlassCard className="p-8 rounded-3xl">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          {/* Stage indicator */}
+          <div className="flex justify-center items-center gap-4">
           {[1, 2, 3].map((stage) => {
             const stageConfig = STAGE_CONFIG[stage as 1 | 2 | 3];
             const StageIcon = stageConfig.icon;
@@ -94,23 +96,23 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
           })}
         </div>
 
-        {/* Current stage title */}
-        <motion.h3
-          key={currentStage}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className={`text-2xl font-nasalization text-center mb-4 text-transparent bg-clip-text bg-gradient-to-r ${config.color}`}
-        >
-          {config.title}
-        </motion.h3>
+          {/* Current stage title */}
+          <motion.h3
+            key={currentStage}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className={`text-2xl font-nasalization text-center text-transparent bg-clip-text bg-gradient-to-r ${config.color}`}
+          >
+            {config.title}
+          </motion.h3>
 
-        {/* Message */}
-        <p className="text-center text-gray-700 font-modern mb-6 text-lg">
-          {message}
-        </p>
+          {/* Message */}
+          <p className="text-center text-gray-700 font-modern text-lg">
+            {message}
+          </p>
 
-        {/* Progress bar */}
-        <div className="relative w-full h-3 bg-white/20 rounded-full overflow-hidden mb-4">
+          {/* Progress bar */}
+          <div className="relative w-full h-3 bg-white/20 rounded-full overflow-hidden">
           <motion.div
             className={`absolute inset-y-0 left-0 bg-gradient-to-r ${config.color} rounded-full`}
             initial={{ width: 0 }}
@@ -133,8 +135,8 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
           />
         </div>
 
-        {/* Progress percentage */}
-        <div className="flex justify-between items-center text-sm text-gray-600 mb-4">
+          {/* Progress percentage */}
+          <div className="flex justify-between items-center text-sm text-gray-600">
           <span className="font-modern">{Math.round(progress)}%</span>
           {estimatedTimeRemaining !== undefined && estimatedTimeRemaining > 0 && (
             <span className="font-modern">
@@ -143,8 +145,8 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
           )}
         </div>
 
-        {/* Particles animation */}
-        <div className="flex justify-center gap-2 mb-6">
+          {/* Particles animation */}
+          <div className="flex justify-center gap-2">
           {[...Array(5)].map((_, i) => (
             <motion.div
               key={i}
@@ -162,18 +164,19 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
           ))}
         </div>
 
-        {/* Cancel button */}
-        {onCancel && (
-          <div className="flex justify-center">
-            <button
-              onClick={onCancel}
-              className="px-6 py-2 text-sm font-modern text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              Anuluj generowanie
-            </button>
-          </div>
-        )}
-      </motion.div>
+          {/* Cancel button */}
+          {onCancel && (
+            <div className="flex justify-center">
+              <button
+                onClick={onCancel}
+                className="px-6 py-2 text-sm font-modern text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Anuluj generowanie
+              </button>
+            </div>
+          )}
+        </motion.div>
+      </GlassCard>
     </div>
   );
 };

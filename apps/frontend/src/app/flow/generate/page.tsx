@@ -809,8 +809,9 @@ export default function GeneratePage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
-      <div className="flex-1 bg-gradient-radial from-pearl-50 to-platinum-100 p-8">
+    <div className="min-h-screen flex flex-col w-full relative">
+      <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
+      <div className="flex-1 p-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
