@@ -25,8 +25,10 @@ Built a product users WANT to use, with validated research methodologies gamifie
 │  LAYER 1: USER (Global - Once)              │
 │  • Aesthetic DNA (implicit + explicit)      │
 │  • Psychology (PRS ideal, biophilia)        │
+│  • Big Five Personality (IPIP-60) 🆕         │
+│  • Inspiration Images (1-10) 🆕              │
 │  • Lifestyle & sensory preferences          │
-│  Time: 15 min | Reused: Forever            │
+│  Time: 20 min | Reused: Forever            │
 └─────────────────────────────────────────────┘
           ↓
 ┌─────────────────────────────────────────────┐
@@ -88,6 +90,60 @@ Built a product users WANT to use, with validated research methodologies gamifie
 **Paper 2**: AI-generated restorativeness (N=200)  
 **Paper 3**: Implicit vs explicit preferences (N=300)  
 **Paper 4**: Functional context integration (N=200)
+
+---
+
+## ✨ NEW FEATURES (January 2025)
+
+### 1. Big Five Personality Test (IPIP-60)
+
+**Research Foundation**: International Personality Item Pool, validated across cultures
+
+**Implementation**:
+- 60-item questionnaire in Polish/English
+- Reverse scoring for accurate measurement
+- 5 domains: Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism
+- Integrated into Core Profile Wizard
+- Results mapped to design preferences using environmental psychology research
+
+**Design Mapping**:
+- **Openness** → Visual complexity, creativity, varied materials
+- **Conscientiousness** → Storage needs, organization, structured layouts
+- **Extraversion** → Social spaces, open layouts, bright lighting
+- **Agreeableness** → Harmony, balanced proportions, calming elements
+- **Neuroticism** → Comfort, soft textures, warm lighting
+
+### 2. Inspiration Images Upload & Analysis
+
+**Purpose**: Visual preference learning through user-uploaded images
+
+**Technical Stack**:
+- VLM (Gemma 3 4B-IT) via Modal.com for image analysis
+- Automatic tagging: styles, colors, materials, biophilia
+- Background processing (non-blocking user experience)
+- Supabase Storage for image persistence
+
+**Features**:
+- Upload 1-10 inspiration images
+- Real-time preview with extracted tags
+- Fallback tags if VLM analysis fails
+- Integration with prompt synthesis for enhanced personalization
+
+### 3. Enhanced Prompt Synthesis
+
+**New PromptWeights**:
+- `storageNeeds` - From conscientiousness (0-1)
+- `harmonyLevel` - From agreeableness + low neuroticism (0-1)
+- Enhanced `visualComplexity` - Combined with personality
+- Enhanced `privateVsShared` - From extraversion
+- Enhanced color/material palettes - From inspiration analysis
+- Enhanced biophilia - From inspiration VLM analysis
+
+**Research Integration**:
+- Personality mapping based on environmental psychology literature
+- Inspiration analysis using computer vision best practices
+- Transparent, explainable scoring algorithms
+- All mappings documented and research-backed
 
 ---
 

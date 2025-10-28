@@ -12,12 +12,12 @@ import { supabase } from '@/lib/supabase';
 import { 
   Home, 
   Plus, 
-  Settings, 
   Image as ImageIcon,
   Clock,
   Heart,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  ArrowLeft
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -48,26 +48,30 @@ interface Room {
  */
 export function UserDashboard() {
   const router = useRouter();
-  const { sessionData } = useSessionData();
+  const { sessionData, updateSessionData } = useSessionData();
   const { language } = useLanguage();
   
   const [households, setHouseholds] = useState<Household[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  
 
   useEffect(() => {
     loadUserData();
-  }, []);
+  }, [sessionData]);
 
   const loadUserData = async () => {
-    setIsLoading(true);
-    
     try {
-      const userHash = sessionData?.userHash || 
-                       (typeof window !== 'undefined' && window.sessionStorage?.getItem('aura_user_hash')) || 
-                       '';
+      // Try to get userHash from multiple sources
+      let userHash = sessionData?.userHash;
+      
+      if (!userHash && typeof window !== 'undefined') {
+        userHash = localStorage.getItem('aura_user_hash') || 
+                   sessionStorage.getItem('aura_user_hash') || '';
+      }
       
       if (!userHash) {
-        console.log('No user hash found - showing empty dashboard');
+        console.log('[Dashboard] No user hash found - showing empty dashboard');
         setHouseholds([]);
         setIsLoading(false);
         return;
@@ -75,16 +79,54 @@ export function UserDashboard() {
 
       console.log('[Dashboard] Loading data for user:', userHash);
       
+      // Check if we have session data with households
+      if (sessionData?.households && sessionData.households.length > 0) {
+        console.log('[Dashboard] Loaded from sessionData');
+        setHouseholds(sessionData.households);
+        setIsLoading(false);
+        return;
+      }
+      
+      // First try to load from localStorage for immediate display
+      const localSessionData = localStorage.getItem('aura_session');
+      console.log('[Dashboard] localStorage data:', localSessionData);
+      if (localSessionData) {
+        try {
+          const parsed = JSON.parse(localSessionData);
+          console.log('[Dashboard] Parsed localStorage data:', parsed);
+          if (parsed.households && parsed.households.length > 0) {
+            console.log('[Dashboard] Loaded from localStorage');
+            setHouseholds(parsed.households);
+            setIsLoading(false);
+            // Continue with Supabase load in background
+          } else {
+            console.log('[Dashboard] No households in localStorage data');
+            setHouseholds([]);
+            setIsLoading(false);
+          }
+        } catch (e) {
+          console.log('[Dashboard] Failed to parse localStorage data:', e);
+          setHouseholds([]);
+          setIsLoading(false);
+        }
+      } else {
+        console.log('[Dashboard] No localStorage data found');
+        setHouseholds([]);
+        setIsLoading(false);
+      }
+      
       // Call Supabase function to get complete profile
       const { data, error } = await supabase
         .rpc('get_user_complete_profile', { p_user_hash: userHash });
       
       if (error) {
         console.error('[Dashboard] Supabase error:', error);
-        // Fallback to empty state
-        setHouseholds([]);
-      } else if (data) {
-        console.log('[Dashboard] Loaded profile data:', data);
+        // If we don't have localStorage data, show empty state
+        if (!localSessionData) {
+          setHouseholds([]);
+        }
+      } else if (data && data.households && data.households.length > 0) {
+        console.log('[Dashboard] Loaded profile data from Supabase:', data);
         
         // Transform Supabase data to UI format
         const transformedHouseholds: Household[] = (data.households || []).map((h: any) => ({
@@ -104,18 +146,38 @@ export function UserDashboard() {
         setHouseholds(transformedHouseholds);
       } else {
         // No profile yet - empty state
-        console.log('[Dashboard] No profile data found');
-        setHouseholds([]);
+        console.log('[Dashboard] No profile data found in Supabase');
+        if (!localSessionData) {
+          setHouseholds([]);
+        }
       }
     } catch (error) {
       console.error('[Dashboard] Failed to load user data:', error);
-      setHouseholds([]);
+      // Only set empty if we don't have localStorage data
+      const localSessionData = localStorage.getItem('aura_session');
+      if (!localSessionData) {
+        setHouseholds([]);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleAddHousehold = () => {
+    // Create a sample household for demo
+    const newHousehold: Household = {
+      id: `household_${Date.now()}`,
+      name: language === 'pl' ? 'Moja Przestrzeń' : 'My Space',
+      type: 'home',
+      rooms: []
+    };
+    
+    const updatedHouseholds = [...households, newHousehold];
+    setHouseholds(updatedHouseholds);
+    
+    // Save to session data
+    updateSessionData({ households: updatedHouseholds });
+    
     router.push('/setup/household');
   };
 
@@ -127,12 +189,27 @@ export function UserDashboard() {
     router.push(`/design/${roomId}`);
   };
 
-  const handleEditProfile = () => {
-    router.push('/setup/profile');
-  };
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('auth') === 'error') {
+      setAuthError(decodeURIComponent(url.searchParams.get('msg') || ''));
+      url.searchParams.delete('auth');
+      url.searchParams.delete('msg');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
+      {authError && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-xl p-3 rounded-lg glass-panel border border-red-300/40">
+          <p className="text-sm text-red-700 font-modern text-center">
+            {language === 'pl' ? 'Błąd logowania: ' : 'Sign-in error: '}
+            {authError}
+          </p>
+        </div>
+      )}
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
@@ -145,7 +222,7 @@ export function UserDashboard() {
         />
       </div>
 
-      <div className="flex-1 p-4 lg:p-8 pb-32">
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 pb-32">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <motion.div
@@ -154,32 +231,23 @@ export function UserDashboard() {
             transition={{ duration: 0.6 }}
             className="mb-8"
           >
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-              <div>
-                <h1 className="text-3xl lg:text-4xl xl:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-2">
-                  {language === 'pl' ? 'Moje Przestrzenie' : 'My Spaces'}
-                </h1>
-                <p className="text-base lg:text-lg text-graphite font-modern">
-                  {language === 'pl' ? 'Zarządzaj swoimi wnętrzami' : 'Manage your interiors'}
-                </p>
-              </div>
-              
-              <div className="flex-shrink-0">
-                <GlassButton onClick={handleEditProfile} variant="secondary">
-                  <Settings size={20} className="mr-2" />
-                  {language === 'pl' ? 'Profil' : 'Profile'}
-                </GlassButton>
-              </div>
+            <div className="mb-6">
+              <h1 className="text-3xl lg:text-4xl xl:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-2">
+                {language === 'pl' ? 'Moje Przestrzenie' : 'My Spaces'}
+              </h1>
+              <p className="text-base lg:text-lg text-graphite font-modern">
+                {language === 'pl' ? 'Zarządzaj swoimi wnętrzami' : 'Manage your interiors'}
+              </p>
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              <GlassCard className="p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+              <GlassCard className="p-4 sm:p-6 min-h-[80px]">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
                     <Home size={20} className="text-white" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-2xl font-nasalization text-graphite">{households.length}</p>
                     <p className="text-xs text-silver-dark font-modern">
                       {language === 'pl' ? 'Przestrzenie' : 'Spaces'}
@@ -188,12 +256,12 @@ export function UserDashboard() {
                 </div>
               </GlassCard>
 
-              <GlassCard className="p-4">
+              <GlassCard className="p-4 sm:p-6 min-h-[80px]">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
                     <ImageIcon size={20} className="text-white" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-2xl font-nasalization text-graphite">
                       {households.reduce((sum, h) => sum + h.rooms.length, 0)}
                     </p>
@@ -204,12 +272,12 @@ export function UserDashboard() {
                 </div>
               </GlassCard>
 
-              <GlassCard className="p-4">
+              <GlassCard className="p-4 sm:p-6 min-h-[80px]">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
                     <Sparkles size={20} className="text-white" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-2xl font-nasalization text-graphite">
                       {households.reduce((sum, h) => 
                         sum + h.rooms.reduce((s, r) => s + r.sessionsCount, 0), 0
@@ -223,6 +291,12 @@ export function UserDashboard() {
               </GlassCard>
             </div>
           </motion.div>
+
+          {/* Inspirations Gallery (from latest session_json) */}
+          <InspirationsGallery userHash={(sessionData as any)?.userHash} />
+
+          {/* Big Five Results */}
+          <BigFiveResults userHash={(sessionData as any)?.userHash} />
 
           {/* Households List */}
           {isLoading ? (
@@ -310,7 +384,7 @@ function HouseholdCard({ household, index, onAddRoom, onOpenRoom }: {
 
         {/* Rooms Grid */}
         {household.rooms.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
             {household.rooms.map((room, roomIndex) => (
               <RoomCard
                 key={room.id}
@@ -323,7 +397,7 @@ function HouseholdCard({ household, index, onAddRoom, onOpenRoom }: {
             {/* Add Room Button */}
             <button
               onClick={onAddRoom}
-              className="glass-panel rounded-xl p-6 hover:bg-white/40 transition-all duration-300 group min-h-[200px] flex flex-col items-center justify-center gap-3"
+              className="glass-panel rounded-xl p-4 sm:p-6 hover:bg-white/40 transition-all duration-300 group min-h-[200px] flex flex-col items-center justify-center gap-3 w-full"
             >
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Plus size={24} className="text-white" />
@@ -345,6 +419,76 @@ function HouseholdCard({ household, index, onAddRoom, onOpenRoom }: {
           </div>
         )}
       </GlassCard>
+    </motion.div>
+  );
+}
+
+function InspirationsGallery({ userHash }: { userHash?: string }) {
+  const { language } = useLanguage();
+  const [urls, setUrls] = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState<boolean>(true);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        if (!userHash) { setUrls([]); return; }
+        
+        // First try localStorage (immediate)
+        const localSession = localStorage.getItem('aura_session');
+        if (localSession) {
+          const parsed = JSON.parse(localSession);
+          const insp = parsed?.inspirations || [];
+          const imgUrls = insp.map((i: any) => i?.url).filter((u: string) => !!u);
+          if (mounted) {
+            setUrls(imgUrls);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Fallback to Supabase
+        const { data, error } = await supabase
+          .from('sessions')
+          .select('session_json')
+          .eq('user_hash', userHash)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        const insp = (data as any)?.session_json?.inspirations || [];
+        const imgUrls = insp.map((i: any) => i?.url).filter((u: string) => !!u);
+        if (mounted) setUrls(imgUrls);
+      } catch (e) {
+        console.warn('[Dashboard] inspirations fetch failed', e);
+        if (mounted) setUrls([]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [userHash]);
+
+  if (loading) return null;
+  if (!urls.length) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="mb-8"
+    >
+      <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4">
+        {language === 'pl' ? 'Moje Inspiracje' : 'My Inspirations'}
+      </h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        {urls.slice(0, 12).map((url, idx) => (
+          <div key={idx} className="relative aspect-square rounded-xl overflow-hidden glass-panel">
+            <Image src={url} alt={`Inspiration ${idx+1}`} fill className="object-cover" />
+          </div>
+        ))}
+      </div>
     </motion.div>
   );
 }
@@ -493,6 +637,109 @@ function getRoomTypeLabel(roomType: string, language: 'pl' | 'en'): string {
   };
 
   return labels[roomType]?.[language] || roomType;
+}
+
+function BigFiveResults({ userHash }: { userHash?: string }) {
+  const { language } = useLanguage();
+  const [bigFiveData, setBigFiveData] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState<boolean>(true);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        if (!userHash) { setBigFiveData(null); setLoading(false); return; }
+        
+        // First try localStorage (immediate)
+        const localSession = localStorage.getItem('aura_session');
+        if (localSession) {
+          const parsed = JSON.parse(localSession);
+          const bigFive = parsed?.bigFive;
+          if (mounted && bigFive) {
+            setBigFiveData(bigFive);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Fallback to Supabase
+        const { data, error } = await supabase
+          .from('sessions')
+          .select('session_json')
+          .eq('user_hash', userHash)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        const bigFive = (data as any)?.session_json?.bigFive;
+        if (mounted) setBigFiveData(bigFive);
+      } catch (e) {
+        console.warn('[Dashboard] Big Five fetch failed', e);
+        if (mounted) setBigFiveData(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [userHash]);
+
+  if (loading) return null;
+  if (!bigFiveData?.scores) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="mb-8"
+    >
+      <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4">
+        {language === 'pl' ? 'Twój Profil Osobowości' : 'Your Personality Profile'}
+      </h2>
+      <GlassCard className="p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {Object.entries(bigFiveData.scores).map(([domain, score], index) => (
+            <motion.div
+              key={domain}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3, delay: index * 0.1 }}
+              className="text-center"
+            >
+              <div className="mb-2">
+                <div className="text-2xl font-bold text-gold mb-1">{Number(score)}%</div>
+                <div className="text-sm font-nasalization text-graphite">
+                  {getDomainLabel(domain, language)}
+                </div>
+              </div>
+              <div className="w-full bg-white/20 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-gold to-champagne h-2 rounded-full transition-all duration-1000"
+                  style={{ width: `${score}%` }}
+                />
+              </div>
+            </motion.div>
+          ))}
+        </div>
+        <div className="mt-4 text-center">
+          <p className="text-sm text-silver-dark font-modern">
+            {language === 'pl' ? 'Wyniki testu Big Five - używane do personalizacji wnętrz' : 'Big Five test results - used for interior personalization'}
+          </p>
+        </div>
+      </GlassCard>
+    </motion.div>
+  );
+}
+
+function getDomainLabel(domain: string, language: 'pl' | 'en'): string {
+  const labels = {
+    openness: { pl: 'Otwartość', en: 'Openness' },
+    conscientiousness: { pl: 'Sumienność', en: 'Conscientiousness' },
+    extraversion: { pl: 'Ekstrawersja', en: 'Extraversion' },
+    agreeableness: { pl: 'Ugodowość', en: 'Agreeableness' },
+    neuroticism: { pl: 'Neurotyczność', en: 'Neuroticism' }
+  };
+  return labels[domain as keyof typeof labels]?.[language] || domain;
 }
 
 function getRelativeTime(dateString: string, language: 'pl' | 'en'): string {

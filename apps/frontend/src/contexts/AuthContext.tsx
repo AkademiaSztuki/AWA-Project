@@ -71,8 +71,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     // Clear local session
     if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem('aura_session');
-      window.sessionStorage.removeItem('aura_user_hash');
+      localStorage.removeItem('aura_session');
+      localStorage.removeItem('aura_user_hash');
+      sessionStorage.removeItem('aura_session');
+      sessionStorage.removeItem('aura_user_hash');
     }
   };
 

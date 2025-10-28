@@ -139,11 +139,11 @@ export function ThanksScreen() {
                   height={56}
                   borderRadius={32}
                   className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
-                  onClick={() => window.location.href = '/'}
-                  aria-label="Zacznij od nowa"
+                  onClick={() => window.location.href = '/dashboard'}
+                  aria-label="Przejdź do dashboard"
                   style={{ opacity: 1 }}
                 >
-                  Zacznij od nowa
+                  Przejdź do Dashboard
                 </GlassSurface>
               </div>
 

@@ -17,6 +17,8 @@ import {
   SensoryTestSuite,
   NatureMetaphorTest
 } from '@/components/research';
+import { BigFiveStep } from '@/components/steps/BigFiveStep';
+import { InspirationsStep } from '@/components/steps/InspirationsStep';
 import { SEMANTIC_DIFFERENTIAL_DIMENSIONS } from '@/lib/questions/validated-scales';
 import { ArrowRight, ArrowLeft, Check, Sparkles, Heart, Zap, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,6 +27,8 @@ import { LoginModal } from '@/components/auth/LoginModal';
 type WizardStep = 
   | 'welcome'
   | 'lifestyle'
+  | 'big_five'
+  | 'inspirations'
   | 'tinder_swipes'
   | 'semantic_diff'
   | 'colors_materials'
@@ -41,6 +45,30 @@ interface CoreProfileData {
     lifeVibe: string;
     goals: string[];
   };
+  bigFive?: {
+    responses: Record<string, number>;
+    scores: {
+      openness: number;
+      conscientiousness: number;
+      extraversion: number;
+      agreeableness: number;
+      neuroticism: number;
+    };
+    completedAt: string;
+  };
+  inspirations?: Array<{
+    id: string;
+    fileId?: string;
+    url?: string;
+    tags?: {
+      styles?: string[];
+      colors?: string[];
+      materials?: string[];
+      biophilia?: number;
+    };
+    description?: string;
+    addedAt: string;
+  }>;
   tinderSwipes?: Array<{
     imageId: number;
     direction: 'left' | 'right';
@@ -99,6 +127,8 @@ export function CoreProfileWizard() {
   const steps: WizardStep[] = [
     'welcome',
     'lifestyle',
+    'big_five',
+    'inspirations',
     'tinder_swipes',
     'semantic_diff',
     'colors_materials',
@@ -310,6 +340,24 @@ export function CoreProfileWizard() {
                 <LifestyleStep 
                   data={profileData.lifestyle}
                   onUpdate={(data: { livingSituation: string; lifeVibe: string; goals: string[] }) => updateProfile({ lifestyle: data })}
+                  onNext={handleNext}
+                  onBack={handleBack}
+                />
+              )}
+
+              {currentStep === 'big_five' && (
+                <BigFiveStep 
+                  data={profileData.bigFive}
+                  onUpdate={(data: { responses: Record<string, number>; scores: { openness: number; conscientiousness: number; extraversion: number; agreeableness: number; neuroticism: number }; completedAt: string }) => updateProfile({ bigFive: data })}
+                  onNext={handleNext}
+                  onBack={handleBack}
+                />
+              )}
+
+              {currentStep === 'inspirations' && (
+                <InspirationsStep 
+                  data={profileData.inspirations}
+                  onUpdate={(data: Array<{ id: string; fileId?: string; url?: string; tags?: { styles?: string[]; colors?: string[]; materials?: string[]; biophilia?: number; }; description?: string; addedAt: string; }>) => updateProfile({ inspirations: data })}
                   onNext={handleNext}
                   onBack={handleBack}
                 />

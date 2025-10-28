@@ -811,7 +811,7 @@ export default function LadderOfNeedsPage() {
 
   const handleContinue = () => {
     stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
-    router.push('/flow/generate');
+    router.push('/dashboard');
   };
 
   const getAwaDialogue = () => {

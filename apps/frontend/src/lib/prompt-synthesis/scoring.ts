@@ -45,6 +45,26 @@ export interface PromptInputs {
     light: string;               // Selected light ID
     natureMetaphor: string;      // Selected nature place
   };
+
+  // Big Five Personality (from IPIP-60)
+  personality?: {
+    openness: number;            // 0-100
+    conscientiousness: number;   // 0-100
+    extraversion: number;        // 0-100
+    agreeableness: number;       // 0-100
+    neuroticism: number;         // 0-100
+  };
+
+  // Inspiration Images (from VLM analysis)
+  inspirations?: Array<{
+    tags: {
+      styles?: string[];
+      colors?: string[];
+      materials?: string[];
+      biophilia?: number;
+    };
+    description?: string;
+  }>;
   
   // LAYER 2: Household
   householdContext: {
@@ -125,6 +145,10 @@ export interface PromptWeights {
   // Complexity & Detail
   visualComplexity: number;      // 0-1
   
+  // Personality-driven preferences
+  storageNeeds: number;          // 0-1 (from conscientiousness)
+  harmonyLevel: number;          // 0-1 (from agreeableness + low neuroticism)
+  
   // Special Considerations
   addressPainPoints: string[];
 }
@@ -176,6 +200,12 @@ export function calculatePromptWeights(inputs: PromptInputs): PromptWeights {
     inputs.householdContext
   );
   
+  // 8. BIG FIVE PERSONALITY INTEGRATION
+  const personalityWeights = mapBigFiveToPromptWeights(inputs.personality);
+  
+  // 9. INSPIRATION TAGS INTEGRATION
+  const inspirationWeights = integrateInspirationTags(inputs.inspirations);
+  
   // COMBINE ALL WEIGHTS
   return {
     // Mood (from PRS gap)
@@ -188,32 +218,36 @@ export function calculatePromptWeights(inputs: PromptInputs): PromptWeights {
     dominantStyle: styleWeights.dominantStyle,
     styleConfidence: styleWeights.confidence,
     
-    // Colors
-    colorPalette: colorWeights.palette,
+    // Colors (enhanced with inspirations)
+    colorPalette: [...colorWeights.palette, ...inspirationWeights.additionalColors],
     colorTemperature: colorWeights.temperature,
     
-    // Materials
-    primaryMaterials: styleWeights.materials,
+    // Materials (enhanced with inspirations)
+    primaryMaterials: [...styleWeights.materials, ...inspirationWeights.additionalMaterials],
     
     // Lighting
     lightingMood: lightingWeights.mood,
     naturalLightImportance: lightingWeights.naturalImportance,
     
-    // Biophilia
-    natureDensity: biophiliaWeights.density,
-    biophilicElements: biophiliaWeights.elements,
+    // Biophilia (enhanced with inspirations)
+    natureDensity: Math.min(1, biophiliaWeights.density + inspirationWeights.biophiliaBoost),
+    biophilicElements: [...biophiliaWeights.elements],
     
     // Functional
     primaryActivity: functionalWeights.primary,
     secondaryActivities: functionalWeights.secondary,
     functionalPriorities: functionalWeights.priorities,
     
-    // Social
+    // Social (enhanced with personality)
     requiresZoning: socialWeights.requiresZoning,
-    privateVsShared: socialWeights.privateVsShared,
+    privateVsShared: personalityWeights.socialPreferences,
     
-    // Complexity
-    visualComplexity: styleWeights.complexity,
+    // Complexity (enhanced with personality)
+    visualComplexity: (styleWeights.complexity + personalityWeights.visualComplexity) / 2,
+    
+    // Personality-driven preferences
+    storageNeeds: personalityWeights.storageNeeds,
+    harmonyLevel: personalityWeights.harmonyLevel,
     
     // Pain points
     addressPainPoints: inputs.painPoints
@@ -436,6 +470,114 @@ function analyzeSocialContext(
   return {
     requiresZoning,
     privateVsShared
+  };
+}
+
+// =========================
+// BIG FIVE PERSONALITY MAPPING
+// =========================
+
+function mapBigFiveToPromptWeights(personality: PromptInputs['personality']): {
+  visualComplexity: number;
+  socialPreferences: number;
+  storageNeeds: number;
+  lightingPreferences: number;
+  harmonyLevel: number;
+} {
+  if (!personality) {
+    return {
+      visualComplexity: 0.5,
+      socialPreferences: 0.5,
+      storageNeeds: 0.5,
+      lightingPreferences: 0.5,
+      harmonyLevel: 0.5
+    };
+  }
+
+  const { openness, conscientiousness, extraversion, agreeableness, neuroticism } = personality;
+
+  // Visual Complexity (Openness + Conscientiousness)
+  // High openness = more complex, varied designs
+  // High conscientiousness = more organized, structured complexity
+  const opennessFactor = openness / 100; // 0-1
+  const conscientiousnessFactor = conscientiousness / 100; // 0-1
+  const visualComplexity = (opennessFactor * 0.7) + (conscientiousnessFactor * 0.3);
+
+  // Social Preferences (Extraversion)
+  // High extraversion = more social, open spaces
+  // Low extraversion = more private, intimate spaces
+  const socialPreferences = extraversion / 100; // 0-1
+
+  // Storage Needs (Conscientiousness)
+  // High conscientiousness = more storage, organization
+  // Low conscientiousness = minimal storage, flexible spaces
+  const storageNeeds = conscientiousness / 100; // 0-1
+
+  // Lighting Preferences (Neuroticism + Extraversion)
+  // High neuroticism = softer, warmer lighting for comfort
+  // High extraversion = brighter lighting for energy
+  // Low neuroticism + low extraversion = balanced lighting
+  const neuroticismFactor = neuroticism / 100; // 0-1
+  const extraversionFactor = extraversion / 100; // 0-1
+  const lightingPreferences = (neuroticismFactor * 0.3) + (extraversionFactor * 0.7);
+
+  // Harmony Level (Agreeableness + low Neuroticism)
+  // High agreeableness = more harmonious, balanced designs
+  // Low neuroticism = more stable, calming elements
+  const agreeablenessFactor = agreeableness / 100; // 0-1
+  const harmonyLevel = (agreeablenessFactor * 0.6) + ((100 - neuroticism) / 100 * 0.4);
+
+  return {
+    visualComplexity: Math.max(0, Math.min(1, visualComplexity)),
+    socialPreferences: Math.max(0, Math.min(1, socialPreferences)),
+    storageNeeds: Math.max(0, Math.min(1, storageNeeds)),
+    lightingPreferences: Math.max(0, Math.min(1, lightingPreferences)),
+    harmonyLevel: Math.max(0, Math.min(1, harmonyLevel))
+  };
+}
+
+function integrateInspirationTags(inspirations: PromptInputs['inspirations']): {
+  additionalStyles: string[];
+  additionalColors: string[];
+  additionalMaterials: string[];
+  biophiliaBoost: number;
+} {
+  if (!inspirations || inspirations.length === 0) {
+    return {
+      additionalStyles: [],
+      additionalColors: [],
+      additionalMaterials: [],
+      biophiliaBoost: 0
+    };
+  }
+
+  // Aggregate all tags from inspiration images
+  const allStyles = new Set<string>();
+  const allColors = new Set<string>();
+  const allMaterials = new Set<string>();
+  let totalBiophilia = 0;
+  let validInspirations = 0;
+
+  inspirations.forEach(inspiration => {
+    if (inspiration.tags) {
+      inspiration.tags.styles?.forEach(style => allStyles.add(style));
+      inspiration.tags.colors?.forEach(color => allColors.add(color));
+      inspiration.tags.materials?.forEach(material => allMaterials.add(material));
+      
+      if (inspiration.tags.biophilia !== undefined) {
+        totalBiophilia += inspiration.tags.biophilia;
+        validInspirations++;
+      }
+    }
+  });
+
+  const biophiliaBoost = validInspirations > 0 ? totalBiophilia / validInspirations : 0;
+
+  return {
+    additionalStyles: Array.from(allStyles),
+    additionalColors: Array.from(allColors),
+    additionalMaterials: Array.from(allMaterials),
+    biophiliaBoost: Math.max(0, Math.min(1, biophiliaBoost))
   };
 }
 

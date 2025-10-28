@@ -17,13 +17,25 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
     console.log('DialogueAudioPlayer: audioRef.current exists:', !!audioRef.current);
     if (audioRef.current) {
       console.log('DialogueAudioPlayer: Setting src and volume:', { src, volume });
+      
+      // Stop current playback before changing src
+      if (!audioRef.current.paused) {
+        audioRef.current.pause();
+      }
+      
       audioRef.current.src = src;
       audioRef.current.volume = volume;
+      
       if (autoPlay) {
         audioRef.current.currentTime = 0;
-        audioRef.current.play().catch((error) => {
-          console.error('DialogueAudioPlayer: Failed to play audio:', error);
-        });
+        // Wait for load before playing
+        audioRef.current.addEventListener('canplay', () => {
+          if (audioRef.current && autoPlay) {
+            audioRef.current.play().catch((error) => {
+              console.error('DialogueAudioPlayer: Failed to play audio:', error);
+            });
+          }
+        }, { once: true });
       }
     }
   }, [src, autoPlay]);

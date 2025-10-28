@@ -18,6 +18,20 @@ export interface SessionData {
   coreNeed?: string;
   generations: GenerationSet[];
   finalSurvey: SurveyResults;
+  // Dashboard data
+  households?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    rooms: Array<{
+      id: string;
+      name: string;
+      roomType: string;
+      sessionsCount: number;
+      lastSessionDate?: string;
+      thumbnailUrl?: string;
+    }>;
+  }>;
   surveyData?: {
     agencyScore?: number;
     satisfactionScore?: number;
@@ -51,6 +65,32 @@ export interface SessionData {
   generatedImages?: string[];
   selectedImage?: string | null;
   imageRatings?: Record<string, any>;
+  // Inspirations for personalization
+  inspirations?: Array<{
+    id: string;
+    fileId?: string;
+    url?: string;
+    tags?: {
+      styles?: string[];
+      colors?: string[];
+      materials?: string[];
+      biophilia?: number;
+    };
+    description?: string;
+    addedAt: string;
+  }>;
+  // Big Five personality test results
+  bigFive?: {
+    responses: Record<string, number>;
+    scores: {
+      openness: number;
+      conscientiousness: number;
+      extraversion: number;
+      agreeableness: number;
+      neuroticism: number;
+    };
+    completedAt: string;
+  };
 }
 
 export type FlowStep = 

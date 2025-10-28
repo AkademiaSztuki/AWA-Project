@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { GlassCard, GlassButton } from '@/components/ui';
 import { useRouter } from 'next/navigation';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { Zap, Heart, Palette, Home, Sparkles, LayoutDashboard } from 'lucide-react';
+import { Zap, Heart, Palette, Home, Sparkles } from 'lucide-react';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -61,25 +61,6 @@ const LandingScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen flex relative">
-      {/* Dashboard link for logged-in users - top right */}
-      {user && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="absolute top-6 right-6 z-50"
-        >
-          <GlassButton
-            onClick={() => router.push('/dashboard')}
-            variant="secondary"
-            size="sm"
-            className="flex items-center gap-2"
-          >
-            <LayoutDashboard size={18} />
-            {language === 'pl' ? 'Dashboard' : 'Dashboard'}
-          </GlassButton>
-        </motion.div>
-      )}
 
       {!showAuraSection && (
         <div className="flex-1 ml-[0px] flex items-center justify-center h-screen">

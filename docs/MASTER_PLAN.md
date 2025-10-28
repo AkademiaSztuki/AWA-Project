@@ -27,6 +27,19 @@ Onboarding (/flow/onboarding)
   - Consent + Demographics
   - Clean glass design ✨
   ↓
+Core Profile Wizard (/setup/profile)
+  - Lifestyle preferences
+  - Big Five Personality Test (IPIP-60) 🆕
+  - Inspiration Images Upload (1-10) 🆕
+  - Tinder swipes for style
+  - Semantic differential scales
+  - Sensory tests
+  - Nature metaphor selection
+  - Aspirational self description
+  - PRS ideal space mapping
+  - Biophilia assessment
+  - Summary & save to profile
+  ↓
 Photo Upload (/flow/photo)
   - Upload or select example
   - AI room analysis (MiniCPM)
@@ -111,6 +124,72 @@ Thanks (/flow/thanks)
 - Glassmorphism effects
 - Smooth animations (Framer Motion)
 - **NO EMOJIS, NO COLORFUL ICONS** ✨
+
+---
+
+## ✨ NEW FEATURES (IMPLEMENTED)
+
+### 1. Big Five Personality Test (IPIP-60)
+
+**Purpose**: Research-backed personality assessment for deeper personalization
+
+**Implementation**:
+- 60-item IPIP questionnaire in Polish/English
+- Reverse scoring for accurate measurement
+- 5 domains: Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism
+- Integrated into Core Profile Wizard
+- Results mapped to design preferences:
+  - **Openness** → Visual complexity, creativity
+  - **Conscientiousness** → Storage needs, organization
+  - **Extraversion** → Social spaces, lighting
+  - **Agreeableness** → Harmony, balance
+  - **Neuroticism** → Calming elements, comfort
+
+**Files**:
+- `lib/questions/ipip-60.ts` - Test items and scoring
+- `components/steps/BigFiveStep.tsx` - UI component
+- `lib/prompt-synthesis/scoring.ts` - Personality mapping
+
+### 2. Inspiration Images Upload & Analysis
+
+**Purpose**: Visual preference learning through user-uploaded images
+
+**Implementation**:
+- Upload 1-10 inspiration images
+- VLM (Gemma 3 4B-IT) analysis via Modal.com
+- Automatic tagging: styles, colors, materials, biophilia
+- Background processing (non-blocking)
+- Integration with prompt synthesis
+
+**Features**:
+- Drag & drop upload interface
+- Real-time preview with tags
+- Supabase Storage integration
+- Fallback tags if VLM fails
+- Progress indicators
+
+**Files**:
+- `app/flow/inspirations/page.tsx` - Standalone page
+- `components/steps/InspirationsStep.tsx` - Wizard step
+- `lib/vision/gamma-tagging.ts` - VLM integration
+- `apps/modal-backend/main.py` - Backend API
+
+### 3. Enhanced Prompt Synthesis
+
+**Purpose**: Integrate personality and inspiration data into image generation
+
+**New PromptWeights**:
+- `storageNeeds` - From conscientiousness
+- `harmonyLevel` - From agreeableness + low neuroticism
+- Enhanced `visualComplexity` - Combined with personality
+- Enhanced `privateVsShared` - From extraversion
+- Enhanced color/material palettes - From inspirations
+- Enhanced biophilia - From inspiration analysis
+
+**Research Foundation**:
+- Big Five mapping based on environmental psychology research
+- Inspiration analysis using computer vision best practices
+- Transparent, explainable scoring algorithms
 
 ---
 

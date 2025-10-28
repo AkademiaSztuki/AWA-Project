@@ -51,6 +51,41 @@ export interface UserProfile {
     naturePlace: string;
     aspirationalSelf?: string; // Text description of ideal self
   };
+
+  // Added: personality and inspirations (global, once, editable)
+  personality?: {
+    instrument: 'IPIP-60';
+    version?: string;
+    language?: 'pl' | 'en';
+    domains?: {
+      openness: number;
+      conscientiousness: number;
+      extraversion: number;
+      agreeableness: number;
+      neuroticism: number;
+    };
+    items?: Array<{
+      id: string; // item key
+      value: number; // raw response
+      reversed?: boolean;
+      domain: 'O' | 'C' | 'E' | 'A' | 'N';
+    }>;
+    completedAt?: string;
+  };
+
+  inspirations?: Array<{
+    fileId?: string; // storage reference (when persisted)
+    storagePath?: string;
+    tags?: {
+      styles?: string[];
+      colors?: string[];
+      materials?: string[];
+      biophilia?: number; // 0–3
+    };
+    description?: string; // short VLM description for Kontext
+    embedding?: number[]; // optional future use
+    addedAt?: string;
+  }>;
   
   profileCompletedAt?: string;
   profileVersion: number;

@@ -37,8 +37,8 @@ export const useSession = (): UseSessionReturn => {
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    // Load from sessionStorage on mount
-    const savedData = sessionStorage.getItem('aura_session');
+    // Load from localStorage on mount (persistent across browser sessions)
+    const savedData = localStorage.getItem('aura_session');
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
@@ -49,10 +49,10 @@ export const useSession = (): UseSessionReturn => {
     }
 
     // Generate user hash if not exists
-    let userHash = sessionStorage.getItem('aura_user_hash');
+    let userHash = localStorage.getItem('aura_user_hash');
     if (!userHash) {
       userHash = generateUserHash();
-      sessionStorage.setItem('aura_user_hash', userHash);
+      localStorage.setItem('aura_user_hash', userHash);
     }
 
     setSessionData(prev => ({ ...prev, userHash }));
@@ -62,7 +62,7 @@ export const useSession = (): UseSessionReturn => {
   const updateSession = (updates: Partial<SessionData>) => {
     setSessionData(prev => {
       const newData = { ...prev, ...updates };
-      sessionStorage.setItem('aura_session', JSON.stringify(newData));
+      localStorage.setItem('aura_session', JSON.stringify(newData));
       return newData;
     });
   };

@@ -64,6 +64,18 @@ interface LLMCommentResult {
   suggestions: string[];
 }
 
+interface InspirationAnalysisRequest {
+  image: string; // base64 encoded image
+}
+
+interface InspirationAnalysisResponse {
+  styles: string[];
+  colors: string[];
+  materials: string[];
+  biophilia: number; // 0-3 scale
+  description: string;
+}
+
 // Centralized generation parameters - single source of truth
 export const getGenerationParameters = (modificationType: 'initial' | 'micro' | 'macro', iterationCount: number = 0) => {
   const qualityAdjustment = Math.max(0.1, 1 - (iterationCount * 0.1));
@@ -245,10 +257,52 @@ export const useModalAPI = () => {
     }
   }, []);
 
+  const analyzeInspiration = useCallback(async (request: InspirationAnalysisRequest): Promise<InspirationAnalysisResponse> => {
+    setIsLoading(true);
+    setError(null);
+
+    const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    if (!apiBase) {
+      const msg = 'Brak konfiguracji ENDPOINTU analizy inspirations (NEXT_PUBLIC_MODAL_API_URL)';
+      setError(msg);
+      setIsLoading(false);
+      throw new Error(msg);
+    }
+    
+    try {
+      console.log('Rozpoczynam analizę inspiracji...');
+      
+      const response = await fetch(`${apiBase}/analyze-inspiration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        throw new Error(`Błąd serwera: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Analiza inspiracji zakończona! Otrzymano wynik:', result);
+      
+      setIsLoading(false);
+      return result;
+
+    } catch (err: any) {
+      console.error('Wystąpił błąd w analyzeInspiration:', err);
+      setError(err.message || 'Wystąpił nieznany błąd.');
+      setIsLoading(false);
+      throw err;
+    }
+  }, []);
+
   return {
     generateImages,
     analyzeRoom,
     generateLLMComment,
+    analyzeInspiration,
     checkHealth,
     isLoading,
     error,

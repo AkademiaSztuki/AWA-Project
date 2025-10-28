@@ -93,6 +93,16 @@ class LLMCommentResponse(BaseModel):
     comment: str
     suggestions: List[str]
 
+class InspirationAnalysisRequest(BaseModel):
+    image: str  # base64 encoded image
+
+class InspirationAnalysisResponse(BaseModel):
+    styles: List[str]
+    colors: List[str]
+    materials: List[str]
+    biophilia: int  # 0-3 scale
+    description: str
+
 @app.cls(
     image=image,
     gpu="H100",  # Changed from B200 to H100 as specified in your original code
@@ -457,6 +467,140 @@ Odpowiedz tylko komentarzem, bez dodatkowych wyjaśnień:"""
             print(f"Error generating human comment: {str(e)}")
             # Fallback to simple comment
             return f"O, widzę że dzisiaj będziemy aranżować wspólnie to wnętrze! Mam już kilka pomysłów."
+    
+    @modal.method()
+    def analyze_inspiration(self, image_bytes: bytes) -> dict:
+        """Analyze inspiration image and extract design elements using Gemma 3 4B-IT"""
+        import time
+        start_time = time.time()
+        
+        try:
+            print(f"Starting inspiration analysis... Image size: {len(image_bytes)} bytes")
+            
+            # Load and process image
+            image_start = time.time()
+            image = Image.open(BytesIO(image_bytes))
+            print(f"Image loaded in {time.time() - image_start:.2f}s - mode: {image.mode}, size: {image.size}")
+            
+            # Convert to RGB if needed
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+                print(f"Converted image to RGB mode")
+            
+            # Prepare messages for Gemma 3 multimodal API
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "image": image},
+                        {"type": "text", "text": """Przeanalizuj to zdjęcie wnętrza i wyciągnij kluczowe elementy designu.
+
+STYLE: [scandinavian, modern, industrial, bohemian, minimalist, rustic, contemporary, traditional, mid-century, art-deco, etc.]
+KOLORY: [warm neutrals, cool grays, earth tones, pastels, bold colors, monochrome, etc.]
+MATERIAŁY: [wood, metal, glass, stone, fabric, leather, concrete, ceramic, etc.]
+BIOPHILIA: [0-3 gdzie 0=brak roślin, 1=minimalne, 2=umiarkowane, 3=dużo roślin/natury]
+OPIS: [krótki opis stylu i atmosfery w języku angielskim dla AI prompt]
+
+Format odpowiedzi:
+STYLE: [lista stylów oddzielonych przecinkami]
+KOLORY: [lista kolorów oddzielonych przecinkami]  
+MATERIAŁY: [lista materiałów oddzielonych przecinkami]
+BIOPHILIA: [liczba 0-3]
+OPIS: [krótki opis w języku angielskim]"""}
+                    ]
+                }
+            ]
+            
+            # Apply chat template and process inputs
+            inputs = self.processor.apply_chat_template(
+                messages, 
+                add_generation_prompt=True, 
+                tokenize=True,
+                return_dict=True, 
+                return_tensors="pt"
+            ).to(self.model.device)
+            
+            # Generate response with optimized parameters for speed
+            generation_start = time.time()
+            print("Starting Gemma 3 4B-IT inference for inspiration analysis...")
+            
+            input_len = inputs["input_ids"].shape[-1]
+            
+            with torch.no_grad():
+                generation = self.model.generate(
+                    **inputs,
+                    max_new_tokens=150,
+                    do_sample=False,  # Greedy decoding for speed
+                    temperature=0.1,
+                    top_p=0.9,
+                    pad_token_id=self.processor.tokenizer.eos_token_id
+                )
+                generation = generation[0][input_len:]
+            
+            # Decode response
+            response = self.processor.decode(generation, skip_special_tokens=True).strip()
+            print(f"Gemma 3 response: {response}")
+            
+            # Parse response
+            styles = []
+            colors = []
+            materials = []
+            biophilia = 1
+            description = "Interior design inspiration"
+            
+            for line in response.split('\n'):
+                line = line.strip()
+                if line.startswith("STYLE:"):
+                    styles_raw = line.replace("STYLE:", "").strip()
+                    styles = [s.strip() for s in styles_raw.split(',') if s.strip()]
+                elif line.startswith("KOLORY:"):
+                    colors_raw = line.replace("KOLORY:", "").strip()
+                    colors = [c.strip() for c in colors_raw.split(',') if c.strip()]
+                elif line.startswith("MATERIAŁY:"):
+                    materials_raw = line.replace("MATERIAŁY:", "").strip()
+                    materials = [m.strip() for m in materials_raw.split(',') if m.strip()]
+                elif line.startswith("BIOPHILIA:"):
+                    biophilia_raw = line.replace("BIOPHILIA:", "").strip()
+                    try:
+                        biophilia = max(0, min(3, int(biophilia_raw)))
+                    except:
+                        biophilia = 1
+                elif line.startswith("OPIS:"):
+                    description = line.replace("OPIS:", "").strip()
+            
+            # Fallback values if parsing failed
+            if not styles:
+                styles = ["modern"]
+            if not colors:
+                colors = ["neutral"]
+            if not materials:
+                materials = ["wood"]
+            
+            total_time = time.time() - start_time
+            result = {
+                "styles": styles,
+                "colors": colors,
+                "materials": materials,
+                "biophilia": biophilia,
+                "description": description
+            }
+            print(f"Total inspiration analysis time: {total_time:.2f}s")
+            print(f"Returning result: {result}")
+            return result
+            
+        except Exception as e:
+            print(f"Gemma 3 inspiration analysis error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback response
+            return {
+                "styles": ["modern"],
+                "colors": ["neutral"],
+                "materials": ["wood"],
+                "biophilia": 1,
+                "description": "Modern interior design inspiration"
+            }
 
 # Initialize model instances
 flux_model = FluxKontextModel()
@@ -661,6 +805,43 @@ async def generate_llm_comment(request: LLMCommentRequest):
 @web_app.options("/llm-comment")
 async def llm_comment_options():
     """Handle preflight request for LLM comment"""
+    return {"message": "OK"}
+
+@web_app.post("/analyze-inspiration", response_model=InspirationAnalysisResponse)
+async def analyze_inspiration(request: InspirationAnalysisRequest):
+    """Analyze inspiration image and extract design elements using Gemma 3 4B-IT"""
+    try:
+        print("Received inspiration analysis request")
+        
+        # Decode base64 image
+        image_bytes = base64.b64decode(request.image)
+        print(f"Image decoded, size: {len(image_bytes)} bytes")
+        
+        # Analyze inspiration using Gemma 3 4B-IT with timeout
+        import asyncio
+        result = await asyncio.wait_for(
+            gemma3_vision_model.analyze_inspiration.remote.aio(image_bytes),
+            timeout=180.0  # 3 minute timeout (H100 cold start can take ~60-90s)
+        )
+        
+        return InspirationAnalysisResponse(
+            styles=result["styles"],
+            colors=result["colors"],
+            materials=result["materials"],
+            biophilia=result["biophilia"],
+            description=result["description"]
+        )
+        
+    except asyncio.TimeoutError:
+        print("Inspiration analysis timed out after 3 minutes")
+        raise HTTPException(status_code=408, detail="Analysis timed out - model may still be loading (cold start)")
+    except Exception as e:
+        print(f"API error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@web_app.options("/analyze-inspiration")
+async def analyze_inspiration_options():
+    """Handle preflight request for inspiration analysis"""
     return {"message": "OK"}
 
 # =========================================
