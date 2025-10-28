@@ -121,7 +121,13 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    
+    // Fix for incorrect dev URL in Vercel
+    if (apiBase.includes('-dev')) {
+      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    }
+    
     if (!apiBase) {
       const msg = 'Brak konfiguracji ENDPOINTU generacji (NEXT_PUBLIC_MODAL_API_URL)';
       setError(msg);
@@ -166,7 +172,13 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    
+    // Fix for incorrect dev URL in Vercel
+    if (apiBase.includes('-dev')) {
+      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    }
+    
     if (!apiBase) {
       const msg = 'Brak konfiguracji ENDPOINTU analizy (NEXT_PUBLIC_MODAL_API_URL)';
       setError(msg);
@@ -205,7 +217,14 @@ export const useModalAPI = () => {
 
   const checkHealth = async () => {
     try {
-      const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      // Use correct API URL, fallback to default if env var is wrong
+      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      
+      // Fix for incorrect dev URL in Vercel
+      if (apiBase.includes('-dev')) {
+        apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      }
+      
       if (!apiBase) {
         console.log('Brak NEXT_PUBLIC_MODAL_API_URL');
         return false;
@@ -227,7 +246,13 @@ export const useModalAPI = () => {
     setError(null);
     
     try {
-      const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      
+      // Fix for incorrect dev URL in Vercel
+      if (apiBase.includes('-dev')) {
+        apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      }
+      
       const response = await fetch(`${apiBase}/llm-comment`, {
         method: 'POST',
         headers: {
@@ -261,7 +286,13 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    
+    // Fix for incorrect dev URL in Vercel
+    if (apiBase.includes('-dev')) {
+      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    }
+    
     if (!apiBase) {
       const msg = 'Brak konfiguracji ENDPOINTU analizy inspirations (NEXT_PUBLIC_MODAL_API_URL)';
       setError(msg);

@@ -663,6 +663,8 @@ web_app.add_middleware(
         "http://localhost:3003",
         "https://aura-design.vercel.app",
         "https://aura-design-git-main-akademiasztuki.vercel.app",
+        "https://www.project-ida.com",
+        "https://project-ida.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -684,9 +686,24 @@ async def root():
     """Root endpoint"""
     return {"message": "Aura FLUX API", "status": "running", "model": "flux-1-kontext"}
 
-@web_app.get("/health")
-async def health_check():
+@app.function(
+    image=image,
+    timeout=60,
+    secrets=[modal.Secret.from_name("huggingface-secret-new")],
+)
+@modal.fastapi_endpoint(method="GET", label="aura-flux-api")
+def health_check():
     """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "model": "flux-1-kontext",
+        "vision_model": "gemma-3-4b-it",
+        "legacy_models": "minicpm-o-2.6 (commented out), florence-2 (hidden but available)"
+    }
+
+@web_app.get("/health")
+async def health_check_web():
+    """Health check endpoint for web app"""
     return {
         "status": "healthy",
         "model": "flux-1-kontext",
