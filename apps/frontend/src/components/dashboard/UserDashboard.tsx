@@ -17,9 +17,18 @@ import {
   Heart,
   Sparkles,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
+  User,
+  Eye
 } from 'lucide-react';
 import Image from 'next/image';
+import {
+  VisualDNASection,
+  CoreNeedsSection,
+  RoomAnalysisSection,
+  InspirationsPreviewSection,
+  GenerationStatsSection
+} from '@/components/dashboard/ProfileSections';
 
 interface Space {
   id: string;
@@ -283,8 +292,40 @@ export function UserDashboard() {
             </div>
           </motion.div>
 
-          {/* Big Five Results */}
+          {/* User Profile Overview */}
+          <ProfileOverview sessionData={sessionData} />
+
+          {/* Big Five Results - Enhanced with details link */}
           <BigFiveResults userHash={(sessionData as any)?.userHash} />
+
+          {/* Visual DNA */}
+          <VisualDNASection visualDNA={(sessionData as any)?.visualDNA} />
+
+          {/* Core Needs / Laddering */}
+          <CoreNeedsSection ladderResults={(sessionData as any)?.ladderResults} />
+
+          {/* Room Analysis */}
+          <RoomAnalysisSection 
+            roomAnalysis={(sessionData as any)?.roomAnalysis}
+            roomImage={(sessionData as any)?.roomImage}
+          />
+
+          {/* Inspirations Preview */}
+          <InspirationsPreviewSection 
+            inspirations={(sessionData as any)?.inspirations || []}
+            onViewAll={() => {
+              const spaces = (sessionData as any)?.spaces || [];
+              if (spaces.length > 0) {
+                router.push(`/space/${spaces[0].id}`);
+              }
+            }}
+          />
+
+          {/* Generation Stats */}
+          <GenerationStatsSection 
+            generations={(sessionData as any)?.generations || []}
+            generatedImages={(sessionData as any)?.generatedImages}
+          />
 
           {/* Spaces List */}
           {isLoading ? (
@@ -336,6 +377,81 @@ export function UserDashboard() {
 }
 
 // ========== SUB-COMPONENTS ==========
+
+function ProfileOverview({ sessionData }: { sessionData: any }) {
+  const { language } = useLanguage();
+  const router = useRouter();
+
+  const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
+
+  // Calculate profile completion
+  const hasVisualDNA = !!sessionData?.visualDNA;
+  const hasLadder = !!sessionData?.ladderResults;
+  const hasBigFive = !!sessionData?.bigFive;
+  const hasInspirations = sessionData?.inspirations?.length > 0;
+  const hasRoom = !!sessionData?.roomImage;
+
+  const completedItems = [hasVisualDNA, hasLadder, hasBigFive, hasInspirations, hasRoom].filter(Boolean).length;
+  const totalItems = 5;
+  const completionPercentage = Math.round((completedItems / totalItems) * 100);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="mb-6"
+    >
+      <GlassCard className="p-6">
+        <div className="flex items-center gap-4 mb-4">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+            <User size={32} className="text-white" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-2xl font-nasalization text-graphite">
+              {t('Twój Profil', 'Your Profile')}
+            </h2>
+            <p className="text-sm text-silver-dark font-modern">
+              {t(`Ukończono ${completionPercentage}%`, `${completionPercentage}% Complete`)}
+            </p>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="w-full bg-white/20 rounded-full h-3 mb-4">
+          <div
+            className="bg-gradient-to-r from-gold to-champagne h-3 rounded-full transition-all duration-1000"
+            style={{ width: `${completionPercentage}%` }}
+          />
+        </div>
+
+        {/* Profile Items */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <ProfileItem completed={hasVisualDNA} label={t('Visual DNA', 'Visual DNA')} />
+          <ProfileItem completed={hasLadder} label={t('Core Needs', 'Core Needs')} />
+          <ProfileItem completed={hasBigFive} label={t('Big Five', 'Big Five')} />
+          <ProfileItem completed={hasInspirations} label={t('Inspiracje', 'Inspirations')} />
+          <ProfileItem completed={hasRoom} label={t('Pokój', 'Room')} />
+        </div>
+      </GlassCard>
+    </motion.div>
+  );
+}
+
+function ProfileItem({ completed, label }: { completed: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+        completed ? 'bg-green-500' : 'bg-white/20'
+      }`}>
+        {completed && <span className="text-white text-xs">✓</span>}
+      </div>
+      <span className={`font-modern ${completed ? 'text-graphite' : 'text-silver-dark'}`}>
+        {label}
+      </span>
+    </div>
+  );
+}
 
 function SpaceCard({ space, index, onOpenSpace }: {
   space: Space;
@@ -467,6 +583,7 @@ function EmptyState({ onAddSpace }: { onAddSpace: () => void }) {
 
 function BigFiveResults({ userHash }: { userHash?: string }) {
   const { language } = useLanguage();
+  const router = useRouter();
   const [bigFiveData, setBigFiveData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState<boolean>(true);
 
@@ -517,12 +634,32 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="mb-8"
+      className="mb-6"
     >
-      <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4">
-        {language === 'pl' ? 'Twój Profil Osobowości' : 'Your Personality Profile'}
-      </h2>
-      <GlassCard className="p-6">
+      <GlassCard 
+        className="p-6 cursor-pointer hover:border-gold/50 transition-all duration-300"
+        onClick={() => router.push('/dashboard/personality')}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+              <User size={20} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-nasalization text-graphite">
+                {language === 'pl' ? 'Profil Osobowości' : 'Personality Profile'}
+              </h3>
+              <p className="text-sm text-silver-dark font-modern">
+                {language === 'pl' ? 'Big Five (IPIP-60)' : 'Big Five (IPIP-60)'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-gold">
+            <Eye size={20} />
+            <ChevronRight size={20} />
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {Object.entries(bigFiveData.scores).map(([domain, score], index) => (
             <motion.div
@@ -549,7 +686,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
         </div>
         <div className="mt-4 text-center">
           <p className="text-sm text-silver-dark font-modern">
-            {language === 'pl' ? 'Wyniki testu Big Five - używane do personalizacji wnętrz' : 'Big Five test results - used for interior personalization'}
+            {language === 'pl' ? 'Kliknij aby zobaczyć szczegółową analizę' : 'Click to see detailed analysis'}
           </p>
         </div>
       </GlassCard>
