@@ -296,8 +296,10 @@ export function InspirationsPreviewSection({ inspirations, onViewAll }: { inspir
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
       className="mb-6"
+      onClick={onViewAll}
+      style={{ cursor: onViewAll ? 'pointer' : 'default' }}
     >
-      <GlassCard className="p-6 cursor-pointer hover:border-gold/50 transition-all duration-300" onClick={onViewAll}>
+      <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center">

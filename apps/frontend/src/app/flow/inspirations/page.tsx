@@ -12,6 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
 import { analyzeInspirationsWithGamma, type InspirationTaggingResult } from "@/lib/vision/gamma-tagging";
 import { supabase } from "@/lib/supabase";
+import { addMultipleInspirationsToSpace } from "@/lib/spaces";
 import { 
   Upload, 
   X, 
