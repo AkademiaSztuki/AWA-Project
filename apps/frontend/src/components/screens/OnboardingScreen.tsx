@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { GlassCard, GlassButton } from '@/components/ui';
+import { GlassCard, GlassButton, CountrySelect } from '@/components/ui';
 import { AwaContainer } from '@/components/awa/AwaContainer';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { useRouter } from 'next/navigation';
@@ -17,11 +17,12 @@ const OnboardingScreen: React.FC = () => {
   const [demographics, setDemographics] = useState({
     ageRange: '',
     gender: '',
-    education: ''
+    education: '',
+    country: ''
   });
   const { updateSessionData, sessionData } = useSessionData();
 
-  const canProceedDemographics = demographics.ageRange && demographics.gender && demographics.education;
+  const canProceedDemographics = demographics.ageRange && demographics.gender && demographics.education && demographics.country;
 
   const handleConsentSubmit = () => {
     console.log('[Onboarding] Consent submit clicked');
@@ -190,6 +191,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
       age: 'Przedział wiekowy',
       gender: 'Płeć',
       education: 'Wykształcenie',
+      country: 'Kraj',
       back: 'Wstecz',
       continue: 'Kontynuuj'
     },
@@ -199,6 +201,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
       age: 'Age range',
       gender: 'Gender',
       education: 'Education level',
+      country: 'Country',
       back: 'Back',
       continue: 'Continue'
     }
@@ -298,6 +301,17 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Country */}
+          <div>
+            <label className="block text-sm font-semibold text-graphite mb-2">
+              {texts.country}
+            </label>
+            <CountrySelect
+              value={data.country}
+              onChange={(code: string) => onUpdate({ ...data, country: code })}
+            />
           </div>
         </div>
 
