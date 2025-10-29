@@ -36,16 +36,6 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'o2',
     text: {
-      pl: 'Mam trudności z rozumieniem abstrakcyjnych idei.',
-      en: 'I have difficulty understanding abstract ideas.'
-    },
-    reverse: true,
-    domain: 'openness',
-    facet: 'ideas'
-  },
-  {
-    id: 'o3',
-    text: {
       pl: 'Mam żywą wyobraźnię.',
       en: 'I have a vivid imagination.'
     },
@@ -54,7 +44,67 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
     facet: 'fantasy'
   },
   {
+    id: 'o3',
+    text: {
+      pl: 'Mam doskonałe pomysły.',
+      en: 'I have excellent ideas.'
+    },
+    reverse: false,
+    domain: 'openness',
+    facet: 'ideas'
+  },
+  {
     id: 'o4',
+    text: {
+      pl: 'Szybko rozumiem różne sprawy.',
+      en: 'I am quick to understand things.'
+    },
+    reverse: false,
+    domain: 'openness',
+    facet: 'ideas'
+  },
+  {
+    id: 'o5',
+    text: {
+      pl: 'Używam trudnych słów.',
+      en: 'I use difficult words.'
+    },
+    reverse: false,
+    domain: 'openness',
+    facet: 'ideas'
+  },
+  {
+    id: 'o6',
+    text: {
+      pl: 'Poświęcam czas na refleksję.',
+      en: 'I spend time reflecting on things.'
+    },
+    reverse: false,
+    domain: 'openness',
+    facet: 'ideas'
+  },
+  {
+    id: 'o7',
+    text: {
+      pl: 'Jestem pełen pomysłów.',
+      en: 'I am full of ideas.'
+    },
+    reverse: false,
+    domain: 'openness',
+    facet: 'ideas'
+  },
+  {
+    id: 'o8',
+    text: {
+      pl: 'Mam trudności z rozumieniem abstrakcyjnych idei.',
+      en: 'I have difficulty understanding abstract ideas.'
+    },
+    reverse: true,
+    domain: 'openness',
+    facet: 'ideas'
+  },
+  {
+    id: 'o9',
     text: {
       pl: 'Nie jestem zainteresowany abstrakcyjnymi ideami.',
       en: 'I am not interested in abstract ideas.'
@@ -64,109 +114,69 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
     facet: 'ideas'
   },
   {
-    id: 'o5',
+    id: 'o10',
     text: {
-      pl: 'Mam rzadko fantazje.',
-      en: 'I rarely have fantasies.'
+      pl: 'Nie mam dobrej wyobraźni.',
+      en: 'I do not have a good imagination.'
     },
     reverse: true,
     domain: 'openness',
     facet: 'fantasy'
   },
   {
-    id: 'o6',
-    text: {
-      pl: 'Poezja ma na mnie mały lub żaden wpływ.',
-      en: 'Poetry has little or no effect on me.'
-    },
-    reverse: true,
-    domain: 'openness',
-    facet: 'aesthetics'
-  },
-  {
-    id: 'o7',
-    text: {
-      pl: 'Często myślę o filozoficznych problemach.',
-      en: 'I often think about philosophical problems.'
-    },
-    reverse: false,
-    domain: 'openness',
-    facet: 'ideas'
-  },
-  {
-    id: 'o8',
-    text: {
-      pl: 'Lubię słuchać muzyki.',
-      en: 'I enjoy listening to music.'
-    },
-    reverse: false,
-    domain: 'openness',
-    facet: 'aesthetics'
-  },
-  {
-    id: 'o9',
-    text: {
-      pl: 'Nie widzę sensu w poezji.',
-      en: 'I see no point in poetry.'
-    },
-    reverse: true,
-    domain: 'openness',
-    facet: 'aesthetics'
-  },
-  {
-    id: 'o10',
-    text: {
-      pl: 'Lubię sztukę.',
-      en: 'I enjoy art.'
-    },
-    reverse: false,
-    domain: 'openness',
-    facet: 'aesthetics'
-  },
-  {
     id: 'o11',
     text: {
-      pl: 'Często zastanawiam się nad sensem życia.',
-      en: 'I often ponder the meaning of life.'
+      pl: 'Mam trudności z wymyślaniem nowych rzeczy.',
+      en: 'I have difficulty imagining things.'
     },
-    reverse: false,
+    reverse: true,
     domain: 'openness',
-    facet: 'ideas'
+    facet: 'fantasy'
   },
   {
     id: 'o12',
     text: {
-      pl: 'Lubię eksperymentować z nowymi rzeczami.',
-      en: 'I like to experiment with new things.'
+      pl: 'Nie jestem zainteresowany abstrakcyjnymi spekulacjami.',
+      en: 'I am not interested in theoretical discussions.'
     },
-    reverse: false,
+    reverse: true,
     domain: 'openness',
-    facet: 'actions'
+    facet: 'ideas'
   },
 
   // CONSCIENTIOUSNESS (12 items)
   {
     id: 'c1',
     text: {
-      pl: 'Zawsze przygotowuję się do ważnych spotkań.',
-      en: 'I always prepare for important meetings.'
+      pl: 'Zawsze jestem przygotowany.',
+      en: 'I am always prepared.'
+    },
+    reverse: false,
+    domain: 'conscientiousness',
+    facet: 'competence'
+  },
+  {
+    id: 'c2',
+    text: {
+      pl: 'Zwracam uwagę na szczegóły.',
+      en: 'I pay attention to details.'
+    },
+    reverse: false,
+    domain: 'conscientiousness',
+    facet: 'dutifulness'
+  },
+  {
+    id: 'c3',
+    text: {
+      pl: 'Wykonuję obowiązki od razu.',
+      en: 'I get chores done right away.'
     },
     reverse: false,
     domain: 'conscientiousness',
     facet: 'self-discipline'
   },
   {
-    id: 'c2',
-    text: {
-      pl: 'Często zapominam o oddawaniu rzeczy na miejsce.',
-      en: 'I often forget to put things back in their proper place.'
-    },
-    reverse: true,
-    domain: 'conscientiousness',
-    facet: 'order'
-  },
-  {
-    id: 'c3',
+    id: 'c4',
     text: {
       pl: 'Lubię porządek.',
       en: 'I like order.'
@@ -176,90 +186,80 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
     facet: 'order'
   },
   {
-    id: 'c4',
-    text: {
-      pl: 'Często zapominam o tym, co chciałem zrobić.',
-      en: 'I often forget what I wanted to do.'
-    },
-    reverse: true,
-    domain: 'conscientiousness',
-    facet: 'self-discipline'
-  },
-  {
     id: 'c5',
     text: {
-      pl: 'Zawsze kończę to, co zacząłem.',
-      en: 'I always finish what I start.'
-    },
-    reverse: false,
-    domain: 'conscientiousness',
-    facet: 'self-discipline'
-  },
-  {
-    id: 'c6',
-    text: {
-      pl: 'Często robię rzeczy w pośpiechu.',
-      en: 'I often do things in a hurry.'
-    },
-    reverse: true,
-    domain: 'conscientiousness',
-    facet: 'self-discipline'
-  },
-  {
-    id: 'c7',
-    text: {
-      pl: 'Jestem bardzo dokładny w swojej pracy.',
-      en: 'I am very careful in my work.'
-    },
-    reverse: false,
-    domain: 'conscientiousness',
-    facet: 'self-discipline'
-  },
-  {
-    id: 'c8',
-    text: {
-      pl: 'Często nie udaje mi się zrobić tego, co zaplanowałem.',
-      en: 'I often fail to do what I planned.'
-    },
-    reverse: true,
-    domain: 'conscientiousness',
-    facet: 'self-discipline'
-  },
-  {
-    id: 'c9',
-    text: {
-      pl: 'Lubię mieć plan na każdy dzień.',
-      en: 'I like to have a plan for each day.'
+      pl: 'Postępuję zgodnie z harmonogramem.',
+      en: 'I follow a schedule.'
     },
     reverse: false,
     domain: 'conscientiousness',
     facet: 'order'
   },
   {
+    id: 'c6',
+    text: {
+      pl: 'Jestem wymagający w swojej pracy.',
+      en: 'I am exacting in my work.'
+    },
+    reverse: false,
+    domain: 'conscientiousness',
+    facet: 'achievement-striving'
+  },
+  {
+    id: 'c7',
+    text: {
+      pl: 'Zostawiam swoje rzeczy wszędzie.',
+      en: 'I leave my belongings around.'
+    },
+    reverse: true,
+    domain: 'conscientiousness',
+    facet: 'order'
+  },
+  {
+    id: 'c8',
+    text: {
+      pl: 'Często robię bałagan.',
+      en: 'I make a mess of things.'
+    },
+    reverse: true,
+    domain: 'conscientiousness',
+    facet: 'order'
+  },
+  {
+    id: 'c9',
+    text: {
+      pl: 'Często zapominam o oddawaniu rzeczy na miejsce.',
+      en: 'I often forget to put things back in their proper place.'
+    },
+    reverse: true,
+    domain: 'conscientiousness',
+    facet: 'order'
+  },
+  {
     id: 'c10',
     text: {
-      pl: 'Często odkładam rzeczy na później.',
-      en: 'I often put things off until later.'
+      pl: 'Uchylam się od swoich obowiązków.',
+      en: 'I shirk my duties.'
+    },
+    reverse: true,
+    domain: 'conscientiousness',
+    facet: 'dutifulness'
+  },
+  {
+    id: 'c11',
+    text: {
+      pl: 'Tracę czas.',
+      en: 'I waste my time.'
     },
     reverse: true,
     domain: 'conscientiousness',
     facet: 'self-discipline'
   },
   {
-    id: 'c11',
-    text: {
-      pl: 'Zawsze dotrzymuję obietnic.',
-      en: 'I always keep my promises.'
-    },
-    reverse: false,
-    domain: 'conscientiousness',
-    facet: 'self-discipline'
-  },
-  {
     id: 'c12',
     text: {
-      pl: 'Często nie udaje mi się dotrzymać terminów.',
-      en: 'I often fail to meet deadlines.'
+      pl: 'Trudno mi zabrać się do pracy.',
+      en: 'I find it difficult to get down to work.'
     },
     reverse: true,
     domain: 'conscientiousness',
@@ -270,8 +270,8 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'e1',
     text: {
-      pl: 'Czuję się komfortowo wśród ludzi.',
-      en: 'I feel comfortable around people.'
+      pl: 'Jestem duszą towarzystwa.',
+      en: 'I am the life of the party.'
     },
     reverse: false,
     domain: 'extraversion',
@@ -280,18 +280,18 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'e2',
     text: {
-      pl: 'Unikam tłumów.',
-      en: 'I avoid crowds.'
+      pl: 'Czuję się komfortowo wśród ludzi.',
+      en: 'I feel comfortable around people.'
     },
-    reverse: true,
+    reverse: false,
     domain: 'extraversion',
-    facet: 'gregariousness'
+    facet: 'warmth'
   },
   {
     id: 'e3',
     text: {
-      pl: 'Lubię być w centrum uwagi.',
-      en: 'I like to be the center of attention.'
+      pl: 'Rozpoczynam rozmowy.',
+      en: 'I start conversations.'
     },
     reverse: false,
     domain: 'extraversion',
@@ -300,28 +300,28 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'e4',
     text: {
-      pl: 'Często czuję się niekomfortowo w towarzystwie innych.',
-      en: 'I often feel uncomfortable around others.'
-    },
-    reverse: true,
-    domain: 'extraversion',
-    facet: 'gregariousness'
-  },
-  {
-    id: 'e5',
-    text: {
-      pl: 'Lubię spotykać nowych ludzi.',
-      en: 'I like to meet new people.'
+      pl: 'Rozmawiam z wieloma różnymi ludźmi na przyjęciach.',
+      en: 'I talk to a lot of different people at parties.'
     },
     reverse: false,
     domain: 'extraversion',
     facet: 'gregariousness'
   },
   {
+    id: 'e5',
+    text: {
+      pl: 'Nie przeszkadza mi bycie w centrum uwagi.',
+      en: 'I don\'t mind being the center of attention.'
+    },
+    reverse: false,
+    domain: 'extraversion',
+    facet: 'assertiveness'
+  },
+  {
     id: 'e6',
     text: {
-      pl: 'Często czuję się samotny.',
-      en: 'I often feel lonely.'
+      pl: 'Nie rozmawiam dużo.',
+      en: 'I don\'t talk a lot.'
     },
     reverse: true,
     domain: 'extraversion',
@@ -330,48 +330,48 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'e7',
     text: {
-      pl: 'Lubię być w towarzystwie.',
-      en: 'I like to be around people.'
-    },
-    reverse: false,
-    domain: 'extraversion',
-    facet: 'gregariousness'
-  },
-  {
-    id: 'e8',
-    text: {
-      pl: 'Często czuję się nieśmiały.',
-      en: 'I often feel shy.'
+      pl: 'Trzymam się w tle.',
+      en: 'I keep in the background.'
     },
     reverse: true,
     domain: 'extraversion',
     facet: 'assertiveness'
   },
   {
+    id: 'e8',
+    text: {
+      pl: 'Mam niewiele do powiedzenia.',
+      en: 'I have little to say.'
+    },
+    reverse: true,
+    domain: 'extraversion',
+    facet: 'gregariousness'
+  },
+  {
     id: 'e9',
     text: {
-      pl: 'Lubię być w centrum wydarzeń.',
-      en: 'I like to be in the center of events.'
+      pl: 'Nie lubię zwracać na siebie uwagi.',
+      en: 'I don\'t like to draw attention to myself.'
     },
-    reverse: false,
+    reverse: true,
     domain: 'extraversion',
     facet: 'assertiveness'
   },
   {
     id: 'e10',
     text: {
-      pl: 'Często czuję się wycofany.',
-      en: 'I often feel withdrawn.'
+      pl: 'Jestem cichy w obecności nieznajomych.',
+      en: 'I am quiet around strangers.'
     },
     reverse: true,
     domain: 'extraversion',
-    facet: 'gregariousness'
+    facet: 'warmth'
   },
   {
     id: 'e11',
     text: {
-      pl: 'Lubię być w towarzystwie przyjaciół.',
-      en: 'I like to be around friends.'
+      pl: 'Dużo rozmawiam ze znajomymi.',
+      en: 'I talk a lot around familiar people.'
     },
     reverse: false,
     domain: 'extraversion',
@@ -380,20 +380,20 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'e12',
     text: {
-      pl: 'Często czuję się niepewnie w towarzystwie.',
-      en: 'I often feel insecure around others.'
+      pl: 'Wycofuję się z kontaktów społecznych.',
+      en: 'I find it hard to approach others.'
     },
     reverse: true,
     domain: 'extraversion',
-    facet: 'assertiveness'
+    facet: 'warmth'
   },
 
   // AGREEABLENESS (12 items)
   {
     id: 'a1',
     text: {
-      pl: 'Często czuję współczucie dla innych.',
-      en: 'I often feel sympathy for others.'
+      pl: 'Mam miękkie serce.',
+      en: 'I have a soft heart.'
     },
     reverse: false,
     domain: 'agreeableness',
@@ -402,8 +402,8 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'a2',
     text: {
-      pl: 'Często martwię się problemami innych.',
-      en: 'I often worry about others\' problems.'
+      pl: 'Współczuję uczuciom innych.',
+      en: 'I sympathize with others\' feelings.'
     },
     reverse: false,
     domain: 'agreeableness',
@@ -412,110 +412,110 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'a3',
     text: {
-      pl: 'Lubię pomagać innym.',
-      en: 'I like to help others.'
+      pl: 'Czuję emocje innych ludzi.',
+      en: 'I feel others\' emotions.'
     },
     reverse: false,
     domain: 'agreeableness',
-    facet: 'altruism'
+    facet: 'tender-mindedness'
   },
   {
     id: 'a4',
     text: {
-      pl: 'Często czuję się zaniepokojony problemami innych.',
-      en: 'I often feel concerned about others\' problems.'
+      pl: 'Poświęcam czas innym.',
+      en: 'I take time out for others.'
     },
     reverse: false,
     domain: 'agreeableness',
-    facet: 'tender-mindedness'
+    facet: 'altruism'
   },
   {
     id: 'a5',
     text: {
-      pl: 'Lubię być miły dla innych.',
-      en: 'I like to be kind to others.'
+      pl: 'Nie przejmuję się zbytnio innymi.',
+      en: 'I feel little concern for others.'
     },
-    reverse: false,
+    reverse: true,
     domain: 'agreeableness',
-    facet: 'altruism'
+    facet: 'tender-mindedness'
   },
   {
     id: 'a6',
     text: {
-      pl: 'Często czuję się zaniepokojony problemami innych.',
-      en: 'I often feel concerned about others\' problems.'
+      pl: 'Sprawiam, że ludzie czują się swobodnie.',
+      en: 'I make people feel at ease.'
     },
     reverse: false,
     domain: 'agreeableness',
-    facet: 'tender-mindedness'
+    facet: 'trust'
   },
   {
     id: 'a7',
     text: {
-      pl: 'Lubię być miły dla innych.',
-      en: 'I like to be kind to others.'
+      pl: 'Nie jestem naprawdę zainteresowany innymi.',
+      en: 'I am not really interested in others.'
     },
-    reverse: false,
-    domain: 'agreeableness',
-    facet: 'altruism'
-  },
-  {
-    id: 'a8',
-    text: {
-      pl: 'Często czuję się zaniepokojony problemami innych.',
-      en: 'I often feel concerned about others\' problems.'
-    },
-    reverse: false,
+    reverse: true,
     domain: 'agreeableness',
     facet: 'tender-mindedness'
   },
   {
+    id: 'a8',
+    text: {
+      pl: 'Obrażam ludzi.',
+      en: 'I insult people.'
+    },
+    reverse: true,
+    domain: 'agreeableness',
+    facet: 'compliance'
+  },
+  {
     id: 'a9',
     text: {
-      pl: 'Lubię być miły dla innych.',
-      en: 'I like to be kind to others.'
+      pl: 'Nie interesują mnie problemy innych ludzi.',
+      en: 'I am not interested in other people\'s problems.'
     },
-    reverse: false,
+    reverse: true,
     domain: 'agreeableness',
-    facet: 'altruism'
+    facet: 'tender-mindedness'
   },
   {
     id: 'a10',
     text: {
-      pl: 'Często czuję się zaniepokojony problemami innych.',
-      en: 'I often feel concerned about others\' problems.'
+      pl: 'Jestem obojętny na uczucia innych.',
+      en: 'I am indifferent to the feelings of others.'
     },
-    reverse: false,
+    reverse: true,
     domain: 'agreeableness',
     facet: 'tender-mindedness'
   },
   {
     id: 'a11',
     text: {
-      pl: 'Lubię być miły dla innych.',
-      en: 'I like to be kind to others.'
+      pl: 'Traktuję ludzi z szacunkiem.',
+      en: 'I treat people with respect.'
     },
     reverse: false,
     domain: 'agreeableness',
-    facet: 'altruism'
+    facet: 'compliance'
   },
   {
     id: 'a12',
     text: {
-      pl: 'Często czuję się zaniepokojony problemami innych.',
-      en: 'I often feel concerned about others\' problems.'
+      pl: 'Staram się być uprzejmy dla wszystkich, których spotykam.',
+      en: 'I try to be courteous to everyone I meet.'
     },
     reverse: false,
     domain: 'agreeableness',
-    facet: 'tender-mindedness'
+    facet: 'compliance'
   },
 
   // NEUROTICISM (12 items)
   {
     id: 'n1',
     text: {
-      pl: 'Często czuję się zestresowany.',
-      en: 'I often feel stressed.'
+      pl: 'Łatwo się stresuję.',
+      en: 'I get stressed out easily.'
     },
     reverse: false,
     domain: 'neuroticism',
@@ -524,8 +524,8 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'n2',
     text: {
-      pl: 'Często czuję się zaniepokojony.',
-      en: 'I often feel worried.'
+      pl: 'Martwię się różnymi sprawami.',
+      en: 'I worry about things.'
     },
     reverse: false,
     domain: 'neuroticism',
@@ -534,58 +534,58 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'n3',
     text: {
-      pl: 'Często czuję się smutny.',
-      en: 'I often feel sad.'
+      pl: 'Łatwo mnie wyprowadzić z równowagi.',
+      en: 'I am easily disturbed.'
+    },
+    reverse: false,
+    domain: 'neuroticism',
+    facet: 'vulnerability'
+  },
+  {
+    id: 'n4',
+    text: {
+      pl: 'Łatwo się denerwuję.',
+      en: 'I get upset easily.'
+    },
+    reverse: false,
+    domain: 'neuroticism',
+    facet: 'vulnerability'
+  },
+  {
+    id: 'n5',
+    text: {
+      pl: 'Często zmieniam nastrój.',
+      en: 'I change my mood a lot.'
     },
     reverse: false,
     domain: 'neuroticism',
     facet: 'depression'
   },
   {
-    id: 'n4',
+    id: 'n6',
     text: {
-      pl: 'Często czuję się zły.',
-      en: 'I often feel angry.'
+      pl: 'Mam częste zmiany nastroju.',
+      en: 'I have frequent mood swings.'
+    },
+    reverse: false,
+    domain: 'neuroticism',
+    facet: 'depression'
+  },
+  {
+    id: 'n7',
+    text: {
+      pl: 'Łatwo się irytuje.',
+      en: 'I get irritated easily.'
     },
     reverse: false,
     domain: 'neuroticism',
     facet: 'anger'
   },
   {
-    id: 'n5',
-    text: {
-      pl: 'Często czuję się niepewnie.',
-      en: 'I often feel insecure.'
-    },
-    reverse: false,
-    domain: 'neuroticism',
-    facet: 'self-consciousness'
-  },
-  {
-    id: 'n6',
-    text: {
-      pl: 'Często czuję się przytłoczony.',
-      en: 'I often feel overwhelmed.'
-    },
-    reverse: false,
-    domain: 'neuroticism',
-    facet: 'anxiety'
-  },
-  {
-    id: 'n7',
-    text: {
-      pl: 'Często czuję się zaniepokojony.',
-      en: 'I often feel worried.'
-    },
-    reverse: false,
-    domain: 'neuroticism',
-    facet: 'anxiety'
-  },
-  {
     id: 'n8',
     text: {
-      pl: 'Często czuję się smutny.',
-      en: 'I often feel sad.'
+      pl: 'Często czuję smutek.',
+      en: 'I often feel blue.'
     },
     reverse: false,
     domain: 'neuroticism',
@@ -594,28 +594,28 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'n9',
     text: {
-      pl: 'Często czuję się zły.',
-      en: 'I often feel angry.'
+      pl: 'Przez większość czasu jestem zrelaksowany.',
+      en: 'I am relaxed most of the time.'
     },
-    reverse: false,
+    reverse: true,
     domain: 'neuroticism',
-    facet: 'anger'
+    facet: 'anxiety'
   },
   {
     id: 'n10',
     text: {
-      pl: 'Często czuję się niepewnie.',
-      en: 'I often feel insecure.'
+      pl: 'Rzadko czuję smutek.',
+      en: 'I seldom feel blue.'
     },
-    reverse: false,
+    reverse: true,
     domain: 'neuroticism',
-    facet: 'self-consciousness'
+    facet: 'depression'
   },
   {
     id: 'n11',
     text: {
-      pl: 'Często czuję się przytłoczony.',
-      en: 'I often feel overwhelmed.'
+      pl: 'Panikuję w trudnych sytuacjach.',
+      en: 'I panic easily.'
     },
     reverse: false,
     domain: 'neuroticism',
@@ -624,10 +624,10 @@ export const IPIP_60_ITEMS: IPIPItem[] = [
   {
     id: 'n12',
     text: {
-      pl: 'Często czuję się zaniepokojony.',
-      en: 'I often feel worried.'
+      pl: 'Nie martwię się rzeczami, które już się wydarzyły.',
+      en: 'I don\'t worry about things that have already happened.'
     },
-    reverse: false,
+    reverse: true,
     domain: 'neuroticism',
     facet: 'anxiety'
   }
