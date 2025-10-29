@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { buildOptimizedFluxPrompt } from '@/lib/dna';
+import { addGeneratedImageToSpace } from '@/lib/spaces';
 
 interface GeneratedImage {
   id: string;
@@ -294,6 +295,14 @@ export default function GeneratePage() {
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
       
+      // Save generated images to spaces
+      const currentSpaces = (sessionData as any)?.spaces || [];
+      let updatedSpaces = currentSpaces;
+      for (const img of newImages) {
+        updatedSpaces = addGeneratedImageToSpace(updatedSpaces, undefined, img.url);
+      }
+      updateSessionData({ spaces: updatedSpaces });
+      
       // Complete loading
       setLoadingProgress(100);
       setEstimatedTime(0);
@@ -432,6 +441,14 @@ export default function GeneratePage() {
       
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
+      
+      // Save generated images to spaces
+      const currentSpaces = (sessionData as any)?.spaces || [];
+      let updatedSpaces = currentSpaces;
+      for (const img of newImages) {
+        updatedSpaces = addGeneratedImageToSpace(updatedSpaces, undefined, img.url);
+      }
+      updateSessionData({ spaces: updatedSpaces });
       
       // Complete modification
       setLoadingProgress(100);

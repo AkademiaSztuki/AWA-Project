@@ -17,33 +17,44 @@ import {
   Heart,
   Sparkles,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
+  User,
+  Eye
 } from 'lucide-react';
 import Image from 'next/image';
+import {
+  VisualDNASection,
+  CoreNeedsSection,
+  RoomAnalysisSection,
+  InspirationsPreviewSection,
+  GenerationStatsSection
+} from '@/components/dashboard/ProfileSections';
 
-interface Household {
+interface Space {
   id: string;
   name: string;
   type: string;
-  rooms: Room[];
+  images: SpaceImage[];
+  createdAt: string;
+  updatedAt: string;
 }
 
-interface Room {
+interface SpaceImage {
   id: string;
-  name: string;
-  roomType: string;
-  sessionsCount: number;
-  lastSessionDate?: string;
+  url: string;
+  type: 'generated' | 'inspiration';
+  addedAt: string;
   thumbnailUrl?: string;
+  tags?: string[];
 }
 
 /**
- * UserDashboard - Main control panel for multi-room, multi-household system
+ * UserDashboard - Main control panel for image spaces
  * 
  * Shows:
- * - User's households
- * - Rooms within each household
- * - Design sessions per room
+ * - User's spaces (simplified from households)
+ * - Generated images in each space
+ * - Inspiration images in each space
  * - Quick actions
  */
 export function UserDashboard() {
@@ -51,7 +62,7 @@ export function UserDashboard() {
   const { sessionData, updateSessionData } = useSessionData();
   const { language } = useLanguage();
   
-  const [households, setHouseholds] = useState<Household[]>([]);
+  const [spaces, setSpaces] = useState<Space[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   
@@ -72,17 +83,17 @@ export function UserDashboard() {
       
       if (!userHash) {
         console.log('[Dashboard] No user hash found - showing empty dashboard');
-        setHouseholds([]);
+        setSpaces([]);
         setIsLoading(false);
         return;
       }
 
       console.log('[Dashboard] Loading data for user:', userHash);
       
-      // Check if we have session data with households
-      if (sessionData?.households && sessionData.households.length > 0) {
+      // Check if we have session data with spaces
+      if (sessionData?.spaces && sessionData.spaces.length > 0) {
         console.log('[Dashboard] Loaded from sessionData');
-        setHouseholds(sessionData.households);
+        setSpaces(sessionData.spaces);
         setIsLoading(false);
         return;
       }
@@ -94,24 +105,24 @@ export function UserDashboard() {
         try {
           const parsed = JSON.parse(localSessionData);
           console.log('[Dashboard] Parsed localStorage data:', parsed);
-          if (parsed.households && parsed.households.length > 0) {
+          if (parsed.spaces && parsed.spaces.length > 0) {
             console.log('[Dashboard] Loaded from localStorage');
-            setHouseholds(parsed.households);
+            setSpaces(parsed.spaces);
             setIsLoading(false);
             // Continue with Supabase load in background
           } else {
-            console.log('[Dashboard] No households in localStorage data');
-            setHouseholds([]);
+            console.log('[Dashboard] No spaces in localStorage data');
+            setSpaces([]);
             setIsLoading(false);
           }
         } catch (e) {
           console.log('[Dashboard] Failed to parse localStorage data:', e);
-          setHouseholds([]);
+          setSpaces([]);
           setIsLoading(false);
         }
       } else {
         console.log('[Dashboard] No localStorage data found');
-        setHouseholds([]);
+        setSpaces([]);
         setIsLoading(false);
       }
       
@@ -123,32 +134,27 @@ export function UserDashboard() {
         console.error('[Dashboard] Supabase error:', error);
         // If we don't have localStorage data, show empty state
         if (!localSessionData) {
-          setHouseholds([]);
+          setSpaces([]);
         }
-      } else if (data && data.households && data.households.length > 0) {
+      } else if (data && data.spaces && data.spaces.length > 0) {
         console.log('[Dashboard] Loaded profile data from Supabase:', data);
         
         // Transform Supabase data to UI format
-        const transformedHouseholds: Household[] = (data.households || []).map((h: any) => ({
-          id: h.household.id,
-          name: h.household.name,
-          type: h.household.household_type || 'home',
-          rooms: (h.rooms || []).map((r: any) => ({
-            id: r.room.id,
-            name: r.room.name,
-            roomType: r.room.room_type,
-            sessionsCount: r.sessions?.length || 0,
-            lastSessionDate: r.sessions?.[r.sessions.length - 1]?.created_at,
-            thumbnailUrl: r.sessions?.[r.sessions.length - 1]?.generated_images?.[0]?.url
-          }))
+        const transformedSpaces: Space[] = (data.spaces || []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          type: s.type || 'personal',
+          images: s.images || [],
+          createdAt: s.created_at,
+          updatedAt: s.updated_at
         }));
         
-        setHouseholds(transformedHouseholds);
+        setSpaces(transformedSpaces);
       } else {
         // No profile yet - empty state
         console.log('[Dashboard] No profile data found in Supabase');
         if (!localSessionData) {
-          setHouseholds([]);
+          setSpaces([]);
         }
       }
     } catch (error) {
@@ -156,37 +162,33 @@ export function UserDashboard() {
       // Only set empty if we don't have localStorage data
       const localSessionData = localStorage.getItem('aura_session');
       if (!localSessionData) {
-        setHouseholds([]);
+        setSpaces([]);
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAddHousehold = () => {
-    // Create a sample household for demo
-    const newHousehold: Household = {
-      id: `household_${Date.now()}`,
-      name: language === 'pl' ? 'Moja Przestrzeń' : 'My Space',
-      type: 'home',
-      rooms: []
+  const handleAddSpace = () => {
+    // Create a new space
+    const newSpace: Space = {
+      id: `space_${Date.now()}`,
+      name: language === 'pl' ? 'Nowa Przestrzeń' : 'New Space',
+      type: 'personal',
+      images: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
     
-    const updatedHouseholds = [...households, newHousehold];
-    setHouseholds(updatedHouseholds);
+    const updatedSpaces = [...spaces, newSpace];
+    setSpaces(updatedSpaces);
     
     // Save to session data
-    updateSessionData({ households: updatedHouseholds });
-    
-    router.push('/setup/household');
+    updateSessionData({ spaces: updatedSpaces });
   };
 
-  const handleAddRoom = (householdId: string) => {
-    router.push(`/setup/room/${householdId}`);
-  };
-
-  const handleOpenRoom = (roomId: string) => {
-    router.push(`/design/${roomId}`);
+  const handleOpenSpace = (spaceId: string) => {
+    router.push(`/space/${spaceId}`);
   };
 
 
@@ -248,7 +250,7 @@ export function UserDashboard() {
                     <Home size={20} className="text-white" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-2xl font-nasalization text-graphite">{households.length}</p>
+                    <p className="text-2xl font-nasalization text-graphite">{spaces.length}</p>
                     <p className="text-xs text-silver-dark font-modern">
                       {language === 'pl' ? 'Przestrzenie' : 'Spaces'}
                     </p>
@@ -263,10 +265,10 @@ export function UserDashboard() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-2xl font-nasalization text-graphite">
-                      {households.reduce((sum, h) => sum + h.rooms.length, 0)}
+                      {spaces.reduce((sum, s) => sum + s.images.filter(img => img.type === 'generated').length, 0)}
                     </p>
                     <p className="text-xs text-silver-dark font-modern">
-                      {language === 'pl' ? 'Pokoje' : 'Rooms'}
+                      {language === 'pl' ? 'Wygenerowane' : 'Generated'}
                     </p>
                   </div>
                 </div>
@@ -279,12 +281,10 @@ export function UserDashboard() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-2xl font-nasalization text-graphite">
-                      {households.reduce((sum, h) => 
-                        sum + h.rooms.reduce((s, r) => s + r.sessionsCount, 0), 0
-                      )}
+                      {spaces.reduce((sum, s) => sum + s.images.filter(img => img.type === 'inspiration').length, 0)}
                     </p>
                     <p className="text-xs text-silver-dark font-modern">
-                      {language === 'pl' ? 'Projekty' : 'Designs'}
+                      {language === 'pl' ? 'Inspiracje' : 'Inspirations'}
                     </p>
                   </div>
                 </div>
@@ -292,13 +292,42 @@ export function UserDashboard() {
             </div>
           </motion.div>
 
-          {/* Inspirations Gallery (from latest session_json) */}
-          <InspirationsGallery userHash={(sessionData as any)?.userHash} />
+          {/* User Profile Overview */}
+          <ProfileOverview sessionData={sessionData} />
 
-          {/* Big Five Results */}
+          {/* Big Five Results - Enhanced with details link */}
           <BigFiveResults userHash={(sessionData as any)?.userHash} />
 
-          {/* Households List */}
+          {/* Visual DNA */}
+          <VisualDNASection visualDNA={(sessionData as any)?.visualDNA} />
+
+          {/* Core Needs / Laddering */}
+          <CoreNeedsSection ladderResults={(sessionData as any)?.ladderResults} />
+
+          {/* Room Analysis */}
+          <RoomAnalysisSection 
+            roomAnalysis={(sessionData as any)?.roomAnalysis}
+            roomImage={(sessionData as any)?.roomImage}
+          />
+
+          {/* Inspirations Preview */}
+          <InspirationsPreviewSection 
+            inspirations={(sessionData as any)?.inspirations || []}
+            onViewAll={() => {
+              const spaces = (sessionData as any)?.spaces || [];
+              if (spaces.length > 0) {
+                router.push(`/space/${spaces[0].id}`);
+              }
+            }}
+          />
+
+          {/* Generation Stats */}
+          <GenerationStatsSection 
+            generations={(sessionData as any)?.generations || []}
+            generatedImages={(sessionData as any)?.generatedImages}
+          />
+
+          {/* Spaces List */}
           {isLoading ? (
             <div className="text-center py-12">
               <div className="inline-block w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin" />
@@ -306,28 +335,27 @@ export function UserDashboard() {
                 {language === 'pl' ? 'Ładowanie...' : 'Loading...'}
               </p>
             </div>
-          ) : households.length === 0 ? (
-            <EmptyState onAddHousehold={handleAddHousehold} />
+          ) : spaces.length === 0 ? (
+            <EmptyState onAddSpace={handleAddSpace} />
           ) : (
             <div className="space-y-6">
-              {households.map((household, index) => (
-                <HouseholdCard
-                  key={household.id}
-                  household={household}
+              {spaces.map((space, index) => (
+                <SpaceCard
+                  key={space.id}
+                  space={space}
                   index={index}
-                  onAddRoom={() => handleAddRoom(household.id)}
-                  onOpenRoom={handleOpenRoom}
+                  onOpenSpace={() => handleOpenSpace(space.id)}
                 />
               ))}
 
-              {/* Add Household Button */}
+              {/* Add Space Button */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: households.length * 0.1 + 0.2 }}
+                transition={{ duration: 0.5, delay: spaces.length * 0.1 + 0.2 }}
               >
                 <button
-                  onClick={handleAddHousehold}
+                  onClick={handleAddSpace}
                   className="w-full glass-panel rounded-2xl p-6 hover:bg-white/40 transition-all duration-300 group"
                 >
                   <div className="flex items-center justify-center gap-3 text-graphite">
@@ -350,22 +378,103 @@ export function UserDashboard() {
 
 // ========== SUB-COMPONENTS ==========
 
-function HouseholdCard({ household, index, onAddRoom, onOpenRoom }: {
-  household: Household;
+function ProfileOverview({ sessionData }: { sessionData: any }) {
+  const { language } = useLanguage();
+  const router = useRouter();
+
+  const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
+
+  // Calculate profile completion
+  const hasVisualDNA = !!sessionData?.visualDNA;
+  const hasLadder = !!sessionData?.ladderResults;
+  const hasBigFive = !!sessionData?.bigFive;
+  const hasInspirations = sessionData?.inspirations?.length > 0;
+  const hasRoom = !!sessionData?.roomImage;
+
+  const completedItems = [hasVisualDNA, hasLadder, hasBigFive, hasInspirations, hasRoom].filter(Boolean).length;
+  const totalItems = 5;
+  const completionPercentage = Math.round((completedItems / totalItems) * 100);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="mb-6"
+    >
+      <GlassCard className="p-6">
+        <div className="flex items-center gap-4 mb-4">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+            <User size={32} className="text-white" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-2xl font-nasalization text-graphite">
+              {t('Twój Profil', 'Your Profile')}
+            </h2>
+            <p className="text-sm text-silver-dark font-modern">
+              {t(`Ukończono ${completionPercentage}%`, `${completionPercentage}% Complete`)}
+            </p>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="w-full bg-white/20 rounded-full h-3 mb-4">
+          <div
+            className="bg-gradient-to-r from-gold to-champagne h-3 rounded-full transition-all duration-1000"
+            style={{ width: `${completionPercentage}%` }}
+          />
+        </div>
+
+        {/* Profile Items */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <ProfileItem completed={hasVisualDNA} label={t('Visual DNA', 'Visual DNA')} />
+          <ProfileItem completed={hasLadder} label={t('Core Needs', 'Core Needs')} />
+          <ProfileItem completed={hasBigFive} label={t('Big Five', 'Big Five')} />
+          <ProfileItem completed={hasInspirations} label={t('Inspiracje', 'Inspirations')} />
+          <ProfileItem completed={hasRoom} label={t('Pokój', 'Room')} />
+        </div>
+      </GlassCard>
+    </motion.div>
+  );
+}
+
+function ProfileItem({ completed, label }: { completed: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+        completed ? 'bg-green-500' : 'bg-white/20'
+      }`}>
+        {completed && <span className="text-white text-xs">✓</span>}
+      </div>
+      <span className={`font-modern ${completed ? 'text-graphite' : 'text-silver-dark'}`}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function SpaceCard({ space, index, onOpenSpace }: {
+  space: Space;
   index: number;
-  onAddRoom: () => void;
-  onOpenRoom: (roomId: string) => void;
+  onOpenSpace: () => void;
 }) {
   const { language } = useLanguage();
+  const generatedImages = space.images.filter(img => img.type === 'generated');
+  const inspirationImages = space.images.filter(img => img.type === 'inspiration');
+  const allImages = [...inspirationImages, ...generatedImages];
+  const displayImages = allImages.slice(0, 6);
+  const remainingCount = allImages.length - displayImages.length;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
+      onClick={onOpenSpace}
+      style={{ cursor: 'pointer' }}
     >
-      <GlassCard className="p-6 lg:p-8">
-        {/* Household Header */}
+      <GlassCard className="p-6 lg:p-8 hover:border-gold/50 transition-all duration-300">
+        {/* Space Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
@@ -373,49 +482,52 @@ function HouseholdCard({ household, index, onAddRoom, onOpenRoom }: {
             </div>
             <div>
               <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
-                {household.name}
+                {space.name}
               </h2>
               <p className="text-sm text-silver-dark font-modern">
-                {household.rooms.length} {language === 'pl' ? 'pokoi' : 'rooms'}
+                {generatedImages.length} {language === 'pl' ? 'wygenerowanych' : 'generated'} • {inspirationImages.length} {language === 'pl' ? 'inspiracji' : 'inspirations'}
               </p>
             </div>
           </div>
+          <ChevronRight size={24} className="text-gold" />
         </div>
 
-        {/* Rooms Grid */}
-        {household.rooms.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
-            {household.rooms.map((room, roomIndex) => (
-              <RoomCard
-                key={room.id}
-                room={room}
-                index={roomIndex}
-                onClick={() => onOpenRoom(room.id)}
-              />
-            ))}
-
-            {/* Add Room Button */}
-            <button
-              onClick={onAddRoom}
-              className="glass-panel rounded-xl p-4 sm:p-6 hover:bg-white/40 transition-all duration-300 group min-h-[200px] flex flex-col items-center justify-center gap-3 w-full"
-            >
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Plus size={24} className="text-white" />
+        {/* Images Gallery Preview */}
+        {allImages.length > 0 ? (
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {displayImages.map((image, idx) => (
+              <div key={image.id} className="relative aspect-square rounded-lg overflow-hidden glass-panel group">
+                <Image
+                  src={image.url}
+                  alt={image.type === 'generated' ? 'Generated' : 'Inspiration'}
+                  fill
+                  className="object-cover transition-transform duration-300 group-hover:scale-110"
+                />
+                {/* Badge indicating type */}
+                <div className="absolute top-1 right-1">
+                  {image.type === 'generated' ? (
+                    <div className="w-5 h-5 rounded-full bg-purple-500/80 flex items-center justify-center">
+                      <Sparkles size={12} className="text-white" />
+                    </div>
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-blue-500/80 flex items-center justify-center">
+                      <Heart size={12} className="text-white" />
+                    </div>
+                  )}
+                </div>
               </div>
-              <span className="font-modern text-graphite">
-                {language === 'pl' ? 'Dodaj Pokój' : 'Add Room'}
-              </span>
-            </button>
+            ))}
+            {remainingCount > 0 && (
+              <div className="relative aspect-square rounded-lg overflow-hidden glass-panel flex items-center justify-center bg-gradient-to-br from-gold/20 to-champagne/20">
+                <span className="text-xl font-nasalization text-graphite">+{remainingCount}</span>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-silver-dark font-modern mb-4">
-              {language === 'pl' ? 'Brak pokoi w tej przestrzeni' : 'No rooms in this space yet'}
+            <p className="text-silver-dark font-modern">
+              {language === 'pl' ? 'Brak obrazów w tej przestrzeni' : 'No images in this space yet'}
             </p>
-            <GlassButton onClick={onAddRoom} variant="secondary">
-              <Plus size={18} className="mr-2" />
-              {language === 'pl' ? 'Dodaj Pierwszy Pokój' : 'Add First Room'}
-            </GlassButton>
           </div>
         )}
       </GlassCard>
@@ -423,163 +535,9 @@ function HouseholdCard({ household, index, onAddRoom, onOpenRoom }: {
   );
 }
 
-function InspirationsGallery({ userHash }: { userHash?: string }) {
-  const { language } = useLanguage();
-  const [urls, setUrls] = React.useState<string[]>([]);
-  const [loading, setLoading] = React.useState<boolean>(true);
 
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        if (!userHash) { setUrls([]); return; }
-        
-        // First try localStorage (immediate)
-        const localSession = localStorage.getItem('aura_session');
-        if (localSession) {
-          const parsed = JSON.parse(localSession);
-          const insp = parsed?.inspirations || [];
-          const imgUrls = insp.map((i: any) => i?.url).filter((u: string) => !!u);
-          if (mounted) {
-            setUrls(imgUrls);
-            setLoading(false);
-            return;
-          }
-        }
-        
-        // Fallback to Supabase
-        const { data, error } = await supabase
-          .from('sessions')
-          .select('session_json')
-          .eq('user_hash', userHash)
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (error) throw error;
-        const insp = (data as any)?.session_json?.inspirations || [];
-        const imgUrls = insp.map((i: any) => i?.url).filter((u: string) => !!u);
-        if (mounted) setUrls(imgUrls);
-      } catch (e) {
-        console.warn('[Dashboard] inspirations fetch failed', e);
-        if (mounted) setUrls([]);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [userHash]);
 
-  if (loading) return null;
-  if (!urls.length) return null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="mb-8"
-    >
-      <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4">
-        {language === 'pl' ? 'Moje Inspiracje' : 'My Inspirations'}
-      </h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-        {urls.slice(0, 12).map((url, idx) => (
-          <div key={idx} className="relative aspect-square rounded-xl overflow-hidden glass-panel">
-            <Image src={url} alt={`Inspiration ${idx+1}`} fill className="object-cover" />
-          </div>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-function RoomCard({ room, index, onClick }: {
-  room: Room;
-  index: number;
-  onClick: () => void;
-}) {
-  const { language } = useLanguage();
-
-  const roomTypeIcons: Record<string, React.ReactNode> = {
-    bedroom: <Home size={32} className="text-gold" />,
-    living_room: <Home size={32} className="text-gold" />,
-    kitchen: <Home size={32} className="text-gold" />,
-    bathroom: <Home size={32} className="text-gold" />,
-    home_office: <Home size={32} className="text-gold" />,
-    dining_room: <Home size={32} className="text-gold" />,
-    kids_room: <Home size={32} className="text-gold" />
-  };
-
-  const icon = roomTypeIcons[room.roomType] || <Home size={32} className="text-gold" />;
-
-  return (
-    <motion.button
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4, delay: index * 0.05 }}
-      whileHover={{ scale: 1.05, y: -5 }}
-      onClick={onClick}
-      className="glass-panel rounded-xl overflow-hidden hover:border-gold/50 transition-all duration-300 group text-left"
-    >
-      {/* Thumbnail or Placeholder */}
-      <div className="relative w-full h-32 bg-gradient-to-br from-platinum-100 to-pearl-100">
-        {room.thumbnailUrl ? (
-          <Image
-            src={room.thumbnailUrl}
-            alt={room.name}
-            fill
-            className="object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            {icon}
-          </div>
-        )}
-        
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gold/0 to-champagne/0 group-hover:from-gold/20 group-hover:to-champagne/20 transition-all duration-300" />
-        
-        {/* Sessions badge */}
-        {room.sessionsCount > 0 && (
-          <div className="absolute top-2 right-2 glass-panel px-2 py-1 rounded-full flex items-center gap-1">
-            <ImageIcon size={12} className="text-gold" />
-            <span className="text-xs font-semibold text-graphite">{room.sessionsCount}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Room Info */}
-      <div className="p-4">
-        <h3 className="font-nasalization text-lg text-graphite mb-1 group-hover:text-gold transition-colors">
-          {room.name}
-        </h3>
-        <p className="text-xs text-silver-dark font-modern mb-3">
-          {getRoomTypeLabel(room.roomType, language)}
-        </p>
-
-        {room.lastSessionDate && (
-          <div className="flex items-center gap-2 text-xs text-silver-dark">
-            <Clock size={12} />
-            <span>{getRelativeTime(room.lastSessionDate, language)}</span>
-          </div>
-        )}
-
-        {room.sessionsCount === 0 && (
-          <div className="text-xs text-blue-500 font-semibold">
-            {language === 'pl' ? 'Nowy pokój' : 'New room'}
-          </div>
-        )}
-      </div>
-
-      {/* Arrow indicator */}
-      <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <ChevronRight size={20} className="text-gold" />
-      </div>
-    </motion.button>
-  );
-}
-
-function EmptyState({ onAddHousehold }: { onAddHousehold: () => void }) {
+function EmptyState({ onAddSpace }: { onAddSpace: () => void }) {
   const { language } = useLanguage();
 
   return (
@@ -614,7 +572,7 @@ function EmptyState({ onAddHousehold }: { onAddHousehold: () => void }) {
             : 'Add your first space to start creating personalized interiors with IDA'}
         </p>
 
-        <GlassButton onClick={onAddHousehold} className="px-8 py-4">
+        <GlassButton onClick={onAddSpace} className="px-8 py-4">
           <Plus size={20} className="mr-2" />
           {language === 'pl' ? 'Dodaj Pierwszą Przestrzeń' : 'Add First Space'}
         </GlassButton>
@@ -625,22 +583,9 @@ function EmptyState({ onAddHousehold }: { onAddHousehold: () => void }) {
 
 // ========== HELPER FUNCTIONS ==========
 
-function getRoomTypeLabel(roomType: string, language: 'pl' | 'en'): string {
-  const labels: Record<string, { pl: string; en: string }> = {
-    bedroom: { pl: 'Sypialnia', en: 'Bedroom' },
-    living_room: { pl: 'Salon', en: 'Living Room' },
-    kitchen: { pl: 'Kuchnia', en: 'Kitchen' },
-    bathroom: { pl: 'Łazienka', en: 'Bathroom' },
-    home_office: { pl: 'Biuro domowe', en: 'Home Office' },
-    dining_room: { pl: 'Jadalnia', en: 'Dining Room' },
-    kids_room: { pl: 'Pokój dziecięcy', en: 'Kids Room' }
-  };
-
-  return labels[roomType]?.[language] || roomType;
-}
-
 function BigFiveResults({ userHash }: { userHash?: string }) {
   const { language } = useLanguage();
+  const router = useRouter();
   const [bigFiveData, setBigFiveData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState<boolean>(true);
 
@@ -691,12 +636,31 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="mb-8"
+      className="mb-6"
+      onClick={() => router.push('/dashboard/personality')}
+      style={{ cursor: 'pointer' }}
     >
-      <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4">
-        {language === 'pl' ? 'Twój Profil Osobowości' : 'Your Personality Profile'}
-      </h2>
-      <GlassCard className="p-6">
+      <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+              <User size={20} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-nasalization text-graphite">
+                {language === 'pl' ? 'Profil Osobowości' : 'Personality Profile'}
+              </h3>
+              <p className="text-sm text-silver-dark font-modern">
+                {language === 'pl' ? 'Big Five (IPIP-60)' : 'Big Five (IPIP-60)'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-gold">
+            <Eye size={20} />
+            <ChevronRight size={20} />
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {Object.entries(bigFiveData.scores).map(([domain, score], index) => (
             <motion.div
@@ -723,7 +687,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
         </div>
         <div className="mt-4 text-center">
           <p className="text-sm text-silver-dark font-modern">
-            {language === 'pl' ? 'Wyniki testu Big Five - używane do personalizacji wnętrz' : 'Big Five test results - used for interior personalization'}
+            {language === 'pl' ? 'Kliknij aby zobaczyć szczegółową analizę' : 'Click to see detailed analysis'}
           </p>
         </div>
       </GlassCard>

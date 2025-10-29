@@ -12,6 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
 import { analyzeInspirationsWithGamma, type InspirationTaggingResult } from "@/lib/vision/gamma-tagging";
 import { supabase } from "@/lib/supabase";
+import { addMultipleInspirationsToSpace } from "@/lib/spaces";
 import { 
   Upload, 
   X, 
@@ -169,6 +170,29 @@ export default function InspirationsPage() {
         };
       });
       await updateSessionData({ inspirations: payload } as any);
+      
+      // Also save inspirations to spaces
+      const currentSpaces = (sessionData as any)?.spaces || [];
+      const inspirationsForSpaces = payload
+        .filter(p => p.url)
+        .map(p => ({
+          url: p.url!,
+          tags: p.tags ? [
+            ...(p.tags.styles || []),
+            ...(p.tags.colors || []),
+            ...(p.tags.materials || [])
+          ] : undefined
+        }));
+      
+      if (inspirationsForSpaces.length > 0) {
+        const updatedSpaces = addMultipleInspirationsToSpace(
+          currentSpaces, 
+          undefined, 
+          inspirationsForSpaces
+        );
+        await updateSessionData({ spaces: updatedSpaces } as any);
+      }
+      
       router.push("/flow/big-five");
     } finally {
       setIsSubmitting(false);
