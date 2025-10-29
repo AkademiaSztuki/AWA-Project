@@ -170,21 +170,8 @@ export function UserDashboard() {
   };
 
   const handleAddSpace = () => {
-    // Create a new space
-    const newSpace: Space = {
-      id: `space_${Date.now()}`,
-      name: language === 'pl' ? 'Nowa Przestrzeń' : 'New Space',
-      type: 'personal',
-      images: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    const updatedSpaces = [...spaces, newSpace];
-    setSpaces(updatedSpaces);
-    
-    // Save to session data
-    updateSessionData({ spaces: updatedSpaces });
+    // Navigate to setup flow for new space
+    router.push('/setup/household');
   };
 
   const handleOpenSpace = (spaceId: string) => {
@@ -356,13 +343,13 @@ export function UserDashboard() {
               >
                 <button
                   onClick={handleAddSpace}
-                  className="w-full glass-panel rounded-2xl p-6 hover:bg-white/40 transition-all duration-300 group"
+                  className="w-full glass-panel rounded-2xl p-4 sm:p-6 hover:bg-white/40 transition-all duration-300 group"
                 >
-                  <div className="flex items-center justify-center gap-3 text-graphite">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Plus size={24} className="text-white" />
+                  <div className="flex items-center justify-center gap-2 sm:gap-3 text-graphite">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Plus size={20} className="sm:w-6 sm:h-6 text-white" />
                     </div>
-                    <span className="font-nasalization text-xl">
+                    <span className="font-nasalization text-base sm:text-lg lg:text-xl">
                       {language === 'pl' ? 'Dodaj Nową Przestrzeń' : 'Add New Space'}
                     </span>
                   </div>
@@ -402,31 +389,31 @@ function ProfileOverview({ sessionData }: { sessionData: any }) {
       transition={{ duration: 0.5 }}
       className="mb-6"
     >
-      <GlassCard className="p-6">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <User size={32} className="text-white" />
+      <GlassCard className="p-4 sm:p-6">
+        <div className="flex items-center gap-3 sm:gap-4 mb-4">
+          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+            <User size={24} className="sm:w-8 sm:h-8 text-white" />
           </div>
-          <div className="flex-1">
-            <h2 className="text-2xl font-nasalization text-graphite">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl sm:text-2xl font-nasalization text-graphite">
               {t('Twój Profil', 'Your Profile')}
             </h2>
-            <p className="text-sm text-silver-dark font-modern">
+            <p className="text-xs sm:text-sm text-silver-dark font-modern">
               {t(`Ukończono ${completionPercentage}%`, `${completionPercentage}% Complete`)}
             </p>
           </div>
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full bg-white/20 rounded-full h-3 mb-4">
+        <div className="w-full bg-white/20 rounded-full h-2 sm:h-3 mb-4">
           <div
-            className="bg-gradient-to-r from-gold to-champagne h-3 rounded-full transition-all duration-1000"
+            className="bg-gradient-to-r from-gold to-champagne h-2 sm:h-3 rounded-full transition-all duration-1000"
             style={{ width: `${completionPercentage}%` }}
           />
         </div>
 
         {/* Profile Items */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
           <ProfileItem completed={hasVisualDNA} label={t('Visual DNA', 'Visual DNA')} />
           <ProfileItem completed={hasLadder} label={t('Core Needs', 'Core Needs')} />
           <ProfileItem completed={hasBigFive} label={t('Big Five', 'Big Five')} />
@@ -471,30 +458,30 @@ function SpaceCard({ space, index, onOpenSpace }: {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
       onClick={onOpenSpace}
-      style={{ cursor: 'pointer' }}
+      className="cursor-pointer"
     >
-      <GlassCard className="p-6 lg:p-8 hover:border-gold/50 transition-all duration-300">
+      <GlassCard className="p-4 sm:p-6 lg:p-8 hover:border-gold/50 transition-all duration-300">
         {/* Space Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-              <Home size={24} className="text-white" />
+        <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+              <Home size={20} className="sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-nasalization text-graphite truncate">
                 {space.name}
               </h2>
-              <p className="text-sm text-silver-dark font-modern">
-                {generatedImages.length} {language === 'pl' ? 'wygenerowanych' : 'generated'} • {inspirationImages.length} {language === 'pl' ? 'inspiracji' : 'inspirations'}
+              <p className="text-xs sm:text-sm text-silver-dark font-modern">
+                {generatedImages.length} {language === 'pl' ? 'wyg.' : 'gen.'} • {inspirationImages.length} {language === 'pl' ? 'insp.' : 'insp.'}
               </p>
             </div>
           </div>
-          <ChevronRight size={24} className="text-gold" />
+          <ChevronRight size={20} className="sm:w-6 sm:h-6 text-gold flex-shrink-0" />
         </div>
 
         {/* Images Gallery Preview */}
         {allImages.length > 0 ? (
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
             {displayImages.map((image, idx) => (
               <div key={image.id} className="relative aspect-square rounded-lg overflow-hidden glass-panel group">
                 <Image
@@ -506,12 +493,12 @@ function SpaceCard({ space, index, onOpenSpace }: {
                 {/* Badge indicating type */}
                 <div className="absolute top-1 right-1">
                   {image.type === 'generated' ? (
-                    <div className="w-5 h-5 rounded-full bg-purple-500/80 flex items-center justify-center">
-                      <Sparkles size={12} className="text-white" />
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center shadow-lg">
+                      <Sparkles size={12} className="sm:w-3.5 sm:h-3.5 text-white" />
                     </div>
                   ) : (
-                    <div className="w-5 h-5 rounded-full bg-blue-500/80 flex items-center justify-center">
-                      <Heart size={12} className="text-white" />
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-champagne to-platinum flex items-center justify-center shadow-lg">
+                      <Heart size={12} className="sm:w-3.5 sm:h-3.5 text-white" />
                     </div>
                   )}
                 </div>
@@ -519,13 +506,13 @@ function SpaceCard({ space, index, onOpenSpace }: {
             ))}
             {remainingCount > 0 && (
               <div className="relative aspect-square rounded-lg overflow-hidden glass-panel flex items-center justify-center bg-gradient-to-br from-gold/20 to-champagne/20">
-                <span className="text-xl font-nasalization text-graphite">+{remainingCount}</span>
+                <span className="text-base sm:text-xl font-nasalization text-graphite">+{remainingCount}</span>
               </div>
             )}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <p className="text-silver-dark font-modern">
+          <div className="text-center py-8 sm:py-12">
+            <p className="text-sm sm:text-base text-silver-dark font-modern">
               {language === 'pl' ? 'Brak obrazów w tej przestrzeni' : 'No images in this space yet'}
             </p>
           </div>
@@ -636,32 +623,31 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="mb-6"
+      className="mb-6 cursor-pointer"
       onClick={() => router.push('/dashboard/personality')}
-      style={{ cursor: 'pointer' }}
     >
-      <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-              <User size={20} className="text-white" />
+      <GlassCard className="p-4 sm:p-6 hover:border-gold/50 transition-all duration-300">
+        <div className="flex items-center justify-between mb-4 gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+              <User size={16} className="sm:w-5 sm:h-5 text-white" />
             </div>
-            <div>
-              <h3 className="text-xl font-nasalization text-graphite">
+            <div className="min-w-0">
+              <h3 className="text-base sm:text-lg lg:text-xl font-nasalization text-graphite truncate">
                 {language === 'pl' ? 'Profil Osobowości' : 'Personality Profile'}
               </h3>
-              <p className="text-sm text-silver-dark font-modern">
+              <p className="text-xs sm:text-sm text-silver-dark font-modern">
                 {language === 'pl' ? 'Big Five (IPIP-60)' : 'Big Five (IPIP-60)'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-gold">
-            <Eye size={20} />
-            <ChevronRight size={20} />
+          <div className="flex items-center gap-1 sm:gap-2 text-gold flex-shrink-0">
+            <Eye size={16} className="sm:w-5 sm:h-5" />
+            <ChevronRight size={16} className="sm:w-5 sm:h-5" />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           {Object.entries(bigFiveData.scores).map(([domain, score], index) => (
             <motion.div
               key={domain}
@@ -671,8 +657,8 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
               className="text-center"
             >
               <div className="mb-2">
-                <div className="text-2xl font-bold text-gold mb-1">{Number(score)}%</div>
-                <div className="text-sm font-nasalization text-graphite">
+                <div className="text-xl sm:text-2xl font-bold text-gold mb-1">{Number(score)}%</div>
+                <div className="text-xs sm:text-sm font-nasalization text-graphite">
                   {getDomainLabel(domain, language)}
                 </div>
               </div>
@@ -686,7 +672,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
           ))}
         </div>
         <div className="mt-4 text-center">
-          <p className="text-sm text-silver-dark font-modern">
+          <p className="text-xs sm:text-sm text-silver-dark font-modern">
             {language === 'pl' ? 'Kliknij aby zobaczyć szczegółową analizę' : 'Click to see detailed analysis'}
           </p>
         </div>
