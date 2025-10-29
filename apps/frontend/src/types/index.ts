@@ -18,7 +18,23 @@ export interface SessionData {
   coreNeed?: string;
   generations: GenerationSet[];
   finalSurvey: SurveyResults;
-  // Dashboard data
+  // Dashboard data - Spaces with images
+  spaces?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    images: Array<{
+      id: string;
+      url: string;
+      type: 'generated' | 'inspiration';
+      addedAt: string;
+      thumbnailUrl?: string;
+      tags?: string[];
+    }>;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  // Legacy households data (for backward compatibility)
   households?: Array<{
     id: string;
     name: string;
