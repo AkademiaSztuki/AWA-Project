@@ -2,7 +2,7 @@
 
 import React, { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -14,7 +14,7 @@ function AuthCallbackContent() {
     (async () => {
       try {
         // Handles both query and hash params for Supabase OAuth
-        const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+        const { error } = await getSupabase().auth.exchangeCodeForSession(window.location.href);
 
         if (!isMounted) return;
 

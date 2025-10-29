@@ -1,13 +1,10 @@
 // Research Validation - Data Export Utilities
 // Export research data for analysis in R, Python, SPSS, etc.
 
-import { createClient } from '@supabase/supabase-js';
+import { getSupabase } from '@/lib/supabase';
 import { UserProfile, Household, Room, DesignSession, EnhancedSwipeData } from '@/types/deep-personalization';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Supabase client is obtained lazily within functions
 
 // =========================
 // RESEARCH DATA EXPORT
@@ -38,11 +35,11 @@ export async function exportAllResearchData(): Promise<ResearchDataExport | null
   try {
     // Fetch all data
     const [profiles, households, rooms, sessions, swipes] = await Promise.all([
-      supabase.from('user_profiles').select('*'),
-      supabase.from('households').select('*'),
-      supabase.from('rooms').select('*'),
-      supabase.from('design_sessions').select('*'),
-      supabase.from('enhanced_swipes').select('*')
+      getSupabase().from('user_profiles').select('*'),
+      getSupabase().from('households').select('*'),
+      getSupabase().from('rooms').select('*'),
+      getSupabase().from('design_sessions').select('*'),
+      getSupabase().from('enhanced_swipes').select('*')
     ]);
 
     return {
@@ -72,7 +69,7 @@ export async function exportAllResearchData(): Promise<ResearchDataExport | null
  */
 export async function exportToCSV(dataType: 'profiles' | 'sessions' | 'swipes'): Promise<string> {
   try {
-    const { data } = await supabase.from(
+    const { data } = await getSupabase().from(
       dataType === 'profiles' ? 'user_profiles' :
       dataType === 'sessions' ? 'design_sessions' :
       'enhanced_swipes'
@@ -126,7 +123,7 @@ export interface PRSAnalysisResult {
 export async function analyzePRSImprovement(): Promise<PRSAnalysisResult | null> {
   try {
     // Fetch all sessions with pre/post data
-    const { data: sessions } = await supabase
+    const { data: sessions } = await getSupabase()
       .from('design_sessions')
       .select(`
         id,
@@ -208,7 +205,7 @@ export interface PreferenceCorrelationResult {
 export async function analyzePreferenceCorrelation(): Promise<PreferenceCorrelationResult | null> {
   try {
     // Fetch user profiles with swipe data and session satisfaction scores
-    const { data: profiles } = await supabase.from('user_profiles').select('*');
+    const { data: profiles } = await getSupabase().from('user_profiles').select('*');
     
     if (!profiles || profiles.length === 0) {
       return null;
@@ -255,7 +252,7 @@ export interface BehavioralMetricsResult {
  */
 export async function analyzeBehavioralMetrics(): Promise<BehavioralMetricsResult | null> {
   try {
-    const { data: swipes } = await supabase
+    const { data: swipes } = await getSupabase()
       .from('enhanced_swipes')
       .select('*');
 

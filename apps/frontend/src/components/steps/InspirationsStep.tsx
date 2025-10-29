@@ -7,7 +7,7 @@ import { GlassButton } from "@/components/ui/GlassButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
 import { analyzeInspirationsWithGamma } from "@/lib/vision/gamma-tagging";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 import { 
   Upload, 
   ArrowRight, 
@@ -121,7 +121,7 @@ export function InspirationsStep({ data, onUpdate, onNext, onBack }: Inspiration
   };
 
   const uploadToSupabase = async (file: File, fileId: string): Promise<string> => {
-    const { data: uploadData, error } = await supabase.storage
+    const { data: uploadData, error } = await getSupabase().storage
       .from('aura-assets')
       .upload(`inspirations/${fileId}`, file, {
         cacheControl: '3600',
@@ -133,7 +133,7 @@ export function InspirationsStep({ data, onUpdate, onNext, onBack }: Inspiration
       throw new Error(`Upload failed: ${error.message}`);
     }
 
-    const { data: { publicUrl } } = supabase.storage
+    const { data: { publicUrl } } = getSupabase().storage
       .from('aura-assets')
       .getPublicUrl(uploadData.path);
 

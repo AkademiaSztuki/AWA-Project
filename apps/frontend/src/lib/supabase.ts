@@ -1,10 +1,19 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+let _supabase: SupabaseClient<Database> | null = null;
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+export function getSupabase(): SupabaseClient<Database> {
+  if (_supabase) return _supabase;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // Avoid throwing during build-time imports; only throw when actually used at runtime
+    throw new Error('Supabase environment variables are not configured');
+  }
+  _supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+  return _supabase;
+}
 
 // Funkcje pomocnicze do logowania danych badawczych
 export const logBehavioralEvent = async (
@@ -12,7 +21,7 @@ export const logBehavioralEvent = async (
   eventType: string, 
   eventData: Record<string, any>
 ) => {
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('behavioral_logs')
     .insert({
       project_id: projectId,
@@ -28,7 +37,7 @@ export const logBehavioralEvent = async (
 export const createProject = async (userHash: string) => {
   const projectId = `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('projects')
     .insert({
       user_hash: userHash,
@@ -53,7 +62,7 @@ export const updateDiscoverySession = async (
   ladderingPath: any,
   coreNeed: string
 ) => {
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('discovery_sessions')
     .insert({
       project_id: projectId,
@@ -69,7 +78,7 @@ export const updateDiscoverySession = async (
 };
 
 export const saveGenerationSet = async (projectId: string, prompt: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('generation_sets')
     .insert({
       project_id: projectId,
@@ -88,7 +97,7 @@ export const saveGenerationSet = async (projectId: string, prompt: string) => {
 
 export const saveFullSessionToSupabase = async (sessionData: any) => {
   if (!sessionData?.userHash) return;
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('sessions')
     .upsert([
       {
@@ -107,7 +116,7 @@ export const saveFullSessionToSupabase = async (sessionData: any) => {
 export const getOrCreateProjectId = async (userHash: string): Promise<string | null> => {
   try {
     // spróbuj znaleźć istniejący projekt
-    const { data: existing, error: selError } = await supabase
+    const { data: existing, error: selError } = await getSupabase()
       .from('projects')
       .select('project_id')
       .eq('user_hash', userHash)
@@ -139,7 +148,7 @@ export const saveTinderSwipes = async (projectId: string, swipes: any[]) => {
 
 // Device context
 export const saveDeviceContext = async (projectId: string, context: Record<string, any>) => {
-  const { error } = await supabase.from('device_context_snapshots').insert({
+  const { error } = await getSupabase().from('device_context_snapshots').insert({
     project_id: projectId,
     context,
     created_at: new Date().toISOString(),
@@ -149,7 +158,7 @@ export const saveDeviceContext = async (projectId: string, context: Record<strin
 
 // Page views
 export const startPageView = async (projectId: string, page: string, meta?: any) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('page_views')
     .insert({ project_id: projectId, page, entered_at: new Date().toISOString(), meta })
     .select()
@@ -159,7 +168,7 @@ export const startPageView = async (projectId: string, page: string, meta?: any)
 };
 
 export const endPageView = async (pageViewId: string) => {
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('page_views')
     .update({ exited_at: new Date().toISOString() })
     .eq('id', pageViewId);
@@ -169,13 +178,13 @@ export const endPageView = async (pageViewId: string) => {
 // Tinder exposures + swipes (docelowe tabele)
 export const saveTinderExposures = async (projectId: string, exposures: any[]) => {
   const rows = exposures.map((e) => ({ ...e, project_id: projectId }));
-  const { error } = await supabase.from('tinder_exposures').insert(rows);
+  const { error } = await getSupabase().from('tinder_exposures').insert(rows);
   if (error) console.error('Błąd zapisu tinder_exposures:', error);
 };
 
 export const saveTinderSwipesDetailed = async (projectId: string, swipes: any[]) => {
   const rows = swipes.map((s) => ({ ...s, project_id: projectId }));
-  const { error } = await supabase.from('tinder_swipes').insert(rows);
+  const { error } = await getSupabase().from('tinder_swipes').insert(rows);
   if (error) console.error('Błąd zapisu tinder_swipes:', error);
 };
 
@@ -184,7 +193,7 @@ export const saveDnaSnapshot = async (
   projectId: string,
   snapshot: { weights: any; top: any; confidence: number; parser_version: string }
 ) => {
-  const { error } = await supabase.from('dna_snapshots').insert({
+  const { error } = await getSupabase().from('dna_snapshots').insert({
     project_id: projectId,
     weights: snapshot.weights,
     top: snapshot.top,
@@ -198,12 +207,12 @@ export const saveDnaSnapshot = async (
 // Ladder path + summary
 export const saveLadderPathRows = async (projectId: string, rows: any[]) => {
   const payload = rows.map((r) => ({ ...r, project_id: projectId }));
-  const { error } = await supabase.from('ladder_paths').insert(payload);
+  const { error } = await getSupabase().from('ladder_paths').insert(payload);
   if (error) console.error('Błąd zapisu ladder_paths:', error);
 };
 
 export const saveLadderSummary = async (projectId: string, summary: any) => {
-  const { error } = await supabase.from('ladder_summary').insert({
+  const { error } = await getSupabase().from('ladder_summary').insert({
     project_id: projectId,
     core_need: summary.core_need,
     prompt_elements: summary.prompt_elements,
@@ -217,7 +226,7 @@ export const startGenerationJob = async (
   projectId: string,
   job: { type: string; prompt: string; parameters: any; has_base_image: boolean; modification_label?: string }
 ) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('generation_jobs')
     .insert({
       project_id: projectId,
@@ -238,7 +247,7 @@ export const endGenerationJob = async (
   jobId: string,
   outcome: { status: 'success' | 'error'; latency_ms: number; error_message?: string }
 ) => {
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('generation_jobs')
     .update({ finished_at: new Date().toISOString(), status: outcome.status, latency_ms: outcome.latency_ms, error_message: outcome.error_message || null })
     .eq('id', jobId);
@@ -250,7 +259,7 @@ export const saveImageRatingEvent = async (
   projectId: string,
   event: { local_image_id: string; rating_key: string; value: number }
 ) => {
-  const { error } = await supabase.from('image_ratings_history').insert({
+  const { error } = await getSupabase().from('image_ratings_history').insert({
     project_id: projectId,
     local_image_id: event.local_image_id,
     rating_key: event.rating_key,
@@ -262,7 +271,7 @@ export const saveImageRatingEvent = async (
 
 // Health + Errors
 export const logHealthCheck = async (projectId: string, ok: boolean, latency_ms: number) => {
-  const { error } = await supabase.from('health_checks').insert({
+  const { error } = await getSupabase().from('health_checks').insert({
     project_id: projectId,
     ok,
     latency_ms,
@@ -272,7 +281,7 @@ export const logHealthCheck = async (projectId: string, ok: boolean, latency_ms:
 };
 
 export const logErrorEvent = async (projectId: string, payload: { source: string; message: string; stack?: string; meta?: any }) => {
-  const { error } = await supabase.from('errors').insert({
+  const { error } = await getSupabase().from('errors').insert({
     project_id: projectId,
     source: payload.source,
     message: payload.message,
@@ -293,7 +302,7 @@ export const saveGeneratedImages = async (
     prompt_fragment: img.prompt,
     created_at: new Date().toISOString(),
   }));
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('generated_images')
     .insert(rows)
     .select();
@@ -308,7 +317,7 @@ export const updateGeneratedImageRatings = async (
   imageId: string,
   ratings: { aesthetic_match?: number; character?: number; harmony?: number }
 ) => {
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('generated_images')
     .update({
       aesthetic_match_score: ratings.aesthetic_match,

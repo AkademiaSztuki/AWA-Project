@@ -50,5 +50,8 @@ export function countryFlagEmoji(code: string): string {
   if (!code || code.length !== 2) return '';
   const base = 127397;
   const upper = code.toUpperCase();
-  return String.fromCodePoint(...[...upper].map((c) => base + c.charCodeAt(0)));
+  // Avoid downlevel iteration to support ES5 target
+  const first = base + upper.charCodeAt(0);
+  const second = base + upper.charCodeAt(1);
+  return String.fromCodePoint(first, second);
 }

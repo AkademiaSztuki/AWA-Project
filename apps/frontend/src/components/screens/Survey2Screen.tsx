@@ -6,7 +6,7 @@ import { GlassCard } from '../ui/GlassCard';
 import GlassSurface from '../ui/GlassSurface';
 import { GlassSlider } from '../ui/GlassSlider';
 import { useSessionData } from '@/hooks/useSessionData';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { AwaDialogue } from '@/components/awa';
 
@@ -57,7 +57,7 @@ export function Survey2Screen() {
     });
 
     // Zapisz do supabase
-    await supabase.from('survey_results').insert([
+    await getSupabase().from('survey_results').insert([
       {
         session_id: sessionData.userHash,
         type: 'clarity',

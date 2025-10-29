@@ -1,7 +1,7 @@
 // Supabase helpers for Deep Personalization Architecture
 // CRUD operations for user_profiles, households, rooms, design_sessions
 
-import { createClient } from '@supabase/supabase-js';
+import { getSupabase } from './supabase';
 import {
   UserProfile,
   Household,
@@ -12,10 +12,7 @@ import {
   SwipePattern
 } from '@/types/deep-personalization';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Supabase client is obtained lazily to avoid build-time env issues
 
 // =========================
 // USER PROFILE
@@ -23,7 +20,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function getUserProfile(userHash: string): Promise<UserProfile | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('user_profiles')
       .select('*')
       .eq('user_hash', userHash)
@@ -39,7 +36,7 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
 
 export async function saveUserProfile(profile: Partial<UserProfile>): Promise<UserProfile | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('user_profiles')
       .upsert({
         user_hash: profile.userHash,
@@ -64,7 +61,7 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
 
 export async function getCompletionStatus(userHash: string): Promise<CompletionStatus | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .rpc('get_completion_status', { p_user_hash: userHash });
 
     if (error) throw error;
@@ -81,7 +78,7 @@ export async function getCompletionStatus(userHash: string): Promise<CompletionS
 
 export async function getUserHouseholds(userHash: string): Promise<Household[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('households')
       .select('*')
       .eq('user_hash', userHash)
@@ -97,7 +94,7 @@ export async function getUserHouseholds(userHash: string): Promise<Household[]> 
 
 export async function saveHousehold(household: Omit<Household, 'id' | 'createdAt' | 'updatedAt'>): Promise<Household | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('households')
       .insert({
         user_hash: household.userHash,
@@ -120,7 +117,7 @@ export async function saveHousehold(household: Omit<Household, 'id' | 'createdAt
 
 export async function updateHousehold(id: string, updates: Partial<Household>): Promise<boolean> {
   try {
-    const { error } = await supabase
+    const { error } = await getSupabase()
       .from('households')
       .update({
         ...updates,
@@ -142,7 +139,7 @@ export async function updateHousehold(id: string, updates: Partial<Household>): 
 
 export async function getHouseholdRooms(householdId: string): Promise<Room[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('rooms')
       .select('*')
       .eq('household_id', householdId)
@@ -158,7 +155,7 @@ export async function getHouseholdRooms(householdId: string): Promise<Room[]> {
 
 export async function getRoom(roomId: string): Promise<Room | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('rooms')
       .select('*')
       .eq('id', roomId)
@@ -174,7 +171,7 @@ export async function getRoom(roomId: string): Promise<Room | null> {
 
 export async function saveRoom(room: Omit<Room, 'id' | 'createdAt' | 'updatedAt'>): Promise<Room | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('rooms')
       .insert({
         household_id: room.householdId,
@@ -203,7 +200,7 @@ export async function saveRoom(room: Omit<Room, 'id' | 'createdAt' | 'updatedAt'
 
 export async function updateRoom(roomId: string, updates: Partial<Room>): Promise<boolean> {
   try {
-    const { error } = await supabase
+    const { error } = await getSupabase()
       .from('rooms')
       .update({
         ...updates,
@@ -225,7 +222,7 @@ export async function updateRoom(roomId: string, updates: Partial<Room>): Promis
 
 export async function getRoomSessions(roomId: string): Promise<DesignSession[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('design_sessions')
       .select('*')
       .eq('room_id', roomId)
@@ -241,7 +238,7 @@ export async function getRoomSessions(roomId: string): Promise<DesignSession[]> 
 
 export async function getLatestSession(roomId: string): Promise<DesignSession | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('design_sessions')
       .select('*')
       .eq('room_id', roomId)
@@ -262,10 +259,10 @@ export async function saveDesignSession(
 ): Promise<DesignSession | null> {
   try {
     // Get next session number
-    const { data: nextNumber } = await supabase
+    const { data: nextNumber } = await getSupabase()
       .rpc('get_next_session_number', { p_room_id: session.roomId });
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('design_sessions')
       .insert({
         room_id: session.roomId,
@@ -301,7 +298,7 @@ export async function updateDesignSession(
   updates: Partial<DesignSession>
 ): Promise<boolean> {
   try {
-    const { error } = await supabase
+    const { error } = await getSupabase()
       .from('design_sessions')
       .update(updates)
       .eq('id', sessionId);
@@ -324,7 +321,7 @@ export async function saveEnhancedSwipe(
   swipe: EnhancedSwipeData
 ): Promise<boolean> {
   try {
-    const { error } = await supabase
+    const { error } = await getSupabase()
       .from('enhanced_swipes')
       .insert({
         user_hash: userHash,
@@ -352,7 +349,7 @@ export async function getSwipePatterns(
   sessionContext?: string
 ): Promise<SwipePattern[]> {
   try {
-    const query = supabase
+    const query = getSupabase()
       .from('enhanced_swipes')
       .select('*')
       .eq('user_hash', userHash);
@@ -382,7 +379,7 @@ export async function getUserCompleteProfile(userHash: string): Promise<{
   households: Array<Household & { rooms: Array<Room & { sessions: DesignSession[] }> }>;
 } | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .rpc('get_user_complete_profile', { p_user_hash: userHash });
 
     if (error) throw error;

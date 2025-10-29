@@ -8,7 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import { 
   Home, 
   Plus, 
@@ -116,7 +116,7 @@ export function UserDashboard() {
       }
       
       // Call Supabase function to get complete profile
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .rpc('get_user_complete_profile', { p_user_hash: userHash });
       
       if (error) {
@@ -448,7 +448,7 @@ function InspirationsGallery({ userHash }: { userHash?: string }) {
         }
         
         // Fallback to Supabase
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
           .from('sessions')
           .select('session_json')
           .eq('user_hash', userHash)
@@ -663,7 +663,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
         }
         
         // Fallback to Supabase
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
           .from('sessions')
           .select('session_json')
           .eq('user_hash', userHash)

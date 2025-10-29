@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, logBehavioralEvent } from '@/lib/supabase';
+import { getSupabase, logBehavioralEvent } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
+  const { data, error } = await getSupabase()
       .from('behavioral_logs')
       .select('*')
       .eq('project_id', projectId)

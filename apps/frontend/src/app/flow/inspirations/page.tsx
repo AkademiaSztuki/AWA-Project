@@ -11,7 +11,7 @@ import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
 import { analyzeInspirationsWithGamma, type InspirationTaggingResult } from "@/lib/vision/gamma-tagging";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 import { 
   Upload, 
   X, 
@@ -143,12 +143,12 @@ export default function InspirationsPage() {
       const uploads = await Promise.all(items.map(async (i) => {
         try {
           const path = `inspirations/${userHash}/${i.id}`;
-          const { data, error } = await supabase
+          const { data, error } = await getSupabase()
             .storage
             .from('aura-assets')
             .upload(path, i.file, { upsert: true, contentType: i.file.type || 'image/jpeg' });
           if (error) throw error;
-          const { data: pub } = supabase.storage.from('aura-assets').getPublicUrl(path);
+          const { data: pub } = getSupabase().storage.from('aura-assets').getPublicUrl(path);
           return { id: i.id, fileId: data?.path, url: pub?.publicUrl || undefined };
         } catch (e) {
           console.warn('Upload failed for', i.id, e);

@@ -6,7 +6,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import GlassSurface from '@/components/ui/GlassSurface';
 import { GlassSlider } from '@/components/ui/GlassSlider';
 import { useSessionData } from '@/hooks/useSessionData';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { AwaDialogue } from '@/components/awa';
 
@@ -91,6 +91,7 @@ export default function Survey1Page() {
     
     // Zapis do Supabase (survey_results)
     try {
+      const supabase = getSupabase();
       await supabase.from('survey_results').insert([
         {
           session_id: (window as any)?.sessionStorage?.getItem('aura_user_hash') || '',
