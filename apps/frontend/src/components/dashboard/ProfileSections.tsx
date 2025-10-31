@@ -37,7 +37,7 @@ export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
       <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
               <Palette size={20} className="text-white" />
             </div>
             <div>
@@ -71,11 +71,11 @@ export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
               <div className="flex-1 bg-white/20 rounded-full h-2">
                 <div
                   className="bg-gradient-to-r from-gold to-champagne h-2 rounded-full"
-                  style={{ width: `${(visualDNA.accuracyScore || 0) * 100}%` }}
+                  style={{ width: `${Math.max(0, Math.min(100, (visualDNA.accuracyScore || 0) > 1 ? visualDNA.accuracyScore : (visualDNA.accuracyScore || 0) * 100))}%` }}
                 />
               </div>
               <span className="text-sm font-bold text-gold">
-                {Math.round((visualDNA.accuracyScore || 0) * 100)}%
+                {Math.round((visualDNA.accuracyScore || 0) > 1 ? (visualDNA.accuracyScore || 0) : (visualDNA.accuracyScore || 0) * 100)}%
               </span>
             </div>
           </div>
@@ -141,7 +141,7 @@ export function CoreNeedsSection({ ladderResults }: { ladderResults: any }) {
       <GlassCard className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-platinum flex items-center justify-center">
               <Target size={20} className="text-white" />
             </div>
             <div>
@@ -156,9 +156,9 @@ export function CoreNeedsSection({ ladderResults }: { ladderResults: any }) {
         </div>
 
         {/* Core Need Badge */}
-        <div className="text-center py-6 mb-4">
-          <div className="inline-block px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white">
-            <p className="text-2xl font-nasalization">
+        <div className="text-center py-4 mb-4">
+          <div className="inline-block px-4 py-2 rounded-2xl glass-panel border border-gold/40 text-graphite">
+            <p className="text-lg font-nasalization">
               {ladderResults.coreNeed || t('Nieokreślona', 'Undefined')}
             </p>
           </div>
@@ -172,7 +172,7 @@ export function CoreNeedsSection({ ladderResults }: { ladderResults: any }) {
             </p>
             {ladderResults.path.map((step: any, idx: number) => (
               <div key={idx} className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center text-white text-xs font-bold">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center text-white text-xs font-bold">
                   {step.level}
                 </div>
                 <span className="text-sm text-graphite font-modern">
@@ -205,7 +205,7 @@ export function RoomAnalysisSection({ roomAnalysis, roomImage }: { roomAnalysis:
       <GlassCard className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-platinum flex items-center justify-center">
               <HomeIcon size={20} className="text-white" />
             </div>
             <div>
@@ -302,7 +302,7 @@ export function InspirationsPreviewSection({ inspirations, onViewAll }: { inspir
       <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
               <Heart size={20} className="text-white" />
             </div>
             <div>
@@ -342,7 +342,7 @@ export function InspirationsPreviewSection({ inspirations, onViewAll }: { inspir
           <div className="mt-4 pt-4 border-t border-white/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Leaf size={16} className="text-green-500" />
+                <Leaf size={16} className="text-gold" />
                 <span className="text-xs text-silver-dark font-modern">
                   {t('Poziom Natury', 'Nature Level')}
                 </span>

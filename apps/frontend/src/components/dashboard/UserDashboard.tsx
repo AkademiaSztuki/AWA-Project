@@ -190,10 +190,10 @@ export function UserDashboard() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
+    <div className="min-h-screen flex flex-col w-full relative">
       {authError && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-xl p-3 rounded-lg glass-panel border border-red-300/40">
-          <p className="text-sm text-red-700 font-modern text-center">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-xl p-3 rounded-lg glass-panel border border-gold/30">
+          <p className="text-sm text-graphite font-modern text-center">
             {language === 'pl' ? 'Błąd logowania: ' : 'Sign-in error: '}
             {authError}
           </p>
@@ -303,7 +303,7 @@ export function UserDashboard() {
             onViewAll={() => {
               const spaces = (sessionData as any)?.spaces || [];
               if (spaces.length > 0) {
-                router.push(`/space/${spaces[0].id}`);
+                router.push(`/space/${spaces[0].id}?filter=inspiration`);
               }
             }}
           />
@@ -429,7 +429,7 @@ function ProfileItem({ completed, label }: { completed: boolean; label: string }
   return (
     <div className="flex items-center gap-2 text-sm">
       <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
-        completed ? 'bg-green-500' : 'bg-white/20'
+        completed ? 'bg-gold' : 'bg-white/20'
       }`}>
         {completed && <span className="text-white text-xs">✓</span>}
       </div>
@@ -637,7 +637,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
                 {language === 'pl' ? 'Profil Osobowości' : 'Personality Profile'}
               </h3>
               <p className="text-xs sm:text-sm text-silver-dark font-modern">
-                {language === 'pl' ? 'Big Five (IPIP-60)' : 'Big Five (IPIP-60)'}
+                {language === 'pl' ? 'Big Five (IPIP-NEO-120)' : 'Big Five (IPIP-NEO-120)'}
               </p>
             </div>
           </div>
@@ -648,28 +648,47 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-          {Object.entries(bigFiveData.scores).map(([domain, score], index) => (
-            <motion.div
-              key={domain}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: index * 0.1 }}
-              className="text-center"
-            >
-              <div className="mb-2">
-                <div className="text-xl sm:text-2xl font-bold text-gold mb-1">{Number(score)}%</div>
-                <div className="text-xs sm:text-sm font-nasalization text-graphite">
-                  {getDomainLabel(domain, language)}
+          {(() => {
+            // Handle both IPIP-60 and IPIP-NEO-120 formats
+            const domainsMap: Array<{ domain: string; score: number }> = [];
+            
+            if (bigFiveData.scores.domains) {
+              // IPIP-NEO-120 format
+              Object.entries(bigFiveData.scores.domains).forEach(([key, value]) => {
+                domainsMap.push({ domain: key, score: value as number });
+              });
+            } else {
+              // IPIP-60 format
+              Object.entries(bigFiveData.scores).forEach(([key, value]) => {
+                if (typeof value === 'number') {
+                  domainsMap.push({ domain: key, score: value });
+                }
+              });
+            }
+            
+            return domainsMap.map(({ domain, score }, index) => (
+              <motion.div
+                key={domain}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: index * 0.1 }}
+                className="text-center"
+              >
+                <div className="mb-2">
+                  <div className="text-xl sm:text-2xl font-bold text-gold mb-1">{Number(score)}%</div>
+                  <div className="text-xs sm:text-sm font-nasalization text-graphite">
+                    {getDomainLabel(domain, language)}
+                  </div>
                 </div>
-              </div>
-              <div className="w-full bg-white/20 rounded-full h-2">
-                <div 
-                  className="bg-gradient-to-r from-gold to-champagne h-2 rounded-full transition-all duration-1000"
-                  style={{ width: `${score}%` }}
-                />
-              </div>
-            </motion.div>
-          ))}
+                <div className="w-full bg-white/20 rounded-full h-2">
+                  <div 
+                    className="bg-gradient-to-r from-gold to-champagne h-2 rounded-full transition-all duration-1000"
+                    style={{ width: `${score}%` }}
+                  />
+                </div>
+              </motion.div>
+            ));
+          })()}
         </div>
         <div className="mt-4 text-center">
           <p className="text-xs sm:text-sm text-silver-dark font-modern">
@@ -683,11 +702,18 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
 
 function getDomainLabel(domain: string, language: 'pl' | 'en'): string {
   const labels = {
+    // IPIP-60 format
     openness: { pl: 'Otwartość', en: 'Openness' },
     conscientiousness: { pl: 'Sumienność', en: 'Conscientiousness' },
     extraversion: { pl: 'Ekstrawersja', en: 'Extraversion' },
     agreeableness: { pl: 'Ugodowość', en: 'Agreeableness' },
-    neuroticism: { pl: 'Neurotyczność', en: 'Neuroticism' }
+    neuroticism: { pl: 'Neurotyczność', en: 'Neuroticism' },
+    // IPIP-NEO-120 format
+    O: { pl: 'Otwartość', en: 'Openness' },
+    C: { pl: 'Sumienność', en: 'Conscientiousness' },
+    E: { pl: 'Ekstrawersja', en: 'Extraversion' },
+    A: { pl: 'Ugodowość', en: 'Agreeableness' },
+    N: { pl: 'Neurotyczność', en: 'Neuroticism' }
   };
   return labels[domain as keyof typeof labels]?.[language] || domain;
 }

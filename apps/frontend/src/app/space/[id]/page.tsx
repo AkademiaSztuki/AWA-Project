@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -32,6 +32,7 @@ export default function SpaceDetailPage() {
   const router = useRouter();
   const params = useParams();
   const spaceId = params?.id as string;
+  const searchParams = useSearchParams();
   const { sessionData, updateSessionData } = useSessionData();
   const { language } = useLanguage();
 
@@ -47,6 +48,13 @@ export default function SpaceDetailPage() {
       setSpace(foundSpace);
     }
   }, [spaceId, sessionData]);
+
+  useEffect(() => {
+    const qp = searchParams?.get('filter');
+    if (qp === 'inspiration' || qp === 'generated' || qp === 'all') {
+      setFilter(qp);
+    }
+  }, [searchParams]);
 
   const filteredImages = space?.images.filter(img => {
     if (filter === 'all') return true;
@@ -95,7 +103,7 @@ export default function SpaceDetailPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
+    <div className="min-h-screen flex flex-col w-full relative">
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
 
@@ -147,7 +155,7 @@ export default function SpaceDetailPage() {
                 onClick={() => setFilter('generated')}
                 className={`px-4 py-2 rounded-lg font-modern transition-all duration-300 flex items-center gap-2 ${
                   filter === 'generated'
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                    ? 'bg-gradient-to-r from-gold to-platinum text-white'
                     : 'glass-panel text-graphite hover:bg-white/40'
                 }`}
               >
@@ -159,7 +167,7 @@ export default function SpaceDetailPage() {
                 onClick={() => setFilter('inspiration')}
                 className={`px-4 py-2 rounded-lg font-modern transition-all duration-300 flex items-center gap-2 ${
                   filter === 'inspiration'
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
+                    ? 'bg-gradient-to-r from-champagne to-platinum text-white'
                     : 'glass-panel text-graphite hover:bg-white/40'
                 }`}
               >
@@ -205,11 +213,11 @@ export default function SpaceDetailPage() {
                   {/* Type Badge */}
                   <div className="absolute top-2 left-2">
                     {image.type === 'generated' ? (
-                      <div className="w-8 h-8 rounded-full bg-purple-500/80 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-gold/80 flex items-center justify-center">
                         <Sparkles size={16} className="text-white" />
                       </div>
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-blue-500/80 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-champagne/80 flex items-center justify-center">
                         <Heart size={16} className="text-white" />
                       </div>
                     )}
@@ -232,7 +240,7 @@ export default function SpaceDetailPage() {
                           e.stopPropagation();
                           handleDeleteImage(image.id);
                         }}
-                        className="w-8 h-8 rounded-full bg-red-500/60 hover:bg-red-500/80 flex items-center justify-center transition-colors"
+                        className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 border border-gold/30 flex items-center justify-center transition-colors"
                       >
                         <Trash2 size={16} className="text-white" />
                       </button>

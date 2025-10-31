@@ -54,15 +54,28 @@ export interface UserProfile {
 
   // Added: personality and inspirations (global, once, editable)
   personality?: {
-    instrument: 'IPIP-60';
+    instrument: 'IPIP-60' | 'IPIP-NEO-120';
     version?: string;
     language?: 'pl' | 'en';
     domains?: {
-      openness: number;
-      conscientiousness: number;
-      extraversion: number;
-      agreeableness: number;
-      neuroticism: number;
+      openness?: number;
+      conscientiousness?: number;
+      extraversion?: number;
+      agreeableness?: number;
+      neuroticism?: number;
+      // IPIP-NEO-120 format
+      O?: number;
+      C?: number;
+      E?: number;
+      A?: number;
+      N?: number;
+    };
+    facets?: {
+      O: { [key: number]: number };
+      C: { [key: number]: number };
+      E: { [key: number]: number };
+      A: { [key: number]: number };
+      N: { [key: number]: number };
     };
     items?: Array<{
       id: string; // item key

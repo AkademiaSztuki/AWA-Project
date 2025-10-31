@@ -9,7 +9,7 @@ import { AwaContainer } from "@/components/awa/AwaContainer";
 import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
-import { IPIP_60_ITEMS, calculateIPIPScores, IPIP_DOMAIN_LABELS, type IPIPScores } from "@/lib/questions/ipip-60";
+import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
 import { 
   Brain, 
   ArrowRight, 
@@ -28,7 +28,7 @@ export default function BigFivePage() {
   const [responses, setResponses] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [scores, setScores] = useState<IPIPScores | null>(null);
+  const [scores, setScores] = useState<IPIPNEOScores | null>(null);
 
   const t = (pl: string, en: string) => (language === "pl" ? pl : en);
 
@@ -38,20 +38,20 @@ export default function BigFivePage() {
       setResponses(sessionData.bigFive.responses || {});
       const responseCount = Object.keys(sessionData.bigFive.responses || {}).length;
       // If all questions answered, show results
-      if (responseCount >= IPIP_60_ITEMS.length) {
+      if (responseCount >= IPIP_120_ITEMS.length) {
         setShowResults(true);
-        const finalScores = calculateIPIPScores(sessionData.bigFive.responses || {});
+        const finalScores = calculateIPIPNEO120Scores(sessionData.bigFive.responses || {});
         setScores(finalScores);
       } else {
         // Ensure we don't exceed the array bounds
-        const nextQuestion = Math.min(responseCount, IPIP_60_ITEMS.length - 1);
+        const nextQuestion = Math.min(responseCount, IPIP_120_ITEMS.length - 1);
         setCurrentQuestion(nextQuestion);
       }
     }
   }, [sessionData]);
 
   const handleResponse = (value: number) => {
-    const item = IPIP_60_ITEMS[currentQuestion];
+    const item = IPIP_120_ITEMS[currentQuestion];
     if (!item) return; // Safety check
     
     setResponses(prev => ({
@@ -61,11 +61,11 @@ export default function BigFivePage() {
     
     // Auto-advance after selection
     setTimeout(() => {
-      if (currentQuestion < IPIP_60_ITEMS.length - 1) {
-        setCurrentQuestion(prev => Math.min(prev + 1, IPIP_60_ITEMS.length - 1));
+      if (currentQuestion < IPIP_120_ITEMS.length - 1) {
+        setCurrentQuestion(prev => Math.min(prev + 1, IPIP_120_ITEMS.length - 1));
       } else {
         // Last question - calculate scores
-        const finalScores = calculateIPIPScores({
+        const finalScores = calculateIPIPNEO120Scores({
           ...responses,
           [item.id]: value
         });
@@ -76,7 +76,7 @@ export default function BigFivePage() {
   };
 
   const handleNext = () => {
-    if (currentQuestion < IPIP_60_ITEMS.length - 1) {
+    if (currentQuestion < IPIP_120_ITEMS.length - 1) {
       setCurrentQuestion(prev => prev + 1);
     }
   };
@@ -90,9 +90,10 @@ export default function BigFivePage() {
   const handleSave = async () => {
     setIsSubmitting(true);
     try {
-      const finalScores = calculateIPIPScores(responses);
+      const finalScores = calculateIPIPNEO120Scores(responses);
       await updateSessionData({
         bigFive: {
+          instrument: 'IPIP-NEO-120',
           responses,
           scores: finalScores,
           completedAt: new Date().toISOString()
@@ -109,14 +110,14 @@ export default function BigFivePage() {
     router.push("/flow/tinder");
   };
 
-  const progress = ((currentQuestion + 1) / IPIP_60_ITEMS.length) * 100;
-  const currentItem = IPIP_60_ITEMS[currentQuestion];
+  const progress = ((currentQuestion + 1) / IPIP_120_ITEMS.length) * 100;
+  const currentItem = IPIP_120_ITEMS[currentQuestion];
   const isAnswered = currentItem ? responses[currentItem.id] !== undefined : false;
   
   // Debug log
   console.log('Big Five Debug:', {
     currentQuestion,
-    IPIP_60_ITEMS_length: IPIP_60_ITEMS.length,
+    IPIP_120_ITEMS_length: IPIP_120_ITEMS.length,
     currentItem: currentItem?.id,
     showResults
   });
@@ -194,7 +195,7 @@ export default function BigFivePage() {
 
                 {/* Results */}
                 <div className="space-y-6 mb-8">
-                  {Object.entries(scores).map(([domain, score], index) => (
+                  {Object.entries(scores.domains).map(([domain, score], index) => (
                     <motion.div
                       key={domain}
                       initial={{ opacity: 0, x: -20 }}
@@ -217,7 +218,7 @@ export default function BigFivePage() {
                       </div>
                       
                       <p className="text-sm text-silver-dark font-modern">
-                        {getScoreDescription(domain as keyof IPIPScores, score, language)}
+                        {getScoreDescription(domain as 'O' | 'C' | 'E' | 'A' | 'N', score, language)}
                       </p>
                     </motion.div>
                   ))}
@@ -303,8 +304,8 @@ export default function BigFivePage() {
                 </h1>
                 <p className="text-lg text-graphite font-modern max-w-2xl mx-auto">
                   {t(
-                    "Odpowiedz na 60 pytań aby IDA mogła lepiej Cię poznać i spersonalizować wnętrza.",
-                    "Answer 60 questions so IDA can get to know you better and personalize your interiors."
+                    "Odpowiedz na 120 pytań aby IDA mogła lepiej Cię poznać i spersonalizować wnętrza.",
+                    "Answer 120 questions so IDA can get to know you better and personalize your interiors."
                   )}
                 </p>
               </div>
@@ -313,7 +314,7 @@ export default function BigFivePage() {
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-modern text-graphite">
-                    {t("Pytanie", "Question")} {currentQuestion + 1} / {IPIP_60_ITEMS.length}
+                    {t("Pytanie", "Question")} {currentQuestion + 1} / {IPIP_120_ITEMS.length}
                   </span>
                   <span className="text-sm font-modern text-silver-dark">
                     {Math.round(progress)}%
@@ -389,7 +390,7 @@ export default function BigFivePage() {
                     {t("Pomiń test", "Skip test")}
                   </GlassButton>
                   
-                  {isAnswered && currentQuestion < IPIP_60_ITEMS.length - 1 && (
+                  {isAnswered && currentQuestion < IPIP_120_ITEMS.length - 1 && (
                     <GlassButton
                       onClick={handleNext}
                       className="px-6 py-3"
@@ -408,9 +409,9 @@ export default function BigFivePage() {
   );
 }
 
-function getScoreDescription(domain: keyof IPIPScores, score: number, language: 'pl' | 'en'): string {
+function getScoreDescription(domain: 'O' | 'C' | 'E' | 'A' | 'N', score: number, language: 'pl' | 'en'): string {
   const descriptions = {
-    openness: {
+    O: {
       pl: score > 70 ? "Bardzo otwarty na nowe doświadczenia" : 
           score > 40 ? "Umiarkowanie otwarty na doświadczenia" : 
           "Preferuje znane i tradycyjne rozwiązania",
@@ -418,7 +419,7 @@ function getScoreDescription(domain: keyof IPIPScores, score: number, language: 
           score > 40 ? "Moderately open to experiences" : 
           "Prefers familiar and traditional solutions"
     },
-    conscientiousness: {
+    C: {
       pl: score > 70 ? "Bardzo zorganizowany i sumienny" : 
           score > 40 ? "Umiarkowanie zorganizowany" : 
           "Elastyczny i spontaniczny",
@@ -426,7 +427,7 @@ function getScoreDescription(domain: keyof IPIPScores, score: number, language: 
           score > 40 ? "Moderately organized" : 
           "Flexible and spontaneous"
     },
-    extraversion: {
+    E: {
       pl: score > 70 ? "Bardzo towarzyski i energiczny" : 
           score > 40 ? "Umiarkowanie towarzyski" : 
           "Cichy i zarezerwowany",
@@ -434,7 +435,7 @@ function getScoreDescription(domain: keyof IPIPScores, score: number, language: 
           score > 40 ? "Moderately sociable" : 
           "Quiet and reserved"
     },
-    agreeableness: {
+    A: {
       pl: score > 70 ? "Bardzo ugodowy i współczujący" : 
           score > 40 ? "Umiarkowanie ugodowy" : 
           "Asertywny i bezpośredni",
@@ -442,7 +443,7 @@ function getScoreDescription(domain: keyof IPIPScores, score: number, language: 
           score > 40 ? "Moderately agreeable" : 
           "Assertive and direct"
     },
-    neuroticism: {
+    N: {
       pl: score > 70 ? "Często odczuwa stres i niepokój" : 
           score > 40 ? "Umiarkowanie wrażliwy" : 
           "Spokojny i opanowany",
