@@ -18,13 +18,30 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
 
   useEffect(() => {
     console.log('AmbientMusic: Initializing with file:', audioFile, 'volume:', volume);
-    
+
+    let initialVolume = volume;
+    if (typeof window !== 'undefined') {
+      try {
+        const savedVolume = localStorage.getItem('ambient-music-volume');
+        if (savedVolume !== null) {
+          const parsed = parseFloat(savedVolume);
+          if (!Number.isNaN(parsed)) {
+            initialVolume = Math.max(0, Math.min(1, parsed));
+          }
+        }
+      } catch (error) {
+        console.warn('AmbientMusic: Nie udało się odczytać zapisanej głośności.', error);
+      }
+    }
+
+    setCurrentVolume(initialVolume);
+
     // Sprawdź czy plik istnieje
     fetch(audioFile, { method: 'HEAD' })
       .then(response => {
         if (response.ok) {
           console.log('AmbientMusic: Audio file found, creating audio element');
-          createAudioElement();
+          createAudioElement(initialVolume);
         } else {
           console.error('AmbientMusic: Audio file not found:', audioFile);
         }
@@ -32,13 +49,15 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
       .catch(error => {
         console.error('AmbientMusic: Error checking audio file:', error);
       });
-  }, [audioFile]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioFile, volume]);
 
-  const createAudioElement = () => {
+  const createAudioElement = (startVolume: number) => {
     // Twórz element audio
     const audio = new Audio(audioFile);
     audio.loop = true; // Zapętlenie muzyki
-    audio.volume = currentVolume;
+    const effectiveVolume = Math.max(0, Math.min(1, startVolume));
+    audio.volume = effectiveVolume;
     audio.dataset.type = 'ambient'; // Dodaj identyfikator
     audioRef.current = audio;
 
