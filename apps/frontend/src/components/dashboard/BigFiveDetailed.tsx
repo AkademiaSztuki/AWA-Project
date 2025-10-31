@@ -1,19 +1,36 @@
 "use client";
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { GlassButton } from '@/components/ui/GlassButton';
+import { IPIP_FACET_LABELS } from '@/lib/questions/ipip-neo-120';
 
 interface BigFiveScores {
-  openness: number;
-  conscientiousness: number;
-  extraversion: number;
-  agreeableness: number;
-  neuroticism: number;
+  // IPIP-60 format
+  openness?: number;
+  conscientiousness?: number;
+  extraversion?: number;
+  agreeableness?: number;
+  neuroticism?: number;
+  // IPIP-NEO-120 format
+  domains?: {
+    O: number;
+    C: number;
+    E: number;
+    A: number;
+    N: number;
+  };
+  facets?: {
+    O: { [key: number]: number };
+    C: { [key: number]: number };
+    E: { [key: number]: number };
+    A: { [key: number]: number };
+    N: { [key: number]: number };
+  };
 }
 
 interface BigFiveDetailedProps {
@@ -25,17 +42,36 @@ interface BigFiveDetailedProps {
 // Radar Chart Component (używając SVG)
 function RadarChart({ scores }: { scores: BigFiveScores }) {
   const dimensions = [
-    { key: 'openness', label: { pl: 'Otwartość', en: 'Openness' }, angle: 0 },
-    { key: 'conscientiousness', label: { pl: 'Sumienność', en: 'Conscientiousness' }, angle: 72 },
-    { key: 'extraversion', label: { pl: 'Ekstrawersja', en: 'Extraversion' }, angle: 144 },
-    { key: 'agreeableness', label: { pl: 'Ugodowość', en: 'Agreeableness' }, angle: 216 },
-    { key: 'neuroticism', label: { pl: 'Neurotyczność', en: 'Neuroticism' }, angle: 288 }
+    { key: 'O', label: { pl: 'Otwartość', en: 'Openness' }, angle: 0 },
+    { key: 'C', label: { pl: 'Sumienność', en: 'Conscientiousness' }, angle: 72 },
+    { key: 'E', label: { pl: 'Ekstrawersja', en: 'Extraversion' }, angle: 144 },
+    { key: 'A', label: { pl: 'Ugodowość', en: 'Agreeableness' }, angle: 216 },
+    { key: 'N', label: { pl: 'Neurotyczność', en: 'Neuroticism' }, angle: 288 }
   ];
 
   const { language } = useLanguage();
   const centerX = 200;
   const centerY = 200;
   const maxRadius = 150;
+
+  // Get scores from either format
+  const getScore = (key: string): number => {
+    // Try IPIP-NEO-120 format first
+    if (scores.domains && key in scores.domains) {
+      return scores.domains[key as 'O' | 'C' | 'E' | 'A' | 'N'];
+    }
+    // Fallback to IPIP-60 format
+    const mapping: Record<string, string> = {
+      'O': 'openness',
+      'C': 'conscientiousness',
+      'E': 'extraversion',
+      'A': 'agreeableness',
+      'N': 'neuroticism'
+    };
+    const mappedKey = mapping[key] as 'openness' | 'conscientiousness' | 'extraversion' | 'agreeableness' | 'neuroticism';
+    const value = scores[mappedKey];
+    return typeof value === 'number' ? value : 50;
+  };
 
   // Convert score (0-100) to radius
   const getPoint = (score: number, angle: number) => {
@@ -49,7 +85,7 @@ function RadarChart({ scores }: { scores: BigFiveScores }) {
 
   // Create polygon points
   const points = dimensions.map(dim => {
-    const score = scores[dim.key as keyof BigFiveScores];
+    const score = getScore(dim.key);
     return getPoint(score, dim.angle);
   });
 
@@ -113,7 +149,7 @@ function RadarChart({ scores }: { scores: BigFiveScores }) {
       {/* Labels */}
       {dimensions.map(dim => {
         const labelPoint = getPoint(110, dim.angle);
-        const score = scores[dim.key as keyof BigFiveScores];
+        const score = getScore(dim.key);
         return (
           <g key={dim.key}>
             <text
@@ -139,12 +175,133 @@ function RadarChart({ scores }: { scores: BigFiveScores }) {
   );
 }
 
-// Domain description component
-function DomainDescription({ domain, score }: { domain: keyof BigFiveScores; score: number }) {
+// Facet Chart Component (mini radar for 6 facets within a domain)
+function FacetChart({ 
+  domain, 
+  facetScores 
+}: { 
+  domain: 'O' | 'C' | 'E' | 'A' | 'N';
+  facetScores: { [key: number]: number }
+}) {
   const { language } = useLanguage();
+  const labels = IPIP_FACET_LABELS[domain];
+  
+  // Create dimensions for 6 facets
+  const facets = Object.entries(labels).map(([num, label]) => ({
+    num: parseInt(num),
+    label: label[language as 'pl' | 'en'],
+    angle: (parseInt(num) - 1) * (360 / 6) // 6 evenly spaced facets
+  }));
+
+  const centerX = 150;
+  const centerY = 150;
+  const maxRadius = 120;
+
+  const getPoint = (score: number, angle: number) => {
+    const radius = (score / 100) * maxRadius;
+    const radian = (angle - 90) * (Math.PI / 180);
+    return {
+      x: centerX + radius * Math.cos(radian),
+      y: centerY + radius * Math.sin(radian)
+    };
+  };
+
+  const points = facets.map(facet => 
+    getPoint(facetScores[facet.num] || 50, facet.angle)
+  );
+
+  const pathData = points.map((p, i) => 
+    `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`
+  ).join(' ') + ' Z';
+
+  const rings = [20, 40, 60, 80, 100];
+
+  return (
+    <svg width="300" height="300" viewBox="0 0 300 300" className="mx-auto my-4">
+      {/* Background rings */}
+      {rings.map(ring => (
+        <circle
+          key={ring}
+          cx={centerX}
+          cy={centerY}
+          r={(ring / 100) * maxRadius}
+          fill="none"
+          stroke="rgba(200, 200, 200, 0.2)"
+          strokeWidth="1"
+        />
+      ))}
+
+      {/* Axis lines */}
+      {facets.map(facet => {
+        const endPoint = getPoint(100, facet.angle);
+        return (
+          <line
+            key={facet.num}
+            x1={centerX}
+            y1={centerY}
+            x2={endPoint.x}
+            y2={endPoint.y}
+            stroke="rgba(200, 200, 200, 0.3)"
+            strokeWidth="1"
+          />
+        );
+      })}
+
+      {/* Data polygon */}
+      <path
+        d={pathData}
+        fill="rgba(212, 175, 55, 0.3)"
+        stroke="rgb(212, 175, 55)"
+        strokeWidth="3"
+      />
+
+      {/* Data points */}
+      {points.map((point, i) => (
+        <circle
+          key={i}
+          cx={point.x}
+          cy={point.y}
+          r="5"
+          fill="rgb(212, 175, 55)"
+        />
+      ))}
+
+      {/* Labels */}
+      {facets.map(facet => {
+        const labelPoint = getPoint(115, facet.angle);
+        const score = facetScores[facet.num] || 0;
+        return (
+          <g key={facet.num}>
+            <text
+              x={labelPoint.x}
+              y={labelPoint.y}
+              textAnchor="middle"
+              className="text-xs font-nasalization fill-graphite"
+            >
+              {facet.label}
+            </text>
+            <text
+              x={labelPoint.x}
+              y={labelPoint.y + 12}
+              textAnchor="middle"
+              className="text-[10px] font-modern fill-gold font-bold"
+            >
+              {score}%
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// Domain description component
+function DomainDescription({ domain, score, facets }: { domain: 'O' | 'C' | 'E' | 'A' | 'N'; score: number; facets?: { [key: number]: number } }) {
+  const { language } = useLanguage();
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const descriptions = {
-    openness: {
+    O: {
       label: { pl: 'Otwartość na Doświadczenia', en: 'Openness to Experience' },
       high: {
         pl: 'Cenisz kreatywność, wyobraźnię i nowe doświadczenia. Lubisz abstrakcyjne myślenie i różnorodność.',
@@ -163,7 +320,7 @@ function DomainDescription({ domain, score }: { domain: keyof BigFiveScores; sco
         en: 'Design Impact: Influences preferences for visual complexity, material variety, and innovative solutions.'
       }
     },
-    conscientiousness: {
+    C: {
       label: { pl: 'Sumienność', en: 'Conscientiousness' },
       high: {
         pl: 'Jesteś zorganizowany, systematyczny i odpowiedzialny. Planujesz z wyprzedzeniem i dbasz o szczegóły.',
@@ -182,7 +339,7 @@ function DomainDescription({ domain, score }: { domain: keyof BigFiveScores; sco
         en: 'Design Impact: Influences storage needs, space organization, and orderliness.'
       }
     },
-    extraversion: {
+    E: {
       label: { pl: 'Ekstrawersja', en: 'Extraversion' },
       high: {
         pl: 'Czerpiesz energię z interakcji społecznych. Lubisz być otoczony ludźmi i aktywność.',
@@ -201,7 +358,7 @@ function DomainDescription({ domain, score }: { domain: keyof BigFiveScores; sco
         en: 'Design Impact: Influences space openness, lighting brightness, and social vs private areas.'
       }
     },
-    agreeableness: {
+    A: {
       label: { pl: 'Ugodowość', en: 'Agreeableness' },
       high: {
         pl: 'Jesteś empatyczny, współpracujący i harmonijny. Cenisz dobre relacje i kompromis.',
@@ -220,7 +377,7 @@ function DomainDescription({ domain, score }: { domain: keyof BigFiveScores; sco
         en: 'Design Impact: Influences color harmony, balanced proportions, and calming elements.'
       }
     },
-    neuroticism: {
+    N: {
       label: { pl: 'Neurotyczność', en: 'Neuroticism' },
       high: {
         pl: 'Jesteś wrażliwy emocjonalnie i reaktywny. Potrzebujesz środowiska, które oferuje komfort i bezpieczeństwo.',
@@ -244,6 +401,8 @@ function DomainDescription({ domain, score }: { domain: keyof BigFiveScores; sco
   const domainData = descriptions[domain];
   const level = score > 66 ? 'high' : score > 33 ? 'medium' : 'low';
 
+  const hasFacets = facets && Object.keys(facets).length > 0;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -251,10 +410,24 @@ function DomainDescription({ domain, score }: { domain: keyof BigFiveScores; sco
       transition={{ duration: 0.5 }}
     >
       <GlassCard className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-nasalization text-graphite">
-            {domainData.label[language as 'pl' | 'en']}
-          </h3>
+        {/* Clickable header */}
+        <div 
+          className={`flex items-center justify-between mb-4 ${hasFacets ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+          onClick={() => hasFacets && setIsExpanded(!isExpanded)}
+        >
+          <div className="flex items-center gap-3">
+            {hasFacets && (
+              <motion.div
+                animate={{ rotate: isExpanded ? 180 : 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <ChevronDown size={24} className="text-gold" />
+              </motion.div>
+            )}
+            <h3 className="text-xl font-nasalization text-graphite">
+              {domainData.label[language as 'pl' | 'en']}
+            </h3>
+          </div>
           <div className="text-3xl font-bold text-gold">{score}%</div>
         </div>
 
@@ -277,6 +450,23 @@ function DomainDescription({ domain, score }: { domain: keyof BigFiveScores; sco
             {domainData.designImpact[language as 'pl' | 'en']}
           </p>
         </div>
+
+        {/* Expanded facets chart */}
+        <AnimatePresence>
+          {isExpanded && facets && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div className="mt-6 pt-6 border-t border-white/20">
+                <FacetChart domain={domain} facetScores={facets} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </GlassCard>
     </motion.div>
   );
@@ -315,7 +505,7 @@ export function BigFiveDetailed({ scores, responses, completedAt }: BigFiveDetai
               {t('Twój Profil Osobowości', 'Your Personality Profile')}
             </h1>
             <p className="text-base lg:text-lg text-graphite font-modern">
-              {t('Big Five (IPIP-60) - Szczegółowa Analiza', 'Big Five (IPIP-60) - Detailed Analysis')}
+              {t('Big Five (IPIP-NEO-120) - Szczegółowa Analiza', 'Big Five (IPIP-NEO-120) - Detailed Analysis')}
             </p>
             {completedAt && (
               <p className="text-sm text-silver-dark font-modern mt-2">
@@ -351,19 +541,49 @@ export function BigFiveDetailed({ scores, responses, completedAt }: BigFiveDetai
               {t('Szczegółowe Opisy Wymiarów', 'Detailed Dimension Descriptions')}
             </h2>
 
-            {Object.entries(scores).map(([domain, score], index) => (
-              <motion.div
-                key={domain}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-              >
-                <DomainDescription
-                  domain={domain as keyof BigFiveScores}
-                  score={score}
-                />
-              </motion.div>
-            ))}
+            {(() => {
+              // Get domains from either format
+              const domainMap: Record<string, number> = {};
+              if (scores.domains) {
+                // IPIP-NEO-120 format
+                Object.entries(scores.domains).forEach(([key, value]) => {
+                  domainMap[key] = value;
+                });
+              } else {
+                // IPIP-60 format - map to NEO keys
+                const mapping: Record<string, string> = {
+                  'openness': 'O',
+                  'conscientiousness': 'C',
+                  'extraversion': 'E',
+                  'agreeableness': 'A',
+                  'neuroticism': 'N'
+                };
+                Object.entries(scores).forEach(([key, value]) => {
+                  if (typeof value === 'number' && mapping[key]) {
+                    domainMap[mapping[key]] = value;
+                  }
+                });
+              }
+              
+              return Object.entries(domainMap).map(([domain, score], index) => {
+                // Get facet scores if available
+                const facetScores = scores.facets?.[domain as 'O' | 'C' | 'E' | 'A' | 'N'];
+                return (
+                  <motion.div
+                    key={domain}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                  >
+                    <DomainDescription
+                      domain={domain as 'O' | 'C' | 'E' | 'A' | 'N'}
+                      score={score}
+                      facets={facetScores}
+                    />
+                  </motion.div>
+                );
+              });
+            })()}
           </div>
 
           {/* Summary */}

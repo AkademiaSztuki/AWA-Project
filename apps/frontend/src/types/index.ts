@@ -97,13 +97,29 @@ export interface SessionData {
   }>;
   // Big Five personality test results
   bigFive?: {
+    instrument?: 'IPIP-60' | 'IPIP-NEO-120';
     responses: Record<string, number>;
     scores: {
-      openness: number;
-      conscientiousness: number;
-      extraversion: number;
-      agreeableness: number;
-      neuroticism: number;
+      openness?: number;
+      conscientiousness?: number;
+      extraversion?: number;
+      agreeableness?: number;
+      neuroticism?: number;
+      // IPIP-NEO-120 specific
+      domains?: {
+        O: number;
+        C: number;
+        E: number;
+        A: number;
+        N: number;
+      };
+      facets?: {
+        O: { [key: number]: number };
+        C: { [key: number]: number };
+        E: { [key: number]: number };
+        A: { [key: number]: number };
+        N: { [key: number]: number };
+      };
     };
     completedAt: string;
   };
