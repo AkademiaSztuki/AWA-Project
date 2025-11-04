@@ -17,18 +17,14 @@ import {
   SensoryTestSuite,
   NatureMetaphorTest
 } from '@/components/research';
-import { BigFiveStep } from '@/components/steps/BigFiveStep';
-import { InspirationsStep } from '@/components/steps/InspirationsStep';
-import { SEMANTIC_DIFFERENTIAL_DIMENSIONS } from '@/lib/questions/validated-scales';
 import { ArrowRight, ArrowLeft, Check, Sparkles, Heart, Zap, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal } from '@/components/auth/LoginModal';
+import { computeWeightedDNAFromSwipes } from '@/lib/dna';
 
 type WizardStep = 
   | 'welcome'
   | 'lifestyle'
-  | 'big_five'
-  | 'inspirations'
   | 'tinder_swipes'
   | 'semantic_diff'
   | 'colors_materials'
@@ -127,8 +123,6 @@ export function CoreProfileWizard() {
   const steps: WizardStep[] = [
     'welcome',
     'lifestyle',
-    'big_five',
-    'inspirations',
     'tinder_swipes',
     'semantic_diff',
     'colors_materials',
@@ -141,7 +135,6 @@ export function CoreProfileWizard() {
   ];
 
   const currentStepIndex = steps.indexOf(currentStep);
-  const progress = ((currentStepIndex + 1) / steps.length) * 100;
 
   const updateProfile = (data: Partial<CoreProfileData>) => {
     setProfileData(prev => ({ ...prev, ...data }));
@@ -237,26 +230,50 @@ export function CoreProfileWizard() {
     setIsSubmitting(true);
     
     try {
-      // Save to session data
+      // Save ALL profile data to session
       await updateSessionData({
+        // Lifestyle
+        lifestyle: profileData.lifestyle,
+        
+        // Big Five (if collected here)
+        bigFive: profileData.bigFive,
+        
+        // Inspirations (if collected here)
+        inspirations: profileData.inspirations,
+        
+        // Tinder swipes (implicit preferences)
         tinderData: {
           swipes: profileData.tinderSwipes || []
         },
+        
+        // Semantic differential (explicit warmth/brightness/complexity)
+        semanticDifferential: profileData.semanticDifferential,
+        
+        // Colors & Materials (explicit)
+        colorsAndMaterials: profileData.colorsAndMaterials,
+        
+        // Sensory preferences (explicit)
+        sensoryPreferences: profileData.sensoryPreferences,
+        
+        // Nature metaphor (projective)
+        natureMetaphor: profileData.natureMetaphor,
+        
+        // Aspirational self (projective)
+        aspirationalSelf: profileData.aspirationalSelf,
+        
+        // PRS Ideal (psychological baseline)
+        prsIdeal: profileData.prsIdeal,
+        
+        // Biophilia score (psychological baseline)
+        biophiliaScore: profileData.biophiliaScore,
+        
+        // Mark profile as complete
+        coreProfileComplete: true,
+        coreProfileCompletedAt: new Date().toISOString()
       });
 
-      // If user is not logged in, show login modal
-      if (!user) {
-        setShowLoginModal(true);
-        setIsSubmitting(false);
-        return;
-      }
-
-      // If logged in, link user_hash and proceed to dashboard
-      if (sessionData?.userHash) {
-        await linkUserHashToAuth(sessionData.userHash);
-      }
-
-      router.push('/dashboard');
+      // Continue with flow - go to inspirations next
+      router.push('/flow/inspirations');
     } catch (error) {
       console.error('Failed to save core profile:', error);
     } finally {
@@ -272,8 +289,8 @@ export function CoreProfileWizard() {
       await linkUserHashToAuth(sessionData.userHash);
     }
     
-    // Navigate to dashboard
-    router.push('/dashboard');
+    // Continue with flow - go to photo upload next
+    router.push('/flow/photo');
   };
 
   return (
@@ -281,24 +298,6 @@ export function CoreProfileWizard() {
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-4xl mx-auto">
-          {/* Progress Bar */}
-          <div className="mb-8 h-12">
-            <div className="flex items-center justify-between text-sm text-silver-dark mb-2 font-modern h-6">
-              <span>
-                {language === 'pl' ? 'Krok' : 'Step'} {currentStepIndex + 1} / {steps.length}
-              </span>
-              <span>{Math.round(progress)}%</span>
-            </div>
-            <div className="glass-panel rounded-full h-3 overflow-hidden">
-              <motion.div 
-                className="h-full bg-gradient-to-r from-gold via-champagne to-gold"
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.5 }}
-              />
-            </div>
-          </div>
-
           {/* IDA Insight - Progressive Reveal */}
           <AnimatePresence>
             {currentInsight && (
@@ -345,28 +344,38 @@ export function CoreProfileWizard() {
                 />
               )}
 
-              {currentStep === 'big_five' && (
-                <BigFiveStep 
-                  data={profileData.bigFive}
-                  onUpdate={(data: { responses: Record<string, number>; scores: { openness: number; conscientiousness: number; extraversion: number; agreeableness: number; neuroticism: number }; completedAt: string }) => updateProfile({ bigFive: data })}
-                  onNext={handleNext}
-                  onBack={handleBack}
-                />
-              )}
-
-              {currentStep === 'inspirations' && (
-                <InspirationsStep 
-                  data={profileData.inspirations}
-                  onUpdate={(data: Array<{ id: string; fileId?: string; url?: string; tags?: { styles?: string[]; colors?: string[]; materials?: string[]; biophilia?: number; }; description?: string; addedAt: string; }>) => updateProfile({ inspirations: data })}
-                  onNext={handleNext}
-                  onBack={handleBack}
-                />
-              )}
-
               {currentStep === 'tinder_swipes' && (
                 <TinderSwipesStep 
-                  onComplete={(swipes: Array<{ imageId: number; direction: 'left' | 'right'; reactionTime: number; dwellTime: number }>) => {
+                  onComplete={async (swipes: Array<{ imageId: number; direction: 'left' | 'right'; reactionTime: number; dwellTime: number }>) => {
                     updateProfile({ tinderSwipes: swipes });
+                    
+                    // Compute DNA analysis in background
+                    const weighted = computeWeightedDNAFromSwipes(swipes, swipes.length);
+                    const dominantStyle = weighted.top.styles.join(' + ') || 'Modern';
+                    const colorPalette = weighted.top.colors.join(' + ') || 'Neutral colors';
+                    const materials = weighted.top.materials.join(' + ') || 'Natural materials';
+                    const lighting = weighted.top.lighting.join(' + ') || 'Soft lighting';
+                    const mood = weighted.top.mood.join(' + ') || 'Cozy';
+                    
+                    // Save visualDNA to session
+                    await updateSessionData({
+                      visualDNA: {
+                        dominantTags: [dominantStyle, ...weighted.top.colors, ...weighted.top.materials].filter(Boolean),
+                        preferences: {
+                          colors: weighted.top.colors,
+                          materials: weighted.top.materials,
+                          styles: weighted.top.styles,
+                          lighting: weighted.top.lighting,
+                        },
+                        accuracyScore: Math.round(weighted.confidence),
+                        dominantStyle,
+                        colorPalette,
+                        materialsSummary: materials,
+                        lightingSummary: lighting,
+                        moodSummary: mood,
+                      } as any
+                    });
+                    
                     handleNext();
                   }}
                   onBack={handleBack}

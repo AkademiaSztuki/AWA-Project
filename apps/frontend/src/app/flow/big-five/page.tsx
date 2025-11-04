@@ -100,14 +100,14 @@ export default function BigFivePage() {
         }
       } as any);
       
-      router.push("/flow/tinder");
+      router.push("/flow/ladder");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleSkip = () => {
-    router.push("/flow/tinder");
+    router.push("/flow/ladder");
   };
 
   const progress = ((currentQuestion + 1) / IPIP_120_ITEMS.length) * 100;

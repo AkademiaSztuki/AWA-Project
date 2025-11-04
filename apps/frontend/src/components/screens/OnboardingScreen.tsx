@@ -49,9 +49,9 @@ const OnboardingScreen: React.FC = () => {
         console.log('[Onboarding] ⚡ FAST TRACK - routing to style selection');
         router.push('/flow/style-selection');
       } else {
-        // Full experience: go to inspirations upload first
-        console.log('[Onboarding] 🌟 FULL EXPERIENCE - routing to inspirations upload');
-        router.push('/flow/inspirations');
+        // Full experience: go to setup/profile (CoreProfileWizard) first
+        console.log('[Onboarding] 🌟 FULL EXPERIENCE - routing to setup/profile');
+        router.push('/setup/profile');
       }
     }
   };

@@ -48,6 +48,8 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
         lifestyle_data: profile.lifestyle,
         sensory_preferences: profile.sensoryPreferences,
         projective_responses: profile.projectiveResponses,
+        personality: profile.personality,
+        inspirations: profile.inspirations,
         profile_completed_at: profile.profileCompletedAt,
         updated_at: new Date().toISOString()
       })

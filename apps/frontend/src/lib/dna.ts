@@ -184,7 +184,10 @@ export function buildOptimizedFluxPrompt(sessionData: any): string {
   }
   
   // 4. COLORS (4-6 tokens) - DNA 25% weight - HIGH PRIORITY
-  const colors = sessionData?.visualDNA?.preferences?.colors || [];
+  // Prioritize implicit (DNA) but fallback to explicit palette selection
+  const implicitColors = sessionData?.visualDNA?.preferences?.colors || [];
+  const explicitPalette = sessionData?.colorsAndMaterials?.selectedPalette;
+  const colors = implicitColors.length > 0 ? implicitColors : explicitPalette ? [explicitPalette] : [];
   if (colors.length > 0 && estimatedTokens < 58) {
     const colorText = `${colors.slice(0, 2).join(' and ')} palette`;
     parts.push(colorText);
@@ -192,14 +195,20 @@ export function buildOptimizedFluxPrompt(sessionData: any): string {
   }
   
   // 5. MATERIALS (3-4 tokens) - DNA 20% weight
-  const materials = sessionData?.visualDNA?.preferences?.materials || [];
+  // Prioritize implicit (DNA) but fallback to explicit selections
+  const implicitMaterials = sessionData?.visualDNA?.preferences?.materials || [];
+  const explicitMaterials = sessionData?.colorsAndMaterials?.topMaterials || [];
+  const materials = implicitMaterials.length > 0 ? implicitMaterials : explicitMaterials;
   if (materials.length > 0 && estimatedTokens < 60) {
     parts.push(`${materials[0]} materials`);
     estimatedTokens += 2;
   }
   
   // 6. LIGHTING (2-3 tokens) - DNA 5% weight + Ladder context
-  const lighting = sessionData?.visualDNA?.preferences?.lighting || [];
+  // Prioritize implicit (DNA) but fallback to explicit sensory preference
+  const implicitLighting = sessionData?.visualDNA?.preferences?.lighting || [];
+  const explicitLight = sessionData?.sensoryPreferences?.light;
+  const lighting = implicitLighting.length > 0 ? implicitLighting : explicitLight ? [explicitLight] : [];
   if (lighting.length > 0 && estimatedTokens < 62) {
     parts.push(`${lighting[0]} lighting`);
     estimatedTokens += 2;

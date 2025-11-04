@@ -123,6 +123,36 @@ export interface SessionData {
     };
     completedAt: string;
   };
+  // Core Profile data (explicit preferences)
+  lifestyle?: {
+    livingSituation: string;
+    lifeVibe: string;
+    goals: string[];
+  };
+  semanticDifferential?: {
+    warmth: number;
+    brightness: number;
+    complexity: number;
+    texture: number;
+  };
+  colorsAndMaterials?: {
+    selectedPalette: string;
+    topMaterials: string[];
+  };
+  sensoryPreferences?: {
+    music: string;
+    texture: string;
+    light: string;
+  };
+  natureMetaphor?: string;
+  aspirationalSelf?: {
+    feelings: string[];
+    rituals: string[];
+  };
+  prsIdeal?: { x: number; y: number };
+  biophiliaScore?: number;
+  coreProfileComplete?: boolean;
+  coreProfileCompletedAt?: string;
 }
 
 export type FlowStep = 
