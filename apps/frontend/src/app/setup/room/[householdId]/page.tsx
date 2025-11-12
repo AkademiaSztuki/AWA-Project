@@ -1,6 +1,9 @@
-import { RoomSetup } from '@/components/setup/RoomSetup';
+import { redirect } from "next/navigation";
 
-export default function RoomSetupPage({ params }: { params: { householdId: string } }) {
-  return <RoomSetup householdId={params.householdId} />;
+export default function RoomSetupIndexPage({
+  params,
+}: {
+  params: { householdId: string };
+}) {
+  redirect(`/setup/room/${params.householdId}/photo`);
 }
-

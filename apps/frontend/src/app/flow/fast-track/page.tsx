@@ -2,9 +2,8 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSessionData } from '@/hooks/useSessionData';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { PhotoUploadStep } from '@/components/setup/RoomSetup';
+import { PhotoUploadStep, type PhotoUploadStepProps } from '@/components/setup/room/steps/PhotoUploadStep';
 import { useSession } from '@/hooks';
 
 /**
@@ -20,8 +19,12 @@ export default function FastTrackPage() {
   const [roomType, setRoomType] = useState<string>('');
   const [roomName, setRoomName] = useState<string>('');
 
-  // Update is called when photo is uploaded and analyzed
-  const handlePhotoUpdate = async (uploadedPhotos: string[], detectedRoomType: string, detectedRoomName: string) => {
+    // Update is called when photo is uploaded and analyzed
+    const handlePhotoUpdate: PhotoUploadStepProps['onUpdate'] = (
+      uploadedPhotos,
+      detectedRoomType,
+      detectedRoomName
+    ) => {
     console.log('[FastTrack] Photo update:', {
       photosCount: uploadedPhotos.length,
       firstPhotoLength: uploadedPhotos[0]?.length,
@@ -31,8 +34,8 @@ export default function FastTrackPage() {
     });
     
     setPhotos(uploadedPhotos);
-    setRoomType(detectedRoomType);
-    setRoomName(detectedRoomName);
+    setRoomType(detectedRoomType ?? '');
+    setRoomName(detectedRoomName ?? '');
     
     // Save to session - make sure it's base64 string, not blob URL
     const roomImage = uploadedPhotos[0] || null;
@@ -42,9 +45,8 @@ export default function FastTrackPage() {
       isBase64: roomImage && !roomImage.startsWith('blob:'),
       imageStart: roomImage?.substring(0, 50)
     });
-    
-    await updateSession({
-      roomType: detectedRoomType,
+    updateSession({
+      roomType: detectedRoomType ?? undefined,
       roomImage: roomImage ?? undefined,
       pathType: 'fast' // Mark as fast track
     });
