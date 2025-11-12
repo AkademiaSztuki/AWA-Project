@@ -1,6 +1,5 @@
-import { HouseholdSetup } from '@/components/setup/HouseholdSetup';
+import { redirect } from "next/navigation";
 
-export default function HouseholdSetupPage() {
-  return <HouseholdSetup />;
+export default function HouseholdSetupIndexPage() {
+  redirect("/setup/household/name");
 }
-

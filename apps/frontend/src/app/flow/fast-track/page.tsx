@@ -2,9 +2,8 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSessionData } from '@/hooks/useSessionData';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { PhotoUploadStep } from '@/components/setup/RoomSetup';
+import { PhotoUploadStep } from '@/components/setup/room/steps/PhotoUploadStep';
 import { useSession } from '@/hooks';
 
 /**

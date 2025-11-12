@@ -1,6 +1,5 @@
-import { CoreProfileWizard } from '@/components/wizards/CoreProfileWizard';
+import { redirect } from "next/navigation";
 
-export default function CoreProfilePage() {
-  return <CoreProfileWizard />;
+export default function ProfileSetupIndexPage() {
+  redirect("/setup/profile/welcome");
 }
-
