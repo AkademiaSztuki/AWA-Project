@@ -20,7 +20,7 @@ const toBase64 = (file: File): Promise<string> =>
     reader.onerror = (error) => reject(error);
   });
 
-interface PhotoUploadStepProps {
+export interface PhotoUploadStepProps {
   photos?: string[];
   roomType?: string;
   onUpdate: (photos: string[], roomType?: string | null, roomName?: string) => void;

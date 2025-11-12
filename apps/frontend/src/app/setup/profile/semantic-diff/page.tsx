@@ -7,9 +7,18 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { useProfileWizard } from "@/components/setup/profile/ProfileWizardContext";
+import type { CoreProfileData } from "@/components/setup/profile/types";
+
+type SemanticDimension = keyof NonNullable<
+  CoreProfileData["semanticDifferential"]
+>;
+
+type SemanticAnswers = Partial<
+  Record<SemanticDimension, number>
+>;
 
 interface SemanticQuestion {
-  id: "warmth" | "brightness" | "complexity";
+  id: SemanticDimension;
   question: { pl: string; en: string };
   leftLabel: { pl: string; en: string };
   rightLabel: { pl: string; en: string };
@@ -62,22 +71,36 @@ export default function SemanticDifferentialPage() {
   );
 
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, number>>(
-    profileData.semanticDifferential || {}
+  const [answers, setAnswers] = useState<SemanticAnswers>(
+    profileData.semanticDifferential ?? {}
   );
 
   const current = questions[currentQuestion];
 
   const handleChoice = (side: "left" | "right") => {
     const value = side === "left" ? 0.2 : 0.8;
-    const nextAnswers = { ...answers, [current.id]: value };
+    const nextAnswers: SemanticAnswers = { ...answers, [current.id]: value };
     setAnswers(nextAnswers);
-    updateProfile({ semanticDifferential: nextAnswers });
+    updateProfile({
+      semanticDifferential: {
+        ...profileData.semanticDifferential,
+        ...nextAnswers,
+      } as NonNullable<CoreProfileData["semanticDifferential"]>,
+    });
 
     if (currentQuestion + 1 < questions.length) {
       setCurrentQuestion((index) => index + 1);
     } else {
-      setTimeout(() => completeStep({ semanticDifferential: nextAnswers }), 300);
+      setTimeout(
+        () =>
+          completeStep({
+            semanticDifferential: {
+              ...profileData.semanticDifferential,
+              ...nextAnswers,
+            } as NonNullable<CoreProfileData["semanticDifferential"]>,
+          }),
+        300
+      );
     }
   };
 

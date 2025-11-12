@@ -22,8 +22,8 @@ interface SwipeRecord {
   direction: "left" | "right";
   reactionTime: number;
   dwellTime: number;
-  tags: string[];
-  categories: Record<string, unknown>;
+  tags?: string[];
+  categories?: Record<string, unknown>;
 }
 
 export default function TinderSwipesPage() {

@@ -6,15 +6,7 @@ import Image from "next/image";
 import { ArrowLeft, Heart, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { GlassButton } from "@/components/ui/GlassButton";
-
-interface RoomSwipeRecord {
-  imageId: number;
-  action: "like" | "dislike";
-  timestamp: number;
-  reactionTime: number;
-  tags: string[];
-  categories: Record<string, unknown>;
-}
+import type { RoomSwipe } from "../types";
 
 interface RoomImage {
   id: number;
@@ -26,7 +18,7 @@ interface RoomImage {
 
 interface RoomSwipesStepProps {
   roomType: string;
-  onComplete: (swipes: RoomSwipeRecord[]) => void;
+  onComplete: (swipes: RoomSwipe[]) => void;
   onBack: () => void;
 }
 
@@ -37,7 +29,7 @@ export function RoomSwipesStep({
 }: RoomSwipesStepProps) {
   const { language } = useLanguage();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [swipes, setSwipes] = useState<RoomSwipeRecord[]>([]);
+  const [swipes, setSwipes] = useState<RoomSwipe[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [startTime, setStartTime] = useState(Date.now());
   const [roomImages, setRoomImages] = useState<RoomImage[]>([]);
@@ -64,17 +56,17 @@ export function RoomSwipesStep({
     setStartTime(Date.now());
   }, [currentImageIndex]);
 
-  const handleSwipe = (action: "like" | "dislike") => {
+  const handleSwipe = (direction: "left" | "right") => {
     const currentImage = roomImages[currentImageIndex];
     if (!currentImage) return;
 
     const reactionTime = Date.now() - startTime;
 
-    const newSwipe: RoomSwipeRecord = {
+    const newSwipe: RoomSwipe = {
       imageId: currentImage.id,
-      action,
-      timestamp: Date.now(),
+      direction,
       reactionTime,
+      dwellTime: reactionTime,
       tags: currentImage.tags,
       categories: currentImage.categories,
     };
@@ -92,9 +84,9 @@ export function RoomSwipesStep({
   const handleDragEnd = (_: unknown, info: { offset: { x: number } }) => {
     const threshold = 100;
     if (info.offset.x > threshold) {
-      handleSwipe("like");
+      handleSwipe("right");
     } else if (info.offset.x < -threshold) {
-      handleSwipe("dislike");
+      handleSwipe("left");
     }
     setIsDragging(false);
   };
@@ -175,7 +167,7 @@ export function RoomSwipesStep({
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => handleSwipe("dislike")}
+              onClick={() => handleSwipe("left")}
               className="w-20 h-20 rounded-full bg-gradient-to-br from-red-100 to-red-200 hover:from-red-200 hover:to-red-300 shadow-xl flex items-center justify-center transition-all z-10"
               disabled={isDragging}
             >
@@ -184,7 +176,7 @@ export function RoomSwipesStep({
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => handleSwipe("like")}
+              onClick={() => handleSwipe("right")}
               className="w-20 h-20 rounded-full bg-gradient-to-br from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 shadow-xl flex items-center justify-center transition-all z-10"
               disabled={isDragging}
             >

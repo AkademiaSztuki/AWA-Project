@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { PhotoUploadStep } from '@/components/setup/room/steps/PhotoUploadStep';
+import { PhotoUploadStep, type PhotoUploadStepProps } from '@/components/setup/room/steps/PhotoUploadStep';
 import { useSession } from '@/hooks';
 
 /**
@@ -19,12 +19,12 @@ export default function FastTrackPage() {
   const [roomType, setRoomType] = useState<string>('');
   const [roomName, setRoomName] = useState<string>('');
 
-  // Update is called when photo is uploaded and analyzed
-  const handlePhotoUpdate = (
-    uploadedPhotos: string[],
-    detectedRoomType?: string | null,
-    detectedRoomName?: string
-  ) => {
+    // Update is called when photo is uploaded and analyzed
+    const handlePhotoUpdate: PhotoUploadStepProps['onUpdate'] = (
+      uploadedPhotos,
+      detectedRoomType,
+      detectedRoomName
+    ) => {
     console.log('[FastTrack] Photo update:', {
       photosCount: uploadedPhotos.length,
       firstPhotoLength: uploadedPhotos[0]?.length,
