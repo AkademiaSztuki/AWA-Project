@@ -108,6 +108,18 @@ export default function GeneratePage() {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<'positive' | 'neutral' | 'negative'>('neutral');
 
+  // Check if roomImage exists, redirect to upload if missing
+  useEffect(() => {
+    // Only redirect if sessionData is loaded (userHash exists) and roomImage is missing
+    // Don't redirect if we already have generated images (user might be viewing results)
+    const typedSessionData = sessionData as any;
+    if (typedSessionData?.userHash && generatedImages.length === 0 && !typedSessionData?.roomImage) {
+      console.warn('[Generate] Brak roomImage w sesji, przekierowuję do uploadu');
+      router.push('/flow/photo');
+      return;
+    }
+  }, [sessionData, router, generatedImages.length]);
+
   useEffect(() => {
     const waitForApi = async () => {
       console.log("Rozpoczynam sprawdzanie gotowości API...");
@@ -153,11 +165,13 @@ export default function GeneratePage() {
   }, []);
 
   useEffect(() => {
-    if (isApiReady && generationCount === 0 && !hasAttemptedGeneration) {
+    // Only attempt generation if API is ready, we haven't generated yet, and roomImage exists
+    const typedSessionData = sessionData as any;
+    if (isApiReady && generationCount === 0 && !hasAttemptedGeneration && typedSessionData?.roomImage) {
       setHasAttemptedGeneration(true);
       handleInitialGeneration();
     }
-  }, [isApiReady, generationCount, hasAttemptedGeneration]);
+  }, [isApiReady, generationCount, hasAttemptedGeneration, sessionData]);
 
   // Generate IDA comment when image is selected
   useEffect(() => {
@@ -224,8 +238,10 @@ export default function GeneratePage() {
       console.error("Dostępne klucze w sessionData:", Object.keys(typedSessionData || {}));
       console.error("Typ roomImage:", typeof typedSessionData?.roomImage);
       console.error("Wartość roomImage (pierwsze 100 znaków):", typedSessionData?.roomImage?.substring(0, 100));
-      setError("Nie można rozpocząć generowania, ponieważ w sesji brakuje zdjęcia Twojego pokoju.");
-      setStatusMessage("Błąd danych wejściowych.");
+      
+      // Redirect to upload page instead of showing error
+      console.warn('[Generate] Przekierowuję do uploadu z handleInitialGeneration');
+      router.push('/flow/photo');
       return;
     }
 
