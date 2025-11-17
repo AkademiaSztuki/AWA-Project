@@ -108,13 +108,30 @@ export default function GeneratePage() {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<'positive' | 'neutral' | 'negative'>('neutral');
 
+  // Sync roomImage from sessionStorage if missing in sessionData
+  useEffect(() => {
+    const typedSessionData = sessionData as any;
+    if (typedSessionData?.userHash && !typedSessionData?.roomImage) {
+      // Check sessionStorage for roomImage
+      const sessionRoomImage = typeof window !== 'undefined' 
+        ? sessionStorage.getItem('aura_session_room_image')
+        : null;
+      
+      if (sessionRoomImage) {
+        console.log('[Generate] Znaleziono roomImage w sessionStorage, synchronizuję z sessionData');
+        updateSessionData({ roomImage: sessionRoomImage } as any);
+        return;
+      }
+    }
+  }, [sessionData, updateSessionData]);
+
   // Check if roomImage exists, redirect to upload if missing
   useEffect(() => {
     // Only redirect if sessionData is loaded (userHash exists) and roomImage is missing
     // Don't redirect if we already have generated images (user might be viewing results)
     const typedSessionData = sessionData as any;
     if (typedSessionData?.userHash && generatedImages.length === 0 && !typedSessionData?.roomImage) {
-      console.warn('[Generate] Brak roomImage w sesji, przekierowuję do uploadu');
+      console.warn('[Generate] Brak roomImage w sesji i sessionStorage, przekierowuję do uploadu');
       router.push('/flow/photo');
       return;
     }
@@ -237,12 +254,25 @@ export default function GeneratePage() {
       console.error("KRYTYCZNY BŁĄD: Brak 'roomImage' w danych sesji.");
       console.error("Dostępne klucze w sessionData:", Object.keys(typedSessionData || {}));
       console.error("Typ roomImage:", typeof typedSessionData?.roomImage);
-      console.error("Wartość roomImage (pierwsze 100 znaków):", typedSessionData?.roomImage?.substring(0, 100));
       
-      // Redirect to upload page instead of showing error
-      console.warn('[Generate] Przekierowuję do uploadu z handleInitialGeneration');
-      router.push('/flow/photo');
-      return;
+      // Check sessionStorage as fallback
+      const sessionRoomImage = typeof window !== 'undefined' 
+        ? sessionStorage.getItem('aura_session_room_image')
+        : null;
+      
+      if (sessionRoomImage) {
+        console.log('[Generate] Znaleziono roomImage w sessionStorage, używam go');
+        // Update sessionData and continue with generation
+        await updateSessionData({ roomImage: sessionRoomImage } as any);
+        // Use the roomImage from sessionStorage for this generation
+        typedSessionData.roomImage = sessionRoomImage;
+      } else {
+        console.error("Wartość roomImage (pierwsze 100 znaków):", typedSessionData?.roomImage?.substring(0, 100));
+        // Redirect to upload page instead of showing error
+        console.warn('[Generate] Przekierowuję do uploadu z handleInitialGeneration');
+        router.push('/flow/photo');
+        return;
+      }
     }
 
     setStatusMessage("Krok 3/3: Wysyłanie zadania do AI. To może potrwać kilka minut...");
