@@ -108,6 +108,31 @@ export default function GeneratePage() {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<'positive' | 'neutral' | 'negative'>('neutral');
 
+  // Check if roomImage exists, redirect to photo upload if missing
+  useEffect(() => {
+    const typedSessionData = sessionData as any;
+    const roomImage = typedSessionData?.roomImage;
+    
+    // Also check sessionStorage as fallback (roomImage might be stored there)
+    const sessionRoomImage = typeof window !== 'undefined' 
+      ? sessionStorage.getItem('aura_session_room_image') 
+      : null;
+    
+    if (!roomImage && !sessionRoomImage) {
+      console.warn('[GeneratePage] Brak roomImage w sesji - przekierowuję do /flow/photo');
+      router.push('/flow/photo');
+      return;
+    }
+    
+    // If roomImage is missing from sessionData but exists in sessionStorage, restore it
+    // Only restore once to avoid infinite loop
+    if (!roomImage && sessionRoomImage && sessionRoomImage.length > 0) {
+      console.log('[GeneratePage] Przywracam roomImage z sessionStorage');
+      updateSessionData({ roomImage: sessionRoomImage });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionData?.roomImage, router]);
+
   useEffect(() => {
     const waitForApi = async () => {
       console.log("Rozpoczynam sprawdzanie gotowości API...");
@@ -219,14 +244,31 @@ export default function GeneratePage() {
     
     const typedSessionData = sessionData as any;
 
-    if (!typedSessionData || !typedSessionData.roomImage) {
+    // Check both sessionData and sessionStorage for roomImage
+    const sessionRoomImage = typeof window !== 'undefined' 
+      ? sessionStorage.getItem('aura_session_room_image') 
+      : null;
+    const roomImage = typedSessionData?.roomImage || sessionRoomImage;
+    
+    if (!typedSessionData || !roomImage) {
       console.error("KRYTYCZNY BŁĄD: Brak 'roomImage' w danych sesji.");
       console.error("Dostępne klucze w sessionData:", Object.keys(typedSessionData || {}));
       console.error("Typ roomImage:", typeof typedSessionData?.roomImage);
       console.error("Wartość roomImage (pierwsze 100 znaków):", typedSessionData?.roomImage?.substring(0, 100));
-      setError("Nie można rozpocząć generowania, ponieważ w sesji brakuje zdjęcia Twojego pokoju.");
-      setStatusMessage("Błąd danych wejściowych.");
+      setError("Nie można rozpocząć generowania, ponieważ w sesji brakuje zdjęcia Twojego pokoju. Przekierowuję do strony uploadu...");
+      setStatusMessage("Brak zdjęcia pokoju. Przekierowuję...");
+      
+      // Redirect to photo upload page after a short delay
+      setTimeout(() => {
+        router.push('/flow/photo');
+      }, 2000);
       return;
+    }
+    
+    // If roomImage was found in sessionStorage but not in sessionData, restore it
+    if (!typedSessionData.roomImage && sessionRoomImage) {
+      console.log('[handleInitialGeneration] Przywracam roomImage z sessionStorage');
+      await updateSessionData({ roomImage: sessionRoomImage });
     }
 
     setStatusMessage("Krok 3/3: Wysyłanie zadania do AI. To może potrwać kilka minut...");
@@ -248,7 +290,7 @@ export default function GeneratePage() {
           type: 'initial',
           prompt,
           parameters,
-          has_base_image: Boolean(typedSessionData.roomImage),
+          has_base_image: Boolean(roomImage),
         });
       }
       
@@ -259,7 +301,7 @@ export default function GeneratePage() {
       
       const response = await generateImages({
         prompt,
-        base_image: typedSessionData.roomImage,
+        base_image: roomImage,
         style: typedSessionData.visualDNA?.dominantStyle || 'modern',
         modifications: [],
         ...parameters
