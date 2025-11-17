@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { SessionData, FlowStep } from '@/types';
+import { fetchLatestSessionSnapshot } from '@/lib/supabase';
 
 const SESSION_STORAGE_KEY = 'aura_session';
 const USER_HASH_STORAGE_KEY = 'aura_user_hash';
@@ -189,6 +190,29 @@ const persistSessionData = (data: SessionData) => {
   persistSanitizedSessionData(data);
 };
 
+const createEmptySession = (): SessionData => ({
+  userHash: '',
+  consentTimestamp: '',
+  currentStep: 'landing',
+  tinderResults: [],
+  visualDNA: {
+    dominantTags: [],
+    preferences: {
+      colors: [],
+      materials: [],
+      styles: [],
+      lighting: []
+    },
+    accuracyScore: 0
+  },
+  generations: [],
+  finalSurvey: {
+    satisfaction: { easeOfUse: 0, engagement: 0, clarity: 0, overall: 0 },
+    agency: { control: 0, collaboration: 0, creativity: 0, ownership: 0 },
+    preferences: { evolution: 0, crystallization: 0, discovery: 0 }
+  }
+});
+
 interface UseSessionReturn {
   sessionData: SessionData;
   updateSession: (updates: Partial<SessionData>) => void;
@@ -199,56 +223,72 @@ interface UseSessionReturn {
 }
 
 export const useSession = (): UseSessionReturn => {
-  const [sessionData, setSessionData] = useState<SessionData>({
-    userHash: '',
-    consentTimestamp: '',
-    currentStep: 'landing',
-    tinderResults: [],
-    visualDNA: {
-      dominantTags: [],
-      preferences: {
-        colors: [],
-        materials: [],
-        styles: [],
-        lighting: []
-      },
-      accuracyScore: 0
-    },
-    generations: [],
-    finalSurvey: {
-      satisfaction: { easeOfUse: 0, engagement: 0, clarity: 0, overall: 0 },
-      agency: { control: 0, collaboration: 0, creativity: 0, ownership: 0 },
-      preferences: { evolution: 0, crystallization: 0, discovery: 0 }
-    }
-  });
+  const [sessionData, setSessionData] = useState<SessionData>(createEmptySession());
 
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    // Load from localStorage on mount (persistent across browser sessions)
-    const savedData = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData) as SessionData;
-        const sessionRoomImage = sessionStorage.getItem(ROOM_IMAGE_SESSION_KEY);
-        if (sessionRoomImage && !parsed.roomImage) {
-          parsed.roomImage = sessionRoomImage;
-        }
-        setSessionData(parsed);
-      } catch (error) {
-        console.error('Failed to load session data:', error);
+    let isMounted = true;
+
+    const initializeSession = async () => {
+      if (typeof window === 'undefined') return;
+
+      // Ensure user hash exists
+      let userHash = localStorage.getItem(USER_HASH_STORAGE_KEY);
+      if (!userHash) {
+        userHash = generateUserHash();
+        localStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
       }
-    }
 
-    // Generate user hash if not exists
-    let userHash = localStorage.getItem(USER_HASH_STORAGE_KEY);
-    if (!userHash) {
-      userHash = generateUserHash();
-      localStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
-    }
+      let mergedSession: Partial<SessionData> | null = null;
+      const savedData = localStorage.getItem(SESSION_STORAGE_KEY);
 
-    setSessionData(prev => ({ ...prev, userHash }));
-    setIsInitialized(true);
+      if (savedData) {
+        try {
+          mergedSession = JSON.parse(savedData) as SessionData;
+        } catch (error) {
+          console.error('Failed to load session data from localStorage:', error);
+        }
+      }
+
+      const sessionRoomImage = sessionStorage.getItem(ROOM_IMAGE_SESSION_KEY);
+      if (sessionRoomImage && (!mergedSession?.roomImage || mergedSession.roomImage.length < sessionRoomImage.length)) {
+        mergedSession = { ...(mergedSession || {}), roomImage: sessionRoomImage };
+      }
+
+      if ((!mergedSession || !mergedSession.roomImage) && userHash) {
+        try {
+          const remoteSession = await fetchLatestSessionSnapshot(userHash);
+          if (remoteSession) {
+            mergedSession = {
+              ...(remoteSession as SessionData),
+              ...(mergedSession || {}),
+            };
+          }
+        } catch (error) {
+          console.warn('[useSession] Nie udało się pobrać sesji z Supabase.', error);
+        }
+      }
+
+      const finalSession: SessionData = {
+        ...createEmptySession(),
+        ...(mergedSession || {}),
+        userHash,
+      };
+
+      persistSessionData(finalSession);
+
+      if (isMounted) {
+        setSessionData(finalSession);
+        setIsInitialized(true);
+      }
+    };
+
+    void initializeSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const updateSession = (updates: Partial<SessionData>) => {

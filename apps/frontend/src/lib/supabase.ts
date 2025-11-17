@@ -102,6 +102,29 @@ export const saveFullSessionToSupabase = async (sessionData: any) => {
   }
 };
 
+export const fetchLatestSessionSnapshot = async (userHash: string) => {
+  if (!userHash) return null;
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('session_json')
+      .eq('user_hash', userHash)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('fetchLatestSessionSnapshot error:', error);
+      return null;
+    }
+
+    return (data as any)?.session_json ?? null;
+  } catch (err) {
+    console.error('fetchLatestSessionSnapshot unexpected failure:', err);
+    return null;
+  }
+};
+
 // --- NOWE POMOCNICZE FUNKCJE ---
 
 export const getOrCreateProjectId = async (userHash: string): Promise<string | null> => {
