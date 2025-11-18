@@ -618,7 +618,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         setUploadedPhotos(newPhotos);
         setUploadedPhotosBase64(newPhotosBase64);
         setSelectedImage(imageObjectUrl);
-        onUpdate(newPhotosBase64);
+        onUpdate(newPhotosBase64, metadata.roomType, metadata.roomName);
         
         // Set pre-computed data instantly
         setDetectedRoomType(metadata.roomType);
@@ -654,7 +654,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         setUploadedPhotos(newPhotos);
         setUploadedPhotosBase64(newPhotosBase64);
         setSelectedImage(imageObjectUrl);
-        onUpdate(newPhotosBase64);
+        onUpdate(newPhotosBase64, detectedRoomType || '', roomName || '');
         setPendingAnalysisFile(file);
         setPendingAnalysisLabel(file.name || imageUrl);
       }
@@ -704,7 +704,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       setSelectedImage(imageUrl);
       
       // Pass base64 to parent (for API usage)
-      onUpdate(newPhotosBase64);
+      onUpdate(newPhotosBase64, detectedRoomType || '', roomName || '');
       setPendingAnalysisFile(file);
       setPendingAnalysisLabel(file.name || imageUrl);
       

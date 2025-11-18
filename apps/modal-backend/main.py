@@ -833,6 +833,9 @@ async def analyze_room(request: RoomAnalysisRequest):
     except asyncio.TimeoutError:
         print("Room analysis timed out after 3 minutes")
         raise HTTPException(status_code=408, detail="Analysis timed out - model may still be loading (cold start)")
+    except HTTPException as http_exc:
+        print(f"Room analysis quota or client error: {http_exc.detail}")
+        raise http_exc
     except Exception as e:
         print(f"API error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
