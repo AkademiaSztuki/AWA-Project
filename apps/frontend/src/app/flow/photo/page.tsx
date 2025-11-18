@@ -42,6 +42,8 @@ export default function PhotoUploadPage() {
   const [humanComment, setHumanComment] = useState<string | null>(null);
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
   const [pageViewId, setPageViewId] = useState<string | null>(null);
+  const [pendingAnalysisFile, setPendingAnalysisFile] = useState<File | null>(null);
+  const [pendingAnalysisLabel, setPendingAnalysisLabel] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -86,19 +88,17 @@ export default function PhotoUploadPage() {
     'empty_room': 'Puste pomieszczenie'
   };
 
-  const generateLLMCommentAsync = useCallback(async (roomType: string, roomDescription: string) => {
-    if (isGeneratingComment) return;
-    
-    console.log('Starting LLM comment generation...', { roomType, roomDescription });
+  const requestHumanComment = useCallback(async (roomType: string, roomDescription?: string) => {
+    if (isGeneratingComment || !roomDescription) return;
+
+    console.log('Starting lightweight LLM comment generation...', { roomType, roomDescription });
     setIsGeneratingComment(true);
     try {
       const result = await generateLLMComment(roomType, roomDescription, 'room_analysis');
       console.log('LLM comment result:', result);
-      setLlmComment(result);
+      setHumanComment(result.comment);
     } catch (error) {
       console.error('Failed to generate LLM comment:', error);
-      // Show error to user for debugging
-      alert(`Blad generowania komentarza IDA: ${error}`);
     } finally {
       setIsGeneratingComment(false);
     }
@@ -119,7 +119,7 @@ export default function PhotoUploadPage() {
       const apiStart = Date.now();
       
       // Analyze room using MiniCPM-o-2.6 (now includes comment generation)
-      const analysis = await analyzeRoom({ image: base64 });
+      const analysis = await analyzeRoom({ image: base64, metadata: { source: 'flow-photo-upload' } });
       
       console.log(`API call completed in ${Date.now() - apiStart}ms`);
       console.log(`Total analysis time: ${Date.now() - startTime}ms`);
@@ -142,16 +142,11 @@ export default function PhotoUploadPage() {
         });
       }
       
-      // Set human Polish comment if available
-      if (analysis.human_comment) {
-        console.log('Setting human comment from IDA (Polish):', analysis.human_comment);
-        setHumanComment(analysis.human_comment);
+      // Request lightweight human comment (Groq/LLM) when description is available
+      if (analysis.room_description) {
+        void requestHumanComment(analysis.detected_room_type, analysis.room_description);
       } else {
-        console.log('No human comment from MiniCPM-o-2.6, using fallback');
-        // Fallback: generate comment separately (for backward compatibility)
-        if (analysis.room_description) {
-          generateLLMCommentAsync(analysis.detected_room_type, analysis.room_description);
-        }
+        setHumanComment(null);
       }
       
     } catch (error) {
@@ -168,8 +163,10 @@ export default function PhotoUploadPage() {
       setShowRoomTypeSelection(true); // Show manual selection on error
     } finally {
       setIsAnalyzing(false);
+      setPendingAnalysisFile(null);
+      setPendingAnalysisLabel(null);
     }
-  }, [analyzeRoom, generateLLMCommentAsync]);
+  }, [analyzeRoom, requestHumanComment]);
 
   // Corrected paths for example images
   const exampleImages = [
@@ -199,9 +196,8 @@ export default function PhotoUploadPage() {
       
       await updateSession({ roomImage: base64 });
       setSelectedImage(URL.createObjectURL(file));
-      
-      // Automatically analyze the room
-      await analyzeImage(file);
+      setPendingAnalysisFile(file);
+      setPendingAnalysisLabel(file.name);
     } catch (error) {
       console.error("Error converting file to base64", error);
       alert(error instanceof Error ? error.message : "Blad podczas przetwarzania pliku");
@@ -240,15 +236,23 @@ export default function PhotoUploadPage() {
           suggestions: []
         });
         setHumanComment(metadata.humanComment);
+        setPendingAnalysisFile(null);
+        setPendingAnalysisLabel(null);
       } else {
-        // Custom image - analyze with Gemma
-        await analyzeImage(file);
+        // Custom image - wait for manual analysis
+        setPendingAnalysisFile(file);
+        setPendingAnalysisLabel(file.name || imageUrl);
       }
     } catch (error) {
       console.error("Error fetching or converting example image", error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleAnalyzePending = async () => {
+    if (!pendingAnalysisFile || isAnalyzing) return;
+    await analyzeImage(pendingAnalysisFile);
   };
 
   const handleContinue = async () => {
@@ -305,6 +309,22 @@ export default function PhotoUploadPage() {
           <p className="text-sm text-gray-600 mb-4">
             <strong>Obslugiwane formaty:</strong> JPG, PNG, TIFF, HEIC
           </p>
+          
+          {pendingAnalysisFile && (
+            <div className="mb-6 p-4 bg-white/5 backdrop-blur-xl border border-white/15 rounded-2xl text-white">
+              <p className="mb-3 font-exo2 text-base">
+                Nowe zdjęcie "{pendingAnalysisLabel || pendingAnalysisFile.name}" czeka na analizę.
+              </p>
+              <button
+                type="button"
+                onClick={handleAnalyzePending}
+                disabled={isAnalyzing}
+                className="px-6 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 text-gray-900 font-exo2 font-semibold shadow-lg disabled:opacity-50"
+              >
+                {isAnalyzing ? 'Analizowanie...' : 'Analizuj wybrane zdjęcie'}
+              </button>
+            </div>
+          )}
           
           {/* Room Analysis Results */}
           {isAnalyzing && (

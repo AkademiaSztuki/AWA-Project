@@ -26,8 +26,18 @@ interface GenerationResponse {
   cost_estimate: number;
 }
 
+interface RoomAnalysisRequestMetadata {
+  source?: string;
+  session_id?: string;
+  cache_key?: string;
+  client_timestamp?: string;
+  request_id?: string;
+  cache_hit?: boolean;
+}
+
 interface RoomAnalysisRequest {
   image: string; // base64 encoded image
+  metadata?: RoomAnalysisRequestMetadata;
 }
 
 interface RoomAnalysisResponse {
@@ -75,6 +85,159 @@ interface InspirationAnalysisResponse {
   biophilia: number; // 0-3 scale
   description: string;
 }
+
+const ROOM_ANALYSIS_LIMIT =
+  Number(process.env.NEXT_PUBLIC_ROOM_ANALYSIS_LIMIT ?? '1') > 0
+    ? Number(process.env.NEXT_PUBLIC_ROOM_ANALYSIS_LIMIT ?? '1')
+    : 1;
+const ROOM_ANALYSIS_WINDOW_MS =
+  (Number(process.env.NEXT_PUBLIC_ROOM_ANALYSIS_WINDOW_SECONDS ?? '3600') || 3600) * 1000;
+const ROOM_ANALYSIS_SESSION_KEY = 'aura_room_analysis_session_id';
+const ROOM_ANALYSIS_USAGE_KEY = 'aura_room_analysis_usage_v1';
+const ROOM_ANALYSIS_CACHE_PREFIX = 'aura_room_analysis_cache_v1:';
+const roomAnalysisMemoryCache = new Map<string, RoomAnalysisResponse>();
+const textEncoder = new TextEncoder();
+
+interface RoomAnalysisUsageEntry {
+  count: number;
+  timestamp: number;
+}
+
+const getSessionStorage = (): Storage | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage;
+  } catch (error) {
+    console.warn('Session storage unavailable:', error);
+    return null;
+  }
+};
+
+const generateRandomId = () => {
+  const cryptoRef = typeof window !== 'undefined' ? window.crypto : globalThis.crypto;
+  if (cryptoRef?.randomUUID) {
+    return cryptoRef.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const hashBase64Data = async (value: string): Promise<string> => {
+  if (!value) {
+    return 'empty';
+  }
+
+  const cryptoRef = typeof window !== 'undefined' ? window.crypto : globalThis.crypto;
+  try {
+    if (!cryptoRef?.subtle) {
+      throw new Error('SubtleCrypto unavailable');
+    }
+    const buffer = await cryptoRef.subtle.digest('SHA-256', textEncoder.encode(value));
+    return Array.from(new Uint8Array(buffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  } catch (error) {
+    console.warn('Falling back to simple hash for room analysis cache:', error);
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash << 5) - hash + value.charCodeAt(i);
+      hash |= 0;
+    }
+    return `fallback-${hash}-${value.length}`;
+  }
+};
+
+const getRoomAnalysisSessionId = () => {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return 'unknown';
+  }
+
+  const existing = storage.getItem(ROOM_ANALYSIS_SESSION_KEY);
+  if (existing) {
+    return existing;
+  }
+
+  const sessionId = generateRandomId();
+  storage.setItem(ROOM_ANALYSIS_SESSION_KEY, sessionId);
+  return sessionId;
+};
+
+const checkAndIncrementRoomAnalysisUsage = () => {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return { allowed: true, count: 0 };
+  }
+
+  const now = Date.now();
+  const raw = storage.getItem(ROOM_ANALYSIS_USAGE_KEY);
+  let entry: RoomAnalysisUsageEntry | null = null;
+  if (raw) {
+    try {
+      entry = JSON.parse(raw) as RoomAnalysisUsageEntry;
+    } catch (error) {
+      console.warn('Failed to parse room analysis usage entry:', error);
+    }
+  }
+
+  if (!entry || now - entry.timestamp > ROOM_ANALYSIS_WINDOW_MS) {
+    entry = { count: 0, timestamp: now };
+  }
+
+  if (entry.count >= ROOM_ANALYSIS_LIMIT) {
+    return { allowed: false, count: entry.count };
+  }
+
+  entry.count += 1;
+  storage.setItem(ROOM_ANALYSIS_USAGE_KEY, JSON.stringify(entry));
+  return { allowed: true, count: entry.count };
+};
+
+const getCachedRoomAnalysis = (cacheKey?: string | null): RoomAnalysisResponse | null => {
+  if (!cacheKey) {
+    return null;
+  }
+
+  if (roomAnalysisMemoryCache.has(cacheKey)) {
+    return roomAnalysisMemoryCache.get(cacheKey)!;
+  }
+
+  const storage = getSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const raw = storage.getItem(`${ROOM_ANALYSIS_CACHE_PREFIX}${cacheKey}`);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as RoomAnalysisResponse;
+    roomAnalysisMemoryCache.set(cacheKey, parsed);
+    return parsed;
+  } catch (error) {
+    console.warn('Failed to parse cached room analysis entry:', error);
+    storage.removeItem(`${ROOM_ANALYSIS_CACHE_PREFIX}${cacheKey}`);
+    return null;
+  }
+};
+
+const persistRoomAnalysisCache = (cacheKey: string, data: RoomAnalysisResponse) => {
+  roomAnalysisMemoryCache.set(cacheKey, data);
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(`${ROOM_ANALYSIS_CACHE_PREFIX}${cacheKey}`, JSON.stringify(data));
+  } catch (error) {
+    console.warn('Failed to persist room analysis cache entry:', error);
+  }
+};
 
 // Centralized generation parameters - single source of truth
 export const getGenerationParameters = (modificationType: 'initial' | 'micro' | 'macro', iterationCount: number = 0) => {
@@ -173,26 +336,58 @@ export const useModalAPI = () => {
     setError(null);
 
     let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
-    
+
     // Fix for incorrect dev URL in Vercel
     if (apiBase.includes('-dev')) {
       apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
     }
-    
+
     if (!apiBase) {
       const msg = 'Brak konfiguracji ENDPOINTU analizy (NEXT_PUBLIC_MODAL_API_URL)';
       setError(msg);
       setIsLoading(false);
       throw new Error(msg);
     }
-    
+
+    const cacheKey = request.image ? await hashBase64Data(request.image) : null;
+    const cachedResult = cacheKey ? getCachedRoomAnalysis(cacheKey) : null;
+
+    if (cachedResult) {
+      console.log('Zwracam wynik analizy pokoju z cache (bez dodatkowego zapytania).');
+      setIsLoading(false);
+      return cachedResult;
+    }
+
+    const quota = checkAndIncrementRoomAnalysisUsage();
+    if (!quota.allowed) {
+      const msg = `Limit analiz pokoju (${ROOM_ANALYSIS_LIMIT}) został osiągnięty dla tej sesji. Odśwież stronę lub wróć później.`;
+      setError(msg);
+      setIsLoading(false);
+      throw new Error(msg);
+    }
+
+    const sessionId = getRoomAnalysisSessionId();
+    const requestId = generateRandomId();
+    const payload: RoomAnalysisRequest = {
+      ...request,
+      metadata: {
+        ...request.metadata,
+        source: request.metadata?.source || 'unknown',
+        session_id: sessionId,
+        cache_key: cacheKey ?? undefined,
+        request_id: requestId,
+        client_timestamp: new Date().toISOString(),
+        cache_hit: false,
+      },
+    };
+
     try {
-      console.log('Rozpoczynam analizę pokoju...');
-      
+      console.log('Rozpoczynam analizę pokoju...', { requestId, source: payload.metadata?.source });
+
       const response = await fetch(`${apiBase}/analyze-room`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -201,17 +396,20 @@ export const useModalAPI = () => {
         throw new Error(`Błąd analizy pokoju: ${response.status} - ${errorText}`);
       }
 
-      const result = await response.json();
-      console.log('Analiza pokoju zakończona! Otrzymano wynik:', result);
-      
-      setIsLoading(false);
-      return result;
+      const result: RoomAnalysisResponse = await response.json();
+      console.log('Analiza pokoju zakończona! Otrzymano wynik:', { requestId, result });
 
+      if (cacheKey) {
+        persistRoomAnalysisCache(cacheKey, result);
+      }
+
+      return result;
     } catch (err: any) {
       console.error('Wystąpił błąd w analizie pokoju:', err);
       setError(err.message || 'Wystąpił nieznany błąd podczas analizy pokoju.');
-      setIsLoading(false);
       throw err;
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 

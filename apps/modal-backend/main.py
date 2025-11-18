@@ -6,14 +6,18 @@ Based on official Modal Flux Kontext example
 
 from io import BytesIO
 from pathlib import Path
+import base64
+import hashlib
+import json
 import modal
+import os
+import threading
+import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
-import base64
 import requests
-import json
 
 # Modal configuration
 app = modal.App("aura-flux-api")
@@ -73,8 +77,18 @@ class GenerationResponse(BaseModel):
     generation_info: dict
     cost_estimate: float
 
+class RoomAnalysisMetadata(BaseModel):
+    session_id: Optional[str] = None
+    source: Optional[str] = None
+    cache_key: Optional[str] = None
+    client_timestamp: Optional[str] = None
+    request_id: Optional[str] = None
+    cache_hit: Optional[bool] = None
+
+
 class RoomAnalysisRequest(BaseModel):
     image: str  # base64 encoded image
+    metadata: Optional[RoomAnalysisMetadata] = None
 
 class RoomAnalysisResponse(BaseModel):
     detected_room_type: str
@@ -82,7 +96,7 @@ class RoomAnalysisResponse(BaseModel):
     room_description: str
     suggestions: List[str]
     comment: str
-    human_comment: str  # New human Polish comment from IDA
+    human_comment: Optional[str] = None  # Lightweight human comment (optional)
 
 class LLMCommentRequest(BaseModel):
     room_type: str
@@ -102,6 +116,76 @@ class InspirationAnalysisResponse(BaseModel):
     materials: List[str]
     biophilia: int  # 0-3 scale
     description: str
+
+
+ROOM_ANALYSIS_SESSION_LIMIT = int(os.environ.get("ROOM_ANALYSIS_SESSION_LIMIT", "1"))
+ROOM_ANALYSIS_SESSION_WINDOW_SECONDS = int(os.environ.get("ROOM_ANALYSIS_SESSION_WINDOW_SECONDS", "3600"))
+_room_analysis_usage: dict[str, dict[str, float]] = {}
+_room_analysis_usage_lock = threading.Lock()
+GROQ_API_URL = os.environ.get("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
+GROQ_LLM_MODEL = os.environ.get("GROQ_LLM_MODEL", "llama-3.1-8b-instant")
+
+
+def _check_room_analysis_quota(session_id: Optional[str]) -> None:
+    """Ensure a session does not exceed the configured number of analyses per time window."""
+    if not session_id:
+        return
+
+    now = time.time()
+    with _room_analysis_usage_lock:
+        entry = _room_analysis_usage.get(session_id)
+        if not entry or now - entry["start"] > ROOM_ANALYSIS_SESSION_WINDOW_SECONDS:
+            _room_analysis_usage[session_id] = {"count": 1, "start": now}
+            return
+
+        entry["count"] += 1
+        if entry["count"] > ROOM_ANALYSIS_SESSION_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail="Room analysis quota exceeded for this session. Please wait before retrying.",
+            )
+
+
+def _call_groq_for_comment(room_type: str, room_description: str, context: str = "room_analysis") -> Optional[str]:
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return None
+
+    try:
+        if context == "room_analysis":
+            prompt = (
+                f"Zdjęcie przedstawia {room_description or 'wnętrze'}. "
+                f"Użytkownik prosi o krótki, ciepły komentarz dotyczący pomieszczenia typu {room_type}. "
+                "Napisz 2-3 zdania po polsku, przyjaznym tonem, zachęcając do wspólnego projektowania."
+            )
+        else:
+            prompt = (
+                f"Wygenerowane wnętrze ({room_type}) opisane jako: {room_description or 'brak opisu'}. "
+                "Przygotuj krótki komentarz (2-3 zdania) po polsku, zachęcający użytkownika do dalszych iteracji."
+            )
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": GROQ_LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": "Jesteś IDA - empatyczną architektką wnętrz mówiącą po polsku."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.7,
+            "max_tokens": 320,
+        }
+
+        response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        content = data["choices"][0]["message"]["content"]
+        return content.strip()
+    except Exception as exc:
+        print(f"[GROQ] Comment generation failed: {exc}")
+        return None
 
 @app.cls(
     image=image,
@@ -226,7 +310,7 @@ class FluxKontextModel:
     gpu="H100",  # Same H100 as FLUX - both models fit together (H100 has 80GB VRAM)
     volumes=volumes,
     secrets=[modal.Secret.from_name("huggingface-secret-new")],
-    scaledown_window=600  # Stay online for 10 minutes to avoid cold starts
+    scaledown_window=180  # Scale down after 3 minutes of inactivity to save costs
 )
 class Gemma3VisionModel:
     """Gemma 3 4B-IT multimodal model for room analysis and comments with excellent Polish support
@@ -324,10 +408,10 @@ class Gemma3VisionModel:
             with torch.no_grad():
                 generation = self.model.generate(
                     **inputs,
-                    max_new_tokens=100,
+                    max_new_tokens=80,
                     do_sample=False,  # Greedy decoding for speed
                     temperature=0.1,
-                    top_p=0.5
+                    top_p=0.4
                 )
                 generation = generation[0][input_len:]
             
@@ -408,65 +492,20 @@ class Gemma3VisionModel:
             }
     
     def _generate_human_comment(self, room_type: str, polish_comment: str) -> str:
-        """Generate human Polish comment using Gemma 3's excellent Polish capabilities"""
-        try:
-            # Prepare prompt for Gemma 3 to generate IDA-style comment
-            transform_prompt = f"""Jesteś IDA - profesjonalnym architektem wnętrz. Napisz krótki, ciepły komentarz o tym pomieszczeniu.
-
-Typ pomieszczenia: {room_type}
-Komentarz z analizy: {polish_comment}
-
-Zasady:
-- Mów jako architekt wnętrz, który będzie współpracować z klientem
-- Użyj ciepłego, entuzjastycznego tonu
-- Zacznij od "O, widzę..." lub "Świetnie!" lub podobnie
-- Wspomnij, że będziecie projektować/aranżować razem
-- Maksymalnie 2-3 zdania
-- Naturalny, ludzki język polski
-
-Przykład stylu: "O, widzę że dzisiaj będziemy aranżować wspólnie tę łazienkę! Widzę eleganckie białe ściany, które możemy uzupełnić o ciepłe akcenty."
-            
-Odpowiedz tylko komentarzem, bez dodatkowych wyjaśnień:"""
-            
-            # Use Gemma 3 to generate the transformed comment
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": transform_prompt}
-                    ]
-                }
-            ]
-            
-            inputs = self.processor.apply_chat_template(
-                messages, 
-                add_generation_prompt=True, 
-                tokenize=True,
-                return_dict=True, 
-                return_tensors="pt"
-            ).to(self.model.device)
-            
-            with torch.no_grad():
-                input_len = inputs["input_ids"].shape[-1]
-                generation = self.model.generate(
-                    **inputs,
-                    max_new_tokens=80,
-                    do_sample=True,
-                    temperature=0.7,
-                    top_p=0.9
-                )
-                generation = generation[0][input_len:]
-            
-            # Decode response
-            human_comment = self.processor.decode(generation, skip_special_tokens=True).strip()
-            
-            print(f"Generated human comment: {human_comment}")
-            return human_comment
-            
-        except Exception as e:
-            print(f"Error generating human comment: {str(e)}")
-            # Fallback to simple comment
-            return f"O, widzę że dzisiaj będziemy aranżować wspólnie to wnętrze! Mam już kilka pomysłów."
+        """Generate lightweight human-style comment without extra GPU usage."""
+        room_templates = {
+            "kitchen": "O, widzę że dziś zajmiemy się Twoją kuchnią!",
+            "living_room": "Świetnie! Ten salon ma ogromny potencjał.",
+            "bedroom": "Uwielbiam taką sypialnię – możemy z niej wyczarować prawdziwą strefę relaksu.",
+            "bathroom": "Ta łazienka już teraz wygląda obiecująco!",
+            "office": "To biuro ma doskonałą bazę pod kreatywne zmiany.",
+            "empty_room": "Puste pomieszczenie to najlepiej – możemy zaprojektować wszystko od zera!"
+        }
+        base = room_templates.get(room_type, "O, widzę że dzisiaj będziemy aranżować coś wyjątkowego!")
+        tail = polish_comment.strip()
+        if tail:
+            return f"{base} {tail}"
+        return base
     
     @modal.method()
     def analyze_inspiration(self, image_bytes: bytes) -> dict:
@@ -529,10 +568,10 @@ OPIS: [krótki opis w języku angielskim]"""}
             with torch.no_grad():
                 generation = self.model.generate(
                     **inputs,
-                    max_new_tokens=150,
+                    max_new_tokens=120,
                     do_sample=False,  # Greedy decoding for speed
                     temperature=0.1,
-                    top_p=0.9,
+                    top_p=0.8,
                     pad_token_id=self.processor.tokenizer.eos_token_id
                 )
                 generation = generation[0][input_len:]
@@ -759,10 +798,21 @@ async def analyze_room(request: RoomAnalysisRequest):
     """Analyze room type and characteristics from uploaded image using Gemma 3 4B-IT"""
     try:
         print("Received room analysis request")
+
+        metadata_dict = request.metadata.dict() if request.metadata else {}
+        session_id = metadata_dict.get("session_id")
+        _check_room_analysis_quota(session_id)
         
         # Decode base64 image
         image_bytes = base64.b64decode(request.image)
         print(f"Image decoded, size: {len(image_bytes)} bytes")
+        
+        image_hash = hashlib.sha256(image_bytes).hexdigest()
+        metadata_dict["image_hash"] = image_hash
+        print(
+            f"[ROOM_ANALYSIS] hash={image_hash[:16]} size={len(image_bytes)} source={metadata_dict.get('source')} "
+            f"session={session_id} cache_key={metadata_dict.get('cache_key')} request_id={metadata_dict.get('request_id')}"
+        )
         
         # Analyze room using Gemma 3 4B-IT with timeout
         import asyncio
@@ -797,6 +847,10 @@ async def generate_llm_comment(request: LLMCommentRequest):
     """Generate intelligent comment using Gemma 3 4B-IT (for generated images)"""
     try:
         print(f"Generating LLM comment for room type: {request.room_type}")
+        
+        groq_comment = _call_groq_for_comment(request.room_type, request.room_description, request.context)
+        if groq_comment:
+            return LLMCommentResponse(comment=groq_comment, suggestions=[])
         
         # For generated images, we don't have the actual image, so we generate a comment based on room type
         # This is a simplified version - in the future we could pass the generated image back to Gemma 3 4B-IT

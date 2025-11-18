@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -457,16 +457,19 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
 
 export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: any) {
   const { language } = useLanguage();
-  const { analyzeRoom } = useModalAPI();
+  const { analyzeRoom, generateLLMComment } = useModalAPI();
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>(photos || []);
   const [uploadedPhotosBase64, setUploadedPhotosBase64] = useState<string[]>([]); // Store base64 for API
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isGeneratingHumanComment, setIsGeneratingHumanComment] = useState(false);
   const [roomAnalysis, setRoomAnalysis] = useState<any>(null);
   const [detectedRoomType, setDetectedRoomType] = useState<string | null>(null);
   const [llmComment, setLlmComment] = useState<{ comment: string; suggestions: string[]; } | null>(null);
   const [humanComment, setHumanComment] = useState<string | null>(null);
   const [showRoomTypeSelection, setShowRoomTypeSelection] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [pendingAnalysisFile, setPendingAnalysisFile] = useState<File | null>(null);
+  const [pendingAnalysisLabel, setPendingAnalysisLabel] = useState<string | null>(null);
   
   // Basic room data
   const [roomName, setRoomName] = useState('');
@@ -496,6 +499,22 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
     return names[type] || 'Pomieszczenie';
   };
 
+  const requestHumanComment = useCallback(
+    async (type: string, description?: string) => {
+      if (!type || !description) return;
+      try {
+        setIsGeneratingHumanComment(true);
+        const response = await generateLLMComment(type, description, 'room_analysis');
+        setHumanComment(response.comment);
+      } catch (error) {
+        console.error('Nie udało się wygenerować komentarza IDA (LLM):', error);
+      } finally {
+        setIsGeneratingHumanComment(false);
+      }
+    },
+    [generateLLMComment]
+  );
+
   const analyzeImage = async (file: File) => {
     setIsAnalyzing(true);
     try {
@@ -506,7 +525,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       console.log(`File converted to base64, length: ${base64.length} chars`);
       
       // Analyze room using MiniCPM-o-2.6
-      const analysis = await analyzeRoom({ image: base64 });
+      const analysis = await analyzeRoom({ image: base64, metadata: { source: 'setup-room-step' } });
       
       console.log('Room analysis result:', analysis);
       
@@ -526,9 +545,11 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         });
       }
       
-      // Set human Polish comment if available
+      // Set human Polish comment if available, otherwise request lightweight LLM comment
       if (analysis.human_comment) {
         setHumanComment(analysis.human_comment);
+      } else if (analysis.room_description) {
+        void requestHumanComment(analysis.detected_room_type, analysis.room_description);
       }
       
     } catch (error) {
@@ -540,6 +561,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       }
     } finally {
       setIsAnalyzing(false);
+      setPendingAnalysisFile(null);
+      setPendingAnalysisLabel(null);
     }
   };
 
@@ -612,9 +635,10 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           suggestions: []
         });
         setHumanComment(metadata.humanComment);
+        setPendingAnalysisFile(null);
+        setPendingAnalysisLabel(null);
       } else {
-        // Custom image - analyze with Gemma
-        setIsAnalyzing(true);
+        // Custom image - prepare for analysis (manual trigger)
         const response = await fetch(imageUrl);
         const blob = await response.blob();
         const file = new File([blob], imageUrl.split('/').pop() || 'image.jpg', { type: blob.type });
@@ -631,15 +655,18 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         setUploadedPhotosBase64(newPhotosBase64);
         setSelectedImage(imageObjectUrl);
         onUpdate(newPhotosBase64);
-        
-        await analyzeImage(file);
+        setPendingAnalysisFile(file);
+        setPendingAnalysisLabel(file.name || imageUrl);
       }
     } catch (error) {
       console.error("Error fetching example image", error);
       alert("Błąd podczas ładowania przykładowego zdjęcia");
-    } finally {
-      setIsAnalyzing(false);
     }
+  };
+
+  const handleAnalyzePending = async () => {
+    if (!pendingAnalysisFile || isAnalyzing) return;
+    await analyzeImage(pendingAnalysisFile);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -678,9 +705,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       
       // Pass base64 to parent (for API usage)
       onUpdate(newPhotosBase64);
-      
-      // Automatically analyze the room
-      await analyzeImage(file);
+      setPendingAnalysisFile(file);
+      setPendingAnalysisLabel(file.name || imageUrl);
       
     } catch (error) {
       console.error("Error processing file", error);
@@ -710,6 +736,19 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
             ? 'Prześlij zdjęcie obecnego stanu pomieszczenia. IDA przeanalizuje je i automatycznie rozpozna typ pomieszczenia.'
             : 'Upload a photo of the current space state. IDA will analyze it and automatically detect the room type.'}
         </p>
+
+        {pendingAnalysisFile && (
+          <div className="mb-6 p-4 glass-panel rounded-2xl border border-white/20">
+            <p className="text-graphite font-modern mb-3">
+              {language === 'pl'
+                ? `Nowe zdjęcie "${pendingAnalysisLabel || pendingAnalysisFile.name}" czeka na analizę.`
+                : `New photo "${pendingAnalysisLabel || pendingAnalysisFile.name}" is ready for analysis.`}
+            </p>
+            <GlassButton onClick={handleAnalyzePending} disabled={isAnalyzing}>
+              {language === 'pl' ? 'Analizuj wybrane zdjęcie' : 'Analyze selected photo'}
+            </GlassButton>
+          </div>
+        )}
 
         {/* Room Analysis Results */}
         {isAnalyzing && (
@@ -782,6 +821,15 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                 )}
               </div>
             </div>
+          </div>
+        )}
+        {isGeneratingHumanComment && !humanComment && (
+          <div className="mb-6 p-4 glass-panel rounded-2xl">
+            <p className="text-graphite font-modern">
+              {language === 'pl'
+                ? 'IDA przygotowuje naturalny komentarz na podstawie Twojego zdjęcia...'
+                : 'IDA is preparing a natural comment based on your photo...'}
+            </p>
           </div>
         )}
 

@@ -79,39 +79,42 @@ export default function InspirationsPage() {
   };
 
   const tagItems = async (itemsToTag: LocalInspiration[]) => {
-    try {
-      const files = itemsToTag.map(i => i.file);
-      const results = await analyzeInspirationsWithGamma(files);
-      
-      setItems(prev => prev.map(item => {
-        const targetItem = itemsToTag.find(i => i.id === item.id);
-        if (!targetItem) return item;
-        
-        const result = results[itemsToTag.indexOf(targetItem)];
-        return result ? { 
-          ...item, 
-          tags: result.tags, 
-          description: result.description,
-          isTagging: false 
-        } : { ...item, isTagging: false, error: "Tagging failed" };
-      }));
+    const payload = (current: LocalInspiration[]) => current.map(i => ({
+      id: i.id,
+      fileId: undefined,
+      tags: i.tags,
+      description: i.description,
+      addedAt: new Date().toISOString(),
+    }));
 
-      // Persist partial results to session in background
-      const payload = (current: LocalInspiration[]) => current.map(i => ({
-        id: i.id,
-        fileId: undefined,
-        tags: i.tags,
-        description: i.description,
-        addedAt: new Date().toISOString(),
-      }));
-      setTimeout(() => updateSessionData({ inspirations: payload(items) } as any), 0);
-    } catch (error) {
-      console.error("Tagging failed:", error);
-      setItems(prev => prev.map(item => 
-        itemsToTag.some(i => i.id === item.id) 
-          ? { ...item, isTagging: false, error: "Tagging failed" }
-          : item
-      ));
+    for (const targetItem of itemsToTag) {
+      try {
+        const [analysis] = await analyzeInspirationsWithGamma([targetItem.file]);
+        setItems(prev => {
+          const updated = prev.map(item =>
+            item.id === targetItem.id
+              ? {
+                  ...item,
+                  tags: analysis.tags,
+                  description: analysis.description,
+                  isTagging: false,
+                  error: undefined,
+                }
+              : item
+          );
+          setTimeout(() => updateSessionData({ inspirations: payload(updated) } as any), 0);
+          return updated;
+        });
+      } catch (error) {
+        console.error("Tagging failed:", error);
+        setItems(prev => {
+          const updated = prev.map(item =>
+            item.id === targetItem.id ? { ...item, isTagging: false, error: "Tagging failed" } : item
+          );
+          setTimeout(() => updateSessionData({ inspirations: payload(updated) } as any), 0);
+          return updated;
+        });
+      }
     }
   };
 
