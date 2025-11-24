@@ -600,8 +600,8 @@ export function BigFiveDetailed({ scores, responses, completedAt }: BigFiveDetai
               <div className="space-y-3 text-graphite font-modern">
                 <p>
                   {t(
-                    'Test Big Five (IPIP-60) to jeden z najbardziej uznanych i naukowo zwalidowanych testów osobowości. Opiera się na modelu pięciu wielkich czynników osobowości, który jest szeroko akceptowany w psychologii.',
-                    'The Big Five test (IPIP-60) is one of the most recognized and scientifically validated personality tests. It is based on the five-factor model of personality, which is widely accepted in psychology.'
+                    'Test Big Five (IPIP-NEO-120) to rozbudowana, naukowo zweryfikowana wersja modelu pięciu wielkich czynników osobowości, obejmująca zarówno domeny główne, jak i 30 szczegółowych facetów.',
+                    'The Big Five test (IPIP-NEO-120) is an extended, scientifically validated version of the five-factor personality model, covering both the main domains and 30 detailed facets.'
                   )}
                 </p>
                 <p>

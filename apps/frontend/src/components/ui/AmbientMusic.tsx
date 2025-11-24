@@ -19,6 +19,9 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
   useEffect(() => {
     console.log('AmbientMusic: Initializing with file:', audioFile, 'volume:', volume);
 
+    let cleanup: (() => void) | undefined;
+    let isCancelled = false;
+
     let initialVolume = volume;
     if (typeof window !== 'undefined') {
       try {
@@ -39,16 +42,31 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     // Sprawdź czy plik istnieje
     fetch(audioFile, { method: 'HEAD' })
       .then(response => {
-        if (response.ok) {
-          console.log('AmbientMusic: Audio file found, creating audio element');
-          createAudioElement(initialVolume);
-        } else {
+        if (!response.ok) {
           console.error('AmbientMusic: Audio file not found:', audioFile);
+          return;
         }
+        if (isCancelled) {
+          // Komponent został odmontowany zanim skończyliśmy sprawdzać plik
+          return;
+        }
+        console.log('AmbientMusic: Audio file found, creating audio element');
+        cleanup = createAudioElement(initialVolume);
       })
       .catch(error => {
         console.error('AmbientMusic: Error checking audio file:', error);
       });
+
+    return () => {
+      isCancelled = true;
+      if (cleanup) {
+        cleanup();
+      } else if (audioRef.current) {
+        // Fallback – upewnij się, że audio jest zatrzymane i referencja wyczyszczona
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioFile, volume]);
 
@@ -123,7 +141,7 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     });
 
     // Sprawdź czy muzyka nie została zatrzymana przez inne audio
-    setInterval(() => {
+    const restartInterval = setInterval(() => {
       if (audioRef.current && isPlaying && audioRef.current.paused) {
         // console.log('AmbientMusic: Audio was paused unexpectedly, restarting...');
         audioRef.current.play().catch(error => {
@@ -184,12 +202,13 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     document.addEventListener('keydown', handleUserInteraction);
     document.addEventListener('touchstart', handleUserInteraction);
 
-    // Cleanup
+    // Cleanup dla pojedynczego audio elementu i listenerów
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
       }
+      clearInterval(restartInterval);
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('keydown', handleUserInteraction);
       document.removeEventListener('touchstart', handleUserInteraction);

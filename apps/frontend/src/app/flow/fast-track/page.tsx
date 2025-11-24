@@ -52,9 +52,8 @@ export default function FastTrackPage() {
 
   // Next is called when user clicks "Dalej" button
   const handleNext = () => {
-    console.log('[FastTrack] Next clicked - routing to onboarding');
-    // Fast track: photo → onboarding → generate (skip tinder, dna, ladder)
-    router.push('/flow/onboarding');
+    console.log('[FastTrack] Next clicked - routing to style selection');
+    router.push('/flow/style-selection');
   };
 
   const handleBack = () => {

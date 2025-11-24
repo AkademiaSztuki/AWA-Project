@@ -140,7 +140,7 @@ export default function VisualDNAPage() {
       dnaAccuracyScore: accuracyRating,
       dnaFeedbackTime: new Date().toISOString(),
     });
-    router.push('/flow/ladder');
+    router.push('/flow/generate');
   };
 
   return (

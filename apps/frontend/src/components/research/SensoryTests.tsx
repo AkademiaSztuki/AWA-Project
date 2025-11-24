@@ -1,35 +1,29 @@
 "use client";
 
-import React, { useState } from 'react';
-import { 
-  MUSIC_PREFERENCES, 
-  TEXTURE_PREFERENCES, 
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  MUSIC_PREFERENCES,
+  TEXTURE_PREFERENCES,
   LIGHT_PREFERENCES,
-  SensoryOption 
+  SensoryOption
 } from '@/lib/questions/validated-scales';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { GlassButton } from '@/components/ui/GlassButton';
-import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { Volume2, Hand, Lightbulb, Play, Pause } from 'lucide-react';
+import { NatureMetaphorTest } from '@/components/research/ProjectiveTechniques';
+import { BiophiliaTest } from '@/components/research/BiophiliaTest';
 
 interface SensoryTestProps {
   type: 'music' | 'texture' | 'light';
   onSelect: (selectedId: string) => void;
   className?: string;
+  value?: string | null;
 }
 
-/**
- * SensoryTest - Multi-modal preference testing
- * 
- * Research: Novel contribution - multi-sensory profiling for interior design
- * Tests: Music (auditory), Texture (tactile), Light (visual)
- */
-export function SensoryTest({ type, onSelect, className = '' }: SensoryTestProps) {
+export function SensoryTest({ type, onSelect, className = '', value }: SensoryTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
@@ -43,321 +37,475 @@ export function SensoryTest({ type, onSelect, className = '' }: SensoryTestProps
     light: Lightbulb
   };
 
-  const titles = {
+  const prompts = {
     music: {
-      pl: 'Jaka muzyka pasuje do Twojej idealnej przestrzeni?',
-      en: 'What music fits your ideal space?'
+      pl: 'Jak brzmi przestrzeń, którą tworzymy?',
+      en: 'What does your new space sound like?'
     },
     texture: {
-      pl: 'Jakiej tekstury chcesz dotykać najczęściej?',
-      en: 'What texture do you want to touch most?'
+      pl: 'Jaką fakturę chcesz czuć pod palcami?',
+      en: 'Which texture should your hands meet?'
     },
     light: {
-      pl: 'Jaki typ oświetlenia preferujesz?',
-      en: 'What type of lighting do you prefer?'
+      pl: 'Jakie światło ma Ci towarzyszyć?',
+      en: 'What kind of light should accompany you?'
     }
   };
 
   const Icon = icons[type];
 
+  useEffect(() => {
+    setSelectedId(value || null);
+    setPlayingAudio(null);
+    audioElement?.pause();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, value]);
+
   const handleSelect = (option: SensoryOption) => {
     setSelectedId(option.id);
     onSelect(option.id);
-    
-    // Stop any playing audio
+
     if (audioElement) {
       audioElement.pause();
       setPlayingAudio(null);
     }
   };
 
-  const handlePlayAudio = async (option: SensoryOption, e: React.MouseEvent) => {
+  const handlePlayAudio = (option: SensoryOption, e: React.MouseEvent) => {
     e.stopPropagation();
-    
     if (!option.audioUrl) return;
 
     if (playingAudio === option.id) {
-      // Stop currently playing
-      if (audioElement) {
-        audioElement.pause();
-        setPlayingAudio(null);
-      }
+      audioElement?.pause();
+      setPlayingAudio(null);
     } else {
-      // Stop previous and play new
-      if (audioElement) {
-        audioElement.pause();
-      }
-      
+      audioElement?.pause();
       const audio = new Audio(option.audioUrl);
       audio.volume = 0.5;
       setAudioElement(audio);
-      
-      audio.play().catch(err => {
-        console.error('Audio play failed:', err);
-      });
-      
-      audio.onended = () => {
-        setPlayingAudio(null);
-      };
-      
+      audio.play().catch(err => console.error('Audio play failed:', err));
+      audio.onended = () => setPlayingAudio(null);
       setPlayingAudio(option.id);
     }
   };
 
+  const gridCols =
+    type === 'light'
+      ? 'grid-cols-2 lg:grid-cols-4'
+      : 'grid-cols-2 lg:grid-cols-3';
+
+  const selectedOption = selectedId ? options.find(o => o.id === selectedId) : null;
+
   return (
-    <GlassCard className={`p-6 lg:p-8 ${className}`}>
-      {/* Title */}
-      <div className="text-center mb-8">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center shadow-lg">
-            <Icon className="text-white" size={24} />
+    <GlassCard className={`p-5 md:p-6 h-full flex flex-col ${className}`}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+            <Icon className="text-white" size={20} />
           </div>
-          <h3 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent">
-            {type === 'music' ? (language === 'pl' ? 'Muzyka' : 'Music') :
-             type === 'texture' ? (language === 'pl' ? 'Tekstura' : 'Texture') :
-             (language === 'pl' ? 'Światło' : 'Light')}
-          </h3>
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
+              {type === 'music' ? (language === 'pl' ? 'Muzyka' : 'Music') :
+               type === 'texture' ? (language === 'pl' ? 'Tekstury' : 'Textures') :
+               (language === 'pl' ? 'Światło' : 'Light')}
+            </p>
+            <p className="text-sm font-modern text-graphite">
+              {prompts[type][language]}
+            </p>
+          </div>
         </div>
-        
-        <p className="text-base lg:text-lg text-graphite font-modern max-w-2xl mx-auto">
-          {t(titles[type])}
-        </p>
+        {selectedOption && (
+          <p className="text-xs text-right text-silver-dark">
+            {language === 'pl' ? 'Wybrano:' : 'Selected:'}{' '}
+            <span className="font-semibold text-graphite">
+              {t(selectedOption.label)}
+            </span>
+          </p>
+        )}
       </div>
 
-      {/* Options Grid */}
-      <div className={`grid gap-4 ${
-        type === 'music' ? 'grid-cols-2 lg:grid-cols-3' :
-        type === 'texture' ? 'grid-cols-2 lg:grid-cols-3' :
-        'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
-      }`}>
-        {options.map((option, index) => {
+      <div className={`grid ${gridCols} gap-3 flex-1`}>
+        {options.map((option) => {
           const isSelected = selectedId === option.id;
-          const isHovered = hoveredId === option.id;
           const isPlaying = playingAudio === option.id;
 
           return (
-            <motion.div
+            <button
               key={option.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: index * 0.1 }}
-              whileHover={{ scale: 1.05, y: -5 }}
-              className="relative"
+              type="button"
+              onClick={() => handleSelect(option)}
+              className={`rounded-2xl border px-4 py-4 text-left flex flex-col gap-3 transition-all ${
+                isSelected
+                  ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
+                  : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
+              }`}
             >
-              <div
-                className={`glass-panel rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 min-h-[280px] flex flex-col ${
-                  isSelected
-                    ? 'border-2 border-gold shadow-xl shadow-gold/20'
-                    : isHovered
-                    ? 'border border-gold/50'
-                    : 'border border-white/30'
-                }`}
-                onMouseEnter={() => setHoveredId(option.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                onClick={() => handleSelect(option)}
-              >
-                {/* Image/Visual */}
-                {option.imageUrl ? (
-                  <div className="relative w-full h-32 lg:h-40 bg-gray-200">
-                    <Image
-                      src={option.imageUrl}
-                      alt={t(option.label)}
-                      fill
-                      className="object-cover"
-                    />
-                    
-                    {/* Selected overlay */}
-                    {isSelected && (
-                      <div className="absolute inset-0 bg-gradient-to-br from-gold/20 to-champagne/20 backdrop-blur-sm flex items-center justify-center">
-                        <div className="w-12 h-12 rounded-full bg-gold flex items-center justify-center">
-                          <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  // Fallback for music without image
-                  <div className="w-full h-32 lg:h-40 bg-gradient-to-br from-platinum-100 to-pearl-100 flex items-center justify-center">
-                    <Icon size={48} className="text-silver-dark" />
-                  </div>
-                )}
-
-                {/* Content */}
-                <div className="p-4 flex-1 flex flex-col">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <h4 className="font-nasalization text-base lg:text-lg text-graphite">
-                      {t(option.label)}
-                    </h4>
-                    
-                    {/* Audio play button for music */}
-                    {type === 'music' && option.audioUrl && (
-                      <button
-                        onClick={(e) => handlePlayAudio(option, e)}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                          isPlaying 
-                            ? 'bg-gold text-white' 
-                            : 'glass-panel hover:bg-gold/20'
-                        }`}
-                      >
-                        {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-                      </button>
-                    )}
-                  </div>
-                  
-                  <p className="text-xs lg:text-sm text-silver-dark font-modern">
-                    {t(option.description)}
-                  </p>
+              {option.imageUrl ? (
+                <div className="relative w-full h-28 overflow-hidden rounded-xl bg-gray-200">
+                  <Image
+                    src={option.imageUrl}
+                    alt={t(option.label)}
+                    fill
+                    className="object-cover"
+                  />
                 </div>
+              ) : (
+                <div className="w-full h-28 rounded-xl bg-gradient-to-br from-platinum-200 to-pearl-100 flex items-center justify-center">
+                  <Icon size={32} className="text-silver-dark" />
+                </div>
+              )}
+
+              <div className="flex items-start justify-between gap-3">
+                <h4 className="font-nasalization text-sm text-graphite">
+                  {t(option.label)}
+                </h4>
+                {type === 'music' && option.audioUrl && (
+                  <button
+                    type="button"
+                    onClick={(e) => handlePlayAudio(option, e)}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${
+                      isPlaying
+                        ? 'bg-gold text-white border-gold'
+                        : 'border-white/20 text-graphite hover:border-gold/50'
+                    }`}
+                  >
+                    {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                  </button>
+                )}
               </div>
-            </motion.div>
+              <p className="text-xs text-silver-dark font-modern leading-relaxed">
+                {t(option.description)}
+              </p>
+            </button>
           );
         })}
       </div>
 
-      {/* Selected Summary */}
-      <AnimatePresence>
-        {selectedId && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            className="mt-6 text-center"
-          >
-            <div className="inline-block glass-panel px-6 py-3 rounded-full bg-gradient-to-r from-gold/10 to-champagne/10 border-gold/30">
-              <p className="text-sm lg:text-base font-modern text-graphite">
-                {language === 'pl' ? 'Wybrano:' : 'Selected:'}{' '}
-                <span className="font-semibold text-gold">
-                  {t(options.find(o => o.id === selectedId)!.label)}
-                </span>
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Help text */}
-      <div className="mt-6 text-xs lg:text-sm text-center text-silver-dark font-modern">
-        {type === 'music' && (language === 'pl' 
-          ? 'Wybierz muzykę która najlepiej oddaje vibe Twojej idealnej przestrzeni'
-          : 'Choose music that best captures the vibe of your ideal space'
-        )}
+      <p className="mt-4 text-xs text-center text-silver-dark font-modern">
+        {type === 'music' && (language === 'pl'
+          ? 'Muzyka ustawia tempo Twoich rytuałów.'
+          : 'Music sets the tempo of your rituals.')}
         {type === 'texture' && (language === 'pl'
-          ? 'Którą teksturę chciałbyś dotykać najczęściej w swoim wnętrzu?'
-          : 'Which texture would you like to touch most in your interior?'
-        )}
+          ? 'Tekstura wpływa na codzienny kontakt z przestrzenią.'
+          : 'Texture defines daily touchpoints in the space.')}
         {type === 'light' && (language === 'pl'
-          ? 'Wybierz temperaturę światła która Cię relaksuje i inspiruje'
-          : 'Choose the light temperature that relaxes and inspires you'
-        )}
-      </div>
+          ? 'Światło reguluje energię i skupienie przez cały dzień.'
+          : 'Light shapes your energy and focus throughout the day.')}
+      </p>
     </GlassCard>
   );
 }
 
-/**
- * Combined Sensory Test Suite
- * All three tests in one component with tabs or steps
- */
+interface PaletteTestProps {
+  options: Array<{
+    id: string;
+    colors: string[];
+    label: { pl: string; en: string };
+  }>;
+  selectedId?: string;
+  onSelect: (id: string) => void;
+}
+
+function PaletteTest({ options, selectedId, onSelect }: PaletteTestProps) {
+  const { language } = useLanguage();
+
+  return (
+    <GlassCard className="p-5 md:p-6 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
+            {language === 'pl' ? 'Paleta' : 'Palette'}
+          </p>
+          <p className="text-sm font-modern text-graphite">
+            {language === 'pl'
+              ? 'Która paleta pomoże nam ustawić bazę kolorystyczną?'
+              : 'Which palette should anchor the chromatic base?'}
+          </p>
+        </div>
+        {selectedId && (
+          <p className="text-xs text-right text-silver-dark">
+            {language === 'pl' ? 'Wybrano:' : 'Selected:'}{' '}
+            <span className="font-semibold text-graphite">
+              {options.find(p => p.id === selectedId)?.label[language]}
+            </span>
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-1">
+        {options.map((palette) => {
+          const isSelected = palette.id === selectedId;
+          return (
+            <button
+              key={palette.id}
+              type="button"
+              onClick={() => onSelect(palette.id)}
+              className={`rounded-2xl border p-4 flex flex-col gap-3 text-left transition-all ${
+                isSelected
+                  ? 'border-gold bg-gold/10 shadow-inner shadow-gold/15'
+                  : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
+              }`}
+            >
+              <div className="flex gap-2 h-10">
+                {palette.colors.map((color, index) => (
+                  <div
+                    key={index}
+                    className="flex-1 rounded-lg"
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+              <p className="text-sm font-nasalization text-graphite text-center">
+                {palette.label[language]}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-4 text-xs text-center text-silver-dark font-modern">
+        {language === 'pl'
+          ? 'Paleta ustawia bazę pod wszystkie sensoryczne decyzje.'
+          : 'The palette sets the base for every other sensory decision.'}
+      </p>
+    </GlassCard>
+  );
+}
+
 interface SensoryTestSuiteProps {
   onComplete: (results: {
     music: string;
     texture: string;
     light: string;
+    natureMetaphor: string;
+    biophiliaScore: number;
   }) => void;
   className?: string;
+  profileContext?: {
+    paletteLabel?: string;
+    livingSituation?: string;
+    goals?: string[];
+  };
+  paletteOptions?: PaletteTestProps['options'];
+  selectedPalette?: string;
+  onPaletteSelect?: (id: string) => void;
 }
 
-export function SensoryTestSuite({ onComplete, className = '' }: SensoryTestSuiteProps) {
+type SensorySuiteTest = 'palette' | 'music' | 'texture' | 'light' | 'nature' | 'biophilia';
+type InteractiveTest = 'music' | 'texture' | 'light';
+
+export function SensoryTestSuite({
+  onComplete,
+  className = '',
+  profileContext,
+  paletteOptions,
+  selectedPalette,
+  onPaletteSelect
+}: SensoryTestSuiteProps) {
   const { language } = useLanguage();
-  const [currentTest, setCurrentTest] = useState<'music' | 'texture' | 'light'>('music');
+  const hasPalette = Boolean(paletteOptions?.length && onPaletteSelect);
+  const tests = useMemo<SensorySuiteTest[]>(
+    () => (hasPalette ? ['palette', 'music', 'texture', 'light', 'nature', 'biophilia'] : ['music', 'texture', 'light', 'nature', 'biophilia']),
+    [hasPalette]
+  );
+  const [currentTest, setCurrentTest] = useState<SensorySuiteTest>(tests[0]);
   const [results, setResults] = useState<{
     music?: string;
     texture?: string;
     light?: string;
+    natureMetaphor?: string;
   }>({});
+  const [biophiliaScore, setBiophiliaScore] = useState<number | undefined>(undefined);
 
-  const handleSelect = (testType: 'music' | 'texture' | 'light', value: string) => {
-    const newResults = { ...results, [testType]: value };
-    setResults(newResults);
+  useEffect(() => {
+    if (!tests.includes(currentTest)) {
+      setCurrentTest(tests[0]);
+    }
+  }, [tests, currentTest]);
 
-    // Auto-advance to next test
-    if (testType === 'music' && !results.texture) {
-      setTimeout(() => setCurrentTest('texture'), 500);
-    } else if (testType === 'texture' && !results.light) {
-      setTimeout(() => setCurrentTest('light'), 500);
-    } else if (testType === 'light' && newResults.music && newResults.texture && newResults.light) {
-      // All completed
-      setTimeout(() => {
-        onComplete({
-          music: newResults.music!,
-          texture: newResults.texture!,
-          light: newResults.light!
-        });
-      }, 500);
+  const goToNext = (testType: SensorySuiteTest) => {
+    const next = tests[tests.indexOf(testType) + 1];
+    if (next) {
+      setTimeout(() => setCurrentTest(next), 300);
     }
   };
 
-  const progress = ((Object.keys(results).length / 3) * 100);
+  const canComplete = (nextResults: typeof results, nextBiophilia?: number) => {
+    const paletteReady = !hasPalette || Boolean(selectedPalette);
+    const sensoryReady = Boolean(nextResults.music && nextResults.texture && nextResults.light);
+    const natureReady = Boolean(nextResults.natureMetaphor);
+    const biophiliaReady = typeof (nextBiophilia ?? biophiliaScore) === 'number';
+    return paletteReady && sensoryReady && natureReady && biophiliaReady;
+  };
+
+  const triggerComplete = (finalResults: typeof results, finalBiophilia: number | undefined) => {
+    if (
+      finalBiophilia === undefined ||
+      !finalResults.music ||
+      !finalResults.texture ||
+      !finalResults.light ||
+      !finalResults.natureMetaphor
+    ) {
+      return;
+    }
+    const payload = {
+      music: finalResults.music,
+      texture: finalResults.texture,
+      light: finalResults.light,
+      natureMetaphor: finalResults.natureMetaphor,
+      biophiliaScore: finalBiophilia
+    };
+    setTimeout(() => onComplete(payload), 300);
+  };
+
+  const handleSelect = (testType: SensorySuiteTest, value: string | number) => {
+    if (testType === 'palette') {
+      onPaletteSelect?.(value as string);
+      goToNext(testType);
+      if (canComplete(results)) {
+        triggerComplete(results, biophiliaScore);
+      }
+      return;
+    }
+
+    if (testType === 'biophilia') {
+      const score = typeof value === 'number' ? value : Number(value);
+      setBiophiliaScore(score);
+      if (canComplete(results, score)) {
+        triggerComplete(results, score);
+      }
+      return;
+    }
+
+    if (testType === 'nature') {
+      const nextResults = { ...results, natureMetaphor: value as string };
+      setResults(nextResults);
+      if (tests.indexOf(testType) !== tests.length - 1) {
+        goToNext(testType);
+      }
+      if (canComplete(nextResults)) {
+        triggerComplete(nextResults, biophiliaScore);
+      }
+      return;
+    }
+
+    const newResults = { ...results, [testType]: value as string };
+    setResults(newResults);
+    if (tests.indexOf(testType) + 1 < tests.length) {
+      goToNext(testType);
+    }
+    if (canComplete(newResults)) {
+      triggerComplete(newResults, biophiliaScore);
+    }
+  };
+
+  const currentIndex = tests.indexOf(currentTest);
+
+  const getTestLabel = (test: SensorySuiteTest) => {
+    switch (test) {
+      case 'music':
+        return language === 'pl' ? 'Muzyka' : 'Music';
+      case 'texture':
+        return language === 'pl' ? 'Tekstury' : 'Textures';
+      case 'light':
+        return language === 'pl' ? 'Światło' : 'Light';
+      case 'palette':
+        return language === 'pl' ? 'Paleta' : 'Palette';
+      case 'nature':
+        return language === 'pl' ? 'Metafora' : 'Metaphor';
+      case 'biophilia':
+        return 'Biophilia';
+      default:
+        return '';
+    }
+  };
+
+  const isTestComplete = (test: SensorySuiteTest) => {
+    if (test === 'palette') return Boolean(selectedPalette);
+    if (test === 'nature') return Boolean(results.natureMetaphor);
+    if (test === 'biophilia') return typeof biophiliaScore === 'number';
+    return Boolean(results[test as InteractiveTest]);
+  };
 
   return (
-    <div className={className}>
-      {/* Progress */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between text-sm text-silver-dark mb-2">
-          <span>{language === 'pl' ? 'Postęp' : 'Progress'}</span>
-          <span>{Math.round(progress)}%</span>
+    <div className={`flex flex-col gap-4 h-full ${className}`}>
+      {profileContext && (
+        <div className="glass-panel rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-silver-dark flex flex-wrap gap-4">
+          {profileContext.paletteLabel && (
+            <div>
+              <p className="uppercase tracking-[0.2em] mb-1">{language === 'pl' ? 'Paleta' : 'Palette'}</p>
+              <p className="text-sm font-nasalization text-graphite">{profileContext.paletteLabel}</p>
+            </div>
+          )}
+          {profileContext.livingSituation && (
+            <div>
+              <p className="uppercase tracking-[0.2em] mb-1">{language === 'pl' ? 'Tryb życia' : 'Lifestyle'}</p>
+              <p className="text-sm font-nasalization text-graphite">{profileContext.livingSituation}</p>
+            </div>
+          )}
+          {profileContext.goals && profileContext.goals.length > 0 && (
+            <div>
+              <p className="uppercase tracking-[0.2em] mb-1">{language === 'pl' ? 'Priorytety' : 'Priorities'}</p>
+              <p className="text-sm font-modern text-graphite">{profileContext.goals.join(' · ')}</p>
+            </div>
+          )}
         </div>
-        <div className="glass-panel rounded-full h-2 overflow-hidden">
-          <motion.div 
-            className="h-full bg-gradient-to-r from-gold to-champagne"
-            initial={{ width: 0 }}
-            animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.5 }}
-          />
-        </div>
-      </div>
+      )}
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6">
-        {(['music', 'texture', 'light'] as const).map((test) => (
+      <div className="flex gap-2">
+        {tests.map((test) => (
           <button
             key={test}
             onClick={() => setCurrentTest(test)}
-            className={`flex-1 px-4 py-3 rounded-xl font-modern text-sm lg:text-base transition-all ${
+            className={`flex-1 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
               currentTest === test
-                ? 'glass-panel bg-gradient-to-br from-gold/20 to-champagne/20 border-gold/40 text-graphite font-semibold'
-                : results[test]
-                ? 'glass-panel text-gold'
-                : 'glass-panel text-silver-dark'
+                ? 'bg-gold/30 border border-gold/50 text-graphite'
+                : isTestComplete(test)
+                ? 'bg-white/10 border border-gold/30 text-gold'
+                : 'bg-white/5 border border-white/10 text-silver-dark'
             }`}
           >
-            {results[test] && '✓ '}
-            {test === 'music' ? (language === 'pl' ? 'Muzyka' : 'Music') :
-             test === 'texture' ? (language === 'pl' ? 'Tekstura' : 'Texture') :
-             (language === 'pl' ? 'Światło' : 'Light')}
+            {getTestLabel(test)}
           </button>
         ))}
       </div>
 
-      {/* Current Test */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentTest}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ duration: 0.3 }}
-        >
-          <SensoryTest
-            type={currentTest}
-            onSelect={(value) => handleSelect(currentTest, value)}
+      <div className="flex-1">
+        {currentTest === 'palette' && hasPalette && paletteOptions ? (
+          <PaletteTest
+            options={paletteOptions}
+            selectedId={selectedPalette}
+            onSelect={(value) => handleSelect('palette', value)}
           />
-        </motion.div>
-      </AnimatePresence>
+        ) : currentTest === 'nature' ? (
+          <NatureMetaphorTest
+            frameless
+            className="h-full overflow-y-auto"
+            onSelect={(value) => handleSelect('nature', value)}
+          />
+        ) : currentTest === 'biophilia' ? (
+          <BiophiliaTest
+            frameless
+            className="h-full overflow-y-auto"
+            onSelect={(score) => handleSelect('biophilia', score)}
+          />
+        ) : (
+          <SensoryTest
+            type={currentTest as InteractiveTest}
+            onSelect={(value) => handleSelect(currentTest, value)}
+            className="h-full"
+            value={results[currentTest as InteractiveTest] || null}
+          />
+        )}
+      </div>
+
+      <p className="text-center text-xs text-silver-dark font-modern">
+        {language === 'pl'
+          ? `Krok ${currentIndex + 1} z ${tests.length}`
+          : `Step ${currentIndex + 1} of ${tests.length}`}
+      </p>
     </div>
   );
 }
+
 

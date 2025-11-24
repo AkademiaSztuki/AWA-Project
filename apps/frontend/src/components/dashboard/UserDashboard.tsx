@@ -9,6 +9,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { supabase } from '@/lib/supabase';
+import { getUserHouseholds, saveHousehold } from '@/lib/supabase-deep-personalization';
 import { 
   Home, 
   Plus, 
@@ -169,9 +170,54 @@ export function UserDashboard() {
     }
   };
 
-  const handleAddSpace = () => {
-    // Navigate to setup flow for new space
-    router.push('/setup/household');
+  const handleAddSpace = async () => {
+    try {
+      // Ensure we have a user hash
+      let userHash = sessionData?.userHash as string | undefined;
+      if (!userHash && typeof window !== 'undefined') {
+        userHash = localStorage.getItem('aura_user_hash') || 
+                   sessionStorage.getItem('aura_user_hash') || undefined;
+      }
+
+      if (!userHash) {
+        console.error('[Dashboard] No user hash found for adding space');
+        router.push('/'); // fallback
+        return;
+      }
+
+      // Try to reuse latest household if exists
+      let householdId: string | null = null;
+      try {
+        const households = await getUserHouseholds(userHash);
+        if (households && households.length > 0) {
+          householdId = households[0].id;
+        }
+      } catch (e) {
+        console.warn('[Dashboard] Failed to load households, will try to create a new one.', e);
+      }
+
+      // If none, create a minimal default household in background
+      if (!householdId) {
+        try {
+          const created = await saveHousehold({
+            userHash,
+            name: language === 'pl' ? 'Moja przestrzeń' : 'My Space',
+            householdType: 'home',
+            livingSituation: 'alone',
+            householdDynamics: null,
+            householdGoals: []
+          } as any);
+          householdId = created?.id || `household-${Date.now()}`;
+        } catch (e) {
+          console.warn('[Dashboard] Failed to create household, using fallback id.', e);
+          householdId = `household-${Date.now()}`;
+        }
+      }
+
+      router.push(`/setup/room/${householdId}`);
+    } catch (error) {
+      console.error('[Dashboard] Error in handleAddSpace:', error);
+    }
   };
 
   const handleOpenSpace = (spaceId: string) => {

@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GlassCard, GlassButton } from '@/components/ui';
-import { AwaContainer } from '@/components/awa/AwaContainer';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { useRouter } from 'next/navigation';
 import { useSessionData } from '@/hooks/useSessionData';
@@ -20,6 +19,15 @@ const OnboardingScreen: React.FC = () => {
     education: ''
   });
   const { updateSessionData, sessionData } = useSessionData();
+  const pathType = sessionData?.pathType;
+  const isFastTrack = pathType === 'fast';
+
+  useEffect(() => {
+    if (!sessionData) return;
+    if (pathType === 'full') {
+      router.replace('/setup/profile');
+    }
+  }, [pathType, router, sessionData]);
 
   const canProceedDemographics = demographics.ageRange && demographics.gender && demographics.education;
 
@@ -45,9 +53,8 @@ const OnboardingScreen: React.FC = () => {
       console.log('[Onboarding] Full sessionData:', sessionData);
       
       if (pathType === 'fast') {
-        // Fast track: photo already uploaded, now go to style selection
-        console.log('[Onboarding] ⚡ FAST TRACK - routing to style selection');
-        router.push('/flow/style-selection');
+        console.log('[Onboarding] ⚡ FAST TRACK - routing to photo upload');
+        router.push('/flow/fast-track');
       } else {
         // Full experience: go to setup/profile (CoreProfileWizard) first
         console.log('[Onboarding] 🌟 FULL EXPERIENCE - routing to setup/profile');
@@ -88,6 +95,33 @@ const OnboardingScreen: React.FC = () => {
   };
 
   const texts = consentTexts[language];
+
+  if (!pathType) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-pearl-50/40 to-platinum-50/40">
+        <GlassCard className="p-6 md:p-8 max-w-lg text-center space-y-4">
+          <p className="text-graphite font-modern">
+            {language === 'pl'
+              ? 'Chwilka... przygotowuję Twoją szybką ścieżkę.'
+              : 'Give me a second… I’m preparing your fast track.'}
+          </p>
+          <GlassButton onClick={() => router.replace('/flow/path-selection')}>
+            {language === 'pl' ? 'Wróć do wyboru ścieżki' : 'Back to path selection'}
+          </GlassButton>
+        </GlassCard>
+      </div>
+    );
+  }
+
+  if (!isFastTrack) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pearl-50/30 to-platinum-50/30">
+        <p className="text-silver-dark font-modern">
+          {language === 'pl' ? 'Przekierowuję Cię dalej...' : 'Redirecting you…'}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col w-full">

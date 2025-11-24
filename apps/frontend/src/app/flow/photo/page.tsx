@@ -175,6 +175,12 @@ export default function PhotoUploadPage() {
     '/images/tinder/Living Room (3).jpg',
   ];
 
+  const backDestination = sessionData?.pathType === 'fast' ? '/flow/onboarding' : '/setup/profile';
+
+  const handleBackNavigation = () => {
+    router.push(backDestination);
+  };
+
   const handleFileSelect = async (file: File) => {
     setIsLoading(true);
     try {
@@ -489,7 +495,7 @@ export default function PhotoUploadPage() {
               height={56}
               borderRadius={32}
               className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
-              onClick={() => router.push('/flow/onboarding')}
+              onClick={handleBackNavigation}
               aria-label="Powrót"
               style={{ opacity: 1 }}
             >

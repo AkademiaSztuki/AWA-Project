@@ -98,19 +98,15 @@ export default function PathSelectionScreen() {
 
   const handlePathSelection = async (pathType: 'fast' | 'full') => {
     stopAllDialogueAudio();
-    
-    // Save path type to session for routing logic
-    await updateSessionData({ pathType });
-    
+
     if (pathType === 'fast') {
-      // Fast track: photo → onboarding → style selection → generate
+      await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
       console.log('[PathSelection] Fast track selected');
-      router.push('/flow/fast-track');
-    } else {
-      // Full experience: onboarding → profile setup → ... → photo → tinder → dna → ladder → generate
-      console.log('[PathSelection] Full experience selected');
-      await updateSessionData({ currentStep: 'onboarding' });
       router.push('/flow/onboarding');
+    } else {
+      await updateSessionData({ pathType: 'full' });
+      console.log('[PathSelection] Full experience selected');
+      router.push('/setup/profile');
     }
   };
 

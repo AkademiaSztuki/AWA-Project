@@ -29,24 +29,59 @@ export default function BigFivePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [scores, setScores] = useState<IPIPNEOScores | null>(null);
+  const [isLegacyResult, setIsLegacyResult] = useState(false);
 
   const t = (pl: string, en: string) => (language === "pl" ? pl : en);
 
   // Load existing responses from session
   useEffect(() => {
-    if (sessionData?.bigFive) {
-      setResponses(sessionData.bigFive.responses || {});
-      const responseCount = Object.keys(sessionData.bigFive.responses || {}).length;
-      // If all questions answered, show results
-      if (responseCount >= IPIP_120_ITEMS.length) {
+    if (!sessionData?.bigFive) {
+      return;
+    }
+
+    const savedScores = normalizeScoresStructure(sessionData.bigFive.scores);
+    const hasIPIP120Shape =
+      sessionData.bigFive.instrument === 'IPIP-NEO-120' ||
+      Boolean((sessionData.bigFive.scores as IPIPNEOScores | undefined)?.domains);
+
+    if (!hasIPIP120Shape) {
+      setIsLegacyResult(Boolean(savedScores));
+      if (savedScores) {
+        setScores(savedScores);
         setShowResults(true);
-        const finalScores = calculateIPIPNEO120Scores(sessionData.bigFive.responses || {});
-        setScores(finalScores);
       } else {
-        // Ensure we don't exceed the array bounds
-        const nextQuestion = Math.min(responseCount, IPIP_120_ITEMS.length - 1);
-        setCurrentQuestion(nextQuestion);
+        setShowResults(false);
       }
+      setResponses({});
+      setCurrentQuestion(0);
+      return;
+    }
+
+    setIsLegacyResult(false);
+
+    const storedResponses = sessionData.bigFive.responses || {};
+    const responseCount = Object.keys(storedResponses).length;
+    setResponses(storedResponses);
+
+    // Completed test – prefer stored scores if present
+    if (sessionData.bigFive.completedAt && savedScores) {
+      setScores(savedScores);
+      setShowResults(true);
+      return;
+    }
+
+    if (responseCount >= IPIP_120_ITEMS.length) {
+      setShowResults(true);
+      if (savedScores) {
+        setScores(savedScores);
+      } else {
+        const finalScores = calculateIPIPNEO120Scores(storedResponses);
+        setScores(finalScores);
+      }
+    } else {
+      // Ensure we don't exceed the array bounds
+      const nextQuestion = Math.min(responseCount, IPIP_120_ITEMS.length - 1);
+      setCurrentQuestion(nextQuestion);
     }
   }, [sessionData]);
 
@@ -88,6 +123,11 @@ export default function BigFivePage() {
   };
 
   const handleSave = async () => {
+    if (isLegacyResult) {
+      router.push("/dashboard");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const finalScores = calculateIPIPNEO120Scores(responses);
@@ -100,14 +140,23 @@ export default function BigFivePage() {
         }
       } as any);
       
-      router.push("/flow/ladder");
+      router.push("/dashboard");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleSkip = () => {
-    router.push("/flow/ladder");
+    router.push("/dashboard");
+  };
+
+  const handleLegacyRetake = () => {
+    updateSessionData({ bigFive: undefined } as any);
+    setResponses({});
+    setScores(null);
+    setShowResults(false);
+    setCurrentQuestion(0);
+    setIsLegacyResult(false);
   };
 
   const progress = ((currentQuestion + 1) / IPIP_120_ITEMS.length) * 100;
@@ -136,6 +185,8 @@ export default function BigFivePage() {
   }
 
   if (showResults && scores) {
+    const domainEntries = getDomainEntries(scores);
+
     return (
       <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
         {/* Background */}
@@ -193,57 +244,95 @@ export default function BigFivePage() {
                   </p>
                 </div>
 
+                {isLegacyResult && (
+                  <div className="mb-6 rounded-2xl border border-gold/30 bg-white/40 p-4 text-sm font-modern text-graphite">
+                    {t(
+                      "Te wyniki pochodzą ze starszej wersji testu (IPIP-60). Aby odblokować nowy raport, wykonaj aktualny test 120 pytań.",
+                      "These scores come from the retired IPIP-60 test. Take the new 120-item version to unlock the refreshed insights."
+                    )}
+                  </div>
+                )}
+
                 {/* Results */}
-                <div className="space-y-6 mb-8">
-                  {Object.entries(scores.domains).map(([domain, score], index) => (
-                    <motion.div
-                      key={domain}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.5, delay: index * 0.1 }}
-                      className="glass-panel rounded-xl p-6"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-nasalization text-graphite">
-                          {IPIP_DOMAIN_LABELS[domain as keyof typeof IPIP_DOMAIN_LABELS][language]}
-                        </h3>
-                        <span className="text-2xl font-bold text-gold">{score}%</span>
-                      </div>
-                      
-                      <div className="w-full bg-white/20 rounded-full h-3 mb-2">
-                        <div 
-                          className="bg-gradient-to-r from-gold to-champagne h-3 rounded-full transition-all duration-1000"
-                          style={{ width: `${score}%` }}
-                        />
-                      </div>
-                      
-                      <p className="text-sm text-silver-dark font-modern">
-                        {getScoreDescription(domain as 'O' | 'C' | 'E' | 'A' | 'N', score, language)}
-                      </p>
-                    </motion.div>
-                  ))}
-                </div>
+                {domainEntries.length === 0 ? (
+                  <div className="text-center text-silver-dark font-modern mb-8">
+                    {t(
+                      "Brak danych do wyświetlenia. Spróbuj ponownie wykonać test.",
+                      "No data available to display. Please retake the test."
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-6 mb-8">
+                    {domainEntries.map(([domain, score], index) => (
+                      <motion.div
+                        key={domain}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.5, delay: index * 0.1 }}
+                        className="glass-panel rounded-xl p-6"
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-xl font-nasalization text-graphite">
+                            {IPIP_DOMAIN_LABELS[domain][language]}
+                          </h3>
+                          <span className="text-2xl font-bold text-gold">{score}%</span>
+                        </div>
+                        
+                        <div className="w-full bg-white/20 rounded-full h-3 mb-2">
+                          <div 
+                            className="bg-gradient-to-r from-gold to-champagne h-3 rounded-full transition-all duration-1000"
+                            style={{ width: `${score}%` }}
+                          />
+                        </div>
+                        
+                        <p className="text-sm text-silver-dark font-modern">
+                          {getScoreDescription(domain, score, language)}
+                        </p>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <GlassButton
-                    onClick={handleSkip}
-                    variant="secondary"
-                    className="px-8 py-3"
-                  >
-                    {t("Pomiń", "Skip")}
-                  </GlassButton>
-                  
-                  <GlassButton
-                    onClick={handleSave}
-                    disabled={isSubmitting}
-                    className="px-8 py-3"
-                  >
-                    <span className="flex items-center gap-2">
-                      {isSubmitting ? t("Zapisywanie…", "Saving…") : t("Kontynuuj", "Continue")}
-                      <ArrowRight size={18} />
-                    </span>
-                  </GlassButton>
+                  {isLegacyResult ? (
+                    <>
+                      <GlassButton
+                        onClick={handleLegacyRetake}
+                        className="px-8 py-3"
+                      >
+                        {t("Wykonaj nowy test", "Retake the new test")}
+                      </GlassButton>
+                      <GlassButton
+                        onClick={handleSkip}
+                        variant="secondary"
+                        className="px-8 py-3"
+                      >
+                        {t("Wróć do panelu", "Back to dashboard")}
+                      </GlassButton>
+                    </>
+                  ) : (
+                    <>
+                      <GlassButton
+                        onClick={handleSkip}
+                        variant="secondary"
+                        className="px-8 py-3"
+                      >
+                        {t("Pomiń", "Skip")}
+                      </GlassButton>
+                      
+                      <GlassButton
+                        onClick={handleSave}
+                        disabled={isSubmitting}
+                        className="px-8 py-3"
+                      >
+                        <span className="flex items-center gap-2">
+                          {isSubmitting ? t("Zapisywanie…", "Saving…") : t("Kontynuuj", "Continue")}
+                          <ArrowRight size={18} />
+                        </span>
+                      </GlassButton>
+                    </>
+                  )}
                 </div>
               </GlassCard>
             </motion.div>
@@ -454,4 +543,90 @@ function getScoreDescription(domain: 'O' | 'C' | 'E' | 'A' | 'N', score: number,
   };
 
   return descriptions[domain][language];
+}
+
+const DOMAIN_KEYS: Array<keyof IPIPNEOScores['domains']> = ['O', 'C', 'E', 'A', 'N'];
+
+function createEmptyFacets(): IPIPNEOScores['facets'] {
+  return {
+    O: {},
+    C: {},
+    E: {},
+    A: {},
+    N: {},
+  };
+}
+
+function clampScoreValue(value: unknown): number | null {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return null;
+  }
+  const rounded = Math.round(value);
+  return Math.max(0, Math.min(100, rounded));
+}
+
+function normalizeScoresStructure(rawScores: unknown): IPIPNEOScores | null {
+  if (!rawScores || typeof rawScores !== 'object') {
+    return null;
+  }
+
+  const maybeScores = rawScores as Partial<IPIPNEOScores> & Record<string, unknown>;
+
+  if (maybeScores.domains && typeof maybeScores.domains === 'object') {
+    const domainValues = DOMAIN_KEYS.map((key) => [key, clampScoreValue((maybeScores.domains as any)[key])] as const);
+    if (domainValues.some(([, value]) => value === null)) {
+      return null;
+    }
+
+    return {
+      domains: domainValues.reduce((acc, [key, value]) => {
+        acc[key] = value as number;
+        return acc;
+      }, {} as IPIPNEOScores['domains']),
+      facets: {
+        O: maybeScores.facets?.O || {},
+        C: maybeScores.facets?.C || {},
+        E: maybeScores.facets?.E || {},
+        A: maybeScores.facets?.A || {},
+        N: maybeScores.facets?.N || {},
+      },
+    };
+  }
+
+  const fallbackDomains = DOMAIN_KEYS.reduce((acc, key) => {
+    const legacyKey =
+      key === 'O' ? 'openness' :
+      key === 'C' ? 'conscientiousness' :
+      key === 'E' ? 'extraversion' :
+      key === 'A' ? 'agreeableness' :
+      'neuroticism';
+    const value =
+      clampScoreValue((maybeScores as Record<string, unknown>)[legacyKey]) ??
+      clampScoreValue((maybeScores as Record<string, unknown>)[key]);
+
+    acc[key] = value ?? undefined;
+    return acc;
+  }, {} as Partial<IPIPNEOScores['domains']>);
+
+  if (DOMAIN_KEYS.some((key) => typeof fallbackDomains[key] !== 'number')) {
+    return null;
+  }
+
+  return {
+    domains: fallbackDomains as IPIPNEOScores['domains'],
+    facets: createEmptyFacets(),
+  };
+}
+
+function getDomainEntries(scoreData: IPIPNEOScores | null): Array<[keyof IPIPNEOScores['domains'], number]> {
+  if (!scoreData?.domains) {
+    return [];
+  }
+
+  return DOMAIN_KEYS
+    .map((key) => {
+      const value = scoreData.domains[key];
+      return typeof value === 'number' ? ([key, value] as [keyof IPIPNEOScores['domains'], number]) : null;
+    })
+    .filter((entry): entry is [keyof IPIPNEOScores['domains'], number] => Boolean(entry));
 }

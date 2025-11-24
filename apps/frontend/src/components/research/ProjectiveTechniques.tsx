@@ -11,6 +11,7 @@ import { Mountain, Sparkles } from 'lucide-react';
 interface NatureMetaphorTestProps {
   onSelect: (selectedId: string) => void;
   className?: string;
+  frameless?: boolean;
 }
 
 /**
@@ -20,7 +21,7 @@ interface NatureMetaphorTestProps {
  * User selects nature place that "feels like" their ideal room
  * Reveals archetypal patterns and deep preferences
  */
-export function NatureMetaphorTest({ onSelect, className = '' }: NatureMetaphorTestProps) {
+export function NatureMetaphorTest({ onSelect, className = '', frameless = false }: NatureMetaphorTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -30,8 +31,8 @@ export function NatureMetaphorTest({ onSelect, className = '' }: NatureMetaphorT
     onSelect(option.id);
   };
 
-  return (
-    <GlassCard className={`p-6 lg:p-8 ${className}`}>
+  const content = (
+    <>
       {/* Title */}
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -178,6 +179,20 @@ export function NatureMetaphorTest({ onSelect, className = '' }: NatureMetaphorT
           ? 'Techniki projekcyjne pomagają odkryć autentyczne preferencje poza świadomymi filtrami'
           : 'Projective techniques help discover authentic preferences beyond conscious filters'}
       </div>
+    </>
+  );
+
+  if (frameless) {
+    return (
+      <div className={className}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <GlassCard className={`p-6 lg:p-8 ${className}`}>
+      {content}
     </GlassCard>
   );
 }

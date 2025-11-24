@@ -10,6 +10,7 @@ import Image from 'next/image';
 interface BiophiliaTestProps {
   onSelect: (score: number, optionId: string) => void;
   className?: string;
+  frameless?: boolean;
 }
 
 /**
@@ -23,7 +24,7 @@ interface BiophiliaTestProps {
  * 2 = Moderate (several plants, natural materials)
  * 3 = Maximum (urban jungle)
  */
-export function BiophiliaTest({ onSelect, className = '' }: BiophiliaTestProps) {
+export function BiophiliaTest({ onSelect, className = '', frameless = false }: BiophiliaTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -33,8 +34,8 @@ export function BiophiliaTest({ onSelect, className = '' }: BiophiliaTestProps) 
     onSelect(option.score, option.id);
   };
 
-  return (
-    <GlassCard className={`p-6 ${className}`}>
+  const content = (
+    <>
       {/* Title */}
       <div className="text-center mb-6">
         <h3 className="text-2xl lg:text-3xl font-nasalization text-gray-800 mb-2">
@@ -148,6 +149,20 @@ export function BiophiliaTest({ onSelect, className = '' }: BiophiliaTestProps) 
           ? 'Biophilia to nasza naturalna potrzeba kontaktu z naturą - pomaga nam zaprojektować przestrzeń która Cię wspiera'
           : 'Biophilia is our natural need for contact with nature - helps us design a space that supports you'}
       </div>
+    </>
+  );
+
+  if (frameless) {
+    return (
+      <div className={className}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <GlassCard className={`p-6 ${className}`}>
+      {content}
     </GlassCard>
   );
 }

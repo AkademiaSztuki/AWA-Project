@@ -39,7 +39,7 @@ export function DNAScreen() {
       visualDNA,
       dnaAccuracyScore: accuracy
     });
-    router.push('/flow/ladder');
+    router.push('/flow/generate');
   };
 
     if (isAnalyzing) {
