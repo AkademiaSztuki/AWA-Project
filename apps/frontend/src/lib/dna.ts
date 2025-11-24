@@ -1,3 +1,5 @@
+import { buildPreferenceMatrixFromSession } from '@/lib/preferences/preference-matrix';
+
 export type TinderSwipe = {
   direction: 'left' | 'right';
   tags?: string[];
@@ -233,6 +235,14 @@ export function buildOptimizedFluxPrompt(sessionData: any): string {
     colors: colors.slice(0, 2),
     materials: materials[0] || 'none'
   });
+  // Dodatkowy log badawczy: macierz implicit vs explicit (jeśli dane mają strukturę SessionData)
+  try {
+    const matrix = buildPreferenceMatrixFromSession(sessionData);
+    console.log('🧬 PreferenceMatrix (implicit vs explicit):', matrix);
+  } catch (e) {
+    // Nie blokujemy generowania jeśli sesja nie spełnia typu SessionData
+    console.warn('PreferenceMatrix build failed (non-fatal):', e);
+  }
   
   return finalPrompt;
 }
