@@ -153,6 +153,8 @@ export interface Room {
   ownershipFeeling?: string; // my_territory, neutral_shared, someone_elses
   
   currentPhotos: RoomPhoto[];
+  preferenceSource?: 'profile' | 'questions';
+  roomPreferencePayload?: RoomPreferencePayload;
   
   // RESEARCH: PRS pre-test
   prsCurrent: PRSMoodGridData;
@@ -172,6 +174,7 @@ export interface Room {
       colors: string[];
     };
   };
+  activityContext?: ActivityContext;
   
   aspirationalState?: {
     prsTarget: PRSMoodGridData;
@@ -202,6 +205,31 @@ export interface RoomActivity {
   satisfaction: string;      // great, ok, difficult
   timeOfDay?: string;        // morning, afternoon, evening, night, varies
   withWhom?: string;         // alone, partner, family, varies
+}
+
+export interface ActivityContext {
+  requiredFurniture: string[];
+  behaviorZones: string[];
+  storageNeeds: string[];
+  lightingNotes: string[];
+}
+
+export interface RoomPreferencePayload {
+  semanticDifferential?: {
+    warmth: number;
+    brightness: number;
+    complexity: number;
+    texture: number;
+  };
+  colorsAndMaterials?: {
+    selectedPalette?: string;
+    topMaterials?: string[];
+  };
+  sensoryPreferences?: {
+    music?: string;
+    texture?: string;
+    light?: string;
+  };
 }
 
 // =========================

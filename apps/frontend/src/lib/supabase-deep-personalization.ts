@@ -186,10 +186,13 @@ export async function saveRoom(room: Omit<Room, 'id' | 'createdAt' | 'updatedAt'
         shared_with: room.sharedWith,
         ownership_feeling: room.ownershipFeeling,
         current_photos: room.currentPhotos,
+        preference_source: room.preferenceSource,
+        room_preference_payload: room.roomPreferencePayload,
         prs_pre_test: room.prsCurrent,
         pain_points: room.painPoints,
         activities: room.activities,
         room_visual_dna: room.roomVisualDNA,
+        activity_context: room.activityContext,
         aspirational_state: room.aspirationalState
       })
       .select()

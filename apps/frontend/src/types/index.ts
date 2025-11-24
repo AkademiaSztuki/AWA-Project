@@ -1,3 +1,5 @@
+import type { RoomActivity, RoomPreferencePayload, ActivityContext } from './deep-personalization';
+
 // Typy dla aplikacji Aura
 export interface SessionData {
   userHash: string;
@@ -6,6 +8,16 @@ export interface SessionData {
   pathType?: 'fast' | 'full';
   uploadedImage?: string;
   roomType?: string;
+  roomName?: string;
+  roomUsageType?: 'solo' | 'shared';
+  roomSharedWith?: string[];
+  roomPainPoints?: string[];
+  roomActivities?: RoomActivity[];
+  roomPreferenceSource?: 'profile' | 'complete';
+  roomPreferences?: RoomPreferencePayload;
+  roomActivityContext?: ActivityContext;
+  prsCurrent?: { x: number; y: number };
+  prsTarget?: { x: number; y: number };
   tinderResults: TinderSwipe[];
   visualDNA: VisualDNA;
   ladderResults?: LadderResults;

@@ -3,6 +3,7 @@
 // Converts multi-source data into numerical weights for prompt building
 
 import { PRSMoodGridData } from '../questions/validated-scales';
+import { ActivityContext } from '@/types/deep-personalization';
 
 // =========================
 // INPUT TYPES
@@ -82,6 +83,7 @@ export interface PromptInputs {
     frequency: string;
     satisfaction: string;        // good, ok, difficult
     timeOfDay?: string;
+    withWhom?: string;
   }>;
   
   painPoints: string[];
@@ -101,6 +103,8 @@ export interface PromptInputs {
     detectedObjects: string[];
     lightQuality: string;         // dark, dim, bright, very_bright
   };
+
+  activityContext?: ActivityContext;
 }
 
 // =========================
@@ -182,7 +186,8 @@ export function calculatePromptWeights(inputs: PromptInputs): PromptWeights {
   const functionalWeights = analyzeFunctionalRequirements(
     inputs.activities,
     inputs.painPoints,
-    inputs.socialContext
+    inputs.socialContext,
+    inputs.activityContext
   );
   
   // 6. LIGHTING REQUIREMENTS
@@ -390,7 +395,8 @@ function calculateBiophiliaIntegration(
 function analyzeFunctionalRequirements(
   activities: PromptInputs['activities'],
   painPoints: string[],
-  socialContext: 'solo' | 'shared'
+  socialContext: 'solo' | 'shared',
+  activityContext?: ActivityContext
 ): {
   primary: string;
   secondary: string[];
@@ -406,14 +412,31 @@ function analyzeFunctionalRequirements(
   const secondary = sortedActivities.slice(1, 3).map(a => a.type);
   
   // Priorities from pain points
-  const priorities: string[] = [];
-  if (painPoints.includes('storage')) priorities.push('ample storage');
-  if (painPoints.includes('layout')) priorities.push('optimized layout');
-  if (painPoints.includes('light')) priorities.push('improved lighting');
-  if (painPoints.includes('clutter')) priorities.push('organization systems');
-  if (socialContext === 'shared') priorities.push('zoning for multiple users');
-  
-  return { primary, secondary, priorities };
+  const prioritySet = new Set<string>();
+  if (painPoints.includes('storage')) prioritySet.add('ample storage');
+  if (painPoints.includes('layout')) prioritySet.add('optimized layout');
+  if (painPoints.includes('light')) prioritySet.add('improved lighting');
+  if (painPoints.includes('clutter')) prioritySet.add('organization systems');
+  if (socialContext === 'shared') prioritySet.add('zoning for multiple users');
+
+  activities.forEach((activity) => {
+    if (activity.satisfaction === 'difficult') {
+      prioritySet.add(`improve_${activity.type}_support`);
+    }
+    if (activity.timeOfDay === 'evening' || activity.timeOfDay === 'night') {
+      prioritySet.add('layered lighting');
+    }
+    if (activity.withWhom && activity.withWhom !== 'alone') {
+      prioritySet.add('flexible seating');
+    }
+  });
+
+  activityContext?.requiredFurniture?.forEach((item) => prioritySet.add(item));
+  activityContext?.behaviorZones?.forEach((zone) => prioritySet.add(zone));
+  activityContext?.storageNeeds?.forEach((need) => prioritySet.add(need));
+  activityContext?.lightingNotes?.forEach((note) => prioritySet.add(note));
+
+  return { primary, secondary, priorities: Array.from(prioritySet) };
 }
 
 function determineLightingStrategy(
