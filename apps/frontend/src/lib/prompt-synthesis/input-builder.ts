@@ -48,11 +48,11 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
     },
     personality: sessionData.bigFive?.scores
       ? {
-          openness: sessionData.bigFive.scores.openness,
-          conscientiousness: sessionData.bigFive.scores.conscientiousness,
-          extraversion: sessionData.bigFive.scores.extraversion,
-          agreeableness: sessionData.bigFive.scores.agreeableness,
-          neuroticism: sessionData.bigFive.scores.neuroticism
+          openness: sessionData.bigFive.scores.openness ?? 50,
+          conscientiousness: sessionData.bigFive.scores.conscientiousness ?? 50,
+          extraversion: sessionData.bigFive.scores.extraversion ?? 50,
+          agreeableness: sessionData.bigFive.scores.agreeableness ?? 50,
+          neuroticism: sessionData.bigFive.scores.neuroticism ?? 50
         }
       : undefined,
     inspirations: sessionData.inspirations?.map((item) => ({
