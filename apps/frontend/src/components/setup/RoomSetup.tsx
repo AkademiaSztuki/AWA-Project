@@ -1230,13 +1230,24 @@ function PreferenceQuestionsStep({
   }, [explicitPreferences]);
 
   const handleSemanticChange = (dimension: SemanticDimensionId, value: number) => {
-    setLocalPrefs((prev) => ({
-      ...prev,
-      semanticDifferential: {
-        ...(prev.semanticDifferential || {}),
-        [dimension]: value / 10
-      }
-    }));
+    setLocalPrefs((prev) => {
+      const currentSemantic = prev.semanticDifferential || {
+        warmth: DEFAULT_SEMANTIC_VALUE,
+        brightness: DEFAULT_SEMANTIC_VALUE,
+        complexity: DEFAULT_SEMANTIC_VALUE,
+        texture: DEFAULT_SEMANTIC_VALUE
+      };
+      return {
+        ...prev,
+        semanticDifferential: {
+          warmth: currentSemantic.warmth ?? DEFAULT_SEMANTIC_VALUE,
+          brightness: currentSemantic.brightness ?? DEFAULT_SEMANTIC_VALUE,
+          complexity: currentSemantic.complexity ?? DEFAULT_SEMANTIC_VALUE,
+          texture: currentSemantic.texture ?? DEFAULT_SEMANTIC_VALUE,
+          [dimension]: value / 10
+        }
+      };
+    });
   };
 
   const handlePaletteSelect = (paletteId: string) => {
