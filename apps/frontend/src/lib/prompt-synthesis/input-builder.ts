@@ -80,7 +80,16 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
       styles: visualDNA?.preferences?.styles || [],
       colors: visualDNA?.preferences?.colors || []
     },
-    currentRoomAnalysis: sessionData.roomAnalysis,
+    currentRoomAnalysis: sessionData.roomAnalysis && 
+      'clutter' in sessionData.roomAnalysis &&
+      'dominantColors' in sessionData.roomAnalysis
+      ? {
+          clutter: (sessionData.roomAnalysis as any).clutter ?? 0,
+          dominantColors: (sessionData.roomAnalysis as any).dominantColors ?? [],
+          detectedObjects: (sessionData.roomAnalysis as any).detectedObjects ?? [],
+          lightQuality: (sessionData.roomAnalysis as any).lightQuality ?? 'bright'
+        }
+      : undefined,
     activityContext: sessionData.roomActivityContext
   };
 }
