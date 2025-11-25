@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -42,6 +42,7 @@ const toBase64 = (file: File): Promise<string> =>
 type SetupStep = 
   | 'photo_upload'
   | 'preference_source'
+  | 'preference_questions'
   | 'prs_current'
   | 'usage_context'
   | 'activities'
@@ -49,6 +50,18 @@ type SetupStep =
   | 'social_dynamics'
   | 'prs_target'
   | 'summary';
+
+const BASE_STEPS: SetupStep[] = [
+  'photo_upload',
+  'preference_source',
+  'preference_questions',
+  'prs_current',
+  'activities',
+  'usage_context',
+  'pain_points',
+  'prs_target',
+  'summary'
+];
 
 type PreferenceSource = 'profile' | 'complete';
 type SemanticDimensionId = 'warmth' | 'brightness' | 'complexity' | 'texture';
@@ -103,18 +116,16 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   });
   const [isSaving, setIsSaving] = useState(false);
 
-  const steps: SetupStep[] = [
-    'photo_upload',
-    'preference_source',
-    'prs_current',
-    'activities',
-    'usage_context',
-    'pain_points',
-    'prs_target',
-    'summary'
-  ];
+  const shouldShowPreferenceQuestions = roomData.preferenceSource === 'complete';
+  const steps = useMemo(
+    () =>
+      shouldShowPreferenceQuestions
+        ? BASE_STEPS
+        : BASE_STEPS.filter((step) => step !== 'preference_questions'),
+    [shouldShowPreferenceQuestions]
+  );
 
-  const currentStepIndex = steps.indexOf(currentStep);
+  const currentStepIndex = Math.max(0, steps.indexOf(currentStep));
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
 
   const handleNext = () => {
@@ -261,12 +272,33 @@ export function RoomSetup({ householdId }: { householdId: string }) {
               <PreferenceSourceStep
                 sessionData={sessionData}
                 preferenceSource={roomData.preferenceSource}
-                explicitPreferences={roomData.explicitPreferences}
                 onBack={handleBack}
-                onContinue={(source, payload) => {
+                onSelectProfile={() => {
                   setRoomData({
                     ...roomData,
-                    preferenceSource: source,
+                    preferenceSource: 'profile',
+                    explicitPreferences: undefined
+                  });
+                  setCurrentStep('prs_current');
+                }}
+                onSelectQuestions={() => {
+                  setRoomData({
+                    ...roomData,
+                    preferenceSource: 'complete'
+                  });
+                  setCurrentStep('preference_questions');
+                }}
+              />
+            )}
+
+            {currentStep === 'preference_questions' && (
+              <PreferenceQuestionsStep
+                explicitPreferences={roomData.explicitPreferences}
+                onBack={handleBack}
+                onSubmit={(payload) => {
+                  setRoomData({
+                    ...roomData,
+                    preferenceSource: 'complete',
                     explicitPreferences: payload
                   });
                   handleNext();
@@ -1014,9 +1046,15 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
 interface PreferenceSourceStepProps {
   sessionData?: SessionData;
   preferenceSource?: PreferenceSource | null;
+  onBack: () => void;
+  onSelectProfile: () => void;
+  onSelectQuestions: () => void;
+}
+
+interface PreferenceQuestionsStepProps {
   explicitPreferences?: RoomPreferencePayload;
   onBack: () => void;
-  onContinue: (source: PreferenceSource, payload?: RoomPreferencePayload) => void;
+  onSubmit: (payload: RoomPreferencePayload) => void;
 }
 
 const DEFAULT_SEMANTIC_VALUE = 0.5;
@@ -1042,83 +1080,11 @@ const buildDefaultPreferences = (source?: RoomPreferencePayload): RoomPreference
 function PreferenceSourceStep({
   sessionData,
   preferenceSource,
-  explicitPreferences,
   onBack,
-  onContinue
+  onSelectProfile,
+  onSelectQuestions
 }: PreferenceSourceStepProps) {
   const { language } = useLanguage();
-  const [selectedSource, setSelectedSource] = useState<PreferenceSource | null>(preferenceSource ?? null);
-  const [localPrefs, setLocalPrefs] = useState<RoomPreferencePayload>(() => buildDefaultPreferences(explicitPreferences));
-
-  useEffect(() => {
-    setSelectedSource(preferenceSource ?? null);
-  }, [preferenceSource]);
-
-  useEffect(() => {
-    setLocalPrefs(buildDefaultPreferences(explicitPreferences));
-  }, [explicitPreferences]);
-
-  const ensureCompleteSelected = () => {
-    if (selectedSource !== 'complete') {
-      setSelectedSource('complete');
-    }
-  };
-
-  const handleSemanticChange = (dimension: SemanticDimensionId, value: number) => {
-    ensureCompleteSelected();
-    setLocalPrefs((prev) => ({
-      ...prev,
-      semanticDifferential: {
-        ...(prev.semanticDifferential || {}),
-        [dimension]: value / 10
-      }
-    }));
-  };
-
-  const handlePaletteSelect = (paletteId: string) => {
-    ensureCompleteSelected();
-    setLocalPrefs((prev) => ({
-      ...prev,
-      colorsAndMaterials: {
-        ...(prev.colorsAndMaterials || {}),
-        selectedPalette: paletteId,
-        topMaterials: prev.colorsAndMaterials?.topMaterials || []
-      }
-    }));
-  };
-
-  const toggleMaterial = (materialId: string) => {
-    ensureCompleteSelected();
-    setLocalPrefs((prev) => {
-      const current = prev.colorsAndMaterials?.topMaterials || [];
-      const exists = current.includes(materialId);
-      const nextMaterials = exists
-        ? current.filter((m) => m !== materialId)
-        : current.length >= 3
-          ? [...current.slice(1), materialId]
-          : [...current, materialId];
-      return {
-        ...prev,
-        colorsAndMaterials: {
-          ...(prev.colorsAndMaterials || {}),
-          topMaterials: nextMaterials
-        }
-      };
-    });
-  };
-
-  type SensoryKey = 'music' | 'texture' | 'light';
-
-  const handleSensorySelect = (key: SensoryKey, value: string) => {
-    ensureCompleteSelected();
-    setLocalPrefs((prev) => ({
-      ...prev,
-      sensoryPreferences: {
-        ...(prev.sensoryPreferences || {}),
-        [key]: value
-      }
-    }));
-  };
 
   const hasProfileData = Boolean(
     sessionData?.colorsAndMaterials?.selectedPalette ||
@@ -1128,33 +1094,6 @@ function PreferenceSourceStep({
           sessionData.sensoryPreferences.texture ||
           sessionData.sensoryPreferences.light))
   );
-
-  const semanticComplete = Boolean(
-    localPrefs.semanticDifferential &&
-      (['warmth', 'brightness', 'complexity', 'texture'] as SemanticDimensionId[]).every(
-        (key) => typeof localPrefs.semanticDifferential?.[key] === 'number'
-      )
-  );
-  const paletteReady = Boolean(localPrefs.colorsAndMaterials?.selectedPalette);
-  const materialsReady = (localPrefs.colorsAndMaterials?.topMaterials?.length || 0) > 0;
-  const sensoryReady = Boolean(
-    localPrefs.sensoryPreferences?.music &&
-      localPrefs.sensoryPreferences?.texture &&
-      localPrefs.sensoryPreferences?.light
-  );
-  const canSubmitComplete = semanticComplete && paletteReady && materialsReady && sensoryReady;
-
-  const handleContinue = () => {
-    if (!selectedSource) return;
-    if (selectedSource === 'profile') {
-      if (!hasProfileData) return;
-      onContinue('profile');
-      return;
-    }
-    if (selectedSource === 'complete' && canSubmitComplete) {
-      onContinue('complete', localPrefs);
-    }
-  };
 
   const profilePaletteLabel = getPaletteLabel(sessionData?.colorsAndMaterials?.selectedPalette, language);
   const profileSemantic = sessionData?.semanticDifferential;
@@ -1170,18 +1109,6 @@ function PreferenceSourceStep({
       ? `${language === 'pl' ? 'Muzyka' : 'Music'}: ${profileSensory.music}`
       : null
   ].filter(Boolean);
-
-  const sensoryOptionsMap: Record<SensoryKey, typeof MUSIC_PREFERENCES> = {
-    music: MUSIC_PREFERENCES,
-    texture: TEXTURE_PREFERENCES,
-    light: LIGHT_PREFERENCES
-  };
-
-  const sensoryLabels: Record<SensoryKey, { pl: string; en: string }> = {
-    music: { pl: 'Muzyka', en: 'Music' },
-    texture: { pl: 'Tekstury', en: 'Textures' },
-    light: { pl: 'Światło', en: 'Light' }
-  };
 
   return (
     <motion.div
@@ -1201,16 +1128,16 @@ function PreferenceSourceStep({
             </h2>
             <p className="text-sm text-silver-dark font-modern">
               {language === 'pl'
-                ? 'Możemy użyć Twojego profilu lub zebrać krótkie odpowiedzi dla tego pokoju.'
-                : 'We can reuse your core profile or capture quick answers just for this room.'}
+                ? 'To osobny krok: wybierz szybkie użycie profilu lub przejdź do krótkich pytań dla tego pokoju.'
+                : 'Pick the fast profile reuse or move to a short, room-specific questionnaire.'}
             </p>
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid lg:grid-cols-2 gap-6 mb-10">
           <div
             className={`glass-panel rounded-2xl p-6 border transition-all ${
-              selectedSource === 'profile'
+              preferenceSource === 'profile'
                 ? 'border-gold bg-gold/5 shadow-lg shadow-gold/10'
                 : 'border-white/10'
             }`}
@@ -1246,7 +1173,7 @@ function PreferenceSourceStep({
             )}
             <GlassButton
               className="mt-6"
-              onClick={() => setSelectedSource('profile')}
+              onClick={onSelectProfile}
               disabled={!hasProfileData}
             >
               {language === 'pl' ? 'Zastosuj profil' : 'Apply my profile'}
@@ -1256,7 +1183,7 @@ function PreferenceSourceStep({
 
           <div
             className={`glass-panel rounded-2xl p-6 border transition-all ${
-              selectedSource === 'complete'
+              preferenceSource === 'complete'
                 ? 'border-gold bg-gold/5 shadow-lg shadow-gold/10'
                 : 'border-white/10'
             }`}
@@ -1272,9 +1199,137 @@ function PreferenceSourceStep({
                 ? '3 krótkie sekcje zajmą ~2 minuty i dadzą IDA pełny kontekst dla tego pokoju.'
                 : 'Three short sections take ~2 minutes and give IDA a complete, room-specific context.'}
             </p>
-            <GlassButton variant="secondary" onClick={() => setSelectedSource('complete')}>
-              {language === 'pl' ? 'Wybierz tryb z pytaniami' : 'Switch to question mode'}
+            <GlassButton variant="secondary" onClick={onSelectQuestions}>
+              {language === 'pl' ? 'Przejdź do pytań' : 'Go to questions'}
+              <ArrowRight size={16} />
             </GlassButton>
+          </div>
+        </div>
+
+        <div className="flex justify-between">
+          <GlassButton onClick={onBack} variant="secondary">
+            <ArrowLeft size={18} />
+            {language === 'pl' ? 'Wstecz' : 'Back'}
+          </GlassButton>
+        </div>
+      </GlassCard>
+    </motion.div>
+  );
+}
+
+function PreferenceQuestionsStep({
+  explicitPreferences,
+  onBack,
+  onSubmit
+}: PreferenceQuestionsStepProps) {
+  const { language } = useLanguage();
+  const [localPrefs, setLocalPrefs] = useState<RoomPreferencePayload>(() => buildDefaultPreferences(explicitPreferences));
+
+  useEffect(() => {
+    setLocalPrefs(buildDefaultPreferences(explicitPreferences));
+  }, [explicitPreferences]);
+
+  const handleSemanticChange = (dimension: SemanticDimensionId, value: number) => {
+    setLocalPrefs((prev) => ({
+      ...prev,
+      semanticDifferential: {
+        ...(prev.semanticDifferential || {}),
+        [dimension]: value / 10
+      }
+    }));
+  };
+
+  const handlePaletteSelect = (paletteId: string) => {
+    setLocalPrefs((prev) => ({
+      ...prev,
+      colorsAndMaterials: {
+        ...(prev.colorsAndMaterials || {}),
+        selectedPalette: paletteId,
+        topMaterials: prev.colorsAndMaterials?.topMaterials || []
+      }
+    }));
+  };
+
+  const toggleMaterial = (materialId: string) => {
+    setLocalPrefs((prev) => {
+      const current = prev.colorsAndMaterials?.topMaterials || [];
+      const exists = current.includes(materialId);
+      const nextMaterials = exists
+        ? current.filter((m) => m !== materialId)
+        : current.length >= 3
+          ? [...current.slice(1), materialId]
+          : [...current, materialId];
+
+      return {
+        ...prev,
+        colorsAndMaterials: {
+          ...(prev.colorsAndMaterials || {}),
+          topMaterials: nextMaterials
+        }
+      };
+    });
+  };
+
+  type SensoryKey = 'music' | 'texture' | 'light';
+
+  const handleSensorySelect = (key: SensoryKey, value: string) => {
+    setLocalPrefs((prev) => ({
+      ...prev,
+      sensoryPreferences: {
+        ...(prev.sensoryPreferences || {}),
+        [key]: value
+      }
+    }));
+  };
+
+  const semanticComplete = Boolean(
+    localPrefs.semanticDifferential &&
+      (['warmth', 'brightness', 'complexity', 'texture'] as SemanticDimensionId[]).every(
+        (key) => typeof localPrefs.semanticDifferential?.[key] === 'number'
+      )
+  );
+  const paletteReady = Boolean(localPrefs.colorsAndMaterials?.selectedPalette);
+  const materialsReady = (localPrefs.colorsAndMaterials?.topMaterials?.length || 0) > 0;
+  const sensoryReady = Boolean(
+    localPrefs.sensoryPreferences?.music &&
+      localPrefs.sensoryPreferences?.texture &&
+      localPrefs.sensoryPreferences?.light
+  );
+  const canSubmitComplete = semanticComplete && paletteReady && materialsReady && sensoryReady;
+
+  const sensoryOptionsMap: Record<SensoryKey, typeof MUSIC_PREFERENCES> = {
+    music: MUSIC_PREFERENCES,
+    texture: TEXTURE_PREFERENCES,
+    light: LIGHT_PREFERENCES
+  };
+
+  const sensoryLabels: Record<SensoryKey, { pl: string; en: string }> = {
+    music: { pl: 'Muzyka', en: 'Music' },
+    texture: { pl: 'Tekstury', en: 'Textures' },
+    light: { pl: 'Światło', en: 'Light' }
+  };
+
+  return (
+    <motion.div
+      key="preference_questions"
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+    >
+      <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+            <Target size={24} className="text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
+              {language === 'pl' ? 'Tryb pytań' : 'Question mode'}
+            </h2>
+            <p className="text-sm text-silver-dark font-modern">
+              {language === 'pl'
+                ? 'Te trzy sekcje dadzą IDA pełny kontekst dla tego pokoju.'
+                : 'These three micro-sections give IDA full context for this room.'}
+            </p>
           </div>
         </div>
 
@@ -1415,12 +1470,8 @@ function PreferenceSourceStep({
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
           <GlassButton
-            onClick={handleContinue}
-            disabled={
-              !selectedSource ||
-              (selectedSource === 'profile' && !hasProfileData) ||
-              (selectedSource === 'complete' && !canSubmitComplete)
-            }
+            onClick={() => onSubmit(localPrefs)}
+            disabled={!canSubmitComplete}
           >
             {language === 'pl' ? 'Zapisz preferencje' : 'Apply preferences'}
             <ArrowRight size={18} />
@@ -1448,26 +1499,31 @@ const FREQUENCY_OPTIONS = [
   { id: 'rarely', label: { pl: 'Rzadko', en: 'Rarely' } }
 ];
 
-const TIME_OF_DAY_OPTIONS = [
-  { id: 'morning', label: { pl: 'Rano', en: 'Morning' } },
-  { id: 'afternoon', label: { pl: 'Popołudnie', en: 'Afternoon' } },
-  { id: 'evening', label: { pl: 'Wieczór', en: 'Evening' } },
-  { id: 'night', label: { pl: 'Noc', en: 'Night' } },
-  { id: 'varies', label: { pl: 'Różnie', en: 'Varies' } }
-];
-
-const WITH_WHOM_OPTIONS = [
-  { id: 'alone', label: { pl: 'Samodzielnie', en: 'Alone' } },
-  { id: 'partner', label: { pl: 'Z partnerem/partnerką', en: 'With partner' } },
-  { id: 'family', label: { pl: 'Z rodziną/dziećmi', en: 'With family/kids' } },
-  { id: 'guests', label: { pl: 'Z gośćmi', en: 'With guests' } },
-  { id: 'varies', label: { pl: 'Różnie', en: 'Varies' } }
-];
-
 const SATISFACTION_OPTIONS = [
-  { id: 'great', emoji: '😊', label: { pl: 'Świetnie wspiera', en: 'Great support' } },
-  { id: 'ok', emoji: '😐', label: { pl: 'Może być', en: 'It works' } },
-  { id: 'difficult', emoji: '😕', label: { pl: 'Utrudnia', en: 'Needs help' } }
+  {
+    id: 'great',
+    label: { pl: 'Działa idealnie', en: 'Great support' },
+    description: {
+      pl: 'Tutaj wszystko działa jak trzeba i nic Cię nie spowalnia.',
+      en: 'Everything works smoothly here and nothing gets in the way.'
+    }
+  },
+  {
+    id: 'ok',
+    label: { pl: 'Jest okej', en: 'It works' },
+    description: {
+      pl: 'Da się korzystać, choć warto byłoby je dopieścić.',
+      en: 'Usable as is, but it could definitely feel better.'
+    }
+  },
+  {
+    id: 'difficult',
+    label: { pl: 'Utrudnia', en: 'Needs help' },
+    description: {
+      pl: 'Przestrzeń męczy i trzeba ją poukładać od nowa.',
+      en: 'The room gets in the way—you need a reset.'
+    }
+  }
 ];
 
 function PainPointsStep({ selected, onUpdate, onNext, onBack }: any) {
@@ -1679,60 +1735,36 @@ function ActivitiesStep({
                     </button>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     <div>
-                      <label className="text-xs uppercase tracking-[0.2em] text-silver-dark">
+                      <p className="text-xs uppercase tracking-[0.2em] text-silver-dark">
                         {language === 'pl' ? 'Częstotliwość' : 'Frequency'}
-                      </label>
-                      <select
-                        className="w-full mt-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-graphite focus:border-gold focus:outline-none"
-                        value={activity.frequency}
-                        onChange={(e) => updateActivity(activity.type, { frequency: e.target.value })}
-                      >
-                        {FREQUENCY_OPTIONS.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label[language]}
-                          </option>
-                        ))}
-                      </select>
+                      </p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {FREQUENCY_OPTIONS.map((option) => {
+                          const isActive = activity.frequency === option.id;
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => updateActivity(activity.type, { frequency: option.id })}
+                              className={`px-3 py-2 rounded-2xl border text-sm font-modern transition-all ${
+                                isActive
+                                  ? 'border-gold bg-gold/10 text-graphite'
+                                  : 'border-white/20 text-silver-dark hover:border-gold/30'
+                              }`}
+                            >
+                              {option.label[language]}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div>
-                      <label className="text-xs uppercase tracking-[0.2em] text-silver-dark">
-                        {language === 'pl' ? 'Pora dnia' : 'Time of day'}
-                      </label>
-                      <select
-                        className="w-full mt-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-graphite focus:border-gold focus:outline-none"
-                        value={activity.timeOfDay}
-                        onChange={(e) => updateActivity(activity.type, { timeOfDay: e.target.value })}
-                      >
-                        {TIME_OF_DAY_OPTIONS.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label[language]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase tracking-[0.2em] text-silver-dark">
-                        {language === 'pl' ? 'Z kim?' : 'With whom?'}
-                      </label>
-                      <select
-                        className="w-full mt-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-graphite focus:border-gold focus:outline-none"
-                        value={activity.withWhom}
-                        onChange={(e) => updateActivity(activity.type, { withWhom: e.target.value })}
-                      >
-                        {WITH_WHOM_OPTIONS.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label[language]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase tracking-[0.2em] text-silver-dark mb-2 block">
-                        {language === 'pl' ? 'Jak wspiera' : 'Support quality'}
-                      </label>
-                      <div className="flex gap-2">
+                      <p className="text-xs uppercase tracking-[0.2em] text-silver-dark">
+                        {language === 'pl' ? 'Jak to miejsce się sprawdza?' : 'How does the space feel?'}
+                      </p>
+                      <div className="grid sm:grid-cols-3 gap-2 mt-2">
                         {SATISFACTION_OPTIONS.map((option) => {
                           const isActive = activity.satisfaction === option.id;
                           return (
@@ -1740,14 +1772,14 @@ function ActivitiesStep({
                               key={option.id}
                               type="button"
                               onClick={() => updateActivity(activity.type, { satisfaction: option.id })}
-                              className={`flex-1 rounded-2xl border py-2 text-sm transition-all ${
+                              className={`rounded-2xl border px-4 py-3 text-sm text-left transition-all ${
                                 isActive
                                   ? 'border-gold bg-gold/10 text-graphite'
                                   : 'border-white/20 text-silver-dark hover:border-gold/30'
                               }`}
                             >
-                              <span className="block text-xl">{option.emoji}</span>
-                              <span>{option.label[language]}</span>
+                              <p className="font-semibold">{option.label[language]}</p>
+                              <p className="text-xs text-silver-dark">{option.description[language]}</p>
                             </button>
                           );
                         })}
