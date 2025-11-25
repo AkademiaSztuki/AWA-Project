@@ -161,7 +161,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
           roomType: roomData.roomType,
           usageType: roomData.usageType,
           sharedWith: roomData.sharedWith || [],
-          preferenceSource: roomData.preferenceSource,
+          preferenceSource: roomData.preferenceSource === 'complete' ? 'questions' : roomData.preferenceSource,
           roomPreferencePayload: roomData.explicitPreferences,
           currentPhotos: (roomData.photos || []).map(url => ({ 
             url, 
