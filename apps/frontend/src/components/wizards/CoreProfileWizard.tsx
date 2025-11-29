@@ -18,7 +18,7 @@ import { LoginModal } from '@/components/auth/LoginModal';
 import { computeWeightedDNAFromSwipes } from '@/lib/dna';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
-const STEP_CARD_HEIGHT = "min-h-[640px] max-h-[85vh]";
+const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[85vh]";
 
 type WizardStep = 
   | 'consent'
@@ -343,34 +343,11 @@ export function CoreProfileWizard() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
+    <div className="flex flex-col w-full">
       {/* Main Content */}
-      <div className="flex-1 flex justify-center items-start px-4 py-10">
-        <div className="w-full max-w-4xl mx-auto space-y-6">
-          {/* IDA Insight - Progressive Reveal */}
-          <AnimatePresence>
-            {currentInsight && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.5 }}
-                className="mb-6"
-              >
-                <div className="glass-panel rounded-xl p-4 bg-gradient-to-r from-gold/10 via-champagne/10 to-platinum/10 border-2 border-gold/30">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Sparkles size={18} className="text-white" />
-                    </div>
-                    <p className="text-sm font-modern text-graphite flex-1">
-                      {currentInsight}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
+      <div className="flex-1 flex justify-center items-start">
+        <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
+          
           {/* Step Content */}
           <AnimatePresence mode="wait">
             <motion.div
@@ -454,7 +431,7 @@ export function CoreProfileWizard() {
               )}
 
               {currentStep === 'sensory_tests' && (
-                <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex flex-col`}>
+                <GlassCard className={`p-6 md:p-8 h-[70vh] flex flex-col`}>
                   <div className="mb-6">
                     <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
                       {language === 'pl' ? 'Testy Sensoryczne' : 'Sensory Suite'}
@@ -468,7 +445,6 @@ export function CoreProfileWizard() {
                   <div className="flex-1 overflow-y-auto scrollbar-hide pr-1">
                     <SensoryTestSuite 
                       className="flex flex-col h-full"
-                      profileContext={sensoryProfileContext}
                       paletteOptions={COLOR_PALETTE_OPTIONS}
                       selectedPalette={profileData.colorsAndMaterials?.selectedPalette}
                       onPaletteSelect={(paletteId) =>
@@ -511,6 +487,7 @@ export function CoreProfileWizard() {
       <div className="w-full">
         <AwaDialogue 
           currentStep="onboarding" 
+          message={currentInsight}
           fullWidth={true}
           autoHide={true}
         />
@@ -601,13 +578,15 @@ function ConsentStep({ onAgree, onExit }: { onAgree: () => void; onExit: () => v
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
+      <div className="flex justify-between mt-6">
         <GlassButton variant="secondary" onClick={onExit}>
-          ← {texts.back}
+          <ArrowLeft size={18} />
+          {texts.back}
         </GlassButton>
 
-        <GlassButton onClick={onAgree} size="lg">
-          {texts.submit} →
+        <GlassButton onClick={onAgree}>
+          {texts.submit}
+          <ArrowRight size={18} />
         </GlassButton>
       </div>
     </GlassCard>
@@ -732,13 +711,15 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
+        <div className="flex justify-between mt-6">
           <GlassButton variant="secondary" onClick={onBack}>
-            ← {texts.back}
+            <ArrowLeft size={18} />
+            {texts.back}
           </GlassButton>
 
-          <GlassButton disabled={!canProceed} onClick={onSubmit} size="lg">
-            {texts.continue} →
+          <GlassButton disabled={!canProceed} onClick={onSubmit}>
+            {texts.continue}
+            <ArrowRight size={18} />
           </GlassButton>
         </div>
       </GlassCard>
@@ -857,9 +838,9 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
+      <div className="flex justify-between mt-6">
         <GlassButton onClick={onBack} variant="secondary">
-          <ArrowLeft size={18} className="mr-2" />
+          <ArrowLeft size={18} />
           {language === 'pl' ? 'Wstecz' : 'Back'}
         </GlassButton>
         <GlassButton 
@@ -867,7 +848,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
           disabled={!canProceed}
         >
           {language === 'pl' ? 'Dalej' : 'Next'}
-          <ArrowRight size={18} className="ml-2" />
+          <ArrowRight size={18} />
         </GlassButton>
       </div>
     </GlassCard>
@@ -957,7 +938,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
 
   if (showInstructions) {
   return (
-    <GlassCard className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
+    <GlassCard className={`p-6 md:p-8 text-center min-h-[700px] max-h-[85vh] overflow-auto scrollbar-hide flex flex-col justify-center items-center`}>
       <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-3">
         {language === 'pl' ? 'Wnętrzarski Tinder' : 'Interior Design Tinder'}
       </h2>
@@ -982,13 +963,14 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="flex justify-between">
           <GlassButton onClick={onBack} variant="secondary">
-            <ArrowLeft size={18} className="mr-2" />
+            <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
           <GlassButton onClick={() => setShowInstructions(false)}>
-            {language === 'pl' ? 'Rozpocznij' : 'Start'} →
+            {language === 'pl' ? 'Rozpocznij' : 'Start'}
+            <ArrowRight size={18} />
           </GlassButton>
         </div>
       </GlassCard>
@@ -996,7 +978,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
   }
 
   return (
-    <GlassCard className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex flex-col`}>
+    <GlassCard className={`p-4 sm:p-6 min-h-[700px] max-h-[85vh] flex flex-col`}>
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center text-silver-dark">
           {language === 'pl' ? 'Ładowanie zdjęć...' : 'Loading images...'}
@@ -1100,7 +1082,7 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
   const questions = [
     {
       id: 'warmth',
-      question: { pl: 'Które wnętrze bardziej TY?', en: 'Which interior is more YOU?' },
+      question: { pl: 'Które wnętrze bardziej do Ciebie pasuje?', en: 'Which interior suits you better?' },
       leftLabel: { pl: 'Zimne', en: 'Cool' },
       rightLabel: { pl: 'Ciepłe', en: 'Warm' },
       leftImage: '/images/tinder/Living Room (2).jpg',
@@ -1108,7 +1090,7 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
     },
     {
       id: 'brightness',
-      question: { pl: 'Które wnętrze bardziej TY?', en: 'Which interior is more YOU?' },
+      question: { pl: 'Które wnętrze bardziej do Ciebie pasuje?', en: 'Which interior suits you better?' },
       leftLabel: { pl: 'Ciemne', en: 'Dark' },
       rightLabel: { pl: 'Jasne', en: 'Bright' },
       leftImage: '/images/tinder/Living Room (3).jpg',
@@ -1116,7 +1098,7 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
     },
     {
       id: 'complexity',
-      question: { pl: 'Które wnętrze bardziej TY?', en: 'Which interior is more YOU?' },
+      question: { pl: 'Które wnętrze bardziej do Ciebie pasuje?', en: 'Which interior suits you better?' },
       leftLabel: { pl: 'Proste', en: 'Simple' },
       rightLabel: { pl: 'Złożone', en: 'Complex' },
       leftImage: '/images/tinder/Living Room (2).jpg',
@@ -1140,7 +1122,7 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
   };
 
   return (
-    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
+    <GlassCard className={`p-6 md:p-8 min-h-[700px] max-h-[85vh] overflow-auto scrollbar-hide flex flex-col justify-center`}>
       <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2 text-center">
         {currentQ.question[language]}
       </h2>
@@ -1192,7 +1174,7 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
         </button>
       </div>
 
-      <div className="flex justify-center">
+      <div className="flex justify-between mt-6">
         <GlassButton onClick={onBack} variant="secondary">
           <ArrowLeft size={18} />
           {language === 'pl' ? 'Wstecz' : 'Back'}

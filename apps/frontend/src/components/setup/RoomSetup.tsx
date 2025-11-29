@@ -10,13 +10,15 @@ import { GlassSlider } from '@/components/ui/GlassSlider';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { MoodGrid } from '@/components/research';
 import { ACTIVITY_QUESTIONS, PAIN_POINTS } from '@/lib/questions/adaptive-questions';
-import { ArrowRight, ArrowLeft, Camera, Activity, AlertCircle, Target } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Camera, Activity, AlertCircle, Target, X, Heart } from 'lucide-react';
+import Image from 'next/image';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { saveRoom } from '@/lib/supabase-deep-personalization';
 import { useSession, useSessionData } from '@/hooks';
 import { SessionData } from '@/types';
 import { RoomPreferencePayload, RoomActivity } from '@/types/deep-personalization';
 import { COLOR_PALETTE_OPTIONS, getPaletteLabel } from '@/components/setup/paletteOptions';
+import { SensoryTestSuite } from '@/components/research/SensoryTests';
 import {
   SEMANTIC_DIFFERENTIAL_DIMENSIONS,
   MUSIC_PREFERENCES,
@@ -73,6 +75,7 @@ interface RoomData {
   sharedWith?: string[];
   photos?: string[];
   prsCurrent?: { x: number; y: number };
+  moodPreference?: { x: number; y: number };
   painPoints: string[];
   activities: RoomActivity[];
   socialDynamics?: any;
@@ -237,7 +240,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
       </div>
 
       <div className="flex-1 p-4 lg:p-8 pb-32">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-3xl lg:max-w-none mx-auto">
           {/* Progress */}
           <div className="mb-8 h-12">
             <div className="flex items-center justify-between text-sm text-silver-dark mb-2 font-modern h-6">
@@ -1074,7 +1077,9 @@ const buildDefaultPreferences = (source?: RoomPreferencePayload): RoomPreference
     music: source?.sensoryPreferences?.music ?? '',
     texture: source?.sensoryPreferences?.texture ?? '',
     light: source?.sensoryPreferences?.light ?? ''
-  }
+  },
+  natureMetaphor: source?.natureMetaphor,
+  biophiliaScore: source?.biophiliaScore
 });
 
 function PreferenceSourceStep({
@@ -1224,30 +1229,71 @@ function PreferenceQuestionsStep({
 }: PreferenceQuestionsStepProps) {
   const { language } = useLanguage();
   const [localPrefs, setLocalPrefs] = useState<RoomPreferencePayload>(() => buildDefaultPreferences(explicitPreferences));
+  const [natureMetaphor, setNatureMetaphor] = useState<string | undefined>(explicitPreferences?.natureMetaphor);
+  const [biophiliaScore, setBiophiliaScore] = useState<number | undefined>(explicitPreferences?.biophiliaScore);
+  const [currentVisualQuestion, setCurrentVisualQuestion] = useState(0);
+  const [visualAnswers, setVisualAnswers] = useState<Record<string, number>>(() => {
+    return {
+      warmth: explicitPreferences?.semanticDifferential?.warmth ?? 50,
+      brightness: explicitPreferences?.semanticDifferential?.brightness ?? 50,
+      complexity: explicitPreferences?.semanticDifferential?.complexity ?? 50
+    };
+  });
 
   useEffect(() => {
     setLocalPrefs(buildDefaultPreferences(explicitPreferences));
   }, [explicitPreferences]);
 
-  const handleSemanticChange = (dimension: SemanticDimensionId, value: number) => {
-    setLocalPrefs((prev) => {
-      const currentSemantic = prev.semanticDifferential || {
-        warmth: DEFAULT_SEMANTIC_VALUE,
-        brightness: DEFAULT_SEMANTIC_VALUE,
-        complexity: DEFAULT_SEMANTIC_VALUE,
-        texture: DEFAULT_SEMANTIC_VALUE
-      };
-      return {
-        ...prev,
-        semanticDifferential: {
-          warmth: currentSemantic.warmth ?? DEFAULT_SEMANTIC_VALUE,
-          brightness: currentSemantic.brightness ?? DEFAULT_SEMANTIC_VALUE,
-          complexity: currentSemantic.complexity ?? DEFAULT_SEMANTIC_VALUE,
-          texture: currentSemantic.texture ?? DEFAULT_SEMANTIC_VALUE,
-          [dimension]: value / 10
-        }
-      };
-    });
+  const visualQuestions = [
+    {
+      id: 'warmth',
+      question: { pl: 'Które wnętrze bardziej do Ciebie pasuje?', en: 'Which interior suits you better?' },
+      leftLabel: { pl: 'Zimne', en: 'Cool' },
+      rightLabel: { pl: 'Ciepłe', en: 'Warm' },
+      leftImage: '/images/tinder/Living Room (2).jpg',
+      rightImage: '/images/tinder/Living Room (1).jpg'
+    },
+    {
+      id: 'brightness',
+      question: { pl: 'Które wnętrze bardziej do Ciebie pasuje?', en: 'Which interior suits you better?' },
+      leftLabel: { pl: 'Ciemne', en: 'Dark' },
+      rightLabel: { pl: 'Jasne', en: 'Bright' },
+      leftImage: '/images/tinder/Living Room (3).jpg',
+      rightImage: '/images/tinder/Living Room (1).jpg'
+    },
+    {
+      id: 'complexity',
+      question: { pl: 'Które wnętrze bardziej do Ciebie pasuje?', en: 'Which interior suits you better?' },
+      leftLabel: { pl: 'Proste', en: 'Simple' },
+      rightLabel: { pl: 'Złożone', en: 'Complex' },
+      leftImage: '/images/tinder/Living Room (2).jpg',
+      rightImage: '/images/tinder/Living Room (3).jpg'
+    }
+  ];
+
+  const handleVisualChoice = (side: 'left' | 'right') => {
+    const currentQ = visualQuestions[currentVisualQuestion];
+    const value = side === 'left' ? 20 : 80; // Mapowanie: left = 20, right = 80 (na skali 0-100)
+    const newAnswers = { ...visualAnswers, [currentQ.id]: value };
+    setVisualAnswers(newAnswers);
+    
+    // Update localPrefs
+    setLocalPrefs(curr => ({
+      ...curr,
+      semanticDifferential: {
+        warmth: currentQ.id === 'warmth' ? value : (curr.semanticDifferential?.warmth ?? 50),
+        brightness: currentQ.id === 'brightness' ? value : (curr.semanticDifferential?.brightness ?? 50),
+        complexity: currentQ.id === 'complexity' ? value : (curr.semanticDifferential?.complexity ?? 50),
+        texture: curr.semanticDifferential?.texture ?? 50
+      }
+    }));
+    
+    if (currentVisualQuestion + 1 < visualQuestions.length) {
+      setCurrentVisualQuestion(currentVisualQuestion + 1);
+    } else {
+      // All visual questions completed, show sensory tests
+      setCurrentVisualQuestion(visualQuestions.length);
+    }
   };
 
   const handlePaletteSelect = (paletteId: string) => {
@@ -1261,64 +1307,13 @@ function PreferenceQuestionsStep({
     }));
   };
 
-  const toggleMaterial = (materialId: string) => {
-    setLocalPrefs((prev) => {
-      const current = prev.colorsAndMaterials?.topMaterials || [];
-      const exists = current.includes(materialId);
-      const nextMaterials = exists
-        ? current.filter((m) => m !== materialId)
-        : current.length >= 3
-          ? [...current.slice(1), materialId]
-          : [...current, materialId];
-
-      return {
-        ...prev,
-        colorsAndMaterials: {
-          ...(prev.colorsAndMaterials || {}),
-          topMaterials: nextMaterials
-        }
-      };
-    });
-  };
-
-  type SensoryKey = 'music' | 'texture' | 'light';
-
-  const handleSensorySelect = (key: SensoryKey, value: string) => {
-    setLocalPrefs((prev) => ({
-      ...prev,
-      sensoryPreferences: {
-        ...(prev.sensoryPreferences || {}),
-        [key]: value
-      }
-    }));
-  };
-
-  const semanticComplete = Boolean(
-    localPrefs.semanticDifferential &&
-      (['warmth', 'brightness', 'complexity', 'texture'] as SemanticDimensionId[]).every(
-        (key) => typeof localPrefs.semanticDifferential?.[key] === 'number'
-      )
-  );
-  const paletteReady = Boolean(localPrefs.colorsAndMaterials?.selectedPalette);
-  const materialsReady = (localPrefs.colorsAndMaterials?.topMaterials?.length || 0) > 0;
-  const sensoryReady = Boolean(
+  const canSubmitComplete = Boolean(
     localPrefs.sensoryPreferences?.music &&
       localPrefs.sensoryPreferences?.texture &&
-      localPrefs.sensoryPreferences?.light
+      localPrefs.sensoryPreferences?.light &&
+      natureMetaphor &&
+      typeof biophiliaScore === 'number'
   );
-  const canSubmitComplete = semanticComplete && paletteReady && materialsReady && sensoryReady;
-
-  const sensoryOptionsMap: Record<SensoryKey, typeof MUSIC_PREFERENCES> = {
-    music: MUSIC_PREFERENCES,
-    texture: TEXTURE_PREFERENCES,
-    light: LIGHT_PREFERENCES
-  };
-
-  const sensoryLabels: Record<SensoryKey, { pl: string; en: string }> = {
-    music: { pl: 'Muzyka', en: 'Music' },
-    texture: { pl: 'Tekstury', en: 'Textures' },
-    light: { pl: 'Światło', en: 'Light' }
-  };
 
   return (
     <motion.div
@@ -1327,166 +1322,145 @@ function PreferenceQuestionsStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <Target size={24} className="text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
-              {language === 'pl' ? 'Tryb pytań' : 'Question mode'}
-            </h2>
-            <p className="text-sm text-silver-dark font-modern">
-              {language === 'pl'
-                ? 'Te trzy sekcje dadzą IDA pełny kontekst dla tego pokoju.'
-                : 'These three micro-sections give IDA full context for this room.'}
-            </p>
-          </div>
+      <GlassCard className="p-6 lg:p-8 min-h-[700px] max-h-[85vh] overflow-auto scrollbar-hide flex flex-col">
+        <div className="mb-6">
+          <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
+            {language === 'pl' ? 'Testy Sensoryczne' : 'Sensory Suite'}
+          </h2>
+          <p className="text-graphite font-modern text-sm">
+            {language === 'pl'
+              ? 'Paleta, metafora natury, muzyka, tekstury, światło i biophilia w jednym spójnym oknie.'
+              : 'Palette, nature metaphor, music, textures, light and biophilia inside one coherent panel.'}
+          </p>
         </div>
-
-        <div className="space-y-6 mb-8">
-          <div className="glass-panel rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-lg font-nasalization text-graphite">
-                {language === 'pl' ? '1. Nastrój pokoju' : '1. Room mood sliders'}
-              </h4>
-              <p className="text-xs text-silver-dark font-modern">
-                {language === 'pl' ? 'Ustaw intuicyjnie' : 'Follow your intuition'}
+        <div className="flex-1 flex flex-col justify-center">
+          <AnimatePresence mode="wait">
+            {currentVisualQuestion < visualQuestions.length ? (
+            // Step 1: Visual Questions
+            <motion.div
+              key="visual_questions"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="flex flex-col items-center justify-center h-full"
+            >
+              <h3 className="text-xl md:text-2xl font-nasalization text-graphite mb-2 text-center">
+                {visualQuestions[currentVisualQuestion].question[language]}
+              </h3>
+              <p className="text-graphite font-modern mb-6 text-sm text-center">
+                {language === 'pl' ? 'Reaguj intuicyjnie, nie myśl za długo' : 'React intuitively, don\'t overthink'}
               </p>
-            </div>
-            <div className="grid md:grid-cols-2 gap-4">
-              {SEMANTIC_DIFFERENTIAL_DIMENSIONS.map((dimension) => {
-                const semanticValue =
-                  localPrefs.semanticDifferential?.[dimension.id as SemanticDimensionId] ??
-                  DEFAULT_SEMANTIC_VALUE;
-                return (
-                  <div key={dimension.id} className="p-3 rounded-2xl border border-white/5 bg-white/5">
-                    <p className="text-sm font-modern text-graphite mb-2">
-                      {dimension.label[language]}
-                    </p>
-                    <div className="flex justify-between text-xs text-silver-dark mb-1 font-modern">
-                      <span>{dimension.min.label[language]}</span>
-                      <span>{dimension.max.label[language]}</span>
-                    </div>
-                    <GlassSlider
-                      min={0}
-                      max={10}
-                      value={Math.round(semanticValue * 10)}
-                      onChange={(value) => handleSemanticChange(dimension.id as SemanticDimensionId, value)}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-6">
-            <div className="glass-panel rounded-2xl p-6">
-              <h4 className="text-lg font-nasalization text-graphite mb-4">
-                {language === 'pl' ? '2a. Paleta bazowa' : '2a. Base palette'}
-              </h4>
-              <div className="grid grid-cols-2 gap-3">
-                {COLOR_PALETTE_OPTIONS.map((palette) => {
-                  const isSelected = localPrefs.colorsAndMaterials?.selectedPalette === palette.id;
-                  return (
-                    <button
-                      type="button"
-                      key={palette.id}
-                      onClick={() => handlePaletteSelect(palette.id)}
-                      className={`rounded-2xl border p-3 transition-all text-left ${
-                        isSelected ? 'border-gold bg-gold/10 shadow-lg' : 'border-white/15 hover:border-gold/40'
-                      }`}
-                    >
-                      <div className="flex gap-2 mb-2 h-8">
-                        {palette.colors.map((color, idx) => (
-                          <div key={idx} className="flex-1 rounded-lg" style={{ backgroundColor: color }} />
-                        ))}
-                      </div>
-                      <p className="text-sm font-modern text-graphite text-center">
-                        {palette.label[language]}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="glass-panel rounded-2xl p-6">
-              <h4 className="text-lg font-nasalization text-graphite mb-4">
-                {language === 'pl' ? '2b. Kluczowe materiały' : '2b. Signature materials'}
-              </h4>
-              <p className="text-xs text-silver-dark font-modern mb-3">
-                {language === 'pl' ? 'Wybierz maksymalnie 3' : 'Pick up to three'}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {MATERIAL_OPTIONS.map((option) => {
-                  const isActive = localPrefs.colorsAndMaterials?.topMaterials?.includes(option.id);
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => toggleMaterial(option.id)}
-                      className={`px-4 py-2 rounded-2xl border text-sm font-modern transition-all ${
-                        isActive
-                          ? 'border-gold bg-gold/10 text-graphite'
-                          : 'border-white/20 text-silver-dark hover:border-gold/40'
-                      }`}
-                    >
-                      {option.label[language]}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="glass-panel rounded-2xl p-6">
-            <h4 className="text-lg font-nasalization text-graphite mb-4">
-              {language === 'pl' ? '3. Szybkie preferencje sensoryczne' : '3. Quick sensory picks'}
-            </h4>
-            <div className="grid md:grid-cols-3 gap-4">
-              {(['music', 'texture', 'light'] as SensoryKey[]).map((key) => (
-                <div key={key} className="border border-white/10 rounded-2xl p-3">
-                  <p className="text-xs uppercase tracking-[0.2em] text-silver-dark mb-2">
-                    {sensoryLabels[key][language]}
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    {sensoryOptionsMap[key].map((option) => {
-                      const isActive = localPrefs.sensoryPreferences?.[key] === option.id;
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => handleSensorySelect(key, option.id)}
-                          className={`text-left px-3 py-2 rounded-xl text-sm transition-all ${
-                            isActive
-                              ? 'bg-gold/15 text-graphite border border-gold/40'
-                              : 'bg-white/5 text-silver-dark border border-transparent hover:border-white/20'
-                          }`}
-                        >
-                          {option.label[language]}
-                        </button>
-                      );
-                    })}
-                  </div>
+              
+              <div className="mb-6">
+                <div className="text-xs text-silver-dark text-center mb-2 font-modern">
+                  {language === 'pl' ? 'Pytanie' : 'Question'} {currentVisualQuestion + 1} / {visualQuestions.length}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6 w-full">
+                <button
+                  type="button"
+                  onClick={() => handleVisualChoice('left')}
+                  className="group relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-white/30 hover:border-gold/50 transition-all hover:scale-[1.02] cursor-pointer"
+                >
+                  <Image
+                    src={visualQuestions[currentVisualQuestion].leftImage}
+                    alt={visualQuestions[currentVisualQuestion].leftLabel[language]}
+                    fill
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                    <p className="text-white font-modern text-sm font-semibold">
+                      {visualQuestions[currentVisualQuestion].leftLabel[language]}
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleVisualChoice('right')}
+                  className="group relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-white/30 hover:border-gold/50 transition-all hover:scale-[1.02] cursor-pointer"
+                >
+                  <Image
+                    src={visualQuestions[currentVisualQuestion].rightImage}
+                    alt={visualQuestions[currentVisualQuestion].rightLabel[language]}
+                    fill
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                    <p className="text-white font-modern text-sm font-semibold">
+                      {visualQuestions[currentVisualQuestion].rightLabel[language]}
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </motion.div>
+          ) : (
+            // Step 2: Sensory Tests
+            <motion.div
+              key="sensory_tests"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="w-full h-full"
+            >
+              <SensoryTestSuite
+                className="flex flex-col h-full"
+                paletteOptions={COLOR_PALETTE_OPTIONS}
+                selectedPalette={localPrefs.colorsAndMaterials?.selectedPalette}
+                onPaletteSelect={(paletteId) => handlePaletteSelect(paletteId)}
+                onComplete={(results) => {
+                  setLocalPrefs((prev) => ({
+                    ...prev,
+                    sensoryPreferences: {
+                      music: results.music,
+                      texture: results.texture,
+                      light: results.light
+                    }
+                  }));
+                  setNatureMetaphor(results.natureMetaphor);
+                  setBiophiliaScore(results.biophiliaScore);
+                }}
+              />
+            </motion.div>
+          )}
+          </AnimatePresence>
         </div>
 
         <div className="flex justify-between">
-          <GlassButton onClick={onBack} variant="secondary">
+          <GlassButton 
+            onClick={() => {
+              if (currentVisualQuestion > 0 && currentVisualQuestion < visualQuestions.length) {
+                // Go back to previous visual question
+                setCurrentVisualQuestion(currentVisualQuestion - 1);
+              } else if (currentVisualQuestion >= visualQuestions.length) {
+                // Go back to visual questions from sensory tests
+                setCurrentVisualQuestion(visualQuestions.length - 1);
+              } else {
+                // Go back to previous step in flow
+                onBack();
+              }
+            }} 
+            variant="secondary"
+          >
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
-          <GlassButton
-            onClick={() => onSubmit(localPrefs)}
-            disabled={!canSubmitComplete}
-          >
-            {language === 'pl' ? 'Zapisz preferencje' : 'Apply preferences'}
-            <ArrowRight size={18} />
-          </GlassButton>
+          {currentVisualQuestion >= visualQuestions.length && (
+            <GlassButton
+              onClick={() => {
+                onSubmit({
+                  ...localPrefs,
+                  natureMetaphor,
+                  biophiliaScore
+                });
+              }}
+              disabled={!canSubmitComplete}
+            >
+              {language === 'pl' ? 'Zapisz preferencje' : 'Apply preferences'}
+              <ArrowRight size={18} />
+            </GlassButton>
+          )}
         </div>
       </GlassCard>
     </motion.div>

@@ -3,6 +3,36 @@ import { PromptInputs } from './scoring';
 
 const defaultPRS = { x: 0, y: 0 };
 
+function transformRoomAnalysis(
+  roomAnalysis: SessionData['roomAnalysis'],
+  visualDNA?: SessionData['visualDNA']
+): PromptInputs['currentRoomAnalysis'] {
+  if (!roomAnalysis) return undefined;
+  const description = (roomAnalysis.room_description || '').toLowerCase();
+  const suggestions = (roomAnalysis.suggestions || []).join(' ').toLowerCase();
+  const clutterKeywords = ['bałagan', 'chaos', 'clutter', 'messy', 'disorganized', 'przeładowane'];
+  const hasClutterIndicators = clutterKeywords.some(k => description.includes(k) || suggestions.includes(k));
+  const clutter = hasClutterIndicators ? 0.7 : 0.3;
+  const objectKeywords = ['sofa', 'table', 'chair', 'bed', 'desk', 'lamp', 'shelf', 'cabinet', 'kanapa', 'stolik', 'krzesło', 'łóżko', 'biurko', 'lampa', 'półka', 'szafka'];
+  const detectedObjects: string[] = objectKeywords.filter(k => description.includes(k));
+  if (detectedObjects.length === 0 && description) {
+    const words = description.split(/\s+/).filter(w => w.length > 4);
+    detectedObjects.push(...words.slice(0, 5));
+  }
+  let dominantColors: string[] = visualDNA?.preferences?.colors?.slice(0, 3) || [];
+  if (dominantColors.length === 0) {
+    const colorKeywords = ['white', 'beige', 'gray', 'brown', 'black', 'blue', 'green', 'red', 'yellow', 'biały', 'beżowy', 'szary', 'brązowy', 'czarny', 'niebieski', 'zielony', 'czerwony', 'żółty'];
+    dominantColors = colorKeywords.filter(c => description.includes(c) && dominantColors.length < 3);
+  }
+  if (dominantColors.length === 0) dominantColors = ['neutral'];
+  const brightKeywords = ['bright', 'jasne', 'oświetlone', 'natural light', 'światło dzienne'];
+  const darkKeywords = ['dark', 'ciemne', 'dim', 'przyciemnione', 'słabe światło'];
+  let lightQuality = 'bright';
+  if (brightKeywords.some(k => description.includes(k))) lightQuality = 'very_bright';
+  else if (darkKeywords.some(k => description.includes(k))) lightQuality = 'dim';
+  return { clutter, dominantColors, detectedObjects: detectedObjects.length > 0 ? detectedObjects : ['furniture'], lightQuality };
+}
+
 export function buildPromptInputsFromSession(sessionData: SessionData): PromptInputs {
   const semantic = sessionData.semanticDifferential;
   const sensoryPreferences = sessionData.sensoryPreferences;
@@ -80,17 +110,7 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
       styles: visualDNA?.preferences?.styles || [],
       colors: visualDNA?.preferences?.colors || []
     },
-    currentRoomAnalysis: sessionData.roomAnalysis && 
-      'clutter' in sessionData.roomAnalysis &&
-      'dominantColors' in sessionData.roomAnalysis
-      ? {
-          clutter: (sessionData.roomAnalysis as any).clutter ?? 0,
-          dominantColors: (sessionData.roomAnalysis as any).dominantColors ?? [],
-          detectedObjects: (sessionData.roomAnalysis as any).detectedObjects ?? [],
-          lightQuality: (sessionData.roomAnalysis as any).lightQuality ?? 'bright'
-        }
-      : undefined,
+    currentRoomAnalysis: transformRoomAnalysis(sessionData.roomAnalysis, visualDNA),
     activityContext: sessionData.roomActivityContext
   };
 }
-

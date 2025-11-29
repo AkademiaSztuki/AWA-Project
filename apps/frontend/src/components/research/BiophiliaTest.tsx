@@ -5,6 +5,7 @@ import { BIOPHILIA_OPTIONS, BiophiliaOption } from '@/lib/questions/validated-sc
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
+import { Leaf } from 'lucide-react';
 import Image from 'next/image';
 
 interface BiophiliaTestProps {
@@ -27,7 +28,6 @@ interface BiophiliaTestProps {
 export function BiophiliaTest({ onSelect, className = '', frameless = false }: BiophiliaTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const handleSelect = (option: BiophiliaOption) => {
     setSelectedId(option.id);
@@ -36,134 +36,119 @@ export function BiophiliaTest({ onSelect, className = '', frameless = false }: B
 
   const content = (
     <>
-      {/* Title */}
-      <div className="text-center mb-6">
-        <h3 className="text-2xl lg:text-3xl font-nasalization text-gray-800 mb-2">
-          {language === 'pl' 
-            ? 'Która wersja najbardziej TY?' 
-            : 'Which version is most YOU?'}
-        </h3>
-        <p className="text-sm text-gray-600 font-modern">
-          {language === 'pl'
-            ? 'Wybierz pokój który czujesz jako swój - naturalna obecność i rośliny'
-            : 'Choose the room that feels like you - nature presence and plants'}
-        </p>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+            <Leaf className="text-white" size={20} />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
+              Biophilia
+            </p>
+            <p className="text-sm font-modern text-graphite">
+              {language === 'pl'
+                ? 'Która wersja najbardziej TY?'
+                : 'Which version is most YOU?'}
+            </p>
+          </div>
+        </div>
+        {selectedId && (
+          <p className="text-xs text-right text-silver-dark">
+            {language === 'pl' ? 'Wybrano:' : 'Selected:'}{' '}
+            <span className="font-semibold text-graphite">
+              {getBiophiliaLevelLabel(
+                BIOPHILIA_OPTIONS.find((o) => o.id === selectedId)?.score || 0,
+                language
+              )}
+            </span>
+          </p>
+        )}
       </div>
 
       {/* Options Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 content-center">
         {BIOPHILIA_OPTIONS.map((option) => {
           const isSelected = selectedId === option.id;
-          const isHovered = hoveredId === option.id;
 
           return (
-            <div
+            <button
               key={option.id}
-              className={`relative cursor-pointer transition-all duration-300 transform ${
-                isSelected ? 'scale-105' : isHovered ? 'scale-102' : 'scale-100'
+              type="button"
+              className={`rounded-2xl border px-4 py-4 text-left flex flex-col gap-3 transition-all ${
+                isSelected
+                  ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
+                  : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
-              onMouseEnter={() => setHoveredId(option.id)}
-              onMouseLeave={() => setHoveredId(null)}
               onClick={() => handleSelect(option)}
             >
-              <div
-                className={`glass-panel rounded-lg overflow-hidden border-2 transition-all ${
-                  isSelected
-                    ? 'border-gold-500 shadow-xl'
-                    : isHovered
-                    ? 'border-gold-300'
-                    : 'border-white/30'
-                }`}
-              >
-                {/* Image */}
-                <div className="relative w-full h-48 bg-gray-200">
-                  {option.imageUrl ? (
-                    <Image
-                      src={option.imageUrl}
-                      alt={t(option.label)}
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    // Placeholder if image not yet available
-                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-                      <p className="text-4xl">{getBiophiliaEmoji(option.score)}</p>
-                    </div>
-                  )}
-
-                  {/* Selected badge */}
-                  {isSelected && (
-                    <div className="absolute top-2 right-2 bg-gold-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                      ✓ {language === 'pl' ? 'Wybrane' : 'Selected'}
-                    </div>
-                  )}
-
-                  {/* Score indicator */}
-                  <div className="absolute bottom-2 left-2 flex gap-1">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`w-2 h-2 rounded-full ${
-                          i <= option.score ? 'bg-green-500' : 'bg-gray-300'
-                        }`}
-                      />
-                    ))}
+              {/* Image */}
+              <div className="relative w-full h-32 overflow-hidden rounded-xl bg-gray-200">
+                {option.imageUrl ? (
+                  <Image
+                    src={option.imageUrl}
+                    alt={t(option.label)}
+                    fill
+                    className="object-cover"
+                  />
+                ) : (
+                  // Placeholder if image not yet available
+                  <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+                    <p className="text-4xl">{getBiophiliaEmoji(option.score)}</p>
                   </div>
-                </div>
+                )}
 
-                {/* Label & Description */}
-                <div className="p-4">
-                  <h4 className="font-nasalization text-lg text-gray-800 mb-1">
-                    {t(option.label)}
-                  </h4>
-                  <p className="text-sm text-gray-600 font-modern">
-                    {t(option.description)}
-                  </p>
+                {/* Selected badge */}
+                {isSelected && (
+                  <div className="absolute top-2 right-2 bg-gold text-white px-2 py-1 rounded-full text-xs font-semibold z-10">
+                    ✓
+                  </div>
+                )}
+
+                {/* Score indicator */}
+                <div className="absolute bottom-2 left-2 flex gap-1">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        i <= option.score ? 'bg-green-500' : 'bg-white/50'
+                      }`}
+                    />
+                  ))}
                 </div>
               </div>
-            </div>
+
+              {/* Label & Description */}
+              <div className="flex items-start justify-between gap-3">
+                <h4 className="font-nasalization text-sm text-graphite">
+                  {t(option.label)}
+                </h4>
+              </div>
+              <p className="text-xs text-silver-dark font-modern leading-relaxed">
+                {t(option.description)}
+              </p>
+            </button>
           );
         })}
       </div>
 
-      {/* Selected Option Summary */}
-      {selectedId && (
-        <div className="mt-6 text-center">
-          <div className="inline-block glass-panel px-6 py-3 rounded-full">
-            <p className="text-sm font-modern text-gray-700">
-              {language === 'pl' ? 'Twój poziom biofilii:' : 'Your biophilia level:'}{' '}
-              <span className="font-semibold text-green-600">
-                {getBiophiliaLevelLabel(
-                  BIOPHILIA_OPTIONS.find((o) => o.id === selectedId)?.score || 0,
-                  language
-                )}
-              </span>
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Help text */}
-      <div className="mt-4 text-xs text-center text-gray-500 font-modern">
+      <p className="mt-4 text-xs text-center text-silver-dark font-modern">
         {language === 'pl'
           ? 'Biophilia to nasza naturalna potrzeba kontaktu z naturą - pomaga nam zaprojektować przestrzeń która Cię wspiera'
           : 'Biophilia is our natural need for contact with nature - helps us design a space that supports you'}
-      </div>
+      </p>
     </>
   );
 
-  if (frameless) {
-    return (
-      <div className={className}>
-        {content}
-      </div>
-    );
-  }
+  const ContentWrapper = frameless ? 'div' : GlassCard;
+  const wrapperClass = frameless 
+    ? `h-full flex flex-col justify-center ${className}`
+    : `p-6 lg:p-8 h-full flex flex-col justify-center ${className}`;
 
   return (
-    <GlassCard className={`p-6 ${className}`}>
+    <ContentWrapper className={wrapperClass}>
       {content}
-    </GlassCard>
+    </ContentWrapper>
   );
 }
 

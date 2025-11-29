@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { NATURE_METAPHOR_OPTIONS, SensoryOption } from '@/lib/questions/validated-scales';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { Mountain, Sparkles } from 'lucide-react';
 
@@ -24,7 +23,6 @@ interface NatureMetaphorTestProps {
 export function NatureMetaphorTest({ onSelect, className = '', frameless = false }: NatureMetaphorTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const handleSelect = (option: SensoryOption) => {
     setSelectedId(option.id);
@@ -33,167 +31,101 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
 
   const content = (
     <>
-      {/* Title */}
-      <div className="text-center mb-8">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 via-emerald-400 to-teal-500 flex items-center justify-center shadow-lg">
-            <Mountain className="text-white" size={24} />
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+            <Mountain className="text-white" size={20} />
           </div>
-          <h3 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization bg-gradient-to-r from-green-600 via-emerald-500 to-teal-600 bg-clip-text text-transparent">
-            {language === 'pl' ? 'Metafora Natury' : 'Nature Metaphor'}
-          </h3>
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
+              {language === 'pl' ? 'Metafora' : 'Metaphor'}
+            </p>
+            <p className="text-sm font-modern text-graphite">
+              {language === 'pl' 
+                ? 'Gdyby Twoja idealna przestrzeń była miejscem w naturze, którym by była?'
+                : 'If your ideal space was a place in nature, which would it be?'}
+            </p>
+          </div>
         </div>
-        
-        <p className="text-base lg:text-lg text-graphite font-modern max-w-2xl mx-auto">
-          {language === 'pl' 
-            ? 'Gdyby Twoja idealna przestrzeń była miejscem w naturze, którym by była?'
-            : 'If your ideal space was a place in nature, which would it be?'}
-        </p>
-        <p className="text-sm text-silver-dark font-modern mt-2">
-          {language === 'pl'
-            ? 'Nie myśl za dużo - reaguj sercem, nie głową'
-            : 'Don\'t think too much - react with your heart, not your head'}
-        </p>
+        {selectedId && (
+          <p className="text-xs text-right text-silver-dark">
+            {language === 'pl' ? 'Wybrano:' : 'Selected:'}{' '}
+            <span className="font-semibold text-graphite">
+              {t(NATURE_METAPHOR_OPTIONS.find(o => o.id === selectedId)!.label)}
+            </span>
+          </p>
+        )}
       </div>
 
       {/* Options Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-        {NATURE_METAPHOR_OPTIONS.map((option, index) => {
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 flex-1 content-center">
+        {NATURE_METAPHOR_OPTIONS.map((option) => {
           const isSelected = selectedId === option.id;
-          const isHovered = hoveredId === option.id;
 
           return (
-            <motion.div
+            <button
               key={option.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4, delay: index * 0.1 }}
-              whileHover={{ scale: 1.05, y: -8 }}
-              className="relative"
+              type="button"
+              className={`rounded-2xl border px-4 py-4 text-left flex flex-col gap-3 transition-all ${
+                isSelected
+                  ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
+                  : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
+              }`}
+              onClick={() => handleSelect(option)}
             >
-              <div
-                className={`glass-panel rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 ${
-                  isSelected
-                    ? 'border-2 border-emerald-500 shadow-2xl shadow-emerald-500/30'
-                    : isHovered
-                    ? 'border border-emerald-400/50 shadow-lg'
-                    : 'border border-white/30'
-                }`}
-                onMouseEnter={() => setHoveredId(option.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                onClick={() => handleSelect(option)}
-              >
-                {/* Image */}
-                <div className="relative w-full h-40 lg:h-48 bg-gray-200">
-                  {option.imageUrl ? (
-                    <Image
-                      src={option.imageUrl}
-                      alt={t(option.label)}
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    // Placeholder with gradient
-                    <div className={`absolute inset-0 ${getNatureGradient(option.id)}`} />
-                  )}
-                  
-                  {/* Selected overlay */}
-                  {isSelected && (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="absolute inset-0 bg-gradient-to-br from-emerald-500/30 to-teal-500/30 backdrop-blur-sm flex items-center justify-center"
-                    >
-                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-xl">
-                        <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Hover glow */}
-                  {isHovered && !isSelected && (
-                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/20 to-teal-400/20 pointer-events-none" />
-                  )}
-                </div>
-
-                {/* Content */}
-                <div className="p-4">
-                  <h4 className={`font-nasalization text-base lg:text-lg mb-2 transition-colors ${
-                    isSelected ? 'text-emerald-600' : 'text-graphite'
-                  }`}>
-                    {t(option.label)}
-                  </h4>
-                  <p className="text-xs lg:text-sm text-silver-dark font-modern leading-relaxed">
-                    {t(option.description)}
-                  </p>
-                </div>
+              {/* Image */}
+              <div className="relative w-full h-28 overflow-hidden rounded-xl bg-gray-200">
+                {option.imageUrl ? (
+                  <Image
+                    src={option.imageUrl}
+                    alt={t(option.label)}
+                    fill
+                    className="object-cover"
+                  />
+                ) : (
+                  // Placeholder with gradient
+                  <div className={`absolute inset-0 ${getNatureGradient(option.id)}`} />
+                )}
+                
+                {/* Selected overlay */}
+                {isSelected && (
+                  <div className="absolute top-2 right-2 bg-gold text-white px-2 py-1 rounded-full text-xs font-semibold z-10">
+                    ✓
+                  </div>
+                )}
               </div>
-            </motion.div>
+
+              {/* Content */}
+              <div className="flex items-start justify-between gap-3">
+                <h4 className="font-nasalization text-sm text-graphite">
+                  {t(option.label)}
+                </h4>
+              </div>
+              <p className="text-xs text-silver-dark font-modern leading-relaxed">
+                {t(option.description)}
+              </p>
+            </button>
           );
         })}
       </div>
 
-      {/* Selected Summary */}
-      <AnimatePresence>
-        {selectedId && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            className="mt-8"
-          >
-            <GlassCard className="p-6 bg-gradient-to-br from-emerald-50/50 to-teal-50/50 border-emerald-200/30">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="text-white" size={20} />
-                </div>
-                <div>
-                  <h4 className="font-nasalization text-lg text-emerald-700 mb-2">
-                    {language === 'pl' ? 'Twoja Esencja' : 'Your Essence'}
-                  </h4>
-                  <p className="text-sm lg:text-base text-graphite font-modern">
-                    <strong className="text-emerald-600">
-                      {t(NATURE_METAPHOR_OPTIONS.find(o => o.id === selectedId)!.label)}
-                    </strong>
-                    {' - '}
-                    {t(NATURE_METAPHOR_OPTIONS.find(o => o.id === selectedId)!.description)}
-                  </p>
-                  <p className="text-xs lg:text-sm text-silver-dark mt-2">
-                    {language === 'pl'
-                      ? 'Ta metafora pomoże nam zrozumieć głębsze potrzeby Twojej przestrzeni'
-                      : 'This metaphor helps us understand the deeper needs of your space'}
-                  </p>
-                </div>
-              </div>
-            </GlassCard>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Help text */}
-      <div className="mt-6 text-xs lg:text-sm text-center text-silver-dark font-modern italic">
+      <p className="mt-4 text-xs text-center text-silver-dark font-modern">
         {language === 'pl'
           ? 'Techniki projekcyjne pomagają odkryć autentyczne preferencje poza świadomymi filtrami'
           : 'Projective techniques help discover authentic preferences beyond conscious filters'}
-      </div>
+      </p>
     </>
   );
 
-  if (frameless) {
-    return (
-      <div className={className}>
-        {content}
-      </div>
-    );
-  }
+  const ContentWrapper = frameless ? 'div' : GlassCard;
+  const wrapperClass = frameless 
+    ? `h-full flex flex-col justify-center ${className}`
+    : `p-6 lg:p-8 h-full flex flex-col justify-center ${className}`;
 
   return (
-    <GlassCard className={`p-6 lg:p-8 ${className}`}>
+    <ContentWrapper className={wrapperClass}>
       {content}
-    </GlassCard>
+    </ContentWrapper>
   );
 }
 

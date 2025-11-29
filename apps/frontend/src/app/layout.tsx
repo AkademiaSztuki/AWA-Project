@@ -9,11 +9,10 @@ import AmbientMusic from '@/components/ui/AmbientMusic';
 import MusicTestButton from '@/components/ui/MusicTestButton';
 import { AwaBackground } from '@/components/awa';
 import { LandscapeGuard } from '@/components/ui/LandscapeGuard';
-import { LanguageProvider, LanguageToggle } from '@/contexts/LanguageContext';
+import { LanguageProvider } from '@/contexts/LanguageContext';
 import { AuthProvider } from '@/contexts/AuthContext';
-import { UserAuthButton } from '@/components/auth/UserAuthButton';
-import { DashboardButton } from '@/components/ui/DashboardButton';
-import { PathSelectionButton } from '@/components/ui/PathSelectionButton';
+import { LayoutProvider } from '@/contexts/LayoutContext';
+import { GlassHeader } from '@/components/ui/GlassHeader';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const audiowide = Audiowide({ 
@@ -42,28 +41,27 @@ export default function RootLayout({
       <body className="min-h-screen overflow-y-auto font-nasalization">
         <LanguageProvider>
           <AuthProvider>
-            <LandscapeGuard>
-            {/* Global navigation in top-right corner */}
-            <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-              <PathSelectionButton />
-              <DashboardButton />
-              <UserAuthButton />
-              <LanguageToggle />
-            </div>
-              
-              <AwaBackground />
-              <AuroraBackgroundClient />
-              <AuroraBubbles />
-              <ParticlesBackground />
-              <AmbientMusic volume={0.4} audioFile="/audio/ambient.mp3" />
-              <MusicTestButton />
-              <div className="flex items-start justify-end min-h-screen w-full">
-                <div className="w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl lg:mr-32">
-                  {children}
-                </div>
-              </div>
-              <SpeedInsights />
-            </LandscapeGuard>
+            <LayoutProvider>
+              <LandscapeGuard>
+                <AwaBackground />
+                <AuroraBackgroundClient />
+                <AuroraBubbles />
+                <ParticlesBackground />
+                <AmbientMusic volume={0.4} audioFile="/audio/ambient.mp3" />
+                
+                <main className="relative z-10 min-h-screen w-full px-4 pt-8 pb-12 md:px-8">
+                  <div className="mx-auto w-full max-w-[1600px] grid gap-10 lg:grid-cols-[minmax(420px,0.3fr)_minmax(480px,0.7fr)] items-start">
+                    {/* Reserved column for IDA narrator - keeps content from overlapping */}
+                    <div className="hidden lg:block min-h-[720px]" aria-hidden="true" />
+                    <div className="w-full max-w-3xl lg:max-w-none lg:ml-auto space-y-4">
+                      <GlassHeader />
+                      {children}
+                    </div>
+                  </div>
+                </main>
+                <SpeedInsights />
+              </LandscapeGuard>
+            </LayoutProvider>
           </AuthProvider>
         </LanguageProvider>
       </body>

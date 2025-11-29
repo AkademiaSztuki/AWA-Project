@@ -236,7 +236,7 @@ export function UserDashboard() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative">
+    <div className="flex flex-col w-full relative">
       {authError && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-xl p-3 rounded-lg glass-panel border border-gold/30">
           <p className="text-sm text-graphite font-modern text-center">
@@ -245,8 +245,6 @@ export function UserDashboard() {
           </p>
         </div>
       )}
-      {/* Background */}
-      <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
       {/* Dialog IDA na dole - cała szerokość */}
       <div className="w-full">
@@ -257,22 +255,19 @@ export function UserDashboard() {
         />
       </div>
 
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 pb-32">
-        <div className="max-w-7xl mx-auto">
+      <div className="flex-1 p-4 lg:p-8 pb-32">
+        <div className="max-w-3xl lg:max-w-none mx-auto">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="mb-8"
+            className="mb-4"
           >
-            <div className="mb-6">
+            <div className="mb-4">
               <h1 className="text-3xl lg:text-4xl xl:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-2">
                 {language === 'pl' ? 'Moje Przestrzenie' : 'My Spaces'}
               </h1>
-              <p className="text-base lg:text-lg text-graphite font-modern">
-                {language === 'pl' ? 'Zarządzaj swoimi wnętrzami' : 'Manage your interiors'}
-              </p>
             </div>
 
             {/* Quick Stats */}

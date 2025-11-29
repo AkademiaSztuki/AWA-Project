@@ -19,9 +19,10 @@ interface SensoryTestProps {
   onSelect: (selectedId: string) => void;
   className?: string;
   value?: string | null;
+  frameless?: boolean;
 }
 
-export function SensoryTest({ type, onSelect, className = '', value }: SensoryTestProps) {
+export function SensoryTest({ type, onSelect, className = '', value, frameless = false }: SensoryTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -91,13 +92,18 @@ export function SensoryTest({ type, onSelect, className = '', value }: SensoryTe
 
   const gridCols =
     type === 'light'
-      ? 'grid-cols-2 lg:grid-cols-4'
-      : 'grid-cols-2 lg:grid-cols-3';
+      ? 'grid-cols-2'
+      : 'grid-cols-2 md:grid-cols-3';
 
   const selectedOption = selectedId ? options.find(o => o.id === selectedId) : null;
 
+  const ContentWrapper = frameless ? 'div' : GlassCard;
+  const wrapperClass = frameless 
+    ? `h-full flex flex-col justify-center ${className}`
+    : `p-5 md:p-6 h-full flex flex-col justify-center ${className}`;
+
   return (
-    <GlassCard className={`p-5 md:p-6 h-full flex flex-col ${className}`}>
+    <ContentWrapper className={wrapperClass}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
@@ -124,7 +130,7 @@ export function SensoryTest({ type, onSelect, className = '', value }: SensoryTe
         )}
       </div>
 
-      <div className={`grid ${gridCols} gap-3 flex-1`}>
+      <div className={`grid ${gridCols} gap-4 flex-1 content-center`}>
         {options.map((option) => {
           const isSelected = selectedId === option.id;
           const isPlaying = playingAudio === option.id;
@@ -192,7 +198,7 @@ export function SensoryTest({ type, onSelect, className = '', value }: SensoryTe
           ? 'Światło reguluje energię i skupienie przez cały dzień.'
           : 'Light shapes your energy and focus throughout the day.')}
       </p>
-    </GlassCard>
+    </ContentWrapper>
   );
 }
 
@@ -204,13 +210,20 @@ interface PaletteTestProps {
   }>;
   selectedId?: string;
   onSelect: (id: string) => void;
+  frameless?: boolean;
+  className?: string;
 }
 
-function PaletteTest({ options, selectedId, onSelect }: PaletteTestProps) {
+function PaletteTest({ options, selectedId, onSelect, frameless = false, className = '' }: PaletteTestProps) {
   const { language } = useLanguage();
 
+  const ContentWrapper = frameless ? 'div' : GlassCard;
+  const wrapperClass = frameless 
+    ? `h-full flex flex-col justify-center ${className}`
+    : `p-5 md:p-6 h-full flex flex-col justify-center ${className}`;
+
   return (
-    <GlassCard className="p-5 md:p-6 h-full flex flex-col">
+    <ContentWrapper className={wrapperClass}>
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
@@ -232,7 +245,7 @@ function PaletteTest({ options, selectedId, onSelect }: PaletteTestProps) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-1">
+      <div className="grid grid-cols-3 gap-4 flex-1 content-center">
         {options.map((palette) => {
           const isSelected = palette.id === selectedId;
           return (
@@ -240,17 +253,17 @@ function PaletteTest({ options, selectedId, onSelect }: PaletteTestProps) {
               key={palette.id}
               type="button"
               onClick={() => onSelect(palette.id)}
-              className={`rounded-2xl border p-4 flex flex-col gap-3 text-left transition-all ${
+              className={`rounded-2xl border p-4 flex flex-col gap-3 text-left transition-all h-full ${
                 isSelected
                   ? 'border-gold bg-gold/10 shadow-inner shadow-gold/15'
                   : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
             >
-              <div className="flex gap-2 h-10">
+              <div className="flex gap-2 h-20 w-full">
                 {palette.colors.map((color, index) => (
                   <div
                     key={index}
-                    className="flex-1 rounded-lg"
+                    className="flex-1 rounded-lg h-full shadow-sm"
                     style={{ backgroundColor: color }}
                   />
                 ))}
@@ -268,7 +281,7 @@ function PaletteTest({ options, selectedId, onSelect }: PaletteTestProps) {
           ? 'Paleta ustawia bazę pod wszystkie sensoryczne decyzje.'
           : 'The palette sets the base for every other sensory decision.'}
       </p>
-    </GlassCard>
+    </ContentWrapper>
   );
 }
 
@@ -476,25 +489,28 @@ export function SensoryTestSuite({
             options={paletteOptions}
             selectedId={selectedPalette}
             onSelect={(value) => handleSelect('palette', value)}
+            frameless
+            className="h-full overflow-y-auto flex flex-col justify-center"
           />
         ) : currentTest === 'nature' ? (
           <NatureMetaphorTest
             frameless
-            className="h-full overflow-y-auto"
+            className="h-full overflow-y-auto flex flex-col justify-center"
             onSelect={(value) => handleSelect('nature', value)}
           />
         ) : currentTest === 'biophilia' ? (
           <BiophiliaTest
             frameless
-            className="h-full overflow-y-auto"
+            className="h-full overflow-y-auto flex flex-col justify-center"
             onSelect={(score) => handleSelect('biophilia', score)}
           />
         ) : (
           <SensoryTest
             type={currentTest as InteractiveTest}
             onSelect={(value) => handleSelect(currentTest, value)}
-            className="h-full"
+            className="h-full overflow-y-auto flex flex-col justify-center"
             value={results[currentTest as InteractiveTest] || null}
+            frameless
           />
         )}
       </div>

@@ -24,10 +24,8 @@ export function PartOneProgressBar({ currentPath, className = '' }: PartOneProgr
   const progress = ((stepInfo.index + 1) / PART_ONE_TOTAL_STEPS) * 100;
 
   return (
-    <div
-      className={`fixed top-16 left-1/2 -translate-x-1/2 w-full max-w-4xl px-4 z-40 pointer-events-none ${className}`}
-    >
-      <div className="glass-panel rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl p-5 md:p-6 pointer-events-auto">
+    <div className={`w-full ${className}`}>
+      <div className="glass-panel rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl p-5 md:p-6 shadow-2xl">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold tracking-[0.2em] uppercase text-silver-dark">
