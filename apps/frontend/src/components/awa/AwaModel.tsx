@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { useFrame, useLoader } from '@react-three/fiber';
-import { useGLTF, useAnimations } from '@react-three/drei';
+import { useFrame, useLoader, useThree } from '@react-three/fiber';
+import { useGLTF, useAnimations, useEnvironment } from '@react-three/drei';
 import * as THREE from 'three';
 import { FlowStep } from '@/types';
 
@@ -15,13 +15,22 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const [headBone, setHeadBone] = useState<THREE.Bone | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
+  // Pobierz envMap z preset "sunset" - lepszy dla metalu (więcej kontrastu i refleksów)
+  const envMap = useEnvironment({ preset: 'studio' });
+  const { scene: threeScene } = useThree();
+
   // Load Quinn model
   const { scene } = useGLTF('/models/SKM_Quinn.gltf');
   // Load idle animation
   const { animations: idleAnimations } = useGLTF('/models/Idle.gltf');
 
   useEffect(() => {
-    if (scene) {
+    if (scene && envMap) {
+      // Ustaw envMap globalnie na scenie (dla lepszej kompatybilności)
+      if (threeScene) {
+        threeScene.environment = envMap;
+      }
+
       // Find head bone for mouse tracking and apply metallic materials
       let foundHead: THREE.Object3D | null = null;
       scene.traverse((child: THREE.Object3D) => {
@@ -39,12 +48,13 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
           if (mesh.material) {
             const material = mesh.material as THREE.Material;
             
-            // Create new metallic material
+            // Create new metallic material with HDRI environment map
             const metallicMaterial = new THREE.MeshStandardMaterial({
               color: new THREE.Color(0xE0E0E0), // Srebrzysty kolor
-              metalness: 0.9, // Wysoka metaliczność
-              roughness: 0.1, // Niska chropowatość = wysoki połysk
-              envMapIntensity: 1.2, // Intensywność odbicia środowiska
+              metalness: 0.95, // Bardzo wysoka metaliczność (prawie 1.0)
+              roughness: 0.05, // Bardzo niska chropowatość = bardzo wysoki połysk
+              envMap: envMap, // Ustaw envMap z HDRI preset "sunset"
+              envMapIntensity: 3.5, // Znacznie zwiększona intensywność dla wyraźnego efektu
             });
             
             // Zachowaj oryginalne tekstury jeśli istnieją
@@ -70,7 +80,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
       // Inform parent that model is loaded
       if (onLoaded) onLoaded();
     }
-  }, [scene, onLoaded]);
+  }, [scene, envMap, threeScene, onLoaded]);
 
   useEffect(() => {
     // Mouse tracking setup
