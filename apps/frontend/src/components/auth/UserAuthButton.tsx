@@ -17,7 +17,7 @@ export function UserAuthButton() {
     return (
       <button
         disabled
-        className="px-3 py-2 rounded-full glass-panel transition-all text-sm font-modern text-graphite/60 flex items-center gap-2 opacity-70"
+        className="h-10 px-4 rounded-full glass-panel transition-all text-sm font-modern text-graphite/60 flex items-center gap-2 opacity-70"
       >
         <User size={16} />
         {language === 'pl' ? 'Ładowanie…' : 'Loading…'}
@@ -30,7 +30,7 @@ export function UserAuthButton() {
       <>
         <button
           onClick={() => setShowLoginModal(true)}
-          className="px-3 py-2 rounded-full glass-panel transition-all text-sm font-modern text-graphite flex items-center gap-2"
+          className="h-10 px-4 rounded-full glass-panel transition-all text-sm font-modern text-graphite flex items-center gap-2"
         >
           <User size={16} />
           {language === 'pl' ? 'Zaloguj' : 'Sign In'}
@@ -53,7 +53,7 @@ export function UserAuthButton() {
           window.location.href = '/';
         }
       }}
-      className="px-3 py-2 rounded-full glass-panel transition-all text-sm font-modern text-graphite flex items-center gap-2 hover:bg-white/10"
+      className="h-10 px-4 rounded-full glass-panel transition-all text-sm font-modern text-graphite flex items-center gap-2 hover:bg-white/10"
     >
       <LogOut size={16} />
       {language === 'pl' ? 'Wyloguj' : 'Sign Out'}

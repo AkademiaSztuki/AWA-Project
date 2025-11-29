@@ -230,6 +230,8 @@ export interface RoomPreferencePayload {
     texture?: string;
     light?: string;
   };
+  natureMetaphor?: string;
+  biophiliaScore?: number;
 }
 
 // =========================

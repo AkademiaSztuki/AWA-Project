@@ -11,37 +11,51 @@ export interface ColorPaletteOption {
 
 export const COLOR_PALETTE_OPTIONS: ColorPaletteOption[] = [
   { 
-    id: 'warm-earth', 
-    colors: ['#8B7355', '#D4A574', '#F5DEB3', '#E6D5B8'],
-    label: { pl: 'Ciepła Ziemia', en: 'Warm Earth' }
+    id: 'biophilic-restoration', 
+    colors: ['#2D4A3E', '#8FBC8F', '#8B5A2B', '#E6DCC8'],
+    label: { pl: 'Regeneracja Biofiliczna', en: 'Biophilic Restoration' }
   },
   { 
-    id: 'cool-nordic', 
-    colors: ['#E8F1F5', '#B0C4DE', '#778899', '#A9B8C2'],
-    label: { pl: 'Nordycki Chłód', en: 'Cool Nordic' }
+    id: 'cognitive-calm', 
+    colors: ['#1B3B5F', '#6B8EAE', '#B0C4DE', '#F0F8FF'],
+    label: { pl: 'Spokój Umysłu', en: 'Cognitive Calm' }
   },
   { 
-    id: 'vibrant-bold', 
-    colors: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3'],
-    label: { pl: 'Odważne Kolory', en: 'Vibrant Bold' }
+    id: 'social-warmth', 
+    colors: ['#C05640', '#D99E32', '#F2C94C', '#FFF8E7'],
+    label: { pl: 'Ciepło Społeczne', en: 'Social Warmth' }
   },
   { 
-    id: 'natural-green', 
-    colors: ['#6B8E23', '#8FBC8F', '#F5F5DC', '#DEB887'],
-    label: { pl: 'Naturalna Zieleń', en: 'Natural Green' }
+    id: 'focus-minimalism', 
+    colors: ['#2C2C2C', '#757575', '#CFCFC4', '#FAFAFA'],
+    label: { pl: 'Minimalizm Skupienia', en: 'Focus Minimalism' }
   },
   { 
-    id: 'monochrome', 
-    colors: ['#2C2C2C', '#5C5C5C', '#8C8C8C', '#E8E8E8'],
-    label: { pl: 'Monochromatyczne', en: 'Monochrome' }
+    id: 'vital-energy', 
+    colors: ['#D72638', '#FF6B6B', '#FFD93D', '#EEEEEE'],
+    label: { pl: 'Energia Witalna', en: 'Vital Energy' }
   },
   { 
-    id: 'soft-pastels', 
-    colors: ['#FFB6C1', '#E6E6FA', '#FFE4E1', '#F0E68C'],
-    label: { pl: 'Miękkie Pastele', en: 'Soft Pastels' }
+    id: 'analogous-harmony', 
+    colors: ['#4A2C40', '#8E6C88', '#C98CA7', '#FADADD'],
+    label: { pl: 'Harmonia Analogiczna', en: 'Analogous Harmony' }
+  },
+  {
+    id: 'earthen-balance',
+    colors: ['#3E2723', '#8D6E63', '#556B2F', '#D7CCC8'],
+    label: { pl: 'Równowaga Ziemi', en: 'Earthen Balance' }
+  },
+  {
+    id: 'nordic-light',
+    colors: ['#A8DADC', '#F1FAEE', '#E0D6CC', '#9E9E9E'],
+    label: { pl: 'Światło Nordyckie', en: 'Nordic Light' }
+  },
+  {
+    id: 'deep-luxury',
+    colors: ['#121212', '#C5A059', '#1A3C34', '#5D101D'],
+    label: { pl: 'Luksusowa Głębia', en: 'Deep Luxury' }
   }
 ];
 
 export const getPaletteLabel = (paletteId?: string, language: 'pl' | 'en' = 'pl') =>
   COLOR_PALETTE_OPTIONS.find(p => p.id === paletteId)?.label[language];
-

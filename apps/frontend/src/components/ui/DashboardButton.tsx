@@ -20,7 +20,7 @@ export function DashboardButton() {
   return (
     <button
       onClick={() => router.push('/dashboard')}
-      className="px-3 py-2 rounded-full glass-panel transition-all text-sm font-modern text-graphite flex items-center gap-2"
+      className="h-10 px-4 rounded-full glass-panel transition-all text-sm font-modern text-graphite flex items-center gap-2"
     >
       <LayoutDashboard size={16} />
       {language === 'pl' ? 'Dashboard' : 'Dashboard'}

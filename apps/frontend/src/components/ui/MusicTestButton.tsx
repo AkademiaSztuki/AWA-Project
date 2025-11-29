@@ -59,25 +59,25 @@ export const MusicTestButton: React.FC = () => {
 
   return (
     <div 
-      className="fixed left-4 top-4 z-[9999]"
+      className="relative z-50"
       onMouseEnter={() => setIsExpanded(true)}
       onMouseLeave={() => setIsExpanded(false)}
     >
       <div className="flex items-center gap-3">
         {/* Główny przycisk */}
         <div
-          className="w-14 h-14 bg-white/20 backdrop-blur-xl border border-white/40 rounded-full cursor-pointer select-none transition-all duration-300 hover:scale-110 shadow-xl flex items-center justify-center"
+          className="w-10 h-10 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full cursor-pointer select-none transition-all duration-300 hover:scale-110 shadow-lg flex items-center justify-center hover:bg-white/20"
           onClick={togglePlay}
         >
-          <Volume2 className="w-6 h-6 text-white" />
+          <Volume2 className="w-5 h-5 text-graphite" />
         </div>
 
         {/* Panel kontroli głośności */}
         {isExpanded && (
-          <div className="animate-in slide-in-from-left-2 duration-300">
+          <div className="absolute top-full right-0 pt-4 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
             <div
-              style={{ width: 280, height: 120 }}
-              className="flex flex-col gap-3 p-4 shadow-xl bg-white/30 backdrop-blur-xl border-2 border-white/50 rounded-[28px]"
+              style={{ width: 280 }}
+              className="flex flex-col gap-3 p-4 shadow-2xl bg-white/90 backdrop-blur-2xl border border-white/50 rounded-[20px]"
             >
               {/* Muzyka - górny rząd */}
               <div className="flex items-center gap-3">
@@ -92,18 +92,18 @@ export const MusicTestButton: React.FC = () => {
 
                 {/* Custom Glass Slider dla muzyki */}
                 <div className="flex-1 relative">
-                  <div className="relative w-full h-5 bg-white/40 backdrop-blur-xl border-2 border-white/60 shadow-xl rounded-[20px] overflow-hidden">
+                  <div className="relative w-full h-5 bg-gray-100/50 backdrop-blur-sm border border-white/60 shadow-inner rounded-full overflow-hidden">
                     {/* Track background */}
-                    <div className="absolute inset-0 bg-black/40 rounded-[20px]"></div>
+                    <div className="absolute inset-0 bg-black/5 rounded-full"></div>
                     {/* Progress track */}
                     <div 
-                      className="absolute top-1/2 transform -translate-y-1/2 h-1.5 bg-gradient-to-r from-yellow-400 to-yellow-300 rounded-full transition-all duration-300 ease-in-out"
+                      className="absolute top-1/2 transform -translate-y-1/2 h-full bg-gradient-to-r from-gold to-champagne rounded-full transition-all duration-300 ease-in-out"
                       style={{ width: `${musicPercentage}%` }}
                     ></div>
                     {/* Slider thumb */}
                     <div 
-                      className={`absolute top-1/2 transform -translate-y-1/2 w-12 h-4 bg-white/80 backdrop-blur-xl border-2 border-white shadow-xl rounded-[16px] cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 focus:ring-2 focus:ring-gold-400 ${
-                        isDragging ? 'scale-110 border-gold/60 ring-2 ring-gold-400' : ''
+                      className={`absolute top-1/2 transform -translate-y-1/2 w-4 h-4 bg-white border border-gold/30 shadow-sm rounded-full cursor-pointer transition-all duration-300 ease-in-out hover:scale-110 focus:ring-2 focus:ring-gold-400 ${
+                        isDragging ? 'scale-125 border-gold ring-2 ring-gold-400' : ''
                       }`}
                       style={{ left: musicLeftPosition }}
                       onMouseDown={() => setIsDragging(true)}
@@ -124,7 +124,7 @@ export const MusicTestButton: React.FC = () => {
                   </div>
                 </div>
                 {/* Tekst głośności muzyki */}
-                <span className="text-xs text-white font-medium min-w-[40px] text-center flex-shrink-0">
+                <span className="text-xs text-graphite font-medium min-w-[30px] text-center flex-shrink-0">
                   {Math.round(musicVolume * 100)}%
                 </span>
               </div>
@@ -137,27 +137,27 @@ export const MusicTestButton: React.FC = () => {
                     console.log('MusicTestButton: toggleVoiceEnabled button clicked');
                     toggleVoiceEnabled();
                   }}
-                  className="text-white hover:scale-110 transition-transform duration-200 flex-shrink-0"
+                  className="text-graphite hover:scale-110 transition-transform duration-200 flex-shrink-0"
                   title={voiceEnabled ? 'Wyłącz głos' : 'Włącz głos'}
                 >
-                  {voiceEnabled ? <MessageCircle className="w-5 h-5" /> : <MessageCircleOff className="w-5 h-5" />}
+                  {voiceEnabled ? <MessageCircle className="w-5 h-5 text-graphite" /> : <MessageCircleOff className="w-5 h-5 text-silver-dark" />}
                 </button>
 
                 {/* Custom Glass Slider dla głosu */}
                 <div className="flex-1 relative">
-                  <div className="text-xs text-white mb-1">Voice Slider: {voicePercentage}%</div>
-                  <div className="relative w-full h-5 bg-white/40 backdrop-blur-xl border-2 border-white/60 shadow-xl rounded-[20px] overflow-hidden">
+                  <div className="text-xs text-graphite mb-1 font-modern">Voice: {Math.round(voicePercentage)}%</div>
+                  <div className="relative w-full h-4 bg-gray-100/50 backdrop-blur-sm border border-white/60 shadow-inner rounded-full overflow-hidden">
                     {/* Track background */}
-                    <div className="absolute inset-0 bg-black/40 rounded-[20px]"></div>
+                    <div className="absolute inset-0 bg-black/5 rounded-full"></div>
                     {/* Progress track */}
                     <div 
-                      className="absolute top-1/2 transform -translate-y-1/2 h-1.5 bg-gradient-to-r from-blue-400 to-blue-300 rounded-full transition-all duration-300 ease-in-out"
+                      className="absolute top-1/2 transform -translate-y-1/2 h-full bg-gradient-to-r from-platinum to-silver rounded-full transition-all duration-300 ease-in-out"
                       style={{ width: `${voicePercentage}%` }}
                     ></div>
                     {/* Slider thumb */}
                     <div 
-                      className={`absolute top-1/2 transform -translate-y-1/2 w-12 h-4 bg-white/80 backdrop-blur-xl border-2 border-white shadow-xl rounded-[16px] cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 focus:ring-2 focus:ring-blue-400 ${
-                        isDragging ? 'scale-110 border-blue/60 ring-2 ring-blue-400' : ''
+                      className={`absolute top-1/2 transform -translate-y-1/2 w-4 h-4 bg-white border border-silver/30 shadow-sm rounded-full cursor-pointer transition-all duration-300 ease-in-out hover:scale-110 focus:ring-2 focus:ring-silver ${
+                        isDragging ? 'scale-125 border-silver ring-2 ring-silver' : ''
                       }`}
                       style={{ left: voiceLeftPosition }}
                       onMouseDown={() => setIsDragging(true)}
@@ -179,7 +179,7 @@ export const MusicTestButton: React.FC = () => {
                   </div>
                 </div>
                 {/* Tekst głośności głosu */}
-                <span className="text-xs text-white font-medium min-w-[40px] text-center flex-shrink-0">
+                <span className="text-xs text-graphite font-medium min-w-[30px] text-center flex-shrink-0">
                   {Math.round(voiceVolume * 100)}%
                 </span>
               </div>

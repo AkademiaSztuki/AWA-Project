@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassButton } from "@/components/ui/GlassButton";
-import { AwaContainer } from "@/components/awa/AwaContainer";
 import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
@@ -13,10 +12,7 @@ import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPI
 import { 
   Brain, 
   ArrowRight, 
-  ArrowLeft,
-  CheckCircle,
-  Clock,
-  User
+  ArrowLeft
 } from "lucide-react";
 
 export default function BigFivePage() {
@@ -30,6 +26,8 @@ export default function BigFivePage() {
   const [showResults, setShowResults] = useState(false);
   const [scores, setScores] = useState<IPIPNEOScores | null>(null);
   const [isLegacyResult, setIsLegacyResult] = useState(false);
+
+  const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[85vh]";
 
   const t = (pl: string, en: string) => (language === "pl" ? pl : en);
 
@@ -163,15 +161,6 @@ export default function BigFivePage() {
   const currentItem = IPIP_120_ITEMS[currentQuestion];
   const isAnswered = currentItem ? responses[currentItem.id] !== undefined : false;
   
-  // Debug log
-  console.log('Big Five Debug:', {
-    currentQuestion,
-    IPIP_120_ITEMS_length: IPIP_120_ITEMS.length,
-    currentItem: currentItem?.id,
-    showResults
-  });
-  
-
   // Safety check - if no current item, show loading or redirect
   if (!currentItem && !showResults) {
     return (
@@ -188,34 +177,15 @@ export default function BigFivePage() {
     const domainEntries = getDomainEntries(scores);
 
     return (
-      <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
-        {/* Background */}
-        <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
-        
-        {/* 3D Model Background */}
-        <div className="absolute inset-0 -z-5">
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="w-96 h-96 rounded-full bg-gradient-to-br from-gold/10 via-champagne/10 to-platinum/10 blur-3xl" />
-          </div>
-        </div>
-
-        {/* Dialog IDA na dole */}
-        <div className="w-full">
-          <AwaDialogue 
-            currentStep="onboarding" 
-            fullWidth={true}
-            autoHide={true}
-          />
-        </div>
-
-        <div className="flex-1 p-4 lg:p-8 pb-32">
-          <div className="max-w-4xl mx-auto">
+      <div className="flex flex-col w-full">
+        <div className="flex-1 flex justify-center items-start">
+          <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <GlassCard className="p-8 lg:p-12">
+              <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
                 {/* Header */}
                 <div className="text-center mb-8">
                   <motion.div
@@ -233,7 +203,7 @@ export default function BigFivePage() {
                     <Brain size={40} className="text-white" />
                   </motion.div>
                   
-                  <h1 className="text-4xl lg:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-4">
+                  <h1 className="text-3xl md:text-4xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-4">
                     {t("Twój Profil Osobowości", "Your Personality Profile")}
                   </h1>
                   <p className="text-lg text-graphite font-modern max-w-2xl mx-auto">
@@ -338,39 +308,29 @@ export default function BigFivePage() {
             </motion.div>
           </div>
         </div>
+
+        {/* Dialog IDA na dole */}
+        <div className="w-full">
+          <AwaDialogue 
+            currentStep="onboarding" 
+            fullWidth={true}
+            autoHide={true}
+          />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
-      
-      {/* 3D Model Background */}
-      <div className="absolute inset-0 -z-5">
-        <div className="w-full h-full flex items-center justify-center">
-          <div className="w-96 h-96 rounded-full bg-gradient-to-br from-gold/10 via-champagne/10 to-platinum/10 blur-3xl" />
-        </div>
-      </div>
-
-      {/* Dialog IDA na dole */}
-      <div className="w-full">
-        <AwaDialogue 
-          currentStep="onboarding" 
-          fullWidth={true}
-          autoHide={true}
-        />
-      </div>
-
-      <div className="flex-1 p-4 lg:p-8 pb-32 flex items-center justify-center min-h-screen">
-        <div className="max-w-4xl mx-auto w-full">
+    <div className="flex flex-col w-full">
+      <div className="flex-1 flex justify-center items-start">
+        <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard className="p-8 lg:p-12">
+            <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
               {/* Header */}
               <div className="text-center mb-8">
                 <motion.div
@@ -388,7 +348,7 @@ export default function BigFivePage() {
                   <Brain size={40} className="text-white" />
                 </motion.div>
                 
-                <h1 className="text-4xl lg:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-4">
+                <h1 className="text-3xl md:text-4xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-4">
                   {t("Test Osobowości Big Five", "Big Five Personality Test")}
                 </h1>
                 <p className="text-lg text-graphite font-modern max-w-2xl mx-auto">
@@ -459,18 +419,18 @@ export default function BigFivePage() {
               </div>
 
               {/* Navigation */}
-              <div className="flex justify-between">
-                <GlassButton
-                  onClick={handlePrevious}
-                  disabled={currentQuestion === 0}
-                  variant="secondary"
-                  className="px-6 py-3"
-                >
-                  <ArrowLeft size={18} className="mr-2" />
-                  {t("Wstecz", "Back")}
-                </GlassButton>
-
+              <div className="flex justify-between mt-auto pt-6">
                 <div className="flex gap-4">
+                  <GlassButton
+                    onClick={handlePrevious}
+                    disabled={currentQuestion === 0}
+                    variant="secondary"
+                    className="px-6 py-3"
+                  >
+                    <ArrowLeft size={18} className="mr-2" />
+                    {t("Wstecz", "Back")}
+                  </GlassButton>
+
                   <GlassButton
                     onClick={handleSkip}
                     variant="secondary"
@@ -478,21 +438,30 @@ export default function BigFivePage() {
                   >
                     {t("Pomiń test", "Skip test")}
                   </GlassButton>
-                  
-                  {isAnswered && currentQuestion < IPIP_120_ITEMS.length - 1 && (
-                    <GlassButton
-                      onClick={handleNext}
-                      className="px-6 py-3"
-                    >
-                      {t("Dalej", "Next")}
-                      <ArrowRight size={18} className="ml-2" />
-                    </GlassButton>
-                  )}
                 </div>
+                
+                {isAnswered && currentQuestion < IPIP_120_ITEMS.length - 1 && (
+                  <GlassButton
+                    onClick={handleNext}
+                    className="px-6 py-3"
+                  >
+                    {t("Dalej", "Next")}
+                    <ArrowRight size={18} className="ml-2" />
+                  </GlassButton>
+                )}
               </div>
             </GlassCard>
           </motion.div>
         </div>
+      </div>
+
+      {/* Dialog IDA na dole */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="onboarding" 
+          fullWidth={true}
+          autoHide={true}
+        />
       </div>
     </div>
   );

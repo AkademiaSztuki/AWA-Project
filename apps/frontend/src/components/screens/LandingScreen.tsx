@@ -11,6 +11,7 @@ import { useModalAPI } from '@/hooks/useModalAPI';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLayout } from '@/contexts/LayoutContext';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
@@ -18,8 +19,15 @@ const LandingScreen: React.FC = () => {
   const { checkHealth } = useModalAPI();
   const { updateSessionData } = useSessionData();
   const { user } = useAuth();
+  const { setHeaderVisible } = useLayout();
   const [showAuraSection, setShowAuraSection] = useState(false);
   const [isPrewarming, setIsPrewarming] = useState(false);
+
+  useEffect(() => {
+    // Hide header initially
+    setHeaderVisible(false);
+    return () => setHeaderVisible(true);
+  }, [setHeaderVisible]);
 
   const landingTexts = {
     pl: {
@@ -56,6 +64,7 @@ const LandingScreen: React.FC = () => {
     // Dodaj opóźnienie 1 sekundy przed pokazaniem okna AURA
     setTimeout(() => {
       setShowAuraSection(true);
+      setHeaderVisible(true);
     }, 1500);
   };
 
@@ -70,8 +79,8 @@ const LandingScreen: React.FC = () => {
         </div>
       )}
       {showAuraSection && (
-        <div className="flex-1 ml-[0px] flex flex-col items-center justify-center h-screen p-8">
-          <div className="w-full max-w-4xl z-30">
+        <div className="flex-1 ml-[0px] flex flex-col items-center justify-center h-screen p-8 pt-0">
+          <div className="w-full max-w-4xl z-30 -mt-80">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

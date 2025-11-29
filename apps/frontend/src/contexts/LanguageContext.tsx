@@ -62,23 +62,23 @@ export function LanguageToggle() {
   const { language, setLanguage } = useLanguage();
 
   return (
-    <div className="flex items-center gap-2 glass-panel px-3 py-2 rounded-full">
+    <div className="flex items-center gap-1 glass-panel px-1.5 h-10 rounded-full">
       <button
         onClick={() => setLanguage('pl')}
-        className={`px-3 py-1 rounded-full transition-all ${
+        className={`px-3 py-1.5 text-xs rounded-full transition-all font-modern ${
           language === 'pl'
-            ? 'bg-gold-500 text-white font-semibold'
-            : 'text-gray-600 hover:text-gray-800'
+            ? 'bg-gold-500 text-white font-semibold shadow-md'
+            : 'text-gray-600 hover:text-gray-800 hover:bg-white/10'
         }`}
       >
         PL
       </button>
       <button
         onClick={() => setLanguage('en')}
-        className={`px-3 py-1 rounded-full transition-all ${
+        className={`px-3 py-1.5 text-xs rounded-full transition-all font-modern ${
           language === 'en'
-            ? 'bg-gold-500 text-white font-semibold'
-            : 'text-gray-600 hover:text-gray-800'
+            ? 'bg-gold-500 text-white font-semibold shadow-md'
+            : 'text-gray-600 hover:text-gray-800 hover:bg-white/10'
         }`}
       >
         EN

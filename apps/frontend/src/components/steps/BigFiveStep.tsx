@@ -116,7 +116,7 @@ export function BigFiveStep({ data, onUpdate, onNext, onBack }: BigFiveStepProps
 
   if (showResults && scores) {
     return (
-      <GlassCard className="p-6 md:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard className="p-6 md:p-8 overflow-auto scrollbar-hide">
         <div className="text-center mb-8">
           <motion.div
             animate={{ 
@@ -199,7 +199,7 @@ export function BigFiveStep({ data, onUpdate, onNext, onBack }: BigFiveStepProps
   }
 
   return (
-    <GlassCard className="p-6 md:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+    <GlassCard className="p-6 md:p-8 overflow-auto scrollbar-hide">
       {/* Header */}
       <div className="text-center mb-8">
         <motion.div

@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassButton } from "@/components/ui/GlassButton";
-import { AwaContainer } from "@/components/awa/AwaContainer";
 import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
@@ -16,11 +15,10 @@ import { addMultipleInspirationsToSpace } from "@/lib/spaces";
 import { 
   Upload, 
   X, 
-  Sparkles, 
   CheckCircle, 
   AlertCircle,
   ArrowRight,
-  Image as ImageIcon
+  ArrowLeft
 } from "lucide-react";
 
 interface LocalInspiration {
@@ -33,6 +31,8 @@ interface LocalInspiration {
   error?: string;
 }
 
+const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[85vh]";
+
 export default function InspirationsPage() {
   const { language } = useLanguage();
   const router = useRouter();
@@ -42,6 +42,8 @@ export default function InspirationsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const t = (pl: string, en: string) => (language === "pl" ? pl : en);
+
+  const progress = Math.min((items.length / 10) * 100, 100);
 
   // Auto-tag on upload in background (non-blocking)
   useEffect(() => {
@@ -210,58 +212,41 @@ export default function InspirationsPage() {
   const canProceed = items.length >= 1 && items.length <= 10;
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
-      
-      {/* 3D Model Background */}
-      <div className="absolute inset-0 -z-5">
-        <div className="w-full h-full flex items-center justify-center">
-          <div className="w-96 h-96 rounded-full bg-gradient-to-br from-gold/10 via-champagne/10 to-platinum/10 blur-3xl" />
-        </div>
-      </div>
-
-      {/* Dialog IDA na dole */}
-      <div className="w-full">
-        <AwaDialogue 
-          currentStep="onboarding" 
-          fullWidth={true}
-          autoHide={true}
-        />
-      </div>
-
-      <div className="flex-1 p-4 lg:p-8 pb-32">
-        <div className="max-w-6xl mx-auto">
+    <div className="flex flex-col w-full">
+      <div className="flex-1 flex justify-center items-start">
+        <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard className="p-8 lg:p-12">
-              {/* Header */}
-              <div className="text-center mb-8">
-                <motion.div
-                  animate={{ 
-                    scale: [1, 1.05, 1],
-                    rotate: [0, 2, -2, 0]
-                  }}
-                  transition={{ 
-                    duration: 3,
-                    repeat: Infinity,
-                    repeatDelay: 2
-                  }}
-                  className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-gold via-champagne to-platinum flex items-center justify-center"
-                >
-                  <ImageIcon size={40} className="text-white" />
-                </motion.div>
+            <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
+              
+              {/* Header with Progress Bar */}
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
+                    {t("Twoje Inspiracje", "Your Inspirations")}
+                  </h2>
+                  <div className="text-sm text-silver-dark font-modern">
+                    {items.length} / 10 {t("zdjęć", "images")}
+                  </div>
+                </div>
                 
-                <h1 className="text-4xl lg:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-4">
-                  {t("Twoje Inspiracje", "Your Inspirations")}
-                </h1>
-                <p className="text-lg text-graphite font-modern max-w-2xl mx-auto">
+                {/* Progress Bar */}
+                <div className="w-full bg-silver/20 rounded-full h-2 mb-4">
+                  <motion.div
+                    className="bg-gradient-to-r from-gold to-champagne h-2 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+
+                <p className="text-graphite font-modern text-sm">
                   {t(
-                    "Prześlij zdjęcia wnętrz, które Cię inspirują (do 10). IDA przeanalizuje je w tle i użyje do personalizacji.",
-                    "Upload interior images that inspire you (up to 10). IDA will analyze them in the background and use them to personalize."
+                    "Prześlij zdjęcia wnętrz, które Cię inspirują. IDA przeanalizuje je w tle.",
+                    "Upload interior images that inspire you. IDA will analyze them in the background."
                   )}
                 </p>
               </div>
@@ -270,7 +255,7 @@ export default function InspirationsPage() {
               <div className="mb-8">
                 <div 
                   onClick={handlePickFiles}
-                  className="border-2 border-dashed border-gold/30 rounded-2xl p-12 text-center hover:border-gold/50 hover:bg-gold/5 transition-all duration-300 cursor-pointer group"
+                  className="border-2 border-dashed border-gold/30 rounded-2xl p-8 md:p-12 text-center hover:border-gold/50 hover:bg-gold/5 transition-all duration-300 cursor-pointer group"
                 >
                   <input
                     ref={inputRef}
@@ -283,22 +268,19 @@ export default function InspirationsPage() {
                   
                   <motion.div
                     whileHover={{ scale: 1.1 }}
-                    className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center group-hover:shadow-lg group-hover:shadow-gold/25 transition-all duration-300"
+                    className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center group-hover:shadow-lg group-hover:shadow-gold/25 transition-all duration-300"
                   >
-                    <Upload size={32} className="text-white" />
+                    <Upload size={28} className="text-white" />
                   </motion.div>
                   
-                  <h3 className="text-xl font-nasalization text-graphite mb-2">
+                  <h3 className="text-lg md:text-xl font-nasalization text-graphite mb-2">
                     {t("Dodaj Zdjęcia", "Add Images")}
                   </h3>
-                  <p className="text-silver-dark font-modern">
+                  <p className="text-sm text-silver-dark font-modern">
                     {t(
-                      "Kliknij lub przeciągnij zdjęcia wnętrz (do 10)",
-                      "Click or drag interior images (up to 10)"
+                      "Kliknij lub przeciągnij zdjęcia wnętrz",
+                      "Click or drag interior images"
                     )}
-                  </p>
-                  <p className="text-sm text-silver-dark mt-2">
-                    {items.length}/10 {t("zdjęć", "images")}
                   </p>
                 </div>
               </div>
@@ -311,11 +293,7 @@ export default function InspirationsPage() {
                   transition={{ duration: 0.5 }}
                   className="mb-8"
                 >
-                  <h3 className="text-xl font-nasalization text-graphite mb-4">
-                    {t("Twoje Inspiracje", "Your Inspirations")}
-                  </h3>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {items.map((item, index) => (
                       <motion.div
                         key={item.id}
@@ -336,15 +314,14 @@ export default function InspirationsPage() {
                           <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
                             {item.isTagging && (
                               <div className="flex flex-col items-center gap-2">
-                                <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin" />
-                                <span className="text-xs text-white font-modern">Analyzing...</span>
+                                <div className="w-6 h-6 border-2 border-gold border-t-transparent rounded-full animate-spin" />
                               </div>
                             )}
                             {item.tags && (
-                              <CheckCircle size={24} className="text-green-400" />
+                              <CheckCircle size={20} className="text-green-400" />
                             )}
                             {item.error && (
-                              <AlertCircle size={24} className="text-red-400" />
+                              <AlertCircle size={20} className="text-red-400" />
                             )}
                           </div>
                           
@@ -353,7 +330,7 @@ export default function InspirationsPage() {
                             onClick={() => removeItem(item.id)}
                             className="absolute top-2 right-2 w-6 h-6 bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center"
                           >
-                            <X size={14} />
+                            <X size={12} />
                           </button>
                         </div>
                         
@@ -361,7 +338,7 @@ export default function InspirationsPage() {
                         {item.tags && (
                           <div className="mt-2 text-xs text-silver-dark">
                             <div className="flex flex-wrap gap-1">
-                              {item.tags.styles?.slice(0, 2).map(style => (
+                              {item.tags.styles?.slice(0, 1).map(style => (
                                 <span key={style} className="px-2 py-1 bg-gold/10 text-gold rounded-full">
                                   {style}
                                 </span>
@@ -376,27 +353,27 @@ export default function InspirationsPage() {
               )}
 
               {/* Actions */}
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <GlassButton
-                  onClick={() => router.back()}
-                  variant="secondary"
-                  className="px-8 py-3"
-                >
-                  {t("Wróć", "Back")}
-                </GlassButton>
-                
-                <GlassButton
-                  onClick={handleSkip}
-                  variant="secondary"
-                  className="px-8 py-3"
-                >
-                  {t("Pomiń", "Skip")}
-                </GlassButton>
+              <div className="flex justify-between mt-auto pt-6">
+                <div className="flex gap-4">
+                  <GlassButton
+                    onClick={() => router.back()}
+                    variant="secondary"
+                  >
+                    <ArrowLeft size={18} />
+                    {t("Wróć", "Back")}
+                  </GlassButton>
+                  
+                  <GlassButton
+                    onClick={handleSkip}
+                    variant="secondary"
+                  >
+                    {t("Pomiń", "Skip")}
+                  </GlassButton>
+                </div>
                 
                 <GlassButton
                   onClick={handleSave}
                   disabled={!canProceed || isSubmitting}
-                  className="px-8 py-3"
                 >
                   <span className="flex items-center gap-2">
                     {isSubmitting ? t("Zapisywanie…", "Saving…") : t("Kontynuuj", "Continue")}
@@ -405,20 +382,18 @@ export default function InspirationsPage() {
                 </GlassButton>
               </div>
 
-              {/* Progress indicator */}
-              {items.length > 0 && (
-                <div className="mt-6 text-center">
-                  <div className="text-sm text-silver-dark font-modern">
-                    {t(
-                      `${items.length}/10 zdjęć • ${items.filter(i => i.tags).length} przeanalizowanych w tle`,
-                      `${items.length}/10 images • ${items.filter(i => i.tags).length} analyzed in background`
-                    )}
-                  </div>
-                </div>
-              )}
             </GlassCard>
           </motion.div>
         </div>
+      </div>
+
+      {/* Dialog IDA na dole */}
+      <div className="w-full">
+        <AwaDialogue 
+          currentStep="onboarding" 
+          fullWidth={true}
+          autoHide={true}
+        />
       </div>
     </div>
   );
