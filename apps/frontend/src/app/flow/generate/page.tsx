@@ -23,9 +23,19 @@ import {
   Palette,
   Home,
   Lightbulb,
+  CheckCircle2,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import Image from 'next/image';
 import { buildOptimizedFluxPrompt } from '@/lib/dna';
+import { 
+  synthesizeFivePrompts, 
+  GenerationSource, 
+  GENERATION_SOURCE_LABELS,
+  type FivePromptSynthesisResult 
+} from '@/lib/prompt-synthesis';
 import { addGeneratedImageToSpace } from '@/lib/spaces';
 
 interface GeneratedImage {
@@ -42,6 +52,10 @@ interface GeneratedImage {
   };
   isFavorite: boolean;
   createdAt: number;
+  // 5-image matrix specific fields
+  source?: GenerationSource;       // Which data source generated this
+  displayIndex?: number;           // Position in blind display (0-4)
+  isBlindSelected?: boolean;       // Was this selected in blind comparison?
 }
 
 interface ModificationOption {
@@ -80,7 +94,7 @@ const MACRO_MODIFICATIONS: ModificationOption[] = [
 export default function GeneratePage() {
   const router = useRouter();
   const { sessionData, updateSessionData } = useSessionData();
-  const { generateImages, isLoading, error, setError, checkHealth, generateLLMComment } = useModalAPI();
+  const { generateImages, generateFiveImagesParallel, isLoading, error, setError, checkHealth, generateLLMComment } = useModalAPI();
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
@@ -97,6 +111,17 @@ export default function GeneratePage() {
   const [pageViewId, setPageViewId] = useState<string | null>(null);
   const [idaComment, setIdaComment] = useState<string | null>(null);
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
+  
+  // 5-Image Matrix State
+  const [isMatrixMode, setIsMatrixMode] = useState(true); // Enable by default
+  const [matrixImages, setMatrixImages] = useState<GeneratedImage[]>([]);
+  const [matrixDisplayOrder, setMatrixDisplayOrder] = useState<GenerationSource[]>([]);
+  const [blindSelectionMade, setBlindSelectionMade] = useState(false);
+  const [selectedSourceIndex, setSelectedSourceIndex] = useState<number | null>(null);
+  const [showSourceReveal, setShowSourceReveal] = useState(false);
+  const [matrixGenerationStartTime, setMatrixGenerationStartTime] = useState<number>(0);
+  const [carouselIndex, setCarouselIndex] = useState(0); // Current carousel position
+  
   const [generationHistory, setGenerationHistory] = useState<Array<{
     id: string;
     type: 'initial' | 'micro' | 'macro';
@@ -168,6 +193,237 @@ export default function GeneratePage() {
 
   const buildInitialPrompt = () => buildOptimizedFluxPrompt(sessionData as any);
 
+  /**
+   * Generates 5 images using different data sources for blind comparison.
+   * This is the new 5-image matrix generation flow.
+   */
+  const handleMatrixGeneration = async () => {
+    if (!isApiReady) {
+      console.log("[5-Image Matrix] API not ready, generation cancelled.");
+      return;
+    }
+    
+    const typedSessionData = sessionData as any;
+    
+    if (!typedSessionData || !typedSessionData.roomImage) {
+      console.error("[5-Image Matrix] Missing roomImage in session data");
+      setError("Nie można rozpocząć generowania - brak zdjęcia pokoju w sesji.");
+      return;
+    }
+    
+    console.log("[5-Image Matrix] Starting 5-image matrix generation...");
+    setMatrixGenerationStartTime(Date.now());
+    setStatusMessage("Przygotowuję 5 różnych wizji dla Twojego wnętrza...");
+    setLoadingStage(2);
+    setLoadingProgress(30);
+    setEstimatedTime(120);
+    
+    try {
+      // Step 1: Synthesize 5 prompts from different data sources
+      console.log("[5-Image Matrix] Step 1: Synthesizing prompts...");
+      const roomType = typedSessionData.roomType || 'living room';
+      
+      const synthesisResult = await synthesizeFivePrompts(
+        typedSessionData,
+        roomType,
+        { verbose: true }
+      );
+      
+      console.log("[5-Image Matrix] Synthesis complete:", {
+        generatedSources: synthesisResult.generatedSources,
+        skippedSources: synthesisResult.skippedSources,
+        displayOrder: synthesisResult.displayOrder
+      });
+      
+      if (synthesisResult.generatedSources.length === 0) {
+        setError("Brak wystarczających danych do wygenerowania obrazów. Uzupełnij profil.");
+        return;
+      }
+      
+      // Step 2: Prepare prompts for parallel generation
+      setLoadingProgress(45);
+      setStatusMessage(`Generuję ${synthesisResult.generatedSources.length} wizji równolegle...`);
+      setEstimatedTime(90);
+      
+      const prompts = synthesisResult.generatedSources.map(source => ({
+        source,
+        prompt: synthesisResult.results[source]!.prompt
+      }));
+      
+      const parameters = getGenerationParameters('initial', generationCount);
+      
+      // Log generation job
+      const projectId = await getOrCreateProjectId(typedSessionData.userHash);
+      let jobId: string | null = null;
+      if (projectId) {
+        jobId = await startGenerationJob(projectId, {
+          type: 'matrix_5',
+          prompt: JSON.stringify(prompts.map(p => ({ source: p.source, prompt: p.prompt.substring(0, 200) }))),
+          parameters: { ...parameters, num_sources: prompts.length },
+          has_base_image: true,
+        });
+      }
+      
+      // Step 3: Generate all images in parallel
+      setLoadingProgress(55);
+      
+      const generationResponse = await generateFiveImagesParallel({
+        prompts,
+        base_image: typedSessionData.roomImage,
+        style: typedSessionData.visualDNA?.dominantStyle || 'modern',
+        parameters: {
+          strength: parameters.strength,
+          steps: parameters.steps,
+          guidance: parameters.guidance,
+          image_size: parameters.image_size
+        }
+      });
+      
+      // Step 4: Process results
+      setLoadingProgress(85);
+      setStatusMessage("Finalizuję obrazy...");
+      setEstimatedTime(10);
+      
+      if (generationResponse.successful_count === 0) {
+        setError("Wszystkie generacje zakończyły się niepowodzeniem.");
+        if (jobId) await endGenerationJob(jobId, { status: 'error', error_message: 'All generations failed' });
+        return;
+      }
+      
+      // Create GeneratedImage objects with shuffled display order
+      const displayOrder = synthesisResult.displayOrder;
+      const newMatrixImages: GeneratedImage[] = [];
+      
+      generationResponse.results
+        .filter(r => r.success)
+        .forEach((result, idx) => {
+          const displayIndex = displayOrder.indexOf(result.source);
+          const sourceLabel = GENERATION_SOURCE_LABELS[result.source];
+          
+          newMatrixImages.push({
+            id: `matrix-${generationCount}-${result.source}`,
+            url: `data:image/png;base64,${result.image}`,
+            base64: result.image,
+            prompt: result.prompt,
+            parameters: {
+              ...parameters,
+              source: result.source,
+              sourceLabel: sourceLabel,
+              processingTime: result.processing_time
+            },
+            ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+            isFavorite: false,
+            createdAt: Date.now(),
+            source: result.source,
+            displayIndex: displayIndex >= 0 ? displayIndex : idx,
+            isBlindSelected: false
+          });
+        });
+      
+      // Sort by display index for blind comparison
+      newMatrixImages.sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0));
+      
+      setMatrixImages(newMatrixImages);
+      setMatrixDisplayOrder(displayOrder.filter(s => 
+        newMatrixImages.some(img => img.source === s)
+      ));
+      setGeneratedImages(newMatrixImages);
+      setSelectedImage(null); // No selection yet - blind comparison mode
+      setBlindSelectionMade(false);
+      setShowSourceReveal(false);
+      setGenerationCount(prev => prev + 1);
+      
+      // Complete loading
+      setLoadingProgress(100);
+      setEstimatedTime(0);
+      setStatusMessage("Gotowe! Wybierz swoje ulubione wnętrze.");
+      
+      // Save to session and Supabase
+      try {
+        if (projectId && jobId) {
+          const totalTime = Date.now() - matrixGenerationStartTime;
+          await endGenerationJob(jobId, { 
+            status: 'success', 
+            latency_ms: totalTime,
+            result_count: generationResponse.successful_count
+          });
+          
+          // Save each generated image
+          for (const img of newMatrixImages) {
+            const genSet = await saveGenerationSet(projectId, img.prompt);
+            if (genSet?.id) {
+              await saveGeneratedImages(genSet.id, [{ 
+                url: img.url, 
+                prompt: img.prompt,
+                source: img.source
+              }]);
+            }
+          }
+          
+          await logBehavioralEvent(projectId, 'matrix_generation_complete', {
+            sources: newMatrixImages.map(i => i.source),
+            displayOrder,
+            successCount: generationResponse.successful_count,
+            failedCount: generationResponse.failed_count,
+            totalTime
+          });
+        }
+      } catch (e) {
+        console.warn('[5-Image Matrix] Supabase persist failed:', e);
+      }
+      
+      console.log("[5-Image Matrix] Generation complete!", {
+        imagesGenerated: newMatrixImages.length,
+        displayOrder: displayOrder
+      });
+      
+    } catch (err) {
+      console.error('[5-Image Matrix] Generation failed:', err);
+      setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas generacji.');
+    }
+  };
+  
+  /**
+   * Handles selection in blind comparison mode.
+   */
+  const handleBlindSelection = async (image: GeneratedImage) => {
+    if (blindSelectionMade) return;
+    
+    const selectionTime = Date.now() - matrixGenerationStartTime;
+    console.log(`[5-Image Matrix] User selected image from source: ${image.source} at position ${image.displayIndex}`);
+    
+    setSelectedImage(image);
+    setBlindSelectionMade(true);
+    setSelectedSourceIndex(image.displayIndex || 0);
+    
+    // Update the image as selected
+    setMatrixImages(prev => prev.map(img => ({
+      ...img,
+      isBlindSelected: img.id === image.id
+    })));
+    
+    // Log to Supabase
+    try {
+      const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+      if (projectId) {
+        await logBehavioralEvent(projectId, 'matrix_blind_selection', {
+          selectedSource: image.source,
+          selectedPosition: image.displayIndex,
+          allSources: matrixImages.map(i => i.source),
+          displayOrder: matrixDisplayOrder,
+          selectionTimeMs: selectionTime
+        });
+      }
+    } catch (e) {
+      console.warn('[5-Image Matrix] Failed to log selection:', e);
+    }
+    
+    // Show reveal after short delay
+    setTimeout(() => {
+      setShowSourceReveal(true);
+    }, 1000);
+  };
+
   // Generate IDA comment for generated images
   const generateIdaComment = async () => {
     if (!selectedImage || isGeneratingComment) return;
@@ -214,7 +470,12 @@ export default function GeneratePage() {
     }
     if (!force && generationCount > 0) return;
     
-    console.log("handleInitialGeneration: Rozpoczynam generowanie obrazów.");
+    // Use matrix generation mode by default
+    if (isMatrixMode) {
+      return handleMatrixGeneration();
+    }
+    
+    console.log("handleInitialGeneration: Rozpoczynam generowanie obrazów (legacy mode).");
     console.log("SessionData pełne dane:", JSON.stringify(sessionData, null, 2));
     
     const typedSessionData = sessionData as any;
@@ -862,7 +1123,349 @@ export default function GeneratePage() {
             </GlassCard>
           )}
 
-          {generatedImages.length > 0 && (
+          {/* 5-Image Matrix - Full Width Carousel View (TEST MODE) */}
+          {isMatrixMode && matrixImages.length > 0 && !blindSelectionMade && (
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-graphite mb-2">
+                  Porównaj wizje ({carouselIndex + 1}/{matrixImages.length})
+                </h2>
+                <p className="text-silver-dark text-sm">
+                  Przeglądaj obrazy i wybierz ten, który najbardziej Ci odpowiada
+                </p>
+              </div>
+              
+              {/* Full Width Carousel */}
+              <div className="relative">
+                {/* Main Image - Full Width */}
+                <GlassCard className="p-2 overflow-hidden">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={matrixImages[carouselIndex]?.id}
+                      initial={{ opacity: 0, x: 50 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -50 }}
+                      transition={{ duration: 0.3 }}
+                      className="relative"
+                    >
+                      <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden">
+                        <Image
+                          src={matrixImages[carouselIndex]?.url || ''}
+                          alt={`Wizja ${carouselIndex + 1}`}
+                          fill
+                          className="object-cover"
+                          priority
+                        />
+                        
+                        {/* Source Label - Always Visible for Testing */}
+                        <div className="absolute top-4 left-4">
+                          <div className="px-4 py-2 bg-black/70 backdrop-blur-sm rounded-lg">
+                            <p className="text-white text-xs font-medium opacity-70">Źródło danych:</p>
+                            <p className="text-gold font-bold text-lg">
+                              {GENERATION_SOURCE_LABELS[matrixImages[carouselIndex]?.source!]?.pl || 'Nieznane'}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Image Counter */}
+                        <div className="absolute top-4 right-4 px-3 py-1.5 bg-black/50 backdrop-blur-sm rounded-full">
+                          <span className="text-white font-medium">
+                            {carouselIndex + 1} / {matrixImages.length}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
+                </GlassCard>
+                
+                {/* Navigation Arrows */}
+                <button
+                  onClick={() => setCarouselIndex(prev => prev > 0 ? prev - 1 : matrixImages.length - 1)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg transition-all z-10"
+                >
+                  <ChevronLeft size={28} className="text-graphite" />
+                </button>
+                <button
+                  onClick={() => setCarouselIndex(prev => prev < matrixImages.length - 1 ? prev + 1 : 0)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg transition-all z-10"
+                >
+                  <ChevronRight size={28} className="text-graphite" />
+                </button>
+              </div>
+              
+              {/* Thumbnail Navigation */}
+              <div className="flex justify-center gap-2 px-4">
+                {matrixImages.map((img, index) => (
+                  <button
+                    key={img.id}
+                    onClick={() => setCarouselIndex(index)}
+                    className={`relative w-16 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                      carouselIndex === index 
+                        ? 'border-gold shadow-lg scale-110' 
+                        : 'border-transparent hover:border-gold/30'
+                    }`}
+                  >
+                    <Image
+                      src={img.url}
+                      alt={`Miniatura ${index + 1}`}
+                      fill
+                      className="object-cover"
+                    />
+                    {carouselIndex === index && (
+                      <div className="absolute inset-0 bg-gold/20" />
+                    )}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Source Info Card */}
+              <GlassCard className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-gold/10 rounded-lg">
+                    <Eye size={20} className="text-gold" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-graphite">
+                      {GENERATION_SOURCE_LABELS[matrixImages[carouselIndex]?.source!]?.pl}
+                    </h3>
+                    <p className="text-sm text-silver-dark mt-1">
+                      {matrixImages[carouselIndex]?.source === GenerationSource.Implicit && 
+                        "Wygenerowane na podstawie Twoich intuicyjnych wyborów z Tindera i inspiracji."}
+                      {matrixImages[carouselIndex]?.source === GenerationSource.Explicit && 
+                        "Wygenerowane na podstawie Twoich świadomych deklaracji preferencji."}
+                      {matrixImages[carouselIndex]?.source === GenerationSource.Personality && 
+                        "Wygenerowane na podstawie Twojego profilu osobowości Big Five."}
+                      {matrixImages[carouselIndex]?.source === GenerationSource.Mixed && 
+                        "Mix wszystkich danych estetycznych (40% implicit, 30% explicit, 30% personality)."}
+                      {matrixImages[carouselIndex]?.source === GenerationSource.MixedFunctional && 
+                        "Pełny mix + dane funkcjonalne (aktywności, problemy, nastrój PRS)."}
+                    </p>
+                  </div>
+                </div>
+              </GlassCard>
+              
+              {/* DEV: Prompt Debug Panel */}
+              <GlassCard className="p-4 bg-gray-900/95 border-yellow-500/50">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-yellow-400">
+                    <span className="text-xs font-mono px-2 py-0.5 bg-yellow-500/20 rounded">DEV</span>
+                    <h3 className="font-mono font-bold text-sm">Prompt użyty do generacji:</h3>
+                  </div>
+                  <div className="bg-black/50 rounded-lg p-3 overflow-x-auto">
+                    <pre className="text-xs font-mono text-green-400 whitespace-pre-wrap break-words">
+                      {matrixImages[carouselIndex]?.prompt || 'Brak promptu'}
+                    </pre>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-xs font-mono">
+                    <div>
+                      <span className="text-gray-400">Source:</span>{' '}
+                      <span className="text-cyan-400">{matrixImages[carouselIndex]?.source}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Token count:</span>{' '}
+                      <span className="text-cyan-400">
+                        ~{matrixImages[carouselIndex]?.prompt?.split(/\s+/).length || 0} words
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </GlassCard>
+              
+              {/* DEV: All Prompts Comparison */}
+              <details className="group">
+                <summary className="cursor-pointer px-4 py-2 bg-gray-800 rounded-lg text-yellow-400 font-mono text-sm flex items-center gap-2">
+                  <span className="text-xs px-2 py-0.5 bg-yellow-500/20 rounded">DEV</span>
+                  Pokaż wszystkie prompty ({matrixImages.length})
+                </summary>
+                <div className="mt-2 space-y-3">
+                  {matrixImages.map((img, idx) => (
+                    <GlassCard 
+                      key={img.id} 
+                      className={`p-3 bg-gray-900/90 ${idx === carouselIndex ? 'border-gold' : 'border-gray-700'}`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                              idx === carouselIndex ? 'bg-gold text-white' : 'bg-gray-700 text-gray-300'
+                            }`}>
+                              {idx + 1}
+                            </span>
+                            <span className="font-mono text-sm text-cyan-400">{img.source}</span>
+                            <span className="text-gray-400 text-xs">
+                              ({GENERATION_SOURCE_LABELS[img.source!]?.pl})
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-500 font-mono">
+                            {img.prompt?.split(/\s+/).length || 0} words
+                          </span>
+                        </div>
+                        <div className="bg-black/40 rounded p-2">
+                          <pre className="text-xs font-mono text-green-300 whitespace-pre-wrap break-words">
+                            {img.prompt || 'Brak'}
+                          </pre>
+                        </div>
+                      </div>
+                    </GlassCard>
+                  ))}
+                </div>
+              </details>
+              
+              {/* Select Button */}
+              <div className="flex justify-center">
+                <GlassButton
+                  onClick={() => handleBlindSelection(matrixImages[carouselIndex])}
+                  className="px-8 py-3 flex items-center gap-2"
+                >
+                  <CheckCircle2 size={20} />
+                  <span>Wybieram tę wizję</span>
+                </GlassButton>
+              </div>
+            </div>
+          )}
+
+          {/* 5-Image Matrix: After Selection - Reveal View */}
+          {isMatrixMode && blindSelectionMade && selectedImage && (
+            <div className="space-y-6">
+              {/* Selected Image - Main Display */}
+              <GlassCard className="p-4">
+                <div className="space-y-4">
+                  <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
+                    <Image 
+                      src={selectedImage.url} 
+                      alt="Wybrane wnętrze" 
+                      fill 
+                      className="object-cover" 
+                    />
+                    <div className="absolute top-4 left-4">
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-gold/90 backdrop-blur-sm rounded-full"
+                      >
+                        <CheckCircle2 size={16} className="text-white" />
+                        <span className="text-sm font-medium text-white">Twój wybór</span>
+                      </motion.div>
+                    </div>
+                    <button
+                      onClick={() => handleFavorite(selectedImage.id)}
+                      className={`absolute top-4 right-4 p-2 rounded-full backdrop-blur transition-all ${
+                        selectedImage.isFavorite ? 'bg-red-100 text-red-500' : 'bg-white/20 text-white hover:bg-white/30'
+                      }`}
+                    >
+                      <Heart size={20} fill={selectedImage.isFavorite ? 'currentColor' : 'none'} />
+                    </button>
+                  </div>
+                  
+                  {/* Source Reveal */}
+                  <AnimatePresence>
+                    {showSourceReveal && selectedImage.source && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                      >
+                        <GlassCard variant="highlighted" className="p-5">
+                          <div className="flex items-start gap-4">
+                            <div className="p-2 bg-gold/10 rounded-lg">
+                              <Eye size={24} className="text-gold" />
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-graphite text-lg mb-1">
+                                To wnętrze zostało stworzone na podstawie:
+                              </h3>
+                              <p className="text-xl font-bold bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
+                                {GENERATION_SOURCE_LABELS[selectedImage.source]?.pl || selectedImage.source}
+                              </p>
+                              <p className="text-sm text-silver-dark">
+                                {selectedImage.source === GenerationSource.Implicit && 
+                                  "Twoje intuicyjne wybory z eksploracji obrazów (Tinder + Inspiracje) - to co naprawdę przyciąga Twoją uwagę."}
+                                {selectedImage.source === GenerationSource.Explicit && 
+                                  "Twoje świadome deklaracje preferencji - kolory, materiały i style które samodzielnie wybrałeś."}
+                                {selectedImage.source === GenerationSource.Personality && 
+                                  "Twój profil osobowości Big Five - jak Twoja osobowość przekłada się na preferencje estetyczne."}
+                                {selectedImage.source === GenerationSource.Mixed && 
+                                  "Połączenie wszystkich danych estetycznych - behawioralnych, deklarowanych i osobowościowych."}
+                                {selectedImage.source === GenerationSource.MixedFunctional && 
+                                  "Pełny mix + funkcjonalność - uwzględnia też jak używasz przestrzeni i jakie masz potrzeby."}
+                              </p>
+                            </div>
+                          </div>
+                        </GlassCard>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </GlassCard>
+              
+              {/* Other Images - Mini Grid */}
+              {showSourceReveal && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <GlassCard className="p-4">
+                    <h3 className="text-sm font-medium text-silver-dark mb-3">
+                      Inne wygenerowane wizje (kliknij aby zobaczyć)
+                    </h3>
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {matrixImages
+                        .filter(img => img.id !== selectedImage.id)
+                        .map((img) => (
+                          <motion.div
+                            key={img.id}
+                            className="flex-shrink-0 cursor-pointer"
+                            whileHover={{ scale: 1.05 }}
+                            onClick={() => {
+                              setSelectedImage(img);
+                              setIdaComment(null);
+                            }}
+                          >
+                            <div className="w-24 h-18 relative rounded-lg overflow-hidden border border-white/30 hover:border-gold/50 transition-all">
+                              <Image
+                                src={img.url}
+                                alt={`Wizja ${GENERATION_SOURCE_LABELS[img.source!]?.pl || ''}`}
+                                fill
+                                className="object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                <span className="text-[10px] text-white/90 text-center px-1 font-medium">
+                                  {GENERATION_SOURCE_LABELS[img.source!]?.pl?.split(' ')[0] || ''}
+                                </span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                    </div>
+                  </GlassCard>
+                </motion.div>
+              )}
+              
+              {/* Continue Button */}
+              {showSourceReveal && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 1 }}
+                  className="flex justify-center"
+                >
+                  <GlassButton
+                    onClick={handleContinue}
+                    className="px-8 py-3 flex items-center gap-2"
+                  >
+                    <span>Kontynuuj</span>
+                    <ArrowRight size={18} />
+                  </GlassButton>
+                </motion.div>
+              )}
+            </div>
+          )}
+
+          {/* Legacy single-image view (when matrix mode is off) */}
+          {!isMatrixMode && generatedImages.length > 0 && (
             <>
               <div className="space-y-4">
                 <GlassCard className="p-4">

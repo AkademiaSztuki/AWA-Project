@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 
 interface GenerationRequest {
   prompt: string;
@@ -24,6 +25,46 @@ interface GenerationResponse {
   };
   processing_time: number;
   cost_estimate: number;
+}
+
+/**
+ * Request for generating multiple images from different sources (5-image matrix)
+ */
+interface MultiSourceGenerationRequest {
+  prompts: Array<{
+    source: GenerationSource;
+    prompt: string;
+  }>;
+  base_image?: string;
+  style: string;
+  parameters: {
+    strength: number;
+    steps: number;
+    guidance: number;
+    image_size?: number;
+  };
+}
+
+/**
+ * Result of a single source generation
+ */
+interface SourceGenerationResult {
+  source: GenerationSource;
+  image: string; // base64
+  prompt: string;
+  processing_time: number;
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Response from multi-source generation (5-image matrix)
+ */
+interface MultiSourceGenerationResponse {
+  results: SourceGenerationResult[];
+  total_processing_time: number;
+  successful_count: number;
+  failed_count: number;
 }
 
 interface RoomAnalysisRequestMetadata {
@@ -527,8 +568,123 @@ export const useModalAPI = () => {
     }
   }, []);
 
+  /**
+   * Generates images for multiple sources in parallel (5-image matrix).
+   * Each source gets one image generated with its specific prompt.
+   */
+  const generateFiveImagesParallel = useCallback(async (
+    request: MultiSourceGenerationRequest
+  ): Promise<MultiSourceGenerationResponse> => {
+    setIsLoading(true);
+    setError(null);
+
+    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    
+    if (apiBase.includes('-dev')) {
+      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    }
+
+    if (!apiBase) {
+      const msg = 'Brak konfiguracji ENDPOINTU generacji (NEXT_PUBLIC_MODAL_API_URL)';
+      setError(msg);
+      setIsLoading(false);
+      throw new Error(msg);
+    }
+
+    const startTime = Date.now();
+    const results: SourceGenerationResult[] = [];
+
+    console.log(`[5-Image Matrix] Generating ${request.prompts.length} images in parallel...`);
+
+    try {
+      // Generate all images in parallel
+      const generationPromises = request.prompts.map(async ({ source, prompt }) => {
+        const sourceStartTime = Date.now();
+        
+        try {
+          console.log(`[5-Image Matrix] Starting generation for source: ${source}`);
+          
+          const generationRequest: GenerationRequest = {
+            prompt,
+            base_image: request.base_image,
+            style: request.style,
+            modifications: [],
+            strength: request.parameters.strength,
+            steps: request.parameters.steps,
+            guidance: request.parameters.guidance,
+            num_images: 1, // One image per source
+            image_size: request.parameters.image_size || 1024
+          };
+
+          const response = await fetch(`${apiBase}/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(generationRequest),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          }
+
+          const result: GenerationResponse = await response.json();
+          const processingTime = Date.now() - sourceStartTime;
+
+          console.log(`[5-Image Matrix] Source ${source} completed in ${processingTime}ms`);
+
+          return {
+            source,
+            image: result.images[0],
+            prompt,
+            processing_time: processingTime,
+            success: true
+          } as SourceGenerationResult;
+
+        } catch (err: any) {
+          const processingTime = Date.now() - sourceStartTime;
+          console.error(`[5-Image Matrix] Source ${source} failed:`, err);
+          
+          return {
+            source,
+            image: '',
+            prompt,
+            processing_time: processingTime,
+            success: false,
+            error: err.message || 'Unknown error'
+          } as SourceGenerationResult;
+        }
+      });
+
+      // Wait for all generations to complete
+      const allResults = await Promise.all(generationPromises);
+      results.push(...allResults);
+
+      const totalTime = Date.now() - startTime;
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      console.log(`[5-Image Matrix] All generations complete. Success: ${successCount}, Failed: ${failCount}, Total time: ${totalTime}ms`);
+
+      setIsLoading(false);
+
+      return {
+        results,
+        total_processing_time: totalTime,
+        successful_count: successCount,
+        failed_count: failCount
+      };
+
+    } catch (err: any) {
+      console.error('[5-Image Matrix] Fatal error:', err);
+      setError(err.message || 'Wystąpił nieznany błąd.');
+      setIsLoading(false);
+      throw err;
+    }
+  }, []);
+
   return {
     generateImages,
+    generateFiveImagesParallel,
     analyzeRoom,
     generateLLMComment,
     analyzeInspiration,
@@ -537,4 +693,13 @@ export const useModalAPI = () => {
     error,
     setError,
   };
+};
+
+// Export types for external use
+export type {
+  GenerationRequest,
+  GenerationResponse,
+  MultiSourceGenerationRequest,
+  MultiSourceGenerationResponse,
+  SourceGenerationResult
 };

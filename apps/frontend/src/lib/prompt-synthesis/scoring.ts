@@ -47,13 +47,22 @@ export interface PromptInputs {
     natureMetaphor: string;      // Selected nature place
   };
 
-  // Big Five Personality (from IPIP-60)
+  // Big Five Personality (from IPIP-NEO-120 with facets)
   personality?: {
-    openness: number;            // 0-100
-    conscientiousness: number;   // 0-100
-    extraversion: number;        // 0-100
-    agreeableness: number;       // 0-100
-    neuroticism: number;         // 0-100
+    // Domain scores (0-100)
+    openness: number;
+    conscientiousness: number;
+    extraversion: number;
+    agreeableness: number;
+    neuroticism: number;
+    // IPIP-NEO-120 facets (0-100 each, 6 per domain)
+    facets?: {
+      O: { [key: number]: number }; // O1-O6: Fantasy, Aesthetics, Feelings, Actions, Ideas, Values
+      C: { [key: number]: number }; // C1-C6: Competence, Order, Dutifulness, Achievement, Self-Discipline, Deliberation
+      E: { [key: number]: number }; // E1-E6: Warmth, Gregariousness, Assertiveness, Activity, Excitement-Seeking, Positive Emotions
+      A: { [key: number]: number }; // A1-A6: Trust, Straightforwardness, Altruism, Compliance, Modesty, Tender-Mindedness
+      N: { [key: number]: number }; // N1-N6: Anxiety, Anger, Depression, Self-Consciousness, Immoderation, Vulnerability
+    };
   };
 
   // Inspiration Images (from VLM analysis)
@@ -149,9 +158,35 @@ export interface PromptWeights {
   // Complexity & Detail
   visualComplexity: number;      // 0-1
   
-  // Personality-driven preferences
+  // Personality-driven preferences (domain-based)
   storageNeeds: number;          // 0-1 (from conscientiousness)
   harmonyLevel: number;          // 0-1 (from agreeableness + low neuroticism)
+  
+  // Facet-driven preferences (IPIP-NEO-120 specific)
+  facetPreferences: {
+    aestheticSensitivity: number;   // 0-1 (from O2 Aesthetics)
+    orderPreference: number;        // 0-1 (from C2 Order)
+    warmthPreference: number;       // 0-1 (from E1 Warmth)
+    socialOpenness: number;         // 0-1 (from E2 Gregariousness)
+    excitementSeeking: number;      // 0-1 (from E5 Excitement-Seeking)
+    tenderMindedness: number;       // 0-1 (from A6 Tender-Mindedness)
+    anxietyLevel: number;           // 0-1 (from N1 Anxiety)
+    vulnerabilityLevel: number;     // 0-1 (from N6 Vulnerability)
+  };
+  
+  // Design implications from facets
+  designImplications: {
+    eclecticMix: boolean;           // High O2 + low C2
+    minimalistTendency: boolean;    // High C2 + low O1
+    cozyTextures: boolean;          // High E1 + high A6
+    boldColors: boolean;            // High E5 + high O2
+    softTextures: boolean;          // High A6
+    organicShapes: boolean;         // High A6 + high O2
+    calmingElements: boolean;       // High N1 (needs calming)
+    groundingElements: boolean;     // High N6 (needs stability)
+    enclosedSpaces: boolean;        // Low E2 + high N1
+    openPlanPreference: boolean;    // High E2 + high E
+  };
   
   // Special Considerations
   addressPainPoints: string[];
@@ -165,14 +200,15 @@ export function calculatePromptWeights(inputs: PromptInputs): PromptWeights {
   // 1. PRS GAP ANALYSIS (highest weight: 25%)
   const prsWeights = analyzePRSGap(inputs.prsCurrent, inputs.prsTarget);
   
-  // 2. STYLE INTEGRATION (implicit 60% + explicit 40%)
-  const styleWeights = integrateStylePreferences(inputs.aestheticDNA);
+  // 2. STYLE INTEGRATION (implicit 60% + explicit 40%, with personality fallback)
+  const styleWeights = integrateStylePreferences(inputs.aestheticDNA, inputs.personality);
   
-  // 3. COLOR INTEGRATION
+  // 3. COLOR INTEGRATION (with personality fallback)
   const colorWeights = integrateColorPreferences(
     inputs.aestheticDNA,
     inputs.roomVisualDNA,
-    inputs.sensory
+    inputs.sensory,
+    inputs.personality
   );
   
   // 4. BIOPHILIA SCORING
@@ -205,8 +241,9 @@ export function calculatePromptWeights(inputs: PromptInputs): PromptWeights {
     inputs.householdContext
   );
   
-  // 8. BIG FIVE PERSONALITY INTEGRATION
+  // 8. BIG FIVE PERSONALITY INTEGRATION (domains + facets)
   const personalityWeights = mapBigFiveToPromptWeights(inputs.personality);
+  const facetWeights = mapBigFiveFacetsToDesignPreferences(inputs.personality);
   
   // 9. INSPIRATION TAGS INTEGRATION
   const inspirationWeights = integrateInspirationTags(inputs.inspirations);
@@ -254,6 +291,12 @@ export function calculatePromptWeights(inputs: PromptInputs): PromptWeights {
     storageNeeds: personalityWeights.storageNeeds,
     harmonyLevel: personalityWeights.harmonyLevel,
     
+    // Facet-driven preferences
+    facetPreferences: facetWeights.facetPreferences,
+    
+    // Design implications from facets
+    designImplications: facetWeights.designImplications,
+    
     // Pain points
     addressPainPoints: inputs.painPoints
   };
@@ -286,23 +329,41 @@ function analyzePRSGap(
   };
 }
 
-function integrateStylePreferences(aestheticDNA: PromptInputs['aestheticDNA']): {
+function integrateStylePreferences(
+  aestheticDNA: PromptInputs['aestheticDNA'],
+  personality?: PromptInputs['personality']
+): {
   dominantStyle: string;
   confidence: number;
   materials: string[];
   complexity: number;
 } {
+  // Check if we have aesthetic data
+  const hasImplicitStyles = aestheticDNA.implicit.dominantStyles.length > 0;
+  const hasExplicitPalette = !!aestheticDNA.explicit.selectedPalette;
+  
+  // If no aesthetic data, derive from personality
+  if (!hasImplicitStyles && !hasExplicitPalette && personality) {
+    return deriveStyleFromPersonality(personality);
+  }
+  
   // Implicit preferences have 60% weight (behavioral data)
   // Explicit preferences have 40% weight (stated preferences)
-  
   const implicitWeight = 0.6;
   const explicitWeight = 0.4;
   
-  // Style: Take implicit first (more authentic)
-  const dominantStyle = aestheticDNA.implicit.dominantStyles[0] || 'modern';
+  // Style: Take implicit first (more authentic), then explicit, then 'modern' fallback
+  let dominantStyle = aestheticDNA.implicit.dominantStyles[0];
+  if (!dominantStyle && aestheticDNA.explicit.selectedPalette) {
+    // Try to derive style from palette name
+    dominantStyle = aestheticDNA.explicit.selectedPalette.toLowerCase();
+  }
+  if (!dominantStyle) {
+    dominantStyle = 'modern'; // Ultimate fallback
+  }
   
   // Confidence: Higher if implicit and explicit align
-  const confidence = 0.8; // TODO: Calculate based on alignment
+  const confidence = hasImplicitStyles ? 0.8 : 0.5;
   
   // Materials: Combine implicit (60%) + explicit (40%)
   const materials = [
@@ -324,16 +385,162 @@ function integrateStylePreferences(aestheticDNA: PromptInputs['aestheticDNA']): 
   };
 }
 
+/**
+ * Derives style preferences purely from Big Five personality traits.
+ * Used when no aesthetic data is available (Personality source).
+ */
+function deriveStyleFromPersonality(personality: NonNullable<PromptInputs['personality']>): {
+  dominantStyle: string;
+  confidence: number;
+  materials: string[];
+  complexity: number;
+} {
+  const O = personality.openness / 100;      // 0-1
+  const C = personality.conscientiousness / 100;
+  const E = personality.extraversion / 100;
+  const A = personality.agreeableness / 100;
+  const N = personality.neuroticism / 100;
+  
+  // STYLE MAPPING based on Big Five combinations
+  let dominantStyle: string;
+  
+  if (O > 0.7 && C < 0.4) {
+    // High Openness + Low Conscientiousness = Bohemian, Eclectic
+    dominantStyle = 'bohemian eclectic';
+  } else if (O > 0.6 && E > 0.6) {
+    // High Openness + High Extraversion = Bold, Maximalist
+    dominantStyle = 'maximalist artistic';
+  } else if (C > 0.7 && O < 0.4) {
+    // High Conscientiousness + Low Openness = Minimalist, Clean
+    dominantStyle = 'minimalist clean';
+  } else if (C > 0.6 && A > 0.6) {
+    // High Conscientiousness + High Agreeableness = Scandinavian
+    dominantStyle = 'Scandinavian';
+  } else if (N > 0.6 && A > 0.5) {
+    // High Neuroticism + High Agreeableness = Cozy, Hygge
+    dominantStyle = 'cozy hygge';
+  } else if (E < 0.4 && N > 0.5) {
+    // Low Extraversion + High Neuroticism = Cocooning, Private
+    dominantStyle = 'cozy sanctuary';
+  } else if (E > 0.7 && A > 0.5) {
+    // High Extraversion + High Agreeableness = Open, Social
+    dominantStyle = 'open contemporary';
+  } else if (O > 0.5 && N < 0.4) {
+    // High Openness + Low Neuroticism = Modern, Confident
+    dominantStyle = 'modern confident';
+  } else {
+    // Balanced = Modern Classic
+    dominantStyle = 'modern classic';
+  }
+  
+  // MATERIALS based on personality
+  const materials: string[] = [];
+  
+  if (A > 0.6 || N > 0.5) {
+    // High Agreeableness or Neuroticism = soft, natural
+    materials.push('soft textiles', 'natural wood');
+  }
+  if (C > 0.6) {
+    // High Conscientiousness = clean, organized
+    materials.push('glass', 'polished surfaces');
+  }
+  if (O > 0.6) {
+    // High Openness = varied, interesting
+    materials.push('mixed textures', 'artisanal elements');
+  }
+  if (E > 0.6) {
+    // High Extraversion = bold, statement
+    materials.push('brass', 'bold accents');
+  }
+  
+  // COMPLEXITY from Openness
+  const complexity = O;
+  
+  return {
+    dominantStyle,
+    confidence: 0.7, // Personality-derived has moderate confidence
+    materials: materials.slice(0, 3),
+    complexity
+  };
+}
+
+/**
+ * Derives colors purely from Big Five personality traits.
+ * Used when no aesthetic data is available.
+ */
+function deriveColorsFromPersonality(personality: NonNullable<PromptInputs['personality']>): {
+  palette: string[];
+  temperature: number;
+} {
+  const O = personality.openness / 100;
+  const C = personality.conscientiousness / 100;
+  const E = personality.extraversion / 100;
+  const A = personality.agreeableness / 100;
+  const N = personality.neuroticism / 100;
+  
+  const colors: string[] = [];
+  
+  // Base colors from personality
+  if (E > 0.6) {
+    // High Extraversion = warm, vibrant
+    colors.push('warm coral', 'sunny yellow');
+  } else if (E < 0.4) {
+    // Low Extraversion = cool, muted
+    colors.push('soft gray', 'muted blue');
+  }
+  
+  if (O > 0.6) {
+    // High Openness = varied, bold
+    colors.push('deep teal', 'rich burgundy');
+  } else if (O < 0.4) {
+    // Low Openness = neutral, safe
+    colors.push('beige', 'cream');
+  }
+  
+  if (N > 0.6) {
+    // High Neuroticism = calming, nature
+    colors.push('sage green', 'sky blue');
+  }
+  
+  if (A > 0.6) {
+    // High Agreeableness = soft, harmonious
+    colors.push('blush pink', 'soft lavender');
+  }
+  
+  if (C > 0.6) {
+    // High Conscientiousness = clean, organized
+    colors.push('crisp white', 'charcoal');
+  }
+  
+  // Temperature: Extraversion drives warmth
+  const temperature = E * 0.6 + A * 0.2 + (1 - N) * 0.2;
+  
+  return {
+    palette: colors.length > 0 ? colors.slice(0, 4) : ['neutral gray', 'white', 'natural wood tones'],
+    temperature
+  };
+}
+
 function integrateColorPreferences(
   aestheticDNA: PromptInputs['aestheticDNA'],
   roomVisualDNA: PromptInputs['roomVisualDNA'],
-  sensory: PromptInputs['sensory']
+  sensory: PromptInputs['sensory'],
+  personality?: PromptInputs['personality']
 ): {
   palette: string[];
   temperature: number;
 } {
+  // Check if we have any color data
+  const hasRoomColors = roomVisualDNA.colors.length > 0;
+  const hasImplicitColors = aestheticDNA.implicit.colors.length > 0;
+  
+  // If no color data, derive from personality
+  if (!hasRoomColors && !hasImplicitColors && personality) {
+    return deriveColorsFromPersonality(personality);
+  }
+  
   // Prioritize room-specific visual DNA (most recent, most relevant)
-  const colors = roomVisualDNA.colors.length > 0
+  const colors = hasRoomColors
     ? roomVisualDNA.colors
     : aestheticDNA.implicit.colors;
   
@@ -351,7 +558,7 @@ function integrateColorPreferences(
   );
   
   return {
-    palette: colors,
+    palette: colors.length > 0 ? colors : ['neutral tones'],
     temperature
   };
 }
@@ -556,6 +763,133 @@ function mapBigFiveToPromptWeights(personality: PromptInputs['personality']): {
     storageNeeds: Math.max(0, Math.min(1, storageNeeds)),
     lightingPreferences: Math.max(0, Math.min(1, lightingPreferences)),
     harmonyLevel: Math.max(0, Math.min(1, harmonyLevel))
+  };
+}
+
+// =========================
+// BIG FIVE FACETS MAPPING (IPIP-NEO-120)
+// =========================
+
+/**
+ * Maps IPIP-NEO-120 facets to specific design preferences.
+ * Facets provide much more granular insight than domain scores alone.
+ * 
+ * Key facets for interior design:
+ * - O2 (Aesthetics): Appreciation for art, beauty, sensitivity to design
+ * - C2 (Order): Preference for organization, tidiness, structure
+ * - E1 (Warmth): Friendliness, affection, cozy preferences
+ * - E2 (Gregariousness): Social nature, open spaces preference
+ * - E5 (Excitement-Seeking): Bold choices, dynamic patterns
+ * - A6 (Tender-Mindedness): Soft textures, gentle aesthetics
+ * - N1 (Anxiety): Need for calming elements, nature
+ * - N6 (Vulnerability): Need for grounding, enclosed safe spaces
+ */
+function mapBigFiveFacetsToDesignPreferences(personality: PromptInputs['personality']): {
+  facetPreferences: PromptWeights['facetPreferences'];
+  designImplications: PromptWeights['designImplications'];
+} {
+  // Default values when no personality data available
+  const defaultFacetPreferences = {
+    aestheticSensitivity: 0.5,
+    orderPreference: 0.5,
+    warmthPreference: 0.5,
+    socialOpenness: 0.5,
+    excitementSeeking: 0.5,
+    tenderMindedness: 0.5,
+    anxietyLevel: 0.5,
+    vulnerabilityLevel: 0.5
+  };
+  
+  const defaultDesignImplications = {
+    eclecticMix: false,
+    minimalistTendency: false,
+    cozyTextures: false,
+    boldColors: false,
+    softTextures: false,
+    organicShapes: false,
+    calmingElements: false,
+    groundingElements: false,
+    enclosedSpaces: false,
+    openPlanPreference: false
+  };
+  
+  if (!personality) {
+    return {
+      facetPreferences: defaultFacetPreferences,
+      designImplications: defaultDesignImplications
+    };
+  }
+  
+  const facets = personality.facets;
+  
+  // Extract facet scores (with fallback to domain-based estimation)
+  const getFacetScore = (domain: 'O' | 'C' | 'E' | 'A' | 'N', facetNum: number, fallbackDomain: number): number => {
+    if (facets && facets[domain] && typeof facets[domain][facetNum] === 'number') {
+      return facets[domain][facetNum] / 100; // Convert 0-100 to 0-1
+    }
+    // Fallback: use domain score as estimation
+    return fallbackDomain / 100;
+  };
+  
+  // Extract key facets
+  const O1_Fantasy = getFacetScore('O', 1, personality.openness);
+  const O2_Aesthetics = getFacetScore('O', 2, personality.openness);
+  const C2_Order = getFacetScore('C', 2, personality.conscientiousness);
+  const E1_Warmth = getFacetScore('E', 1, personality.extraversion);
+  const E2_Gregariousness = getFacetScore('E', 2, personality.extraversion);
+  const E5_ExcitementSeeking = getFacetScore('E', 5, personality.extraversion);
+  const A6_TenderMindedness = getFacetScore('A', 6, personality.agreeableness);
+  const N1_Anxiety = getFacetScore('N', 1, personality.neuroticism);
+  const N6_Vulnerability = getFacetScore('N', 6, personality.neuroticism);
+  
+  // Build facet preferences
+  const facetPreferences = {
+    aestheticSensitivity: O2_Aesthetics,
+    orderPreference: C2_Order,
+    warmthPreference: E1_Warmth,
+    socialOpenness: E2_Gregariousness,
+    excitementSeeking: E5_ExcitementSeeking,
+    tenderMindedness: A6_TenderMindedness,
+    anxietyLevel: N1_Anxiety,
+    vulnerabilityLevel: N6_Vulnerability
+  };
+  
+  // Derive design implications from facet combinations
+  const designImplications = {
+    // High O2 (aesthetics) + low C2 (order) = eclectic, varied mix
+    eclecticMix: O2_Aesthetics > 0.6 && C2_Order < 0.4,
+    
+    // High C2 (order) + low O1 (fantasy) = minimalist, clean lines
+    minimalistTendency: C2_Order > 0.6 && O1_Fantasy < 0.4,
+    
+    // High E1 (warmth) + high A6 (tender) = cozy, soft textures
+    cozyTextures: E1_Warmth > 0.5 && A6_TenderMindedness > 0.5,
+    
+    // High E5 (excitement) + high O2 (aesthetics) = bold colors, dynamic
+    boldColors: E5_ExcitementSeeking > 0.6 && O2_Aesthetics > 0.5,
+    
+    // High A6 (tender-mindedness) = soft textures preference
+    softTextures: A6_TenderMindedness > 0.6,
+    
+    // High A6 + high O2 = organic, flowing shapes
+    organicShapes: A6_TenderMindedness > 0.5 && O2_Aesthetics > 0.5,
+    
+    // High N1 (anxiety) = needs calming elements, nature
+    calmingElements: N1_Anxiety > 0.6,
+    
+    // High N6 (vulnerability) = needs grounding, stability
+    groundingElements: N6_Vulnerability > 0.6,
+    
+    // Low E2 (gregariousness) + high N1 (anxiety) = enclosed, cozy spaces
+    enclosedSpaces: E2_Gregariousness < 0.4 && N1_Anxiety > 0.5,
+    
+    // High E2 (gregariousness) + high E = open plan, social spaces
+    openPlanPreference: E2_Gregariousness > 0.6 && (personality.extraversion / 100) > 0.5
+  };
+  
+  return {
+    facetPreferences,
+    designImplications
   };
 }
 
