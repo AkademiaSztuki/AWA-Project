@@ -41,11 +41,11 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'initial':
-        return 'from-blue-400 to-cyan-400';
+        return 'from-silver-400 to-platinum-100';
       case 'micro':
-        return 'from-purple-400 to-pink-400';
+        return 'from-champagne to-gold-400';
       case 'macro':
-        return 'from-orange-400 to-red-400';
+        return 'from-gold-500 to-gold-600';
       default:
         return 'from-gray-400 to-gray-500';
     }

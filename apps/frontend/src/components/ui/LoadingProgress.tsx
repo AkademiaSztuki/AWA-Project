@@ -17,20 +17,20 @@ const STAGE_CONFIG = {
   1: {
     icon: Wand2,
     title: "Przygotowuję środowisko AI",
-    color: "from-blue-400 to-cyan-400",
-    bgColor: "from-blue-500/20 to-cyan-500/20",
+    color: "from-silver-400 to-platinum-100",
+    bgColor: "from-silver-500/20 to-platinum-100/20",
   },
   2: {
     icon: Sparkles,
     title: "Generuję wizualizacje",
-    color: "from-purple-400 to-pink-400",
-    bgColor: "from-purple-500/20 to-pink-500/20",
+    color: "from-gold-400 to-champagne",
+    bgColor: "from-gold-500/20 to-champagne/20",
   },
   3: {
     icon: CheckCircle,
     title: "Finalizuję obrazy",
-    color: "from-green-400 to-emerald-400",
-    bgColor: "from-green-500/20 to-emerald-500/20",
+    color: "from-gold-500 to-gold-600",
+    bgColor: "from-gold-500/20 to-gold-600/20",
   },
 };
 
@@ -72,7 +72,7 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
                   }}
                   className={`w-12 h-12 rounded-full flex items-center justify-center ${
                     isCompleted 
-                      ? 'bg-gradient-to-r from-green-400 to-emerald-400' 
+                      ? 'bg-gradient-to-r from-gold-500 to-gold-600' 
                       : isActive
                       ? `bg-gradient-to-r ${stageConfig.bgColor}`
                       : 'bg-white/10'
@@ -88,7 +88,7 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
                 
                 {stage < 3 && (
                   <div className={`w-16 h-1 mx-2 rounded-full ${
-                    isCompleted ? 'bg-green-400' : 'bg-white/20'
+                    isCompleted ? 'bg-gold-500' : 'bg-white/20'
                   }`} />
                 )}
               </div>
@@ -159,7 +159,7 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
                 repeat: Infinity,
                 delay: i * 0.2,
               }}
-              className="w-2 h-2 rounded-full bg-gold"
+              className="w-2 h-2 rounded-full bg-gold-500"
             />
           ))}
         </div>

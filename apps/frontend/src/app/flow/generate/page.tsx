@@ -751,17 +751,13 @@ export default function GeneratePage() {
       }
       
       if (rating !== 'is_my_interior') {
-        const allRatingsComplete = ['aesthetic_match', 'character', 'harmony'].every(
-          (key) => updatedRatings[key as keyof typeof updatedRatings] > 0
-        );
+        const allRatingsComplete = updatedRatings.aesthetic_match > 0;
+        
         if (allRatingsComplete) {
           setHasCompletedRatings(true);
           
-          // Calculate average rating for feedback
-          const avgRating = (['aesthetic_match', 'character', 'harmony'].reduce(
-            (sum, key) => sum + (updatedRatings[key as keyof typeof updatedRatings] || 0), 
-            0
-          ) / 3);
+          // Calculate rating for feedback
+          const avgRating = updatedRatings.aesthetic_match;
           
           if (avgRating >= 6) {
             setFeedbackMessage("Świetny wybór! Ten obraz ma doskonałe oceny. Możesz go zapisać lub spróbować drobnych modyfikacji.");
@@ -812,9 +808,7 @@ export default function GeneratePage() {
     setSelectedImage(image);
     
     const hasInteriorRating = image.ratings.is_my_interior > 0;
-    const hasAllRatings = image.ratings.aesthetic_match > 0 && 
-                         image.ratings.character > 0 && 
-                         image.ratings.harmony > 0;
+    const hasAllRatings = image.ratings.aesthetic_match > 0;
     
     setHasAnsweredInteriorQuestion(hasInteriorRating);
     setHasCompletedRatings(hasAllRatings);
@@ -828,18 +822,17 @@ export default function GeneratePage() {
   return (
     <div className="min-h-screen flex flex-col w-full relative">
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
-      <div className="flex-1 p-8">
+      <div className="flex-1 px-8 pb-8 pt-2">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="space-y-6"
+          className="space-y-4"
         >
           <div className="text-center">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent">
               Twoje Wymarzone Wnętrza
             </h1>
-            <p className="text-lg text-graphite">Generowane przez AI na podstawie Twojego wizualnego DNA</p>
           </div>
 
           {(isLoading || !isApiReady) && (
@@ -871,16 +864,7 @@ export default function GeneratePage() {
 
           {generatedImages.length > 0 && (
             <>
-              {/* Generation History */}
-              {generationHistory.length > 0 && (
-                <GenerationHistory
-                  history={generationHistory}
-                  currentIndex={currentHistoryIndex}
-                  onNodeClick={handleHistoryNodeClick}
-                />
-              )}
-
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <GlassCard className="p-4">
                   {selectedImage && (
                     <div className="space-y-4">
@@ -991,12 +975,12 @@ export default function GeneratePage() {
                         </AnimatePresence>
 
                         <AnimatePresence>
-                          {hasAnsweredInteriorQuestion && !hasCompletedRatings && (
+                          {hasAnsweredInteriorQuestion && !hasCompletedRatings && selectedImage?.id !== 'original-uploaded-image' && (
                             <motion.div
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: -20 }}
-                              transition={{ duration: 0.5 }}
+                              transition={{ duration: 0.8, ease: "easeInOut" }}
                               className="space-y-6"
                             >
                               <h4 className="font-semibold text-graphite text-lg">Oceń to wnętrze:</h4>
@@ -1006,18 +990,6 @@ export default function GeneratePage() {
                                   left: 'Nietrafiona',
                                   mid: 'Zgodność z gustem',
                                   right: 'Idealna',
-                                },
-                                {
-                                  key: 'character',
-                                  left: 'Nijaka',
-                                  mid: 'Z charakterem',
-                                  right: 'Pełna charakteru',
-                                },
-                                {
-                                  key: 'harmony',
-                                  left: 'Chaotyczna',
-                                  mid: 'Harmonijna',
-                                  right: 'Idealna harmonia',
                                 },
                               ].map(({ key, left, mid, right }) => (
                                 <div key={key} className="border-b border-gray-200/50 pb-4 last:border-b-0">
@@ -1045,7 +1017,7 @@ export default function GeneratePage() {
                       </div>
 
                       <AnimatePresence>
-                        {hasCompletedRatings && (
+                        {(hasCompletedRatings || selectedImage?.id === 'original-uploaded-image') && (
                           <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -1069,9 +1041,19 @@ export default function GeneratePage() {
 
                             <GlassButton 
                               onClick={() => {
-                                const originalImage = generatedImages.find(img => img.parameters?.modificationType === 'initial');
-                                if (originalImage) {
-                                  handleImageSelect(originalImage);
+                                const roomImage = (sessionData as any)?.roomImage;
+                                if (roomImage) {
+                                  const originalImg: GeneratedImage = {
+                                    id: 'original-uploaded-image',
+                                    url: roomImage.startsWith('data:') ? roomImage : `data:image/jpeg;base64,${roomImage}`,
+                                    base64: roomImage,
+                                    prompt: 'Oryginalne zdjęcie',
+                                    parameters: { modificationType: 'original' },
+                                    ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 5 },
+                                    isFavorite: false,
+                                    createdAt: 0
+                                  };
+                                  handleImageSelect(originalImg);
                                 }
                               }} 
                               variant="secondary" 
@@ -1170,6 +1152,17 @@ export default function GeneratePage() {
                     )}
                   </AnimatePresence>
                 </div>
+
+                {/* Generation History - Moved to bottom */}
+                {generationHistory.length > 0 && (
+                  <div className="mt-12 mb-8">
+                    <GenerationHistory
+                      history={generationHistory}
+                      currentIndex={currentHistoryIndex}
+                      onNodeClick={handleHistoryNodeClick}
+                    />
+                  </div>
+                )}
             </>
           )}
         </motion.div>
