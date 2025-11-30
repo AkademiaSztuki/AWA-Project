@@ -1,7 +1,7 @@
 """
-Aura Modal Backend - FLUX 1 Kontext Integration
+Aura Modal Backend - FLUX 2 Dev Integration
 FastAPI endpoints for interior design image generation
-Based on official Modal Flux Kontext example
+Using FLUX 2 Dev model from Hugging Face
 """
 
 from io import BytesIO
@@ -22,40 +22,55 @@ import requests
 # Modal configuration
 app = modal.App("aura-flux-api")
 
-# Model configuration - using official settings
-MODEL_NAME = "black-forest-labs/FLUX.1-Kontext-dev"
+# Model configuration - FLUX.2 Dev 4-bit quantized (fits in 24GB L4)
+MODEL_NAME = "diffusers/FLUX.2-dev-bnb-4bit"
 
 # Image configuration
 CACHE_DIR = "/cache"
 volumes = {CACHE_DIR: modal.Volume.from_name("aura-flux-cache", create_if_missing=True)}
 
-# Modal image with dependencies
+# Modal image with dependencies - FLUX.2 CONFIG
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("git", "ffmpeg", "libsndfile1")  # Added audio dependencies
-    .pip_install("uv")
-    .run_commands(
-        "uv pip install --system --compile-bytecode --index-strategy unsafe-best-match "
-        "accelerate~=1.8.1 "
-        "git+https://github.com/huggingface/diffusers.git@00f95b9755718aabb65456e791b8408526ae6e76 "
-        "huggingface-hub[hf-transfer]~=0.33.1 "
-        "Pillow~=11.2.1 safetensors~=0.5.3 transformers>=4.50.0 sentencepiece~=0.2.0 einops timm "
-        "torch==2.7.1 torchaudio==2.7.1 optimum-quanto==0.2.7 "
-        "fastapi~=0.110.0 pydantic~=2.7.0 uvicorn[standard]~=0.29.0 "
-        "soundfile librosa av librosa[display] "  # Added audio packages for MiniCPM-o-2.6
-        "vector-quantize-pytorch vocos "  # Added TTS packages for MiniCPM-o-2.6
-        "--extra-index-url https://download.pytorch.org/whl/cu128"
+    .apt_install("git", "ffmpeg", "libsndfile1")
+    .pip_install(
+        # Core ML packages
+        "torch==2.7.1",
+        "torchaudio==2.7.1", 
+        extra_index_url="https://download.pytorch.org/whl/cu128"
+    )
+    .pip_install(
+        # Install latest diffusers from main branch (has Flux2Pipeline for FLUX.2)
+        "git+https://github.com/huggingface/diffusers.git",
+        "accelerate>=1.8.1",
+        "huggingface-hub[hf-transfer]>=0.34.0",
+        "transformers>=4.52.0",
+        "safetensors>=0.5.3",
+        "sentencepiece>=0.2.0",
+        "Pillow>=11.2.1",
+        "einops",
+        "timm",
+        "bitsandbytes>=0.45.0",  # For 4-bit quantization
+    )
+    .pip_install(
+        # API packages
+        "fastapi>=0.110.0",
+        "pydantic>=2.7.0",
+        "uvicorn[standard]>=0.29.0",
+        "soundfile",
+        "librosa",
+        "av",
     )
     .env({
-        "HF_HUB_ENABLE_HF_TRANSFER": "1",  # Allows faster model downloads
-        "HF_HOME": "/cache",  # Fixed: use string literal instead of str(CACHE_DIR)
+        "HF_HUB_ENABLE_HF_TRANSFER": "1",
+        "HF_HOME": "/cache",
     })
 )
 
 # Import statements for Modal
 with image.imports():
     import torch
-    from diffusers import FluxKontextPipeline
+    from diffusers import Flux2Pipeline  # For FLUX.2-dev
     from diffusers.utils import load_image
     from transformers import AutoProcessor, AutoModelForCausalLM, AutoTokenizer
     from PIL import Image
@@ -64,10 +79,11 @@ with image.imports():
 class GenerationRequest(BaseModel):
     prompt: str
     base_image: Optional[str] = None  # base64 encoded input image for image-to-image
-    negative_prompt: str = ""
+    inspiration_images: Optional[List[str]] = None  # Additional reference images for multi-reference (base64)
+    negative_prompt: str = ""  # Not used in FLUX 2, kept for compatibility
     num_images: int = 1
-    guidance_scale: float = 3.5
-    num_inference_steps: int = 20
+    guidance_scale: float = 4.0  # FLUX 2 default
+    num_inference_steps: int = 35  # FLUX 2 recommended: 28-50
     width: int = 1024
     height: int = 1024
     seed: Optional[int] = None
@@ -189,17 +205,17 @@ def _call_groq_for_comment(room_type: str, room_description: str, context: str =
 
 @app.cls(
     image=image,
-    gpu="H100",  # Changed from B200 to H100 as specified in your original code
+    gpu="A100",  # A100 (40GB) - 4-bit FLUX.2 needs ~30GB
     volumes=volumes,
     secrets=[modal.Secret.from_name("huggingface-secret-new")],
-    scaledown_window=240  # Stay online for 4 minutes to avoid cold starts
+    scaledown_window=120  # 2 minutes to save costs
 )
-class FluxKontextModel:
+class Flux2Model:
     @modal.enter()
     def enter(self):
-        """Initialize FLUX Kontext model"""
+        """Initialize FLUX 2 Dev model"""
         try:
-            print("Downloading FLUX Kontext model if necessary...")
+            print("Downloading FLUX 2 Dev model if necessary...")
             
             # Set up secrets
             import os
@@ -209,67 +225,74 @@ class FluxKontextModel:
             self.seed = 42  # Default seed for consistency
             print(f"Using device: {self.device}")
             
-            # Load model with official settings
-            self.pipe = FluxKontextPipeline.from_pretrained(
+            # Load FLUX.2 Dev 4-bit quantized model (fits in 24GB L4)
+            print("Loading FLUX.2 Dev 4-bit model...")
+            self.pipe = Flux2Pipeline.from_pretrained(
                 MODEL_NAME,
                 torch_dtype=torch.bfloat16,
                 cache_dir=CACHE_DIR,
-                use_auth_token=self.hf_token,
+                token=self.hf_token,
             ).to(self.device)
             
-            print("FLUX Kontext model loaded successfully!")
+            print("FLUX.2 Dev 4-bit model loaded successfully!")
         except Exception as e:
-            print(f"Error loading FLUX Kontext model: {str(e)}")
+            print(f"Error loading FLUX Dev model: {str(e)}")
             raise e
 
     @modal.method()
-    def generate_images(self, request: GenerationRequest, image_bytes: bytes = None) -> dict:
-        """Generate images using FLUX Kontext - IMAGE-TO-IMAGE MODE"""
+    def generate_images(self, request: GenerationRequest, image_bytes: bytes = None, inspiration_images_bytes: Optional[List[bytes]] = None) -> dict:
+        """Generate images using FLUX 2 Dev - IMAGE-TO-IMAGE MODE with optional multi-reference"""
         try:
-            print(f"Generating {request.num_images} images with prompt: {request.prompt[:50]}...")
+            print(f"Generating {request.num_images} images with prompt: {request.prompt[:100]}...")
             
             if not image_bytes:
-                raise ValueError("FLUX Kontext requires a base image for image-to-image editing!")
+                raise ValueError("FLUX 2 requires a base image for image-to-image editing!")
             
-            # Validate prompt length (CLIP limit is 77 tokens)
+            # FLUX 2 supports much longer prompts (32K tokens), so we just log length
             prompt_tokens = len(request.prompt.split())
-            print(f"[PROMPT] Token count: {prompt_tokens}")
-            if prompt_tokens > 77:
-                print(f"[WARNING] Prompt exceeds CLIP limit (77 tokens)! {prompt_tokens - 77} tokens will be truncated!")
-                print(f"[WARNING] Truncated portion: {' '.join(request.prompt.split()[77:])}")
-            elif prompt_tokens > 65:
-                print(f"[WARNING] Prompt is long ({prompt_tokens} tokens). Recommended max: 65 tokens.")
-            else:
-                print(f"[OK] Prompt length OK ({prompt_tokens} tokens < 65 recommended)")
+            print(f"[PROMPT] Token count: {prompt_tokens} (FLUX 2 supports up to 32K tokens)")
             
-            # Load and resize the input image (following official example)
-            # Use proper resolution for FLUX Kontext - minimum 1024px for good quality
+            # Load and prepare base image
             target_size = max(1024, min(request.width, request.height))
             init_image = Image.open(BytesIO(image_bytes)).convert('RGB').resize((target_size, target_size))
             print(f"Loaded base image, resized to: {init_image.size}")
+            
+            # Prepare image list for FLUX 2 (supports multi-reference)
+            image_list = [init_image]
+            
+            # Add inspiration images if provided (for multi-reference editing)
+            if inspiration_images_bytes:
+                print(f"Adding {len(inspiration_images_bytes)} inspiration images for multi-reference editing")
+                for insp_bytes in inspiration_images_bytes[:3]:  # FLUX 2 dev supports up to ~6 total
+                    insp_img = Image.open(BytesIO(insp_bytes)).convert('RGB')
+                    # Resize to match base image aspect ratio approximately
+                    insp_img = insp_img.resize((target_size, target_size))
+                    image_list.append(insp_img)
+                print(f"Total images for multi-reference: {len(image_list)}")
             
             # Set random seed if provided
             if request.seed is not None:
                 torch.manual_seed(request.seed)
                 if torch.cuda.is_available():
                     torch.cuda.manual_seed(request.seed)
+                seed = request.seed
             else:
                 # Use fixed seed for consistency
-                self.seed = 42
-                torch.manual_seed(self.seed)
+                seed = self.seed
+                torch.manual_seed(seed)
                 if torch.cuda.is_available():
-                    torch.cuda.manual_seed(self.seed)
+                    torch.cuda.manual_seed(seed)
             
-            # Generate images in IMAGE-TO-IMAGE mode (following official example)
-            print("Running FLUX Kontext image-to-image inference...")
+            # Generate images with FLUX 2
+            print(f"Running FLUX 2 Dev image-to-image inference with {len(image_list)} reference image(s)...")
             with torch.inference_mode():
                 result = self.pipe(
-                    image=init_image,  # ← BASE IMAGE for editing
                     prompt=request.prompt,
+                    image=image_list,  # FLUX 2 accepts list of images for multi-reference
                     guidance_scale=request.guidance_scale,
                     num_inference_steps=request.num_inference_steps,
                     output_type="pil",
-                    generator=torch.Generator(device=self.device).manual_seed(self.seed),
+                    generator=torch.Generator(device=self.device).manual_seed(seed),
                     num_images_per_prompt=request.num_images,
                 )
             
@@ -281,21 +304,22 @@ class FluxKontextModel:
                 img_b64 = base64.b64encode(buffer.getvalue()).decode()
                 images_b64.append(img_b64)
             
-            # Calculate cost estimate (rough approximation)
-            cost_estimate = request.num_images * 0.05  # $0.05 per image estimate
+            # Calculate cost estimate (rough approximation - FLUX 2 is free for dev model)
+            cost_estimate = 0.0  # Dev model is free, only compute costs
             
             return {
                 "images": images_b64,
                 "generation_info": {
                     "model": MODEL_NAME,
-                    "prompt": request.prompt,
-                    "negative_prompt": request.negative_prompt,
+                    "prompt": request.prompt[:200],  # Truncate for logging
                     "num_images": request.num_images,
                     "guidance_scale": request.guidance_scale,
                     "num_inference_steps": request.num_inference_steps,
                     "width": request.width,
                     "height": request.height,
-                    "seed": request.seed,
+                    "seed": seed,
+                    "multi_reference": len(image_list) > 1,
+                    "reference_count": len(image_list)
                 },
                 "cost_estimate": cost_estimate
             }
@@ -307,10 +331,10 @@ class FluxKontextModel:
 # Gemma 3 4B-IT Model - MULTIMODAL MODEL WITH EXCELLENT POLISH SUPPORT
 @app.cls(
     image=image,
-    gpu="H100",  # Same H100 as FLUX - both models fit together (H100 has 80GB VRAM)
+    gpu="T4",  # Changed from H100 to T4 for cost savings (~$0.59/h vs $4.76/h) - 4B model fits in 16GB
     volumes=volumes,
     secrets=[modal.Secret.from_name("huggingface-secret-new")],
-    scaledown_window=180  # Scale down after 3 minutes of inactivity to save costs
+    scaledown_window=120  # Reduced to 2 minutes to save costs
 )
 class Gemma3VisionModel:
     """Gemma 3 4B-IT multimodal model for room analysis and comments with excellent Polish support
@@ -642,7 +666,7 @@ OPIS: [krótki opis w języku angielskim]"""}
             }
 
 # Initialize model instances
-flux_model = FluxKontextModel()
+flux_model = Flux2Model()
 gemma3_vision_model = Gemma3VisionModel()
 
 def build_prompt(request: GenerationRequest) -> str:
@@ -656,19 +680,58 @@ def build_prompt(request: GenerationRequest) -> str:
     timeout=600,  # 10 minutes timeout
     secrets=[modal.Secret.from_name("huggingface-secret-new")],
 )
+@modal.fastapi_endpoint(method="OPTIONS", label="aura-flux-api")
+def generate_images_options():
+    """Handle CORS preflight requests"""
+    from fastapi import Response
+    return Response(
+        content="",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Max-Age": "3600"
+        }
+    )
+
+@app.function(
+    image=image,
+    timeout=600,  # 10 minutes timeout
+    secrets=[modal.Secret.from_name("huggingface-secret-new")],
+)
 @modal.fastapi_endpoint(method="POST", label="aura-flux-api")
 def generate_images_endpoint(request: GenerationRequest):
-    """Generate images endpoint"""
+    """Generate images endpoint with CORS support"""
+    from fastapi import Response
+    import json
     try:
         print(f"Received generation request: {request.prompt[:100]}...")
+        
+        if not request.base_image:
+            raise HTTPException(status_code=400, detail="FLUX 2 requires a base_image for image-to-image editing")
         
         # Build comprehensive prompt
         full_prompt = build_prompt(request)
         
-        # Generate images
+        # Decode base64 image to bytes
+        image_bytes = base64.b64decode(request.base_image)
+        print(f"Decoded base image: {len(image_bytes)} bytes")
+        
+        # Decode inspiration images if provided (for multi-reference)
+        inspiration_images_bytes = None
+        if request.inspiration_images and len(request.inspiration_images) > 0:
+            inspiration_images_bytes = []
+            for insp_b64 in request.inspiration_images[:3]:  # Limit to 3 inspiration images
+                insp_bytes = base64.b64decode(insp_b64)
+                inspiration_images_bytes.append(insp_bytes)
+            print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
+        
+        # Generate images in image-to-image mode with optional multi-reference
         result = flux_model.generate_images.remote(
             GenerationRequest(
                 prompt=full_prompt,
+                base_image=request.base_image,
+                inspiration_images=request.inspiration_images,
                 negative_prompt=request.negative_prompt,
                 num_images=request.num_images,
                 guidance_scale=request.guidance_scale,
@@ -676,18 +739,64 @@ def generate_images_endpoint(request: GenerationRequest):
                 width=request.width,
                 height=request.height,
                 seed=request.seed,
-            )
+            ),
+            image_bytes,  # Pass the decoded bytes
+            inspiration_images_bytes  # Pass inspiration images bytes
         )
         
-        return GenerationResponse(
+        response_data = GenerationResponse(
             images=result["images"],
             generation_info=result["generation_info"],
             cost_estimate=result["cost_estimate"]
         )
         
+        # Add CORS headers - return Pydantic model directly, Modal will serialize it
+        # We'll use a custom response to add headers
+        response_dict = response_data.model_dump()
+        
+        response = Response(
+            content=json.dumps(response_dict),
+            media_type="application/json",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                "Access-Control-Max-Age": "3600"
+            }
+        )
+        
+        return response
+        
+    except HTTPException as e:
+        print(f"HTTP Error in generate_images_endpoint: {str(e)}")
+        from fastapi import Response
+        import json
+        error_response = Response(
+            content=json.dumps({"detail": str(e.detail)}),
+            media_type="application/json",
+            status_code=e.status_code,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
+        )
+        return error_response
     except Exception as e:
         print(f"Error in generate_images_endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        from fastapi import Response
+        import json
+        error_response = Response(
+            content=json.dumps({"detail": str(e)}),
+            media_type="application/json",
+            status_code=500,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
+        )
+        return error_response
 
 # FastAPI app for additional endpoints
 web_app = FastAPI(title="Aura FLUX API", version="1.0.0")
@@ -723,7 +832,7 @@ def fastapi_app():
 @web_app.get("/")
 async def root():
     """Root endpoint"""
-    return {"message": "Aura FLUX API", "status": "running", "model": "flux-1-kontext"}
+    return {"message": "Aura FLUX API", "status": "running", "model": "flux-2-dev"}
 
 @app.function(
     image=image,
@@ -735,7 +844,7 @@ def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "model": "flux-1-kontext",
+        "model": "flux-2-dev",
         "vision_model": "gemma-3-4b-it",
         "legacy_models": "minicpm-o-2.6 (commented out), florence-2 (hidden but available)"
     }
@@ -745,7 +854,7 @@ async def health_check_web():
     """Health check endpoint for web app"""
     return {
         "status": "healthy",
-        "model": "flux-1-kontext",
+        "model": "flux-2-dev",
         "vision_model": "gemma-3-4b-it",
         "legacy_models": "minicpm-o-2.6 (commented out), florence-2 (hidden but available)"
     }
@@ -757,7 +866,7 @@ async def generate_images(request: GenerationRequest):
         print(f"Received generation request: {request.prompt[:100]}...")
         
         if not request.base_image:
-            raise HTTPException(status_code=400, detail="FLUX Kontext requires a base_image for image-to-image editing")
+            raise HTTPException(status_code=400, detail="FLUX 2 requires a base_image for image-to-image editing")
         
         # Build comprehensive prompt
         full_prompt = build_prompt(request)
@@ -766,11 +875,21 @@ async def generate_images(request: GenerationRequest):
         image_bytes = base64.b64decode(request.base_image)
         print(f"Decoded base image: {len(image_bytes)} bytes")
         
-        # Generate images in image-to-image mode
+        # Decode inspiration images if provided (for multi-reference)
+        inspiration_images_bytes = None
+        if request.inspiration_images and len(request.inspiration_images) > 0:
+            inspiration_images_bytes = []
+            for insp_b64 in request.inspiration_images[:3]:  # Limit to 3 inspiration images
+                insp_bytes = base64.b64decode(insp_b64)
+                inspiration_images_bytes.append(insp_bytes)
+            print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
+        
+        # Generate images in image-to-image mode with optional multi-reference
         result = flux_model.generate_images.remote(
             GenerationRequest(
                 prompt=full_prompt,
                 base_image=request.base_image,
+                inspiration_images=request.inspiration_images,
                 negative_prompt=request.negative_prompt,
                 num_images=request.num_images,
                 guidance_scale=request.guidance_scale,
@@ -779,7 +898,8 @@ async def generate_images(request: GenerationRequest):
                 height=request.height,
                 seed=request.seed,
             ),
-            image_bytes  # Pass the decoded bytes
+            image_bytes,  # Pass the decoded bytes
+            inspiration_images_bytes  # Pass inspiration images bytes
         )
         
         return GenerationResponse(
@@ -818,7 +938,7 @@ async def analyze_room(request: RoomAnalysisRequest):
         import asyncio
         result = await asyncio.wait_for(
             gemma3_vision_model.analyze_room_and_comment.remote.aio(image_bytes),
-            timeout=180.0  # 3 minute timeout (H100 cold start can take ~60-90s)
+            timeout=300.0  # 5 minute timeout (T4 is slower, cold start can take longer)
         )
         
         return RoomAnalysisResponse(
@@ -895,7 +1015,7 @@ async def analyze_inspiration(request: InspirationAnalysisRequest):
         import asyncio
         result = await asyncio.wait_for(
             gemma3_vision_model.analyze_inspiration.remote.aio(image_bytes),
-            timeout=180.0  # 3 minute timeout (H100 cold start can take ~60-90s)
+            timeout=300.0  # 5 minute timeout (T4 is slower, cold start can take longer)
         )
         
         return InspirationAnalysisResponse(
