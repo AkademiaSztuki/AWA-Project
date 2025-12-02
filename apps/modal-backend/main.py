@@ -19,6 +19,26 @@ from pydantic import BaseModel
 from typing import List, Optional
 import requests
 
+def decode_base64_image(base64_string: str) -> bytes:
+    """Convert base64 string to bytes, handling data URI prefix"""
+    try:
+        # Remove data URI prefix if present (e.g., "data:image/png;base64,")
+        if ',' in base64_string:
+            base64_string = base64_string.split(',', 1)[1]
+        
+        # Decode base64
+        image_bytes = base64.b64decode(base64_string)
+        print(f"Decoded base64 image, size: {len(image_bytes)} bytes")
+        
+        if len(image_bytes) < 8:
+            raise ValueError("Image too small to be valid")
+        
+        return image_bytes
+        
+    except Exception as e:
+        print(f"Error decoding base64 image: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid image file: {e}")
+
 # Modal configuration
 app = modal.App("aura-flux-api")
 
@@ -263,11 +283,16 @@ class Flux2Model:
             # Add inspiration images if provided (for multi-reference editing)
             if inspiration_images_bytes:
                 print(f"Adding {len(inspiration_images_bytes)} inspiration images for multi-reference editing")
-                for insp_bytes in inspiration_images_bytes[:3]:  # FLUX 2 dev supports up to ~6 total
-                    insp_img = Image.open(BytesIO(insp_bytes)).convert('RGB')
-                    # Resize to match base image aspect ratio approximately
-                    insp_img = insp_img.resize((target_size, target_size))
-                    image_list.append(insp_img)
+                for i, insp_bytes in enumerate(inspiration_images_bytes[:6]):  # FLUX 2 dev supports up to 6 reference images
+                    try:
+                        insp_img = Image.open(BytesIO(insp_bytes)).convert('RGB')
+                        # Resize to match base image aspect ratio approximately
+                        insp_img = insp_img.resize((target_size, target_size))
+                        image_list.append(insp_img)
+                        print(f"Loaded inspiration image {i+1}, size: {insp_img.size}")
+                    except Exception as e:
+                        print(f"Failed to load inspiration image {i+1}: {e}")
+                        # Continue with other images
                 print(f"Total images for multi-reference: {len(image_list)}")
             
             # Set random seed if provided
@@ -714,16 +739,21 @@ def generate_images_endpoint(request: GenerationRequest):
         full_prompt = build_prompt(request)
         
         # Decode base64 image to bytes
-        image_bytes = base64.b64decode(request.base_image)
+        image_bytes = decode_base64_image(request.base_image)
         print(f"Decoded base image: {len(image_bytes)} bytes")
         
         # Decode inspiration images if provided (for multi-reference)
         inspiration_images_bytes = None
         if request.inspiration_images and len(request.inspiration_images) > 0:
             inspiration_images_bytes = []
-            for insp_b64 in request.inspiration_images[:3]:  # Limit to 3 inspiration images
-                insp_bytes = base64.b64decode(insp_b64)
-                inspiration_images_bytes.append(insp_bytes)
+            for i, insp_b64 in enumerate(request.inspiration_images[:6]):  # Limit to 6 for FLUX.2 [dev]
+                try:
+                    insp_bytes = decode_base64_image(insp_b64)
+                    inspiration_images_bytes.append(insp_bytes)
+                    print(f"Decoded inspiration image {i+1}, size: {len(insp_bytes)} bytes")
+                except Exception as e:
+                    print(f"Failed to decode inspiration image {i+1}: {e}")
+                    # Continue with other images
             print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
         
         # Generate images in image-to-image mode with optional multi-reference
@@ -872,16 +902,21 @@ async def generate_images(request: GenerationRequest):
         full_prompt = build_prompt(request)
         
         # Decode base64 image to bytes
-        image_bytes = base64.b64decode(request.base_image)
+        image_bytes = decode_base64_image(request.base_image)
         print(f"Decoded base image: {len(image_bytes)} bytes")
         
         # Decode inspiration images if provided (for multi-reference)
         inspiration_images_bytes = None
         if request.inspiration_images and len(request.inspiration_images) > 0:
             inspiration_images_bytes = []
-            for insp_b64 in request.inspiration_images[:3]:  # Limit to 3 inspiration images
-                insp_bytes = base64.b64decode(insp_b64)
-                inspiration_images_bytes.append(insp_bytes)
+            for i, insp_b64 in enumerate(request.inspiration_images[:6]):  # Limit to 6 for FLUX.2 [dev]
+                try:
+                    insp_bytes = decode_base64_image(insp_b64)
+                    inspiration_images_bytes.append(insp_bytes)
+                    print(f"Decoded inspiration image {i+1}, size: {len(insp_bytes)} bytes")
+                except Exception as e:
+                    print(f"Failed to decode inspiration image {i+1}: {e}")
+                    # Continue with other images
             print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
         
         # Generate images in image-to-image mode with optional multi-reference
@@ -924,7 +959,7 @@ async def analyze_room(request: RoomAnalysisRequest):
         _check_room_analysis_quota(session_id)
         
         # Decode base64 image
-        image_bytes = base64.b64decode(request.image)
+        image_bytes = decode_base64_image(request.image)
         print(f"Image decoded, size: {len(image_bytes)} bytes")
         
         image_hash = hashlib.sha256(image_bytes).hexdigest()
@@ -1008,7 +1043,7 @@ async def analyze_inspiration(request: InspirationAnalysisRequest):
         print("Received inspiration analysis request")
         
         # Decode base64 image
-        image_bytes = base64.b64decode(request.image)
+        image_bytes = decode_base64_image(request.image)
         print(f"Image decoded, size: {len(image_bytes)} bytes")
         
         # Analyze inspiration using Gemma 3 4B-IT with timeout

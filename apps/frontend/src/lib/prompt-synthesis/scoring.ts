@@ -209,7 +209,19 @@ export interface PromptWeights {
 
 export function calculatePromptWeights(inputs: PromptInputs, sourceType?: GenerationSource | string): PromptWeights {
   // 1. PRS GAP ANALYSIS (highest weight: 25%)
+  // IMPORTANT: Some sources have PRS zeroed in modes.ts (Implicit, Explicit, Personality)
+  // If PRS is (0,0) for both current and target, all needs will be 0 (correct behavior)
+  // Only Mixed and MixedFunctional should use real PRS data
   const prsWeights = analyzePRSGap(inputs.prsCurrent, inputs.prsTarget);
+  
+  // Log PRS values for debugging
+  if (sourceType) {
+    const prsGap = Math.sqrt(
+      Math.pow(inputs.prsTarget.x - inputs.prsCurrent.x, 2) + 
+      Math.pow(inputs.prsTarget.y - inputs.prsCurrent.y, 2)
+    );
+    console.log(`[PRS] Source: ${sourceType}, Current: (${inputs.prsCurrent.x}, ${inputs.prsCurrent.y}), Target: (${inputs.prsTarget.x}, ${inputs.prsTarget.y}), Gap: ${prsGap.toFixed(2)}`);
+  }
   
   // 2. STYLE INTEGRATION (implicit 60% + explicit 40%, with personality fallback)
   const styleWeights = integrateStylePreferences(
@@ -231,19 +243,60 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
   );
   
   // 4. BIOPHILIA SCORING
-  // For Mixed sources, blend implicit and explicit biophilia
-  const isMixed = sourceType === GenerationSource.Mixed || sourceType === GenerationSource.MixedFunctional;
-  let biophiliaScoreToUse = inputs.psychologicalBaseline.biophiliaScore;
+  // Each source type uses different biophilia data (as filtered in modes.ts)
+  let biophiliaScoreToUse: number;
   
-  if (isMixed && inputs.psychologicalBaseline.implicitBiophiliaScore !== undefined) {
-    // Blend implicit (from Tinder) and explicit (from test) biophilia
-    const implicitBiophilia = inputs.psychologicalBaseline.implicitBiophiliaScore;
-    const explicitBiophilia = inputs.psychologicalBaseline.biophiliaScore;
-    // For Mixed: average, for MixedFunctional: slightly favor explicit
-    const implicitWeight = sourceType === GenerationSource.MixedFunctional ? 0.4 : 0.5;
-    const explicitWeight = sourceType === GenerationSource.MixedFunctional ? 0.6 : 0.5;
-    biophiliaScoreToUse = Math.round(implicitBiophilia * implicitWeight + explicitBiophilia * explicitWeight);
-    console.log('[Biophilia] Mixed source - blending implicit:', implicitBiophilia, '+ explicit:', explicitBiophilia, '→', biophiliaScoreToUse);
+  switch (sourceType) {
+    case GenerationSource.Implicit:
+      // Implicit source: use ONLY implicitBiophiliaScore from Tinder (modes.ts sets biophiliaScore to this)
+      // But also check if implicitBiophiliaScore is available directly
+      biophiliaScoreToUse = inputs.psychologicalBaseline.implicitBiophiliaScore ?? 
+                           inputs.psychologicalBaseline.biophiliaScore ?? 0;
+      console.log('[Biophilia] Implicit source - using Tinder-derived biophilia:', biophiliaScoreToUse);
+      break;
+      
+    case GenerationSource.Explicit:
+      // Explicit source: use ONLY explicit biophiliaScore from test
+      biophiliaScoreToUse = inputs.psychologicalBaseline.biophiliaScore ?? 0;
+      console.log('[Biophilia] Explicit source - using test biophilia:', biophiliaScoreToUse);
+      break;
+      
+    case GenerationSource.Personality:
+      // Personality source: ZERO biophilia (modes.ts sets biophiliaScore to 0)
+      biophiliaScoreToUse = 0;
+      console.log('[Biophilia] Personality source - zeroed (personality-driven only)');
+      break;
+      
+    case GenerationSource.Mixed:
+    case GenerationSource.MixedFunctional:
+      // Mixed sources: blend implicit and explicit biophilia if both available
+      const implicitBiophilia = inputs.psychologicalBaseline.implicitBiophiliaScore;
+      const explicitBiophilia = inputs.psychologicalBaseline.biophiliaScore ?? 0;
+      
+      if (implicitBiophilia !== undefined) {
+        // Blend implicit (from Tinder) and explicit (from test) biophilia
+        // For Mixed: 50/50, for MixedFunctional: 40% implicit + 60% explicit
+        const implicitWeight = sourceType === GenerationSource.MixedFunctional ? 0.4 : 0.5;
+        const explicitWeight = sourceType === GenerationSource.MixedFunctional ? 0.6 : 0.5;
+        biophiliaScoreToUse = Math.round(implicitBiophilia * implicitWeight + explicitBiophilia * explicitWeight);
+        console.log('[Biophilia] Mixed source - blending implicit:', implicitBiophilia, '+ explicit:', explicitBiophilia, '→', biophiliaScoreToUse);
+      } else {
+        // No implicit biophilia - use only explicit
+        biophiliaScoreToUse = explicitBiophilia;
+        console.log('[Biophilia] Mixed source - no implicit data, using explicit only:', biophiliaScoreToUse);
+      }
+      break;
+      
+    case GenerationSource.InspirationReference:
+      // InspirationReference: use explicit biophilia (inspirations provide visual reference, not biophilia score)
+      biophiliaScoreToUse = inputs.psychologicalBaseline.biophiliaScore ?? 0;
+      console.log('[Biophilia] InspirationReference source - using explicit biophilia:', biophiliaScoreToUse);
+      break;
+      
+    default:
+      // Fallback: use explicit
+      biophiliaScoreToUse = inputs.psychologicalBaseline.biophiliaScore ?? 0;
+      console.log('[Biophilia] Unknown source - using explicit biophilia:', biophiliaScoreToUse);
   }
   
   const biophiliaWeights = calculateBiophiliaIntegration(
