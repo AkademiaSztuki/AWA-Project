@@ -1,7 +1,6 @@
 // Supabase helpers for Deep Personalization Architecture
 // CRUD operations for user_profiles, households, rooms, design_sessions
 
-import { createClient } from '@supabase/supabase-js';
 import {
   UserProfile,
   Household,
@@ -11,11 +10,7 @@ import {
   EnhancedSwipeData,
   SwipePattern
 } from '@/types/deep-personalization';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase } from '@/lib/supabase'; // Use shared Supabase client to avoid multiple instances
 
 // =========================
 // USER PROFILE
@@ -97,8 +92,51 @@ export async function getUserHouseholds(userHash: string): Promise<Household[]> 
   }
 }
 
+/**
+ * Ensures a user profile exists for the given userHash.
+ * Creates a minimal profile if it doesn't exist.
+ */
+async function ensureUserProfileExists(userHash: string): Promise<boolean> {
+  try {
+    // Check if profile exists
+    const existing = await getUserProfile(userHash);
+    if (existing) {
+      return true; // Profile already exists
+    }
+
+    // Create minimal profile
+    const { error } = await supabase
+      .from('user_profiles')
+      .insert({
+        user_hash: userHash,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+
+    if (error) {
+      // If it's a unique constraint violation, profile was created by another request
+      if (error.code === '23505') {
+        return true;
+      }
+      throw error;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error ensuring user profile exists:', error);
+    return false;
+  }
+}
+
 export async function saveHousehold(household: Omit<Household, 'id' | 'createdAt' | 'updatedAt'>): Promise<Household | null> {
   try {
+    // Ensure user profile exists first (required by foreign key constraint)
+    const profileExists = await ensureUserProfileExists(household.userHash);
+    if (!profileExists) {
+      console.error('Failed to ensure user profile exists before saving household');
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('households')
       .insert({
@@ -192,13 +230,41 @@ export async function saveRoom(room: Omit<Room, 'id' | 'createdAt' | 'updatedAt'
         pain_points: room.painPoints,
         activities: room.activities,
         room_visual_dna: room.roomVisualDNA,
-        activity_context: room.activityContext,
         aspirational_state: room.aspirationalState
       })
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If error is about missing column, try without activity_context
+      if (error.message?.includes('activity_context')) {
+        console.warn('activity_context column not found, saving without it');
+        const { data: retryData, error: retryError } = await supabase
+          .from('rooms')
+          .insert({
+            household_id: room.householdId,
+            name: room.name,
+            room_type: room.roomType,
+            usage_type: room.usageType,
+            shared_with: room.sharedWith,
+            ownership_feeling: room.ownershipFeeling,
+            current_photos: room.currentPhotos,
+            preference_source: room.preferenceSource,
+            room_preference_payload: room.roomPreferencePayload,
+            prs_pre_test: room.prsCurrent,
+            pain_points: room.painPoints,
+            activities: room.activities,
+            room_visual_dna: room.roomVisualDNA,
+            aspirational_state: room.aspirationalState
+          })
+          .select()
+          .single();
+        
+        if (retryError) throw retryError;
+        return retryData as Room;
+      }
+      throw error;
+    }
     return data as Room;
   } catch (error) {
     console.error('Error saving room:', error);

@@ -84,6 +84,7 @@ export default function InspirationsPage() {
     const payload = (current: LocalInspiration[]) => current.map(i => ({
       id: i.id,
       fileId: undefined,
+      url: i.previewUrl, // Include previewUrl (base64 data URL) for immediate use
       tags: i.tags,
       description: i.description,
       addedAt: new Date().toISOString(),
@@ -145,15 +146,26 @@ export default function InspirationsPage() {
     setIsSubmitting(true);
     try {
       // Upload files to Supabase Storage (background tolerate failures)
+      // Note: If bucket doesn't exist, we'll skip upload but keep base64 in session
       const userHash = (sessionData as any)?.userHash || 'anonymous';
       const uploads = await Promise.all(items.map(async (i) => {
         try {
+          // Try to upload to storage, but don't fail if bucket doesn't exist
           const path = `inspirations/${userHash}/${i.id}`;
           const { data, error } = await supabase
             .storage
             .from('aura-assets')
             .upload(path, i.file, { upsert: true, contentType: i.file.type || 'image/jpeg' });
-          if (error) throw error;
+          
+          if (error) {
+            // If bucket doesn't exist, log warning but continue
+            if (error.message?.includes('Bucket not found') || error.statusCode === '404') {
+              console.warn('Bucket aura-assets not found - skipping upload, using base64 only');
+              return { id: i.id };
+            }
+            throw error;
+          }
+          
           const { data: pub } = supabase.storage.from('aura-assets').getPublicUrl(path);
           return { id: i.id, fileId: data?.path, url: pub?.publicUrl || undefined };
         } catch (e) {
@@ -163,12 +175,15 @@ export default function InspirationsPage() {
       }));
 
       // Persist inspirations with public URLs to session (and Supabase via saveFullSession)
+      // Include base64 for local storage if upload failed
       const payload = items.map(i => {
         const up = uploads.find(u => u.id === i.id);
+        const base64 = i.imageBase64 || i.previewUrl; // Keep base64 if available
         return {
           id: i.id,
           fileId: up?.fileId,
           url: up?.url,
+          imageBase64: base64, // Keep base64 for InspirationReference source
           tags: i.tags,
           description: i.description,
           addedAt: new Date().toISOString(),

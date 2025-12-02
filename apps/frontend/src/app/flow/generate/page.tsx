@@ -4,7 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
-import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startGenerationJob, endGenerationJob, saveImageRatingEvent, startPageView, endPageView } from '@/lib/supabase';
+import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startGenerationJob, endGenerationJob, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent } from '@/lib/supabase';
+import { assessAllSourcesQuality, getViableSources, type DataStatus } from '@/lib/prompt-synthesis/data-quality';
+import { calculateImplicitQuality } from '@/lib/prompt-synthesis/implicit-quality';
+import { analyzeSourceConflict } from '@/lib/prompt-synthesis/conflict-analysis';
+import { countExplicitAnswers, getRegenerationInterpretation, type GenerationFeedback, type RegenerationEvent } from '@/lib/feedback/generation-feedback';
 import { useModalAPI, getGenerationParameters } from '@/hooks/useModalAPI';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -31,9 +35,11 @@ import {
 import Image from 'next/image';
 import { buildOptimizedFluxPrompt } from '@/lib/dna';
 import { 
-  synthesizeFivePrompts, 
+  synthesizeSixPrompts,
+  synthesizeFivePrompts, // Backward compatibility
   GenerationSource, 
   GENERATION_SOURCE_LABELS,
+  type SixPromptSynthesisResult,
   type FivePromptSynthesisResult 
 } from '@/lib/prompt-synthesis';
 import { addGeneratedImageToSpace } from '@/lib/spaces';
@@ -94,7 +100,7 @@ const MACRO_MODIFICATIONS: ModificationOption[] = [
 export default function GeneratePage() {
   const router = useRouter();
   const { sessionData, updateSessionData } = useSessionData();
-  const { generateImages, generateFiveImagesParallel, isLoading, error, setError, checkHealth, generateLLMComment } = useModalAPI();
+  const { generateImages, generateFiveImagesParallel, generateSixImagesParallel, isLoading, error, setError, checkHealth, generateLLMComment } = useModalAPI();
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
@@ -112,8 +118,8 @@ export default function GeneratePage() {
   const [idaComment, setIdaComment] = useState<string | null>(null);
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
   
-  // 5-Image Matrix State
-  const [isMatrixMode, setIsMatrixMode] = useState(true); // Enable by default
+  // 6-Image Matrix State
+  const [isMatrixMode, setIsMatrixMode] = useState(true); // Enabled - 6 different sources
   const [matrixImages, setMatrixImages] = useState<GeneratedImage[]>([]);
   const [matrixDisplayOrder, setMatrixDisplayOrder] = useState<GenerationSource[]>([]);
   const [blindSelectionMade, setBlindSelectionMade] = useState(false);
@@ -121,6 +127,12 @@ export default function GeneratePage() {
   const [showSourceReveal, setShowSourceReveal] = useState(false);
   const [matrixGenerationStartTime, setMatrixGenerationStartTime] = useState<number>(0);
   const [carouselIndex, setCarouselIndex] = useState(0); // Current carousel position
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false); // Prevent duplicate generations
+  const [regenerateCount, setRegenerateCount] = useState(0); // Track regeneration count
+  const [lastGenerationTime, setLastGenerationTime] = useState<number>(0); // For regeneration tracking
+  const [qualityReport, setQualityReport] = useState<any>(null); // Store quality report for feedback
+  const [synthesisResult, setSynthesisResult] = useState<SixPromptSynthesisResult | null>(null); // Store synthesis result for skipped sources info
   
   const [generationHistory, setGenerationHistory] = useState<Array<{
     id: string;
@@ -173,9 +185,20 @@ export default function GeneratePage() {
         }
       } catch {}
     })();
-    return () => { (async () => { if (pageViewId) await endPageView(pageViewId); })(); };
+    
+    // Cleanup: abort any ongoing generation when leaving the page
+    return () => { 
+      (async () => { 
+        if (pageViewId) await endPageView(pageViewId); 
+      })();
+      // Abort any ongoing generation
+      if (abortController) {
+        console.log('[Generate] Page unmounting - aborting ongoing generation');
+        abortController.abort();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [abortController]);
 
   useEffect(() => {
     if (isApiReady && generationCount === 0 && !hasAttemptedGeneration) {
@@ -194,45 +217,123 @@ export default function GeneratePage() {
   const buildInitialPrompt = () => buildOptimizedFluxPrompt(sessionData as any);
 
   /**
-   * Generates 5 images using different data sources for blind comparison.
-   * This is the new 5-image matrix generation flow.
+   * Generates 6 images using different data sources for blind comparison.
+   * This is the new 6-image matrix generation flow with multi-reference support.
    */
   const handleMatrixGeneration = async () => {
     if (!isApiReady) {
-      console.log("[5-Image Matrix] API not ready, generation cancelled.");
+      console.log("[6-Image Matrix] API not ready, generation cancelled.");
+      return;
+    }
+    
+    // Prevent duplicate generations
+    if (isGenerating) {
+      console.log("[6-Image Matrix] Generation already in progress, skipping.");
       return;
     }
     
     const typedSessionData = sessionData as any;
     
     if (!typedSessionData || !typedSessionData.roomImage) {
-      console.error("[5-Image Matrix] Missing roomImage in session data");
+      console.error("[6-Image Matrix] Missing roomImage in session data");
       setError("Nie można rozpocząć generowania - brak zdjęcia pokoju w sesji.");
       return;
     }
     
-    console.log("[5-Image Matrix] Starting 5-image matrix generation...");
-    setMatrixGenerationStartTime(Date.now());
-    setStatusMessage("Przygotowuję 5 różnych wizji dla Twojego wnętrza...");
+    // Create new AbortController for this generation
+    const controller = new AbortController();
+    setAbortController(controller);
+    setIsGenerating(true);
+    
+    // Reset images for new generation
+    setMatrixImages([]);
+    setGeneratedImages([]);
+    
+    console.log("[6-Image Matrix] Starting 6-image matrix generation...");
+    const generationStartTime = Date.now();
+    setMatrixGenerationStartTime(generationStartTime);
+    setLastGenerationTime(generationStartTime);
+    setStatusMessage("Przygotowuję 6 różnych wizji dla Twojego wnętrza...");
     setLoadingStage(2);
     setLoadingProgress(30);
-    setEstimatedTime(120);
+    setEstimatedTime(150);
+    
+    // Track regeneration if this is not the first generation
+    if (regenerateCount > 0) {
+      try {
+        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        if (projectId) {
+          const typedSessionData = sessionData as any;
+          const tinderSwipes = typedSessionData.tinderData?.swipes || [];
+          const implicitQuality = tinderSwipes.length > 0 
+            ? calculateImplicitQuality(tinderSwipes)
+            : undefined;
+          
+          const { buildPromptInputsFromSession } = await import('@/lib/prompt-synthesis/input-builder');
+          const inputs = buildPromptInputsFromSession(typedSessionData);
+          const qualityReports = assessAllSourcesQuality(inputs, tinderSwipes);
+          const sourceQualityMap: Record<string, string | DataStatus> = {};
+          qualityReports.forEach(r => {
+            sourceQualityMap[r.source] = r.status;
+          });
+          
+          const regenerationEvent: RegenerationEvent = {
+            sessionId: typedSessionData.userHash || 'unknown',
+            projectId: projectId || undefined,
+            timestamp: new Date().toISOString(),
+            previousSources: matrixImages.map(img => img.source!).filter(Boolean),
+            previousSelected: selectedImage?.source || null,
+            regenerationCount: regenerateCount,
+            timeSinceLastGen: generationStartTime - lastGenerationTime,
+            interpretation: getRegenerationInterpretation(regenerateCount),
+            sourceQuality: sourceQualityMap,
+            implicitQuality
+          };
+          
+          await saveRegenerationEvent({
+            sessionId: regenerationEvent.sessionId,
+            projectId: regenerationEvent.projectId,
+            previousSources: regenerationEvent.previousSources,
+            previousSelected: regenerationEvent.previousSelected,
+            regenerationCount: regenerationEvent.regenerationCount,
+            timeSinceLastGen: regenerationEvent.timeSinceLastGen,
+            interpretation: regenerationEvent.interpretation,
+            sourceQuality: sourceQualityMap,
+            implicitQuality: regenerationEvent.implicitQuality
+          });
+        }
+      } catch (e) {
+        console.warn('[6-Image Matrix] Failed to track regeneration:', e);
+      }
+    }
     
     try {
-      // Step 1: Synthesize 5 prompts from different data sources
-      console.log("[5-Image Matrix] Step 1: Synthesizing prompts...");
+      // Step 1: Assess data quality before synthesis
+      console.log("[6-Image Matrix] Step 1: Assessing data quality...");
+      const { buildPromptInputsFromSession } = await import('@/lib/prompt-synthesis/input-builder');
+      const inputs = buildPromptInputsFromSession(typedSessionData);
+      const tinderSwipes = typedSessionData.tinderData?.swipes || [];
+      const qualityReports = assessAllSourcesQuality(inputs, tinderSwipes);
+      setQualityReport(qualityReports);
+      
+      // Step 2: Synthesize 6 prompts from different data sources
+      console.log("[6-Image Matrix] Step 2: Synthesizing prompts...");
       const roomType = typedSessionData.roomType || 'living room';
       
-      const synthesisResult = await synthesizeFivePrompts(
+      const synthesisResult = await synthesizeSixPrompts(
         typedSessionData,
         roomType,
         { verbose: true }
       );
       
-      console.log("[5-Image Matrix] Synthesis complete:", {
+      // Store synthesis result for UI display
+      setSynthesisResult(synthesisResult);
+      
+      console.log("[6-Image Matrix] Synthesis complete:", {
         generatedSources: synthesisResult.generatedSources,
         skippedSources: synthesisResult.skippedSources,
-        displayOrder: synthesisResult.displayOrder
+        displayOrder: synthesisResult.displayOrder,
+        hasInspirationImages: !!synthesisResult.inspirationImages
       });
       
       if (synthesisResult.generatedSources.length === 0) {
@@ -243,7 +344,7 @@ export default function GeneratePage() {
       // Step 2: Prepare prompts for parallel generation
       setLoadingProgress(45);
       setStatusMessage(`Generuję ${synthesisResult.generatedSources.length} wizji równolegle...`);
-      setEstimatedTime(90);
+      setEstimatedTime(120);
       
       const prompts = synthesisResult.generatedSources.map(source => ({
         source,
@@ -257,50 +358,110 @@ export default function GeneratePage() {
       let jobId: string | null = null;
       if (projectId) {
         jobId = await startGenerationJob(projectId, {
-          type: 'matrix_5',
+          type: 'initial', // Use 'initial' to match constraint (initial/micro/macro)
           prompt: JSON.stringify(prompts.map(p => ({ source: p.source, prompt: p.prompt.substring(0, 200) }))),
           parameters: { ...parameters, num_sources: prompts.length },
           has_base_image: true,
         });
       }
       
-      // Step 3: Generate all images in parallel
+      // Step 3: Generate all images in parallel with progressive display
       setLoadingProgress(55);
       
-      const generationResponse = await generateFiveImagesParallel({
-        prompts,
-        base_image: typedSessionData.roomImage,
-        style: typedSessionData.visualDNA?.dominantStyle || 'modern',
-        parameters: {
-          strength: parameters.strength,
-          steps: parameters.steps,
-          guidance: parameters.guidance,
-          image_size: parameters.image_size
+      // Track completed images for progress
+      let completedCount = 0;
+      
+      // Callback to show images as they complete
+      const onImageReady = (result: any) => {
+        if (result.success) {
+          completedCount++;
+          const sourceLabel = GENERATION_SOURCE_LABELS[result.source as GenerationSource];
+          const displayIndex = synthesisResult.displayOrder.indexOf(result.source);
+          const newImage: GeneratedImage = {
+            id: `matrix-${generationCount}-${result.source}`,
+            url: `data:image/png;base64,${result.image}`,
+            base64: result.image,
+            prompt: result.prompt,
+            parameters: {
+              ...parameters,
+              source: result.source,
+              sourceLabel: sourceLabel,
+              processingTime: result.processing_time
+            },
+            ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+            isFavorite: false,
+            createdAt: Date.now(),
+            source: result.source,
+            displayIndex: displayIndex >= 0 ? displayIndex : completedCount - 1,
+            isBlindSelected: false
+          };
+          
+          // Add to matrix images progressively
+          setMatrixImages(prev => {
+            // Remove any existing image with same source to avoid duplicates
+            const filtered = prev.filter(img => img.source !== result.source);
+            const updated = [...filtered, newImage].sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0));
+            console.log(`[6-Image Matrix] Progressive update: ${updated.length} images (added ${result.source})`);
+            return updated;
+          });
+          setGeneratedImages(prev => {
+            // Remove any existing image with same source to avoid duplicates
+            const filtered = prev.filter(img => img.source !== result.source);
+            const updated = [...filtered, newImage].sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0));
+            return updated;
+          });
+          
+          // Update progress
+          const progressPercent = 55 + (completedCount / prompts.length) * 30;
+          setLoadingProgress(progressPercent);
+          setStatusMessage(`Wygenerowano ${completedCount}/${prompts.length} wizji...`);
         }
-      });
+      };
+      
+      const generationResponse = await generateSixImagesParallel(
+        {
+          prompts,
+          base_image: typedSessionData.roomImage,
+          inspiration_images: synthesisResult.inspirationImages, // For InspirationReference source
+          style: typedSessionData.visualDNA?.dominantStyle || 'modern',
+          parameters: {
+            strength: parameters.strength,
+            steps: parameters.steps,
+            guidance: parameters.guidance,
+            image_size: parameters.image_size
+          }
+        },
+        onImageReady,
+        controller.signal
+      );
       
       // Step 4: Process results
       setLoadingProgress(85);
       setStatusMessage("Finalizuję obrazy...");
       setEstimatedTime(10);
       
+      console.log("[6-Image Matrix] Generation response:", {
+        successful_count: generationResponse.successful_count,
+        failed_count: generationResponse.failed_count,
+        results: generationResponse.results.map(r => ({ source: r.source, success: r.success, hasImage: !!r.image }))
+      });
+      
       if (generationResponse.successful_count === 0) {
         setError("Wszystkie generacje zakończyły się niepowodzeniem.");
-        if (jobId) await endGenerationJob(jobId, { status: 'error', error_message: 'All generations failed' });
+        if (jobId) await endGenerationJob(jobId, { status: 'error', latency_ms: Date.now() - matrixGenerationStartTime, error_message: 'All generations failed' });
         return;
       }
       
-      // Create GeneratedImage objects with shuffled display order
+      // Final update: create complete list from generationResponse
+      // (Images should already be in matrixImages from onImageReady callback, but this ensures completeness)
       const displayOrder = synthesisResult.displayOrder;
-      const newMatrixImages: GeneratedImage[] = [];
-      
-      generationResponse.results
+      const newMatrixImages: GeneratedImage[] = generationResponse.results
         .filter(r => r.success)
-        .forEach((result, idx) => {
+        .map((result, idx) => {
           const displayIndex = displayOrder.indexOf(result.source);
           const sourceLabel = GENERATION_SOURCE_LABELS[result.source];
           
-          newMatrixImages.push({
+          return {
             id: `matrix-${generationCount}-${result.source}`,
             url: `data:image/png;base64,${result.image}`,
             base64: result.image,
@@ -317,17 +478,39 @@ export default function GeneratePage() {
             source: result.source,
             displayIndex: displayIndex >= 0 ? displayIndex : idx,
             isBlindSelected: false
-          });
+          };
         });
       
       // Sort by display index for blind comparison
       newMatrixImages.sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0));
       
+      console.log("[6-Image Matrix] Final images to display:", newMatrixImages.length, newMatrixImages.map(i => ({ source: i.source, displayIndex: i.displayIndex, hasUrl: !!i.url })));
+      
+      if (newMatrixImages.length === 0) {
+        console.error("[6-Image Matrix] ERROR: No images to display!");
+        setError("Nie udało się wygenerować żadnych obrazów.");
+        return;
+      }
+      
+      if (newMatrixImages.length < generationResponse.successful_count) {
+        console.warn(`[6-Image Matrix] WARNING: Expected ${generationResponse.successful_count} images, got ${newMatrixImages.length}`);
+      }
+      
+      // Update state with all images
       setMatrixImages(newMatrixImages);
       setMatrixDisplayOrder(displayOrder.filter(s => 
         newMatrixImages.some(img => img.source === s)
       ));
       setGeneratedImages(newMatrixImages);
+      
+      // Reset carousel to first image
+      setCarouselIndex(0);
+      
+      console.log("[6-Image Matrix] State updated:", {
+        matrixImagesCount: newMatrixImages.length,
+        displayOrderLength: displayOrder.filter(s => newMatrixImages.some(img => img.source === s)).length,
+        carouselIndex: 0
+      });
       setSelectedImage(null); // No selection yet - blind comparison mode
       setBlindSelectionMade(false);
       setShowSourceReveal(false);
@@ -340,22 +523,49 @@ export default function GeneratePage() {
       
       // Save to session and Supabase
       try {
+        // Save generated images to sessionData (like inspirations)
+        const generatedImagesPayload = newMatrixImages.map(img => ({
+          id: img.id,
+          url: img.url,
+          base64: img.base64, // Keep base64 for display
+          prompt: img.prompt,
+          source: img.source,
+          sourceLabel: img.parameters?.sourceLabel,
+          parameters: img.parameters,
+          createdAt: new Date(img.createdAt).toISOString(),
+          isFavorite: img.isFavorite || false,
+          ratings: img.ratings
+        }));
+        
+        // Update sessionData with generated images
+        const currentGenerated = (typedSessionData?.generatedImages || []);
+        await updateSessionData({ 
+          generatedImages: [...currentGenerated, ...generatedImagesPayload]
+        } as any);
+        
+        // Also save to spaces
+        const currentSpaces = (typedSessionData?.spaces || []);
+        let updatedSpaces = currentSpaces;
+        for (const img of newMatrixImages) {
+          updatedSpaces = addGeneratedImageToSpace(updatedSpaces, undefined, img.url);
+        }
+        await updateSessionData({ spaces: updatedSpaces } as any);
+        
         if (projectId && jobId) {
           const totalTime = Date.now() - matrixGenerationStartTime;
           await endGenerationJob(jobId, { 
             status: 'success', 
-            latency_ms: totalTime,
-            result_count: generationResponse.successful_count
+            latency_ms: totalTime
           });
           
-          // Save each generated image
+          // Save each generated image to Supabase
           for (const img of newMatrixImages) {
             const genSet = await saveGenerationSet(projectId, img.prompt);
             if (genSet?.id) {
               await saveGeneratedImages(genSet.id, [{ 
                 url: img.url, 
                 prompt: img.prompt,
-                source: img.source
+                parameters: { source: img.source }
               }]);
             }
           }
@@ -369,28 +579,39 @@ export default function GeneratePage() {
           });
         }
       } catch (e) {
-        console.warn('[5-Image Matrix] Supabase persist failed:', e);
+        console.warn('[6-Image Matrix] Supabase persist failed:', e);
       }
       
-      console.log("[5-Image Matrix] Generation complete!", {
+      console.log("[6-Image Matrix] Generation complete!", {
         imagesGenerated: newMatrixImages.length,
         displayOrder: displayOrder
       });
       
-    } catch (err) {
-      console.error('[5-Image Matrix] Generation failed:', err);
-      setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas generacji.');
+    } catch (err: any) {
+      // Check if it was an abort
+      if (err.name === 'AbortError' || err.message === 'Generation cancelled') {
+        console.log('[6-Image Matrix] Generation was cancelled by user');
+        setStatusMessage("Generacja została anulowana.");
+      } else {
+        console.error('[6-Image Matrix] Generation failed:', err);
+        setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas generacji.');
+      }
+    } finally {
+      // Always cleanup
+      setIsGenerating(false);
+      setAbortController(null);
     }
   };
   
   /**
    * Handles selection in blind comparison mode.
+   * Now with full feedback collection including quality metrics.
    */
   const handleBlindSelection = async (image: GeneratedImage) => {
     if (blindSelectionMade) return;
     
     const selectionTime = Date.now() - matrixGenerationStartTime;
-    console.log(`[5-Image Matrix] User selected image from source: ${image.source} at position ${image.displayIndex}`);
+    console.log(`[6-Image Matrix] User selected image from source: ${image.source} at position ${image.displayIndex}`);
     
     setSelectedImage(image);
     setBlindSelectionMade(true);
@@ -402,10 +623,63 @@ export default function GeneratePage() {
       isBlindSelected: img.id === image.id
     })));
     
-    // Log to Supabase
+    // Collect full feedback with quality metrics
     try {
       const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+      const typedSessionData = sessionData as any;
+      
+      // Get Tinder swipes for implicit quality
+      const tinderSwipes = typedSessionData.tinderData?.swipes || [];
+      const implicitQuality = tinderSwipes.length > 0 
+        ? calculateImplicitQuality(tinderSwipes)
+        : undefined;
+      
+      // Build quality report
+      const { buildPromptInputsFromSession } = await import('@/lib/prompt-synthesis/input-builder');
+      const inputs = buildPromptInputsFromSession(typedSessionData);
+      const qualityReports = assessAllSourcesQuality(inputs, tinderSwipes);
+      const sourceQualityMap: Record<string, string> = {};
+      qualityReports.forEach(r => {
+        sourceQualityMap[r.source] = r.status;
+      });
+      
+      // Conflict analysis
+      const conflictAnalysis = analyzeSourceConflict(inputs);
+      
+      const feedback: GenerationFeedback = {
+        sessionId: typedSessionData.userHash || 'unknown',
+        projectId: projectId || undefined,
+        timestamp: new Date().toISOString(),
+        generatedSources: matrixImages.map(img => img.source!).filter(Boolean),
+        sourceQuality: sourceQualityMap,
+        selectedSource: image.source || null,
+        selectionTime,
+        hasCompleteBigFive: !!(typedSessionData.bigFive?.scores && 
+          typedSessionData.bigFive.scores.openness !== 50 &&
+          typedSessionData.bigFive.scores.conscientiousness !== 50),
+        tinderSwipeCount: tinderSwipes.length,
+        explicitAnswerCount: countExplicitAnswers(typedSessionData),
+        implicitQuality,
+        conflictAnalysis: conflictAnalysis.hasConflict ? conflictAnalysis : undefined
+      };
+      
+      // Save to Supabase
       if (projectId) {
+        await saveGenerationFeedback({
+          sessionId: feedback.sessionId,
+          projectId: feedback.projectId,
+          generatedSources: feedback.generatedSources,
+          selectedSource: feedback.selectedSource,
+          selectionTime: feedback.selectionTime,
+          hasCompleteBigFive: feedback.hasCompleteBigFive,
+          tinderSwipeCount: feedback.tinderSwipeCount,
+          explicitAnswerCount: feedback.explicitAnswerCount,
+          sourceQuality: sourceQualityMap,
+          implicitQuality: feedback.implicitQuality,
+          conflictAnalysis: feedback.conflictAnalysis
+        });
+        
+        // Also log legacy event for backward compatibility
         await logBehavioralEvent(projectId, 'matrix_blind_selection', {
           selectedSource: image.source,
           selectedPosition: image.displayIndex,
@@ -415,7 +689,7 @@ export default function GeneratePage() {
         });
       }
     } catch (e) {
-      console.warn('[5-Image Matrix] Failed to log selection:', e);
+      console.warn('[6-Image Matrix] Failed to save feedback:', e);
     }
     
     // Show reveal after short delay
@@ -470,7 +744,7 @@ export default function GeneratePage() {
     }
     if (!force && generationCount > 0) return;
     
-    // Use matrix generation mode by default
+    // Use matrix generation mode (6 images from different sources)
     if (isMatrixMode) {
       return handleMatrixGeneration();
     }
@@ -556,13 +830,30 @@ export default function GeneratePage() {
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
       
+      // Save generated images to sessionData (like inspirations)
+      const generatedImagesPayload = newImages.map(img => ({
+        id: img.id,
+        url: img.url,
+        base64: img.base64,
+        prompt: img.prompt,
+        parameters: img.parameters,
+        createdAt: new Date(img.createdAt).toISOString(),
+        isFavorite: img.isFavorite || false,
+        ratings: img.ratings
+      }));
+      
+      const currentGenerated = ((sessionData as any)?.generatedImages || []);
+      await updateSessionData({ 
+        generatedImages: [...currentGenerated, ...generatedImagesPayload]
+      } as any);
+      
       // Save generated images to spaces
       const currentSpaces = (sessionData as any)?.spaces || [];
       let updatedSpaces = currentSpaces;
       for (const img of newImages) {
         updatedSpaces = addGeneratedImageToSpace(updatedSpaces, undefined, img.url);
       }
-      updateSessionData({ spaces: updatedSpaces });
+      await updateSessionData({ spaces: updatedSpaces });
       
       // Complete loading
       setLoadingProgress(100);
@@ -703,13 +994,30 @@ export default function GeneratePage() {
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
       
+      // Save generated images to sessionData (like inspirations)
+      const generatedImagesPayload = newImages.map(img => ({
+        id: img.id,
+        url: img.url,
+        base64: img.base64,
+        prompt: img.prompt,
+        parameters: img.parameters,
+        createdAt: new Date(img.createdAt).toISOString(),
+        isFavorite: img.isFavorite || false,
+        ratings: img.ratings
+      }));
+      
+      const currentGenerated = ((sessionData as any)?.generatedImages || []);
+      await updateSessionData({ 
+        generatedImages: [...currentGenerated, ...generatedImagesPayload]
+      } as any);
+      
       // Save generated images to spaces
       const currentSpaces = (sessionData as any)?.spaces || [];
       let updatedSpaces = currentSpaces;
       for (const img of newImages) {
         updatedSpaces = addGeneratedImageToSpace(updatedSpaces, undefined, img.url);
       }
-      updateSessionData({ spaces: updatedSpaces });
+      await updateSessionData({ spaces: updatedSpaces });
       
       // Complete modification
       setLoadingProgress(100);
@@ -826,7 +1134,21 @@ export default function GeneratePage() {
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
 
+      // Save generated image to sessionData (like inspirations)
+      const generatedImagePayload = {
+        id: newImage.id,
+        url: newImage.url,
+        base64: newImage.base64,
+        prompt: newImage.prompt,
+        parameters: newImage.parameters,
+        createdAt: new Date(newImage.createdAt).toISOString(),
+        isFavorite: newImage.isFavorite || false,
+        ratings: newImage.ratings
+      };
+      
+      const currentGenerated = ((sessionData as any)?.generatedImages || []);
       await updateSessionData({
+        generatedImages: [...currentGenerated, generatedImagePayload],
         generations: [
           ...((sessionData as any).generations || []),
           {
@@ -840,7 +1162,7 @@ export default function GeneratePage() {
             usedOriginal: false
           },
         ],
-      });
+      } as any);
     } catch (err) {
       console.error('Remove furniture failed:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas usuwania mebli.');
@@ -893,7 +1215,21 @@ export default function GeneratePage() {
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
 
+      // Save generated image to sessionData (like inspirations)
+      const generatedImagePayload = {
+        id: newImage.id,
+        url: newImage.url,
+        base64: newImage.base64,
+        prompt: newImage.prompt,
+        parameters: newImage.parameters,
+        createdAt: new Date(newImage.createdAt).toISOString(),
+        isFavorite: newImage.isFavorite || false,
+        ratings: newImage.ratings
+      };
+      
+      const currentGenerated = ((sessionData as any)?.generatedImages || []);
       await updateSessionData({
+        generatedImages: [...currentGenerated, generatedImagePayload],
         generations: [
           ...((sessionData as any).generations || []),
           {
@@ -907,7 +1243,7 @@ export default function GeneratePage() {
             usedOriginal: false
           },
         ],
-      });
+      } as any);
     } catch (err) {
       console.error('Quality improvement failed:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas poprawiania jakości.');
@@ -1116,14 +1452,17 @@ export default function GeneratePage() {
               <div className="text-center text-red-600">
                 <p className="font-semibold">Wystąpił błąd podczas generowania</p>
                 <p className="text-sm mt-2">{error}</p>
-                <GlassButton onClick={() => { void handleInitialGeneration(true); }} className="mt-4">
+                <GlassButton onClick={() => { 
+                  setRegenerateCount(prev => prev + 1);
+                  void handleInitialGeneration(true); 
+                }} className="mt-4">
                   Spróbuj ponownie
                 </GlassButton>
               </div>
             </GlassCard>
           )}
 
-          {/* 5-Image Matrix - Full Width Carousel View (TEST MODE) */}
+          {/* 6-Image Matrix - Full Width Carousel View (TEST MODE) */}
           {isMatrixMode && matrixImages.length > 0 && !blindSelectionMade && (
             <div className="space-y-4">
               {/* Header */}
@@ -1135,6 +1474,48 @@ export default function GeneratePage() {
                   Przeglądaj obrazy i wybierz ten, który najbardziej Ci odpowiada
                 </p>
               </div>
+              
+              {/* Skipped Sources Info */}
+              {synthesisResult && synthesisResult.skippedSources.length > 0 && (
+                <GlassCard className="p-4 border-amber-500/30 bg-amber-500/5">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-amber-500/10 rounded-lg">
+                      <Lightbulb size={20} className="text-amber-500" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-graphite mb-2">
+                        Niektóre źródła zostały pominięte
+                      </h3>
+                      <p className="text-sm text-silver-dark mb-3">
+                        Niektóre wizje nie zostały wygenerowane, ponieważ brakuje wystarczających danych:
+                      </p>
+                      <div className="space-y-2">
+                        {synthesisResult.qualityReports
+                          .filter(report => !report.shouldGenerate)
+                          .map(report => (
+                            <div key={report.source} className="text-sm">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-medium text-graphite">
+                                  {GENERATION_SOURCE_LABELS[report.source]?.pl || report.source}:
+                                </span>
+                                <span className="text-amber-500 text-xs">
+                                  {report.status === 'insufficient' ? 'Brak danych' : 'Niewystarczające dane'}
+                                </span>
+                              </div>
+                              {report.warnings.length > 0 && (
+                                <ul className="list-disc list-inside text-silver-dark text-xs ml-4">
+                                  {report.warnings.map((warning, idx) => (
+                                    <li key={idx}>{warning}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                </GlassCard>
+              )}
               
               {/* Full Width Carousel */}
               <div className="relative">
@@ -1240,6 +1621,8 @@ export default function GeneratePage() {
                         "Mix wszystkich danych estetycznych (40% implicit, 30% explicit, 30% personality)."}
                       {matrixImages[carouselIndex]?.source === GenerationSource.MixedFunctional && 
                         "Pełny mix + dane funkcjonalne (aktywności, problemy, nastrój PRS)."}
+                      {matrixImages[carouselIndex]?.source === GenerationSource.InspirationReference && 
+                        "Multi-reference z polubionych inspiracji - style i kolory z obrazów referencyjnych."}
                     </p>
                   </div>
                 </div>
@@ -1325,7 +1708,7 @@ export default function GeneratePage() {
             </div>
           )}
 
-          {/* 5-Image Matrix: After Selection - Reveal View */}
+          {/* 6-Image Matrix: After Selection - Reveal View */}
           {isMatrixMode && blindSelectionMade && selectedImage && (
             <div className="space-y-6">
               {/* Selected Image - Main Display */}
@@ -1390,6 +1773,8 @@ export default function GeneratePage() {
                                   "Połączenie wszystkich danych estetycznych - behawioralnych, deklarowanych i osobowościowych."}
                                 {selectedImage.source === GenerationSource.MixedFunctional && 
                                   "Pełny mix + funkcjonalność - uwzględnia też jak używasz przestrzeni i jakie masz potrzeby."}
+                                {selectedImage.source === GenerationSource.InspirationReference && 
+                                  "Multi-reference z polubionych inspiracji - style, kolory i nastrój z obrazów które Ci się spodobały."}
                               </p>
                             </div>
                           </div>

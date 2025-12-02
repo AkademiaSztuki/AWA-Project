@@ -218,3 +218,104 @@ Plik: `20251129000000_generation_matrix_results.sql`
 - [ ] A/B testing różnych wag w Mixed
 - [ ] Analytics dashboard dla matrix_source_preferences
 
+---
+
+## Faza 2: Poprawa Jakości i Różnorodności (Six-Image Diversity Recovery)
+
+**Status:** ✅ ZAIMPLEMENTOWANE
+
+**Data implementacji:** 2025-01-XX
+
+### Problem
+
+Prompty generowane dla różnych źródeł były zbyt podobne do siebie, szczególnie:
+- **Implicit/Mixed/MixedFunctional** - produkowały identyczne style z tag soup ("bohemian warm earth velvet marble...")
+- **Explicit** - używał "social-warmth" zamiast prawdziwego stylu
+- **Personality** - fallback był zbyt generyczny ("modern classic")
+- **InspirationReference** - nie miał unikalnej struktury promptu
+
+### Zaimplementowane poprawki
+
+#### 1. Normalizacja stylów (`scoring.ts`)
+
+- **VALID_STYLES whitelist** - lista dozwolonych stylów (modern, scandinavian, bohemian, etc.)
+- **extractValidStyle()** - wyciąga prawidłowy styl z tag soup
+  - "bohemian warm earth velvet marble..." → "bohemian"
+- **extractAllValidStyles()** - normalizuje tablice stylów z inspirations
+
+#### 2. Mapowanie Explicit na style (`scoring.ts`)
+
+- **deriveStyleFromExplicit()** - mapuje lifestyle/sensory na style:
+  - `lifestyle.vibe: calm` → minimalist
+  - `lifestyle.vibe: creative` → eclectic
+  - `sensory.texture: cold_metal` → industrial
+  - `sensory.texture: smooth_wood` → japandi
+  - `sensory.light: warm_low` → scandinavian
+  - `sensory.natureMetaphor: ocean` → coastal
+  - `sensory.natureMetaphor: forest` → rustic
+
+#### 3. Kolory jako HEX (`scoring.ts`)
+
+- **COLOR_TO_HEX mapa** - konwertuje nazwy kolorów na hex
+- **extractValidColors()** - normalizuje kolory do hex kodów
+- **Deduplikacja kolorów** - unika duplikatów w palecie
+
+#### 4. Builder produkuje różne prompty (`builder.ts`)
+
+- **normalizeStyle()** - podwójna walidacja stylu (wyciąga z tag soup)
+- **ensureHexColor()** - gwarantuje hex kody dla wszystkich kolorów
+- **STYLE_OPTIONS integration** - używa definicji stylów do tworzenia bogatych opisów:
+  - "Modern: Clean lines, minimalist approach..." zamiast samego "Modern"
+- **Source-aware customization**:
+  - **InspirationReference** - minimalny prompt bez stylu (style z obrazów)
+  - **MixedFunctional** - dodaje `functional_requirements` i `address_pain_points`
+  - **Personality** - dodaje `personality_signature` z cechami Big Five
+
+#### 5. Przekazywanie źródła do buildera (`index.ts`)
+
+- **sourceType w SynthesisOptions** - każdy prompt wie, z jakiego źródła pochodzi
+- **buildFlux2Prompt()** przyjmuje `sourceType` - umożliwia customizację per źródło
+
+#### 6. Mapowanie danych wejściowych (`input-builder.ts`)
+
+- **selectedStyle mapping** - przekazuje `selectedStyle` z `colorsAndMaterials` do `aestheticDNA.explicit`
+- Fallback do `visualDNA.dominantStyle` jeśli `selectedStyle` nie jest dostępne
+
+### Rezultat
+
+Każdy z 6 obrazów w macierzy powinien teraz być wyraźnie inny:
+
+1. **Implicit** - używa znormalizowanych stylów z Tinder swipes (np. "Modern: Clean lines...")
+2. **Explicit** - ściśle trzyma się wybranego stylu lub mapuje z lifestyle/sensory
+3. **Personality** - używa mapowania Big Five z `personality_signature`
+4. **Mixed** - inteligentnie łączy implicit+explicit (np. "Bohemian with Modern accents")
+5. **MixedFunctional** - jak Mixed + `functional_requirements` i `address_pain_points`
+6. **InspirationReference** - minimalny prompt "Transform using style elements from reference images..."
+
+### Pliki zmodyfikowane
+
+| Plik | Zmiany |
+|------|--------|
+| `lib/prompt-synthesis/scoring.ts` | VALID_STYLES, extractValidStyle(), deriveStyleFromExplicit(), COLOR_TO_HEX, normalizeColor() |
+| `lib/prompt-synthesis/builder.ts` | normalizeStyle(), ensureHexColor(), STYLE_OPTIONS integration, source-aware customization |
+| `lib/prompt-synthesis/index.ts` | sourceType w SynthesisOptions, przekazywanie do buildFlux2Prompt() |
+| `lib/prompt-synthesis/input-builder.ts` | selectedStyle mapping z colorsAndMaterials |
+
+### Acceptance Criteria
+
+- [x] Każde źródło produkuje unikalny styl (nie "modern" dla wszystkich)
+- [x] Style są znormalizowane (nie tag soup)
+- [x] Kolory są w formacie HEX
+- [x] Explicit używa selectedStyle lub mapuje z lifestyle/sensory
+- [x] Mixed łączy implicit+explicit zamiast wybierać tylko jedno
+- [x] InspirationReference ma minimalny prompt
+- [x] MixedFunctional zawiera functional_requirements
+- [x] Personality zawiera personality_signature
+
+### Następne kroki (opcjonalne)
+
+- [ ] Testy jednostkowe dla normalizeStyle() i extractValidStyle()
+- [ ] Rozszerzenie VALID_STYLES o więcej stylów jeśli potrzeba
+- [ ] Monitoring różnorodności promptów w produkcji
+- [ ] A/B testing czy różnorodność poprawia user satisfaction
+

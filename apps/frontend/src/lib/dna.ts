@@ -11,6 +11,7 @@ export type TinderSwipe = {
     lighting: string[];
     layout: string[];
     mood: string[];
+    biophilia?: number; // 0-3 scale
   };
 };
 

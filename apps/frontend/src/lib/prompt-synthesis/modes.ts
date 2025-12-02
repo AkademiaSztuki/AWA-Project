@@ -42,7 +42,10 @@ export enum GenerationSource {
   Mixed = 'mixed',
   
   /** Image 5: Mixed + functional data (activities, pain_points, PRS gap) */
-  MixedFunctional = 'mixed_functional'
+  MixedFunctional = 'mixed_functional',
+  
+  /** Image 6: Multi-reference with inspiration images */
+  InspirationReference = 'inspiration_reference'
 }
 
 export const GENERATION_SOURCE_LABELS: Record<GenerationSource, { pl: string; en: string }> = {
@@ -65,6 +68,10 @@ export const GENERATION_SOURCE_LABELS: Record<GenerationSource, { pl: string; en
   [GenerationSource.MixedFunctional]: { 
     pl: 'Mix + funkcjonalność', 
     en: 'Mix + functionality' 
+  },
+  [GenerationSource.InspirationReference]: { 
+    pl: 'Inspiracje referencyjne', 
+    en: 'Inspiration references' 
   }
 };
 
@@ -221,7 +228,13 @@ export function filterInputsBySource(inputs: PromptInputs, source: GenerationSou
       // ZERO PRS - implicit doesn't care about mood transformations
       clone.prsCurrent = { ...NEUTRAL_PRS };
       clone.prsTarget = { ...NEUTRAL_PRS };
-      clone.psychologicalBaseline = { ...clone.psychologicalBaseline, prsIdeal: { ...NEUTRAL_PRS } };
+      // For Implicit source, use implicitBiophiliaScore from Tinder instead of global biophiliaScore
+      const implicitBiophilia = clone.psychologicalBaseline.implicitBiophiliaScore ?? 0;
+      clone.psychologicalBaseline = { 
+        ...clone.psychologicalBaseline, 
+        prsIdeal: { ...NEUTRAL_PRS },
+        biophiliaScore: implicitBiophilia  // Use Tinder-derived biophilia for implicit source
+      };
       // ZERO roomVisualDNA - use only implicit colors/styles
       clone.roomVisualDNA = { ...EMPTY_ROOM_VISUAL_DNA };
       // ZERO social context for implicit
@@ -272,7 +285,13 @@ export function filterInputsBySource(inputs: PromptInputs, source: GenerationSou
       // ZERO PRS - personality is the only driver
       clone.prsCurrent = { ...NEUTRAL_PRS };
       clone.prsTarget = { ...NEUTRAL_PRS };
-      clone.psychologicalBaseline = { ...clone.psychologicalBaseline, prsIdeal: { ...NEUTRAL_PRS } };
+      // ZERO biophiliaScore - personality source should not use user's biophilia preference
+      // (Could derive from Big Five in future, but for now zero it to keep personality pure)
+      clone.psychologicalBaseline = { 
+        ...clone.psychologicalBaseline, 
+        prsIdeal: { ...NEUTRAL_PRS },
+        biophiliaScore: 0  // Zero biophilia for personality source
+      };
       // ZERO social
       clone.socialContext = 'solo';
       clone.sharedWith = undefined;
@@ -296,6 +315,14 @@ export function filterInputsBySource(inputs: PromptInputs, source: GenerationSou
     case GenerationSource.MixedFunctional:
       // Image 5: Mixed + all functional data
       // KEEP: everything - this is the most complete prompt
+      break;
+      
+    case GenerationSource.InspirationReference:
+      // Image 6: Multi-reference with inspiration images
+      // Uses all aesthetic data + inspiration images as visual references
+      // KEEP: all aesthetic data (implicit, explicit, personality, inspirations)
+      // KEEP: functional data for context
+      // Inspiration images will be passed separately as multi-reference
       break;
   }
   
@@ -331,9 +358,22 @@ export function hasDataForSource(inputs: PromptInputs, source: GenerationSource)
       );
       
     case GenerationSource.Mixed:
+      // Mixed requires BOTH implicit AND explicit data
+      const hasImplicit = hasDataForSource(inputs, GenerationSource.Implicit);
+      const hasExplicit = hasDataForSource(inputs, GenerationSource.Explicit);
+      return hasImplicit && hasExplicit;
+      
     case GenerationSource.MixedFunctional:
-      // Always generate these - they combine whatever data is available
-      return true;
+      // MixedFunctional requires Mixed data PLUS functional data
+      const hasMixed = hasDataForSource(inputs, GenerationSource.Mixed);
+      const hasFunctional = 
+        (inputs.activities && inputs.activities.length > 0) ||
+        (inputs.painPoints && inputs.painPoints.length > 0);
+      return hasMixed && hasFunctional;
+      
+    case GenerationSource.InspirationReference:
+      // Need at least some inspiration images for multi-reference
+      return (inputs.inspirations?.length || 0) > 0;
   }
 }
 
@@ -346,7 +386,8 @@ export function getAvailableSources(inputs: PromptInputs): GenerationSource[] {
     GenerationSource.Explicit,
     GenerationSource.Personality,
     GenerationSource.Mixed,
-    GenerationSource.MixedFunctional
+    GenerationSource.MixedFunctional,
+    GenerationSource.InspirationReference
   ];
   
   return allSources.filter(source => hasDataForSource(inputs, source));

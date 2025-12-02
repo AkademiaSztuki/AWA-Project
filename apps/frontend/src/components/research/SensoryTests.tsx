@@ -10,9 +10,10 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import Image from 'next/image';
-import { Volume2, Hand, Lightbulb, Play, Pause } from 'lucide-react';
+import { Volume2, Hand, Lightbulb, Play, Pause, Palette } from 'lucide-react';
 import { NatureMetaphorTest } from '@/components/research/ProjectiveTechniques';
 import { BiophiliaTest } from '@/components/research/BiophiliaTest';
+import { STYLE_OPTIONS, type StyleOption } from '@/lib/questions/style-options';
 
 interface SensoryTestProps {
   type: 'music' | 'texture' | 'light';
@@ -27,6 +28,7 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   const options = type === 'music' ? MUSIC_PREFERENCES :
                   type === 'texture' ? TEXTURE_PREFERENCES :
@@ -146,13 +148,17 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
                   : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
             >
-              {option.imageUrl ? (
+              {option.imageUrl && !imageErrors.has(option.imageUrl) ? (
                 <div className="relative w-full h-28 overflow-hidden rounded-xl bg-gray-200">
                   <Image
                     src={option.imageUrl}
                     alt={t(option.label)}
                     fill
+                    sizes="(max-width: 768px) 50vw, 33vw"
                     className="object-cover"
+                    onError={() => {
+                      setImageErrors(prev => new Set(prev).add(option.imageUrl!));
+                    }}
                   />
                 </div>
               ) : (
@@ -166,17 +172,24 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
                   {t(option.label)}
                 </h4>
                 {type === 'music' && option.audioUrl && (
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => handlePlayAudio(option, e)}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handlePlayAudio(option, e as any);
+                      }
+                    }}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors cursor-pointer ${
                       isPlaying
                         ? 'bg-gold text-white border-gold'
                         : 'border-white/20 text-graphite hover:border-gold/50'
                     }`}
                   >
                     {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-                  </button>
+                  </div>
                 )}
               </div>
               <p className="text-xs text-silver-dark font-modern leading-relaxed">
@@ -208,6 +221,14 @@ interface PaletteTestProps {
     colors: string[];
     label: { pl: string; en: string };
   }>;
+  selectedId?: string;
+  onSelect: (id: string) => void;
+  frameless?: boolean;
+  className?: string;
+}
+
+interface StyleTestProps {
+  options: StyleOption[];
   selectedId?: string;
   onSelect: (id: string) => void;
   frameless?: boolean;
@@ -285,6 +306,79 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
   );
 }
 
+function StyleTest({ options, selectedId, onSelect, frameless = false, className = '' }: StyleTestProps) {
+  const { language, t } = useLanguage();
+
+  const ContentWrapper = frameless ? 'div' : GlassCard;
+  const wrapperClass = frameless 
+    ? `h-full flex flex-col justify-center ${className}`
+    : `p-5 md:p-6 h-full flex flex-col justify-center ${className}`;
+
+  return (
+    <ContentWrapper className={wrapperClass}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+            <Palette className="text-white" size={20} />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
+              {language === 'pl' ? 'Styl' : 'Style'}
+            </p>
+            <p className="text-sm font-modern text-graphite">
+              {language === 'pl'
+                ? 'Który styl najlepiej opisuje Twoje preferencje?'
+                : 'Which style best describes your preferences?'}
+            </p>
+          </div>
+        </div>
+        {selectedId && (
+          <p className="text-xs text-right text-silver-dark">
+            {language === 'pl' ? 'Wybrano:' : 'Selected:'}{' '}
+            <span className="font-semibold text-graphite">
+              {(() => {
+                const style = options.find(s => s.id === selectedId);
+                return style ? (language === 'pl' ? style.labelPl : style.labelEn) : '';
+              })()}
+            </span>
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 flex-1 content-center overflow-y-auto">
+        {options.map((style) => {
+          const isSelected = style.id === selectedId;
+          return (
+            <button
+              key={style.id}
+              type="button"
+              onClick={() => onSelect(style.id)}
+              className={`rounded-2xl border px-4 py-4 text-left flex flex-col gap-3 transition-all ${
+                isSelected
+                  ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
+                  : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
+              }`}
+            >
+              <h4 className="font-nasalization text-sm text-graphite">
+                {language === 'pl' ? style.labelPl : style.labelEn}
+              </h4>
+              <p className="text-xs text-silver-dark font-modern leading-relaxed">
+                {style.description}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-4 text-xs text-center text-silver-dark font-modern">
+        {language === 'pl'
+          ? 'Styl ustawia bazę dla całej estetyki przestrzeni.'
+          : 'Style sets the foundation for the entire space aesthetic.'}
+      </p>
+    </ContentWrapper>
+  );
+}
+
 interface SensoryTestSuiteProps {
   onComplete: (results: {
     music: string;
@@ -292,6 +386,7 @@ interface SensoryTestSuiteProps {
     light: string;
     natureMetaphor: string;
     biophiliaScore: number;
+    style?: string;
   }) => void;
   className?: string;
   profileContext?: {
@@ -302,9 +397,12 @@ interface SensoryTestSuiteProps {
   paletteOptions?: PaletteTestProps['options'];
   selectedPalette?: string;
   onPaletteSelect?: (id: string) => void;
+  styleOptions?: StyleOption[];
+  selectedStyle?: string;
+  onStyleSelect?: (id: string) => void;
 }
 
-type SensorySuiteTest = 'palette' | 'music' | 'texture' | 'light' | 'nature' | 'biophilia';
+type SensorySuiteTest = 'palette' | 'style' | 'music' | 'texture' | 'light' | 'nature' | 'biophilia';
 type InteractiveTest = 'music' | 'texture' | 'light';
 
 export function SensoryTestSuite({
@@ -313,20 +411,28 @@ export function SensoryTestSuite({
   profileContext,
   paletteOptions,
   selectedPalette,
-  onPaletteSelect
+  onPaletteSelect,
+  styleOptions,
+  selectedStyle,
+  onStyleSelect
 }: SensoryTestSuiteProps) {
   const { language } = useLanguage();
   const hasPalette = Boolean(paletteOptions?.length && onPaletteSelect);
-  const tests = useMemo<SensorySuiteTest[]>(
-    () => (hasPalette ? ['palette', 'music', 'texture', 'light', 'nature', 'biophilia'] : ['music', 'texture', 'light', 'nature', 'biophilia']),
-    [hasPalette]
-  );
+  const hasStyle = Boolean(styleOptions?.length && onStyleSelect);
+  const tests = useMemo<SensorySuiteTest[]>(() => {
+    const baseTests: SensorySuiteTest[] = [];
+    if (hasPalette) baseTests.push('palette');
+    if (hasStyle) baseTests.push('style');
+    baseTests.push('music', 'texture', 'light', 'nature', 'biophilia');
+    return baseTests;
+  }, [hasPalette, hasStyle]);
   const [currentTest, setCurrentTest] = useState<SensorySuiteTest>(tests[0]);
   const [results, setResults] = useState<{
     music?: string;
     texture?: string;
     light?: string;
     natureMetaphor?: string;
+    style?: string;
   }>({});
   const [biophiliaScore, setBiophiliaScore] = useState<number | undefined>(undefined);
 
@@ -345,10 +451,11 @@ export function SensoryTestSuite({
 
   const canComplete = (nextResults: typeof results, nextBiophilia?: number) => {
     const paletteReady = !hasPalette || Boolean(selectedPalette);
+    const styleReady = !hasStyle || Boolean(selectedStyle);
     const sensoryReady = Boolean(nextResults.music && nextResults.texture && nextResults.light);
     const natureReady = Boolean(nextResults.natureMetaphor);
     const biophiliaReady = typeof (nextBiophilia ?? biophiliaScore) === 'number';
-    return paletteReady && sensoryReady && natureReady && biophiliaReady;
+    return paletteReady && styleReady && sensoryReady && natureReady && biophiliaReady;
   };
 
   const triggerComplete = (finalResults: typeof results, finalBiophilia: number | undefined) => {
@@ -366,7 +473,8 @@ export function SensoryTestSuite({
       texture: finalResults.texture,
       light: finalResults.light,
       natureMetaphor: finalResults.natureMetaphor,
-      biophiliaScore: finalBiophilia
+      biophiliaScore: finalBiophilia,
+      ...(selectedStyle && { style: selectedStyle })
     };
     setTimeout(() => onComplete(payload), 300);
   };
@@ -374,6 +482,15 @@ export function SensoryTestSuite({
   const handleSelect = (testType: SensorySuiteTest, value: string | number) => {
     if (testType === 'palette') {
       onPaletteSelect?.(value as string);
+      goToNext(testType);
+      if (canComplete(results)) {
+        triggerComplete(results, biophiliaScore);
+      }
+      return;
+    }
+
+    if (testType === 'style') {
+      onStyleSelect?.(value as string);
       goToNext(testType);
       if (canComplete(results)) {
         triggerComplete(results, biophiliaScore);
@@ -424,6 +541,8 @@ export function SensoryTestSuite({
         return language === 'pl' ? 'Światło' : 'Light';
       case 'palette':
         return language === 'pl' ? 'Paleta' : 'Palette';
+      case 'style':
+        return language === 'pl' ? 'Styl' : 'Style';
       case 'nature':
         return language === 'pl' ? 'Metafora' : 'Metaphor';
       case 'biophilia':
@@ -435,6 +554,7 @@ export function SensoryTestSuite({
 
   const isTestComplete = (test: SensorySuiteTest) => {
     if (test === 'palette') return Boolean(selectedPalette);
+    if (test === 'style') return Boolean(selectedStyle);
     if (test === 'nature') return Boolean(results.natureMetaphor);
     if (test === 'biophilia') return typeof biophiliaScore === 'number';
     return Boolean(results[test as InteractiveTest]);
@@ -489,6 +609,14 @@ export function SensoryTestSuite({
             options={paletteOptions}
             selectedId={selectedPalette}
             onSelect={(value) => handleSelect('palette', value)}
+            frameless
+            className="h-full overflow-y-auto flex flex-col justify-center"
+          />
+        ) : currentTest === 'style' && hasStyle && styleOptions ? (
+          <StyleTest
+            options={styleOptions}
+            selectedId={selectedStyle}
+            onSelect={(value) => handleSelect('style', value)}
             frameless
             className="h-full overflow-y-auto flex flex-col justify-center"
           />

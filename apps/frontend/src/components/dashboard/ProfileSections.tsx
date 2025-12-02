@@ -14,7 +14,8 @@ import {
   Image as ImageIcon,
   ChevronRight,
   Sparkles,
-  Leaf
+  Leaf,
+  Plus
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -42,10 +43,10 @@ export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
             </div>
             <div>
               <h3 className="text-xl font-nasalization text-graphite">
-                {t('Visual DNA', 'Visual DNA')}
+                {t('Ukryte Preferencje', 'Implicit Preferences')}
               </h3>
               <p className="text-sm text-silver-dark font-modern">
-                {t('Twoje preferencje wizualne', 'Your visual preferences')}
+                {t('Z analizy Twoich wyborów (Tinder)', 'From your swipe choices (Tinder)')}
               </p>
             </div>
           </div>
@@ -118,6 +119,130 @@ export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
             </div>
           </div>
         )}
+      </GlassCard>
+    </motion.div>
+  );
+}
+
+// Explicit Preferences Section (Jawne preferencje)
+export function ExplicitPreferencesSection({ sessionData }: { sessionData: any }) {
+  const { language } = useLanguage();
+
+  const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
+
+  const colorsAndMaterials = sessionData?.colorsAndMaterials;
+  const sensoryPreferences = sessionData?.sensoryPreferences;
+
+  // Check if we have any explicit preferences
+  const hasExplicitData = !!(colorsAndMaterials?.selectedStyle || 
+                              colorsAndMaterials?.selectedPalette ||
+                              sensoryPreferences?.light ||
+                              sensoryPreferences?.texture ||
+                              sensoryPreferences?.music ||
+                              sensoryPreferences?.natureMetaphor);
+
+  if (!hasExplicitData) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="mb-6"
+    >
+      <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+              <Sparkles size={20} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-nasalization text-graphite">
+                {t('Jawne Preferencje', 'Explicit Preferences')}
+              </h3>
+              <p className="text-sm text-silver-dark font-modern">
+                {t('Twoje świadome wybory', 'Your conscious choices')}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {/* Style & Palette */}
+          {(colorsAndMaterials?.selectedStyle || colorsAndMaterials?.selectedPalette) && (
+            <div>
+              <p className="text-xs text-silver-dark font-modern mb-2">
+                {t('Styl i Paleta', 'Style & Palette')}
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {colorsAndMaterials?.selectedStyle && (
+                  <span className="px-3 py-1 rounded-full text-xs font-modern bg-white/20 text-graphite">
+                    {colorsAndMaterials.selectedStyle}
+                  </span>
+                )}
+                {colorsAndMaterials?.selectedPalette && (
+                  <span className="px-3 py-1 rounded-full text-xs font-modern bg-white/20 text-graphite">
+                    {colorsAndMaterials.selectedPalette}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Materials */}
+          {colorsAndMaterials?.topMaterials && colorsAndMaterials.topMaterials.length > 0 && (
+            <div>
+              <p className="text-xs text-silver-dark font-modern mb-2">
+                {t('Materiały', 'Materials')}
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {colorsAndMaterials.topMaterials.map((material: string, idx: number) => (
+                  <span
+                    key={idx}
+                    className="px-3 py-1 rounded-full text-xs font-modern bg-white/20 text-graphite"
+                  >
+                    {material}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sensory Preferences */}
+          {(sensoryPreferences?.light || sensoryPreferences?.texture || sensoryPreferences?.music || sensoryPreferences?.natureMetaphor) && (
+            <div>
+              <p className="text-xs text-silver-dark font-modern mb-2">
+                {t('Preferencje Sensoryczne', 'Sensory Preferences')}
+              </p>
+              <div className="space-y-1">
+                {sensoryPreferences?.light && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-silver-dark font-modern w-20">{t('Światło:', 'Light:')}</span>
+                    <span className="text-sm text-graphite font-modern">{sensoryPreferences.light}</span>
+                  </div>
+                )}
+                {sensoryPreferences?.texture && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-silver-dark font-modern w-20">{t('Tekstura:', 'Texture:')}</span>
+                    <span className="text-sm text-graphite font-modern">{sensoryPreferences.texture}</span>
+                  </div>
+                )}
+                {sensoryPreferences?.music && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-silver-dark font-modern w-20">{t('Muzyka:', 'Music:')}</span>
+                    <span className="text-sm text-graphite font-modern">{sensoryPreferences.music}</span>
+                  </div>
+                )}
+                {sensoryPreferences?.natureMetaphor && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-silver-dark font-modern w-20">{t('Metafora:', 'Metaphor:')}</span>
+                    <span className="text-sm text-graphite font-modern">{sensoryPreferences.natureMetaphor}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </GlassCard>
     </motion.div>
   );
@@ -274,21 +399,99 @@ export function RoomAnalysisSection({ roomAnalysis, roomImage }: { roomAnalysis:
   );
 }
 
-// Inspirations Preview Section
-export function InspirationsPreviewSection({ inspirations, onViewAll }: { inspirations: any[]; onViewAll?: () => void }) {
-  const { language } = useLanguage();
+// Helper to get image URL from various formats
+function getImageUrl(item: any): string | null {
+  // Check all possible image fields
+  if (item.url) return item.url;
+  if (item.imageBase64) return item.imageBase64;
+  if (item.image) return item.image;
+  if (item.base64) return item.base64.startsWith('data:') ? item.base64 : `data:image/png;base64,${item.base64}`;
+  if (item.previewUrl) return item.previewUrl;
+  if (item.thumbnailUrl) return item.thumbnailUrl;
+  return null;
+}
 
-  if (!inspirations || inspirations.length === 0) return null;
+// Inspirations Preview Section
+export function InspirationsPreviewSection({ 
+  inspirations, 
+  onViewAll,
+  onAddInspirations 
+}: { 
+  inspirations: any[]; 
+  onViewAll?: () => void;
+  onAddInspirations?: () => void;
+}) {
+  const { language } = useLanguage();
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [imageErrors, setImageErrors] = React.useState<Set<number>>(new Set());
 
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
+
+  // Show empty state with add button if no inspirations
+  if (!inspirations || inspirations.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="mb-6"
+      >
+        <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+                <Heart size={20} className="text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-nasalization text-graphite">
+                  {t('Inspiracje', 'Inspirations')}
+                </h3>
+                <p className="text-sm text-silver-dark font-modern">
+                  {t('Dodaj zdjęcia wnętrz, które Ci się podobają', 'Add interior photos you like')}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {onAddInspirations && (
+            <button
+              onClick={onAddInspirations}
+              className="w-full py-4 border-2 border-dashed border-gold/30 rounded-lg 
+                       hover:border-gold/60 hover:bg-gold/5 transition-all duration-200
+                       flex items-center justify-center gap-2 text-gold font-modern"
+            >
+              <Plus size={20} />
+              {t('Dodaj inspiracje', 'Add inspirations')}
+            </button>
+          )}
+        </GlassCard>
+      </motion.div>
+    );
+  }
   
-  const displayInspirations = inspirations.filter(i => i.url).slice(0, 4);
-  const remainingCount = Math.max(0, inspirations.length - 4);
+  // Get all inspirations with valid images
+  const allValidInspirations = inspirations.map((insp, idx) => ({
+    ...insp,
+    _idx: idx,
+    _imageUrl: getImageUrl(insp)
+  })).filter(i => i._imageUrl !== null);
+  
+  // Show 4 when collapsed, all when expanded
+  const displayInspirations = isExpanded 
+    ? allValidInspirations
+    : allValidInspirations.slice(0, 4);
+  
+  const totalWithImages = allValidInspirations.length;
+  const remainingCount = isExpanded ? 0 : Math.max(0, totalWithImages - 4);
 
   // Calculate aggregated biophilia
   const avgBiophilia = inspirations
     .filter(i => i.tags?.biophilia !== undefined)
     .reduce((sum, i) => sum + (i.tags?.biophilia || 0), 0) / inspirations.length;
+
+  const handleImageError = (idx: number) => {
+    setImageErrors(prev => new Set(prev).add(idx));
+  };
 
   return (
     <motion.div
@@ -296,11 +499,12 @@ export function InspirationsPreviewSection({ inspirations, onViewAll }: { inspir
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
       className="mb-6"
-      onClick={onViewAll}
-      style={{ cursor: onViewAll ? 'pointer' : 'default' }}
     >
       <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
-        <div className="flex items-center justify-between mb-4">
+        <div 
+          className="flex items-center justify-between mb-4 cursor-pointer"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
               <Heart size={20} className="text-white" />
@@ -310,32 +514,70 @@ export function InspirationsPreviewSection({ inspirations, onViewAll }: { inspir
                 {t('Inspiracje', 'Inspirations')}
               </h3>
               <p className="text-sm text-silver-dark font-modern">
-                {inspirations.length} {t('obrazków', 'images')}
+                {totalWithImages} {t('obrazków', 'images')}
+                {totalWithImages < inspirations.length && ` (${inspirations.length - totalWithImages} ${t('bez podglądu', 'no preview')})`}
               </p>
             </div>
           </div>
-          <ChevronRight size={24} className="text-gold" />
+          <ChevronRight 
+            size={24} 
+            className={`text-gold transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+          />
         </div>
 
         {/* Images Grid */}
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          {displayInspirations.map((insp, idx) => (
-            <div key={idx} className="relative aspect-square rounded-lg overflow-hidden">
-              <Image
-                src={insp.url!}
-                alt={`Inspiration ${idx + 1}`}
-                fill
-                className="object-cover"
-              />
-            </div>
-          ))}
-        </div>
+        <motion.div 
+          className={`grid grid-cols-4 gap-2 mb-4 ${isExpanded ? 'max-h-[500px] overflow-y-auto pr-1' : ''}`}
+          initial={false}
+          animate={{ height: isExpanded ? 'auto' : 'auto' }}
+        >
+          {displayInspirations.map((insp) => {
+            if (imageErrors.has(insp._idx)) {
+              return (
+                <div key={insp._idx} className="relative aspect-square rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
+                  <ImageIcon size={24} className="text-silver-dark" />
+                </div>
+              );
+            }
+            
+            return (
+              <div key={insp._idx} className="relative aspect-square rounded-lg overflow-hidden bg-white/5">
+                <Image
+                  src={insp._imageUrl}
+                  alt={`Inspiration ${insp._idx + 1}`}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 25vw, 20vw"
+                  onError={() => handleImageError(insp._idx)}
+                  unoptimized={insp._imageUrl?.startsWith('data:')}
+                />
+              </div>
+            );
+          })}
+        </motion.div>
 
-        {remainingCount > 0 && (
-          <p className="text-sm text-center text-silver-dark font-modern">
-            +{remainingCount} {t('więcej', 'more')}
-          </p>
-        )}
+        {/* Show remaining count or add more button */}
+        <div className="flex items-center justify-between gap-4">
+          {remainingCount > 0 && (
+            <p className="text-sm text-silver-dark font-modern cursor-pointer hover:text-gold transition-colors"
+               onClick={() => setIsExpanded(true)}>
+              +{remainingCount} {t('więcej', 'more')}
+            </p>
+          )}
+          
+          {onAddInspirations && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddInspirations();
+              }}
+              className="flex items-center gap-1 text-sm text-gold hover:text-champagne transition-colors font-modern"
+            >
+              <Plus size={16} />
+              {t('Dodaj więcej', 'Add more')}
+            </button>
+          )}
+        </div>
 
         {/* Biophilia Score */}
         {!isNaN(avgBiophilia) && avgBiophilia > 0 && (
@@ -358,16 +600,34 @@ export function InspirationsPreviewSection({ inspirations, onViewAll }: { inspir
   );
 }
 
-// Generation Stats Section
-export function GenerationStatsSection({ generations, generatedImages }: { generations: any[]; generatedImages?: string[] }) {
+// Generation Stats Section with expandable images
+export function GenerationStatsSection({ generations, generatedImages }: { generations: any[]; generatedImages?: any[] }) {
   const { language } = useLanguage();
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [imageErrors, setImageErrors] = React.useState<Set<number>>(new Set());
 
   const totalGenerations = generations?.length || 0;
-  const totalImages = generatedImages?.length || 0;
+  
+  // Handle both string[] and object[] formats for generatedImages
+  const normalizedImages = (generatedImages || []).map((img, idx) => {
+    if (typeof img === 'string') {
+      return { _idx: idx, _imageUrl: img.startsWith('data:') ? img : `data:image/png;base64,${img}` };
+    }
+    return { _idx: idx, _imageUrl: getImageUrl(img) };
+  }).filter(img => img._imageUrl !== null);
+  
+  const totalImages = normalizedImages.length;
 
   if (totalGenerations === 0 && totalImages === 0) return null;
 
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
+  
+  const displayImages = isExpanded ? normalizedImages : normalizedImages.slice(0, 4);
+  const remainingCount = isExpanded ? 0 : Math.max(0, totalImages - 4);
+
+  const handleImageError = (idx: number) => {
+    setImageErrors(prev => new Set(prev).add(idx));
+  };
 
   return (
     <motion.div
@@ -377,34 +637,79 @@ export function GenerationStatsSection({ generations, generatedImages }: { gener
       className="mb-6"
     >
       <GlassCard className="p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <Sparkles size={20} className="text-white" />
+        <div 
+          className="flex items-center justify-between mb-4 cursor-pointer"
+          onClick={() => totalImages > 0 && setIsExpanded(!isExpanded)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+              <Sparkles size={20} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-nasalization text-graphite">
+                {t('Wygenerowane Obrazy', 'Generated Images')}
+              </h3>
+              <p className="text-sm text-silver-dark font-modern">
+                {totalImages} {t('obrazków', 'images')} • {totalGenerations} {t('sesji', 'sessions')}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-xl font-nasalization text-graphite">
-              {t('Statystyki Generowania', 'Generation Stats')}
-            </h3>
-            <p className="text-sm text-silver-dark font-modern">
-              {t('Twoja aktywność', 'Your activity')}
-            </p>
-          </div>
+          {totalImages > 0 && (
+            <ChevronRight 
+              size={24} 
+              className={`text-gold transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+            />
+          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        {/* Images Grid */}
+        {totalImages > 0 && (
+          <motion.div 
+            className={`grid grid-cols-4 gap-2 mb-4 ${isExpanded ? 'max-h-[500px] overflow-y-auto pr-1' : ''}`}
+            initial={false}
+          >
+            {displayImages.map((img) => {
+              if (imageErrors.has(img._idx)) {
+                return (
+                  <div key={img._idx} className="relative aspect-square rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
+                    <ImageIcon size={24} className="text-silver-dark" />
+                  </div>
+                );
+              }
+              
+              return (
+                <div key={img._idx} className="relative aspect-square rounded-lg overflow-hidden bg-white/5">
+                  <Image
+                    src={img._imageUrl!}
+                    alt={`Generated ${img._idx + 1}`}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 25vw, 20vw"
+                    onError={() => handleImageError(img._idx)}
+                    unoptimized={img._imageUrl?.startsWith('data:')}
+                  />
+                </div>
+              );
+            })}
+          </motion.div>
+        )}
+
+        {remainingCount > 0 && (
+          <p className="text-sm text-center text-silver-dark font-modern cursor-pointer hover:text-gold transition-colors"
+             onClick={() => setIsExpanded(true)}>
+            +{remainingCount} {t('więcej', 'more')}
+          </p>
+        )}
+
+        {/* Stats summary when no images */}
+        {totalImages === 0 && totalGenerations > 0 && (
           <div className="text-center p-4 rounded-lg bg-white/10">
             <p className="text-3xl font-nasalization text-gold">{totalGenerations}</p>
             <p className="text-xs text-silver-dark font-modern">
               {t('Sesji generowania', 'Generation sessions')}
             </p>
           </div>
-          <div className="text-center p-4 rounded-lg bg-white/10">
-            <p className="text-3xl font-nasalization text-gold">{totalImages}</p>
-            <p className="text-xs text-silver-dark font-modern">
-              {t('Wygenerowanych obrazków', 'Generated images')}
-            </p>
-          </div>
-        </div>
+        )}
       </GlassCard>
     </motion.div>
   );

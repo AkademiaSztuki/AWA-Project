@@ -88,6 +88,7 @@ export function BiophiliaTest({ onSelect, className = '', frameless = false }: B
                     src={option.imageUrl}
                     alt={t(option.label)}
                     fill
+                    sizes="(max-width: 768px) 50vw, 33vw"
                     className="object-cover"
                   />
                 ) : (

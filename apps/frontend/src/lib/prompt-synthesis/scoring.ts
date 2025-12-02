@@ -4,6 +4,10 @@
 
 import { PRSMoodGridData } from '../questions/validated-scales';
 import { ActivityContext } from '@/types/deep-personalization';
+import { GenerationSource } from './modes';
+import { deriveStyleFromFacets, calculateConfidence, type PersonalityData } from './facet-derivation';
+import { RESEARCH_SOURCES } from './research-mappings';
+import { analyzeMoodTransformation, mapSocialContext, analyzeActivityNeeds, type MoodTransformation, type SocialContextRecommendations, type ActivityRecommendations } from './mood-transformation';
 
 // =========================
 // INPUT TYPES
@@ -22,6 +26,7 @@ export interface PromptInputs {
     };
     explicit: {
       selectedPalette: string;   // User's ranked #1 palette
+      selectedStyle?: string;     // User's selected style (from style-selection flow)
       topMaterials: string[];    // User's selected materials
       warmthPreference: number;  // 0-1 from semantic differential
       brightnessPreference: number; // 0-1
@@ -31,7 +36,8 @@ export interface PromptInputs {
   
   psychologicalBaseline: {
     prsIdeal: PRSMoodGridData;   // Where user wants spaces ideally
-    biophiliaScore: number;      // 0-3
+    biophiliaScore: number;      // 0-3 (global from biophilia test)
+    implicitBiophiliaScore?: number; // 0-3 (calculated from Tinder swipes - avgBiophilia from liked images)
   };
   
   lifestyle: {
@@ -190,30 +196,58 @@ export interface PromptWeights {
   
   // Special Considerations
   addressPainPoints: string[];
+  
+  // NEW: Mood transformation (for MixedFunctional)
+  moodTransformation?: MoodTransformation;
+  socialContextRecommendations?: SocialContextRecommendations;
+  activityNeeds?: ActivityRecommendations;
 }
 
 // =========================
 // SCORING FUNCTIONS
 // =========================
 
-export function calculatePromptWeights(inputs: PromptInputs): PromptWeights {
+export function calculatePromptWeights(inputs: PromptInputs, sourceType?: GenerationSource | string): PromptWeights {
   // 1. PRS GAP ANALYSIS (highest weight: 25%)
   const prsWeights = analyzePRSGap(inputs.prsCurrent, inputs.prsTarget);
   
   // 2. STYLE INTEGRATION (implicit 60% + explicit 40%, with personality fallback)
-  const styleWeights = integrateStylePreferences(inputs.aestheticDNA, inputs.personality);
+  const styleWeights = integrateStylePreferences(
+    inputs.aestheticDNA,
+    inputs.personality,
+    inputs.lifestyle,
+    inputs.sensory,
+    sourceType
+  );
   
-  // 3. COLOR INTEGRATION (with personality fallback)
+  // 3. COLOR INTEGRATION (with personality and style fallback)
   const colorWeights = integrateColorPreferences(
     inputs.aestheticDNA,
     inputs.roomVisualDNA,
     inputs.sensory,
-    inputs.personality
+    inputs.personality,
+    styleWeights.dominantStyle, // Pass dominant style for color derivation when no color data
+    sourceType // Pass source type for Mixed/MixedFunctional differentiation
   );
   
   // 4. BIOPHILIA SCORING
+  // For Mixed sources, blend implicit and explicit biophilia
+  const isMixed = sourceType === GenerationSource.Mixed || sourceType === GenerationSource.MixedFunctional;
+  let biophiliaScoreToUse = inputs.psychologicalBaseline.biophiliaScore;
+  
+  if (isMixed && inputs.psychologicalBaseline.implicitBiophiliaScore !== undefined) {
+    // Blend implicit (from Tinder) and explicit (from test) biophilia
+    const implicitBiophilia = inputs.psychologicalBaseline.implicitBiophiliaScore;
+    const explicitBiophilia = inputs.psychologicalBaseline.biophiliaScore;
+    // For Mixed: average, for MixedFunctional: slightly favor explicit
+    const implicitWeight = sourceType === GenerationSource.MixedFunctional ? 0.4 : 0.5;
+    const explicitWeight = sourceType === GenerationSource.MixedFunctional ? 0.6 : 0.5;
+    biophiliaScoreToUse = Math.round(implicitBiophilia * implicitWeight + explicitBiophilia * explicitWeight);
+    console.log('[Biophilia] Mixed source - blending implicit:', implicitBiophilia, '+ explicit:', explicitBiophilia, '→', biophiliaScoreToUse);
+  }
+  
   const biophiliaWeights = calculateBiophiliaIntegration(
-    inputs.psychologicalBaseline.biophiliaScore,
+    biophiliaScoreToUse,
     inputs.sensory.natureMetaphor,
     inputs.roomType
   );
@@ -240,6 +274,15 @@ export function calculatePromptWeights(inputs: PromptInputs): PromptWeights {
     inputs.sharedWith,
     inputs.householdContext
   );
+  
+  // 7b. SOCIAL CONTEXT RECOMMENDATIONS (for MixedFunctional)
+  const socialContextRecommendations = mapSocialContext(
+    inputs.socialContext,
+    inputs.sharedWith
+  );
+  
+  // 7c. ACTIVITY NEEDS ANALYSIS (for MixedFunctional)
+  const activityNeeds = analyzeActivityNeeds(inputs.activities);
   
   // 8. BIG FIVE PERSONALITY INTEGRATION (domains + facets)
   const personalityWeights = mapBigFiveToPromptWeights(inputs.personality);
@@ -298,8 +341,168 @@ export function calculatePromptWeights(inputs: PromptInputs): PromptWeights {
     designImplications: facetWeights.designImplications,
     
     // Pain points
-    addressPainPoints: inputs.painPoints
+    addressPainPoints: inputs.painPoints,
+    
+    // NEW: Mood transformation and context (for MixedFunctional)
+    moodTransformation: prsWeights.moodTransformation,
+    socialContextRecommendations: socialContextRecommendations,
+    activityNeeds: activityNeeds
   };
+}
+
+// =========================
+// VALID INTERIOR STYLES
+// =========================
+
+const VALID_STYLES = [
+  'modern', 'scandinavian', 'industrial', 'minimalist', 'rustic',
+  'bohemian', 'contemporary', 'traditional', 'mid-century', 'japandi',
+  'coastal', 'farmhouse', 'mediterranean', 'art-deco', 'maximalist',
+  'eclectic', 'hygge', 'zen', 'vintage', 'transitional'
+];
+
+/**
+ * Extracts valid style names from a tag soup string.
+ * Handles cases like "bohemian warm earth velvet marble..." -> "bohemian"
+ */
+function extractValidStyle(styleString: string): string | null {
+  if (!styleString) return null;
+  
+  const lower = styleString.toLowerCase().trim();
+  
+  // Check if it's already a valid style
+  if (VALID_STYLES.includes(lower)) {
+    return lower;
+  }
+  
+  // Try to find a valid style within the string
+  for (const validStyle of VALID_STYLES) {
+    if (lower.includes(validStyle)) {
+      return validStyle;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Extracts all valid styles from an array of style strings.
+ */
+function extractAllValidStyles(styles: string[]): string[] {
+  const validStyles = new Set<string>();
+  
+  for (const style of styles) {
+    const valid = extractValidStyle(style);
+    if (valid) {
+      validStyles.add(valid);
+    }
+  }
+  
+  return Array.from(validStyles);
+}
+
+// =========================
+// VALID COLORS AND NORMALIZATION
+// =========================
+
+const COLOR_TO_HEX: Record<string, string> = {
+  // Neutrals
+  'white': '#FFFFFF',
+  'black': '#000000',
+  'gray': '#808080',
+  'grey': '#808080',
+  'beige': '#F5F5DC',
+  'cream': '#FFFDD0',
+  'ivory': '#FFFFF0',
+  'taupe': '#8B7355',
+  // Warm tones
+  'warm coral': '#FF7F50',
+  'sunny yellow': '#FFD700',
+  'warm beige': '#D4A574',
+  'terracotta': '#E2725B',
+  'burnt orange': '#CC5500',
+  // Cool tones
+  'soft gray': '#A9A9A9',
+  'muted blue': '#6B8E9F',
+  'sage green': '#9DC183',
+  'sky blue': '#87CEEB',
+  'steel blue': '#4682B4',
+  // Rich colors
+  'deep teal': '#008080',
+  'rich burgundy': '#800020',
+  'emerald green': '#50C878',
+  'navy blue': '#000080',
+  // Soft colors
+  'blush pink': '#FFB6C1',
+  'soft lavender': '#E6E6FA',
+  'peach': '#FFE5B4',
+  'mint green': '#98FF98',
+  // Earth tones
+  'charcoal': '#36454F',
+  'crisp white': '#FFFFFF',
+  'warm tones': '#D4A574',
+  'cool tones': '#6B8E9F',
+  'neutral': '#808080',
+  // Common color descriptions from Tinder metadata
+  'warm neutrals': '#D4A574',
+  'cool grays': '#6B8E9F',
+  'earth tones': '#8B7355',
+  'pastels': '#FFB6C1',
+  'bold colors': '#FF7F50',
+  'monochrome': '#808080',
+  'natural wood': '#D4A574',
+  'warm wood': '#D4A574',
+  'cool wood': '#6B8E9F',
+  'warm': '#D4A574',
+  'cool': '#6B8E9F',
+  'neutral colors': '#808080',
+  'warm colors': '#D4A574',
+  'cool colors': '#6B8E9F'
+};
+
+/**
+ * Converts color names to HEX codes.
+ * Returns empty string if no mapping found (FLUX.2 JSON needs hex).
+ */
+function normalizeColor(color: string): string {
+  if (!color) return '';
+  
+  // Already a hex code
+  if (color.startsWith('#')) {
+    return color;
+  }
+  
+  const lower = color.toLowerCase().trim();
+  
+  // Direct mapping
+  if (COLOR_TO_HEX[lower]) {
+    return COLOR_TO_HEX[lower];
+  }
+  
+  // Try partial matching for common patterns
+  if (lower.includes('warm') && lower.includes('neutral')) return '#D4A574';
+  if (lower.includes('cool') && lower.includes('gray')) return '#6B8E9F';
+  if (lower.includes('earth')) return '#8B7355';
+  if (lower.includes('pastel')) return '#FFB6C1';
+  if (lower.includes('bold')) return '#FF7F50';
+  if (lower.includes('monochrome')) return '#808080';
+  if (lower.includes('wood')) return '#D4A574';
+  if (lower.includes('warm')) return '#D4A574';
+  if (lower.includes('cool')) return '#6B8E9F';
+  if (lower.includes('natural')) return '#D4A574';
+  if (lower.includes('neutral')) return '#808080';
+  
+  // No match - return empty (we'll derive from style later)
+  return '';
+}
+
+/**
+ * Extracts and normalizes colors from an array.
+ */
+function extractValidColors(colors: string[]): string[] {
+  const normalized = colors.map(normalizeColor).filter(c => c);
+  // Deduplicate
+  return Array.from(new Set(normalized));
 }
 
 // =========================
@@ -314,6 +517,7 @@ function analyzePRSGap(
   needsEnergizing: number;
   needsInspiration: number;
   needsGrounding: number;
+  moodTransformation?: MoodTransformation;  // NEW: comprehensive transformation data
 } {
   // X-axis: -1 (energizing) to +1 (calming)
   // Y-axis: -1 (boring) to +1 (inspiring)
@@ -321,72 +525,394 @@ function analyzePRSGap(
   const xGap = target.x - current.x;
   const yGap = target.y - current.y;
   
-  return {
+  // Calculate basic gaps (for backward compatibility)
+  const basicGaps = {
     needsCalming: Math.max(0, xGap),        // Positive xGap = needs more calming
     needsEnergizing: Math.max(0, -xGap),    // Negative xGap = needs more energy
     needsInspiration: Math.max(0, yGap),    // Positive yGap = needs more inspiration
     needsGrounding: Math.max(0, -yGap)      // Negative yGap = needs more grounding
   };
+  
+  // Calculate comprehensive mood transformation
+  const moodTransformation = analyzeMoodTransformation(current, target);
+  
+  return {
+    ...basicGaps,
+    moodTransformation
+  };
 }
 
 function integrateStylePreferences(
   aestheticDNA: PromptInputs['aestheticDNA'],
-  personality?: PromptInputs['personality']
+  personality?: PromptInputs['personality'],
+  lifestyle?: PromptInputs['lifestyle'],
+  sensory?: PromptInputs['sensory'],
+  sourceType?: GenerationSource | string
 ): {
   dominantStyle: string;
   confidence: number;
   materials: string[];
   complexity: number;
 } {
-  // Check if we have aesthetic data
-  const hasImplicitStyles = aestheticDNA.implicit.dominantStyles.length > 0;
-  const hasExplicitPalette = !!aestheticDNA.explicit.selectedPalette;
+  // Normalize implicit styles - extract valid styles from tag soup
+  const implicitValidStyles = extractAllValidStyles(aestheticDNA.implicit.dominantStyles);
+  const hasImplicitStyles = implicitValidStyles.length > 0;
+  const hasExplicitStyle = !!aestheticDNA.explicit.selectedStyle && aestheticDNA.explicit.selectedStyle.length > 0;
+  const hasExplicitPalette = !!aestheticDNA.explicit.selectedPalette && aestheticDNA.explicit.selectedPalette.length > 0;
   
-  // If no aesthetic data, derive from personality
-  if (!hasImplicitStyles && !hasExplicitPalette && personality) {
-    return deriveStyleFromPersonality(personality);
+  // Debug logging
+  console.log('[StylePreferences] Input analysis:', {
+    sourceType,
+    implicitStyles: aestheticDNA.implicit.dominantStyles,
+    implicitValidStyles,
+    hasImplicitStyles,
+    explicitStyle: aestheticDNA.explicit.selectedStyle,
+    hasExplicitStyle,
+    explicitPalette: aestheticDNA.explicit.selectedPalette,
+    hasExplicitPalette,
+    hasPersonality: !!personality,
+    personalityScores: personality ? {
+      O: personality.openness,
+      C: personality.conscientiousness,
+      E: personality.extraversion,
+      A: personality.agreeableness,
+      N: personality.neuroticism
+    } : null
+  });
+  
+  // SPECIAL HANDLING FOR MIXED SOURCES - force blending even without implicit data
+  // Handle both enum and string for backward compatibility
+  const isMixed = sourceType === GenerationSource.Mixed || sourceType === GenerationSource.MixedFunctional ||
+                  sourceType === 'mixed' || sourceType === 'mixed_functional';
+  
+  // Define isMixedFunctional once at the top of the Mixed block
+  const isMixedFunctional = (sourceType === GenerationSource.MixedFunctional || sourceType === 'mixed_functional');
+  
+  if (isMixed) {
+    let explicitStyle = '';
+    if (hasExplicitStyle) {
+      explicitStyle = extractValidStyle(aestheticDNA.explicit.selectedStyle!) || '';
+    }
+    if (!explicitStyle && hasExplicitPalette) {
+      explicitStyle = extractValidStyle(aestheticDNA.explicit.selectedPalette) || '';
+    }
+    if (!explicitStyle) {
+      // No fallback - if quality gates work correctly, this should not happen
+      // If it does, the source should have been skipped
+      throw new Error(`Mixed source requires explicit style data, but none found. This indicates a quality gate failure.`);
+    }
+    
+    // For Mixed sources, ALWAYS blend with personality or implicit if available
+    // But differentiate Mixed vs MixedFunctional even when blending succeeds
+    
+    if (hasImplicitStyles) {
+      const implicitStyle = implicitValidStyles[0];
+      if (implicitStyle.toLowerCase() !== explicitStyle.toLowerCase()) {
+        // Create different blended styles for Mixed vs MixedFunctional
+        let blendedStyle: string;
+        if (isMixedFunctional) {
+          // MixedFunctional: emphasize the explicit style more (functional needs explicit preferences)
+          blendedStyle = `${explicitStyle} with ${implicitStyle} accents`;
+        } else {
+          // Mixed: emphasize the implicit style more (aesthetic blend)
+          blendedStyle = `${implicitStyle} with ${explicitStyle} influences`;
+        }
+        
+        console.log('[StylePreferences] Mixed: blending explicit + implicit:', explicitStyle, '+', implicitStyle, '→', blendedStyle);
+        
+        // Differentiate materials for Mixed vs MixedFunctional
+        let blendedMaterials: string[];
+        if (isMixedFunctional) {
+          // MixedFunctional: emphasize explicit materials more (functional needs)
+          blendedMaterials = [
+            ...aestheticDNA.explicit.topMaterials.slice(0, 2),
+            ...aestheticDNA.implicit.materials.slice(0, 1)
+          ];
+        } else {
+          // Mixed: emphasize implicit materials more (aesthetic blend)
+          blendedMaterials = [
+            ...aestheticDNA.implicit.materials.slice(0, 2),
+            ...aestheticDNA.explicit.topMaterials.slice(0, 1)
+          ];
+        }
+        
+        return {
+          dominantStyle: blendedStyle,
+          confidence: 0.75,
+          materials: blendedMaterials,
+          complexity: (aestheticDNA.implicit.complexity + aestheticDNA.explicit.complexityPreference) / 2
+        };
+      }
+    } else if (personality) {
+      // No implicit data - blend explicit with personality
+      const personalityStyle = deriveStyleFromPersonality(personality);
+      const personalityBaseStyle = personalityStyle.dominantStyle.split(' ')[0].toLowerCase();
+      if (personalityBaseStyle !== explicitStyle.toLowerCase()) {
+        // Create different blended styles for Mixed vs MixedFunctional
+        let blendedStyle: string;
+        if (isMixedFunctional) {
+          // MixedFunctional: emphasize explicit style more (functional needs explicit preferences)
+          blendedStyle = `${explicitStyle} with ${personalityBaseStyle} touches`;
+        } else {
+          // Mixed: emphasize personality style more (aesthetic blend)
+          blendedStyle = `${personalityBaseStyle} with ${explicitStyle} touches`;
+        }
+        
+        console.log('[StylePreferences] Mixed: blending explicit + personality:', explicitStyle, '+', personalityStyle.dominantStyle, '→', blendedStyle);
+        return {
+          dominantStyle: blendedStyle,
+          confidence: 0.7,
+          materials: [
+            ...aestheticDNA.explicit.topMaterials.slice(0, 2),
+            ...personalityStyle.materials.slice(0, 1)
+          ],
+          complexity: (aestheticDNA.explicit.complexityPreference + personalityStyle.complexity) / 2
+        };
+      }
+    }
+    
+    // If no blending possible (no implicit, no personality, or same styles)
+    // FORCE DIVERSITY: Use different styles for Mixed vs MixedFunctional vs Explicit
+    // This ensures each source produces visually distinct results
+    const styleAlternatives: Record<string, string[]> = {
+      'minimalist': ['scandinavian', 'japandi', 'contemporary'],
+      'scandinavian': ['minimalist', 'japandi', 'hygge'],
+      'modern': ['contemporary', 'transitional', 'scandinavian'],
+      'contemporary': ['modern', 'transitional', 'scandinavian'],
+      'bohemian': ['eclectic', 'maximalist', 'rustic'],
+      'rustic': ['farmhouse', 'bohemian', 'traditional'],
+      'industrial': ['modern', 'contemporary', 'minimalist'],
+      'traditional': ['transitional', 'rustic', 'contemporary']
+    };
+    
+    const alternatives = styleAlternatives[explicitStyle.toLowerCase()] || ['scandinavian', 'contemporary', 'modern'];
+    
+    // Mixed uses first alternative, MixedFunctional uses second (or first if only one)
+    const alternativeIndex = isMixedFunctional ? 1 : 0;
+    const alternativeStyle = alternatives[alternativeIndex] || alternatives[0] || 'scandinavian';
+    
+    // Only use alternative if it's different from explicit
+    if (alternativeStyle.toLowerCase() !== explicitStyle.toLowerCase()) {
+      console.log('[StylePreferences] Mixed: forcing diversity - using alternative style:', alternativeStyle, 'instead of', explicitStyle);
+      return {
+        dominantStyle: alternativeStyle,
+        confidence: 0.65,
+        materials: aestheticDNA.explicit.topMaterials.slice(0, 3),
+        complexity: aestheticDNA.explicit.complexityPreference * 1.1 // Slightly more complex
+      };
+    }
+    
+    // Fallback: add modifier if alternative is same as explicit
+    const modifier = isMixedFunctional ? 'optimized' : 'elevated';
+    console.log('[StylePreferences] Mixed: using explicit with', modifier, 'modifier:', explicitStyle);
+    return {
+      dominantStyle: `${modifier} ${explicitStyle}`,
+      confidence: 0.65,
+      materials: aestheticDNA.explicit.topMaterials.slice(0, 3),
+      complexity: aestheticDNA.explicit.complexityPreference * 1.1 // Slightly more complex
+    };
   }
   
-  // Implicit preferences have 60% weight (behavioral data)
-  // Explicit preferences have 40% weight (stated preferences)
-  const implicitWeight = 0.6;
-  const explicitWeight = 0.4;
-  
-  // Style: Take implicit first (more authentic), then explicit, then 'modern' fallback
-  let dominantStyle = aestheticDNA.implicit.dominantStyles[0];
-  if (!dominantStyle && aestheticDNA.explicit.selectedPalette) {
-    // Try to derive style from palette name
-    dominantStyle = aestheticDNA.explicit.selectedPalette.toLowerCase();
-  }
-  if (!dominantStyle) {
-    dominantStyle = 'modern'; // Ultimate fallback
+  // PRIORITY 1: If we have personality data and NO aesthetic data, derive from personality
+  // This is for the Personality source where all aesthetic data is zeroed
+  if (!hasImplicitStyles && !hasExplicitStyle && !hasExplicitPalette && personality) {
+    const personalityStyle = deriveStyleFromPersonality(personality);
+    // Logging is already done in deriveStyleFromPersonality with research basis
+    return personalityStyle;
   }
   
-  // Confidence: Higher if implicit and explicit align
-  const confidence = hasImplicitStyles ? 0.8 : 0.5;
+    // PRIORITY 2: If we have ONLY implicit data (Implicit source)
+  if (hasImplicitStyles && !hasExplicitStyle && !hasExplicitPalette) {
+    const selectedStyle = implicitValidStyles[0];
+    console.log('[StylePreferences] Using implicit style:', selectedStyle, '(from', aestheticDNA.implicit.dominantStyles, ')');
+    return {
+      dominantStyle: selectedStyle,
+      confidence: 0.8,
+      materials: aestheticDNA.implicit.materials.slice(0, 3),
+      complexity: aestheticDNA.implicit.complexity
+    };
+  }
   
-  // Materials: Combine implicit (60%) + explicit (40%)
-  const materials = [
-    ...aestheticDNA.implicit.materials.slice(0, 2),
-    ...aestheticDNA.explicit.topMaterials.slice(0, 1)
-  ];
+  // PRIORITY 3: If we have ONLY explicit data (Explicit source)
+  if (!hasImplicitStyles && (hasExplicitStyle || hasExplicitPalette)) {
+    let explicitStyle = '';
+    if (hasExplicitStyle) {
+      explicitStyle = extractValidStyle(aestheticDNA.explicit.selectedStyle!) || '';
+    }
+    // If no valid style from selectedStyle, try to derive from lifestyle/sensory
+    if (!explicitStyle && (lifestyle || sensory)) {
+      explicitStyle = deriveStyleFromExplicit(lifestyle, sensory) || '';
+    }
+    // If still no style, try palette name
+    if (!explicitStyle && hasExplicitPalette) {
+      explicitStyle = extractValidStyle(aestheticDNA.explicit.selectedPalette) || '';
+    }
+    // No fallback - if quality gates work correctly, this should not happen
+    if (!explicitStyle) {
+      throw new Error(`Explicit source requires explicit style data, but none found. This indicates a quality gate failure.`);
+    }
+    
+    console.log('[StylePreferences] Using explicit style:', explicitStyle, '(sourceType:', sourceType, ')');
+    return {
+      dominantStyle: explicitStyle,
+      confidence: 0.7,
+      materials: aestheticDNA.explicit.topMaterials.slice(0, 3),
+      complexity: aestheticDNA.explicit.complexityPreference
+    };
+  }
   
-  // Complexity: Weighted average
-  const complexity = (
-    aestheticDNA.implicit.complexity * implicitWeight +
-    aestheticDNA.explicit.complexityPreference * explicitWeight
-  );
+  // PRIORITY 4: MIXED MODE - both implicit and explicit data exist
+  if (hasImplicitStyles && (hasExplicitStyle || hasExplicitPalette)) {
+    const implicitStyle = implicitValidStyles[0];
+    let explicitStyle = '';
+    if (hasExplicitStyle) {
+      explicitStyle = extractValidStyle(aestheticDNA.explicit.selectedStyle!) || '';
+    }
+    if (!explicitStyle && hasExplicitPalette) {
+      explicitStyle = extractValidStyle(aestheticDNA.explicit.selectedPalette) || '';
+    }
+    
+    // If they differ, create a blended style
+    if (explicitStyle && implicitStyle.toLowerCase() !== explicitStyle.toLowerCase()) {
+      console.log('[StylePreferences] Using blended style:', explicitStyle, '+', implicitStyle);
+      return {
+        dominantStyle: `${explicitStyle} with ${implicitStyle} accents`,
+        confidence: 0.75,
+        materials: [
+          ...aestheticDNA.implicit.materials.slice(0, 2),
+          ...aestheticDNA.explicit.topMaterials.slice(0, 1)
+        ],
+        complexity: (aestheticDNA.implicit.complexity + aestheticDNA.explicit.complexityPreference) / 2
+      };
+    }
+    
+    // If same or no explicit, use implicit
+    console.log('[StylePreferences] Mixed mode, using implicit:', implicitStyle);
+    return {
+      dominantStyle: implicitStyle,
+      confidence: 0.8,
+      materials: [
+        ...aestheticDNA.implicit.materials.slice(0, 2),
+        ...aestheticDNA.explicit.topMaterials.slice(0, 1)
+      ],
+      complexity: (aestheticDNA.implicit.complexity + aestheticDNA.explicit.complexityPreference) / 2
+    };
+  }
   
+  // PRIORITY 4b: MIXED MODE without implicit - blend explicit with personality
+  // This happens when user has explicit preferences but no Tinder swipes
+  if (!hasImplicitStyles && (hasExplicitStyle || hasExplicitPalette) && personality) {
+    let explicitStyle = '';
+    if (hasExplicitStyle) {
+      explicitStyle = extractValidStyle(aestheticDNA.explicit.selectedStyle!) || '';
+    }
+    if (!explicitStyle && hasExplicitPalette) {
+      explicitStyle = extractValidStyle(aestheticDNA.explicit.selectedPalette) || '';
+    }
+    
+    // Get personality-derived style
+    const personalityStyle = deriveStyleFromPersonality(personality);
+    
+    // If explicit and personality styles differ, create a blend
+    if (explicitStyle && personalityStyle.dominantStyle.toLowerCase() !== explicitStyle.toLowerCase()) {
+      console.log('[StylePreferences] Blending explicit + personality:', explicitStyle, '+', personalityStyle.dominantStyle);
+      return {
+        dominantStyle: `${explicitStyle} with ${personalityStyle.dominantStyle.split(' ')[0]} influences`,
+        confidence: 0.7,
+        materials: [
+          ...aestheticDNA.explicit.topMaterials.slice(0, 2),
+          ...personalityStyle.materials.slice(0, 1)
+        ],
+        complexity: (aestheticDNA.explicit.complexityPreference + personalityStyle.complexity) / 2
+      };
+    }
+    
+    // If same, just use explicit
+    if (!explicitStyle) {
+      throw new Error(`Mixed mode requires explicit style data, but none found. This indicates a quality gate failure.`);
+    }
+    console.log('[StylePreferences] Mixed mode (no implicit), using explicit:', explicitStyle);
+    return {
+      dominantStyle: explicitStyle,
+      confidence: 0.7,
+      materials: aestheticDNA.explicit.topMaterials.slice(0, 3),
+      complexity: aestheticDNA.explicit.complexityPreference
+    };
+  }
+  
+  // FALLBACK: No data at all - this shouldn't happen but handle it
+  console.log('[StylePreferences] No style data, using fallback');
+  
+  // Try to derive from lifestyle/sensory if available
+  if (lifestyle || sensory) {
+    const derivedStyle = deriveStyleFromExplicit(lifestyle, sensory);
+    if (derivedStyle) {
+      return {
+        dominantStyle: derivedStyle,
+        confidence: 0.5,
+        materials: [],
+        complexity: 0.5
+      };
+    }
+  }
+  
+  // Ultimate fallback
   return {
-    dominantStyle,
-    confidence,
-    materials,
-    complexity
+    dominantStyle: 'modern',
+    confidence: 0.3,
+    materials: [],
+    complexity: 0.5
   };
 }
 
 /**
+ * Derives style from explicit lifestyle and sensory preferences.
+ * Used when selectedStyle is not available but we have lifestyle/sensory data.
+ */
+function deriveStyleFromExplicit(
+  lifestyle?: PromptInputs['lifestyle'],
+  sensory?: PromptInputs['sensory']
+): string | null {
+  if (!lifestyle && !sensory) return null;
+  
+  // Lifestyle vibe mapping
+  if (lifestyle?.vibe) {
+    const vibe = lifestyle.vibe.toLowerCase();
+    if (vibe.includes('calm') || vibe.includes('peaceful')) return 'minimalist';
+    if (vibe.includes('creative') || vibe.includes('artistic')) return 'eclectic';
+    if (vibe.includes('busy') || vibe.includes('active')) return 'contemporary';
+    if (vibe.includes('structured') || vibe.includes('organized')) return 'scandinavian';
+  }
+  
+  // Sensory texture mapping
+  if (sensory?.texture) {
+    const texture = sensory.texture.toLowerCase();
+    if (texture.includes('cold_metal') || texture.includes('industrial')) return 'industrial';
+    if (texture.includes('smooth_wood') || texture.includes('natural')) return 'japandi';
+    if (texture.includes('rough') || texture.includes('rustic')) return 'rustic';
+  }
+  
+  // Sensory light mapping
+  if (sensory?.light) {
+    const light = sensory.light.toLowerCase();
+    if (light.includes('warm_low') || light.includes('hygge')) return 'scandinavian';
+    if (light.includes('cool_bright')) return 'modern';
+  }
+  
+  // Nature metaphor mapping
+  if (sensory?.natureMetaphor) {
+    const nature = sensory.natureMetaphor.toLowerCase();
+    if (nature === 'ocean' || nature === 'coastal') return 'coastal';
+    if (nature === 'forest' || nature === 'woodland') return 'rustic';
+    if (nature === 'mountain') return 'modern';
+  }
+  
+  return null;
+}
+
+/**
  * Derives style preferences purely from Big Five personality traits.
+ * Uses research-backed mappings with facet-level precision when available.
  * Used when no aesthetic data is available (Personality source).
  */
 function deriveStyleFromPersonality(personality: NonNullable<PromptInputs['personality']>): {
@@ -394,73 +920,52 @@ function deriveStyleFromPersonality(personality: NonNullable<PromptInputs['perso
   confidence: number;
   materials: string[];
   complexity: number;
+  researchBasis?: string; // Added for transparency
 } {
-  const O = personality.openness / 100;      // 0-1
-  const C = personality.conscientiousness / 100;
-  const E = personality.extraversion / 100;
-  const A = personality.agreeableness / 100;
-  const N = personality.neuroticism / 100;
+  // Convert to PersonalityData format
+  const personalityData: PersonalityData = {
+    openness: personality.openness,
+    conscientiousness: personality.conscientiousness,
+    extraversion: personality.extraversion,
+    agreeableness: personality.agreeableness,
+    neuroticism: personality.neuroticism,
+    facets: personality.facets
+  };
   
-  // STYLE MAPPING based on Big Five combinations
-  let dominantStyle: string;
+  // Use facet-driven derivation
+  const derivation = deriveStyleFromFacets(personalityData);
   
-  if (O > 0.7 && C < 0.4) {
-    // High Openness + Low Conscientiousness = Bohemian, Eclectic
-    dominantStyle = 'bohemian eclectic';
-  } else if (O > 0.6 && E > 0.6) {
-    // High Openness + High Extraversion = Bold, Maximalist
-    dominantStyle = 'maximalist artistic';
-  } else if (C > 0.7 && O < 0.4) {
-    // High Conscientiousness + Low Openness = Minimalist, Clean
-    dominantStyle = 'minimalist clean';
-  } else if (C > 0.6 && A > 0.6) {
-    // High Conscientiousness + High Agreeableness = Scandinavian
-    dominantStyle = 'Scandinavian';
-  } else if (N > 0.6 && A > 0.5) {
-    // High Neuroticism + High Agreeableness = Cozy, Hygge
-    dominantStyle = 'cozy hygge';
-  } else if (E < 0.4 && N > 0.5) {
-    // Low Extraversion + High Neuroticism = Cocooning, Private
-    dominantStyle = 'cozy sanctuary';
-  } else if (E > 0.7 && A > 0.5) {
-    // High Extraversion + High Agreeableness = Open, Social
-    dominantStyle = 'open contemporary';
-  } else if (O > 0.5 && N < 0.4) {
-    // High Openness + Low Neuroticism = Modern, Confident
-    dominantStyle = 'modern confident';
-  } else {
-    // Balanced = Modern Classic
-    dominantStyle = 'modern classic';
-  }
+  // Calculate confidence using new method
+  const calculatedConfidence = calculateConfidence(personalityData);
   
-  // MATERIALS based on personality
-  const materials: string[] = [];
+  // Get research source citation for logging
+  const researchSource = RESEARCH_SOURCES[derivation.researchBasis];
+  const researchBasis = researchSource 
+    ? `${researchSource.citation.substring(0, 50)}... (${derivation.researchBasis})`
+    : derivation.researchBasis;
   
-  if (A > 0.6 || N > 0.5) {
-    // High Agreeableness or Neuroticism = soft, natural
-    materials.push('soft textiles', 'natural wood');
-  }
-  if (C > 0.6) {
-    // High Conscientiousness = clean, organized
-    materials.push('glass', 'polished surfaces');
-  }
-  if (O > 0.6) {
-    // High Openness = varied, interesting
-    materials.push('mixed textures', 'artisanal elements');
-  }
-  if (E > 0.6) {
-    // High Extraversion = bold, statement
-    materials.push('brass', 'bold accents');
-  }
-  
-  // COMPLEXITY from Openness
-  const complexity = O;
+  console.log('[StylePreferences] Personality-derived style:', {
+    style: derivation.dominantStyle,
+    confidence: calculatedConfidence,
+    matchScore: derivation.score,
+    matchedMapping: derivation.matchedMapping,
+    researchBasis: researchBasis,
+    hasFacets: !!personality.facets,
+    domainScores: {
+      O: personality.openness,
+      C: personality.conscientiousness,
+      E: personality.extraversion,
+      A: personality.agreeableness,
+      N: personality.neuroticism
+    }
+  });
   
   return {
-    dominantStyle,
-    confidence: 0.7, // Personality-derived has moderate confidence
-    materials: materials.slice(0, 3),
-    complexity
+    dominantStyle: derivation.dominantStyle,
+    confidence: calculatedConfidence,
+    materials: derivation.materials,
+    complexity: derivation.complexity,
+    researchBasis: researchBasis
   };
 }
 
@@ -480,44 +985,132 @@ function deriveColorsFromPersonality(personality: NonNullable<PromptInputs['pers
   
   const colors: string[] = [];
   
-  // Base colors from personality
+  // Base colors from personality - using HEX codes directly
   if (E > 0.6) {
     // High Extraversion = warm, vibrant
-    colors.push('warm coral', 'sunny yellow');
+    colors.push('#FF7F50', '#FFD700'); // warm coral, sunny yellow
   } else if (E < 0.4) {
     // Low Extraversion = cool, muted
-    colors.push('soft gray', 'muted blue');
+    colors.push('#A9A9A9', '#6B8E9F'); // soft gray, muted blue
   }
   
   if (O > 0.6) {
     // High Openness = varied, bold
-    colors.push('deep teal', 'rich burgundy');
+    colors.push('#008080', '#800020'); // deep teal, rich burgundy
   } else if (O < 0.4) {
     // Low Openness = neutral, safe
-    colors.push('beige', 'cream');
+    colors.push('#F5F5DC', '#FFFDD0'); // beige, cream
   }
   
   if (N > 0.6) {
     // High Neuroticism = calming, nature
-    colors.push('sage green', 'sky blue');
+    colors.push('#9DC183', '#87CEEB'); // sage green, sky blue
   }
   
   if (A > 0.6) {
     // High Agreeableness = soft, harmonious
-    colors.push('blush pink', 'soft lavender');
+    colors.push('#FFB6C1', '#E6E6FA'); // blush pink, soft lavender
   }
   
   if (C > 0.6) {
     // High Conscientiousness = clean, organized
-    colors.push('crisp white', 'charcoal');
+    colors.push('#FFFFFF', '#36454F'); // crisp white, charcoal
   }
   
   // Temperature: Extraversion drives warmth
   const temperature = E * 0.6 + A * 0.2 + (1 - N) * 0.2;
   
   return {
-    palette: colors.length > 0 ? colors.slice(0, 4) : ['neutral gray', 'white', 'natural wood tones'],
+    palette: colors.length > 0 ? colors.slice(0, 4) : ['#808080', '#FFFFFF', '#D3D3D3'], // Neutral tones as HEX
     temperature
+  };
+}
+
+/**
+ * Derives color palette from interior design style.
+ * Used when no color data is available but we have a style.
+ */
+function deriveColorsFromStyle(style: string): {
+  palette: string[];
+  temperature: number;
+} {
+  const styleColors: Record<string, { palette: string[]; temperature: number }> = {
+    'modern': {
+      palette: ['#FFFFFF', '#2C3E50', '#95A5A6', '#BDC3C7'],
+      temperature: 0.4
+    },
+    'scandinavian': {
+      palette: ['#FFFFFF', '#F5F5DC', '#D4A574', '#87CEEB'],
+      temperature: 0.5
+    },
+    'bohemian': {
+      palette: ['#8B4513', '#DAA520', '#CD853F', '#D2691E', '#FF6347'],
+      temperature: 0.7
+    },
+    'industrial': {
+      palette: ['#36454F', '#708090', '#A9A9A9', '#D2691E'],
+      temperature: 0.3
+    },
+    'minimalist': {
+      palette: ['#FFFFFF', '#F5F5F5', '#E0E0E0', '#000000'],
+      temperature: 0.4
+    },
+    'rustic': {
+      palette: ['#8B4513', '#D2691E', '#DEB887', '#F5DEB3'],
+      temperature: 0.7
+    },
+    'contemporary': {
+      palette: ['#FFFFFF', '#808080', '#000000', '#C0C0C0'],
+      temperature: 0.5
+    },
+    'traditional': {
+      palette: ['#800020', '#DAA520', '#F5F5DC', '#8B4513'],
+      temperature: 0.6
+    },
+    'mid-century': {
+      palette: ['#FF6347', '#FFD700', '#008080', '#F5F5DC'],
+      temperature: 0.6
+    },
+    'japandi': {
+      palette: ['#F5F5DC', '#D4A574', '#808080', '#2F4F4F'],
+      temperature: 0.5
+    },
+    'coastal': {
+      palette: ['#FFFFFF', '#87CEEB', '#F5DEB3', '#20B2AA'],
+      temperature: 0.5
+    },
+    'farmhouse': {
+      palette: ['#FFFFFF', '#F5F5DC', '#8B4513', '#708090'],
+      temperature: 0.6
+    },
+    'eclectic': {
+      palette: ['#FF6347', '#9370DB', '#20B2AA', '#FFD700'],
+      temperature: 0.6
+    },
+    'hygge': {
+      palette: ['#F5F5DC', '#D2B48C', '#8B7355', '#A0522D'],
+      temperature: 0.7
+    }
+  };
+  
+  const lowerStyle = style.toLowerCase();
+  
+  // Try exact match first
+  if (styleColors[lowerStyle]) {
+    return styleColors[lowerStyle];
+  }
+  
+  // Try partial match
+  for (const [key, value] of Object.entries(styleColors)) {
+    if (lowerStyle.includes(key)) {
+      return value;
+    }
+  }
+  
+  // Default neutral palette
+  return {
+    palette: ['#FFFFFF', '#F5F5DC', '#808080', '#2C3E50'],
+    temperature: 0.5
   };
 }
 
@@ -525,31 +1118,25 @@ function integrateColorPreferences(
   aestheticDNA: PromptInputs['aestheticDNA'],
   roomVisualDNA: PromptInputs['roomVisualDNA'],
   sensory: PromptInputs['sensory'],
-  personality?: PromptInputs['personality']
+  personality?: PromptInputs['personality'],
+  dominantStyle?: string,
+  sourceType?: GenerationSource | string
 ): {
   palette: string[];
   temperature: number;
 } {
-  // Check if we have any color data
-  const hasRoomColors = roomVisualDNA.colors.length > 0;
-  const hasImplicitColors = aestheticDNA.implicit.colors.length > 0;
-  
-  // If no color data, derive from personality
-  if (!hasRoomColors && !hasImplicitColors && personality) {
-    return deriveColorsFromPersonality(personality);
-  }
-  
-  // Prioritize room-specific visual DNA (most recent, most relevant)
-  const colors = hasRoomColors
-    ? roomVisualDNA.colors
-    : aestheticDNA.implicit.colors;
+  // Check if this is a Mixed source
+  const isMixed = sourceType === GenerationSource.Mixed || sourceType === GenerationSource.MixedFunctional ||
+                  sourceType === 'mixed' || sourceType === 'mixed_functional';
+  const isMixedFunctional = (sourceType === GenerationSource.MixedFunctional || sourceType === 'mixed_functional');
   
   // Color temperature: Weighted average
   const implicitWarmth = aestheticDNA.implicit.warmth;
   const explicitWarmth = aestheticDNA.explicit.warmthPreference;
-  
-  // Sensory light preference influences temperature
-  const lightInfluence = sensory.light.includes('warm') ? 0.7 : sensory.light.includes('cool') ? 0.3 : 0.5;
+  // Handle empty sensory.light - default to neutral (0.5) if empty
+  const lightInfluence = sensory.light && sensory.light.length > 0
+    ? (sensory.light.includes('warm') ? 0.7 : sensory.light.includes('cool') ? 0.3 : 0.5)
+    : 0.5;
   
   const temperature = (
     implicitWarmth * 0.4 +
@@ -557,10 +1144,116 @@ function integrateColorPreferences(
     lightInfluence * 0.2
   );
   
-  return {
-    palette: colors.length > 0 ? colors : ['neutral tones'],
-    temperature
-  };
+  // Collect all raw colors from available sources
+  const rawColors: string[] = [
+    ...roomVisualDNA.colors,
+    ...aestheticDNA.implicit.colors
+  ];
+  
+  // Convert all colors to hex (FLUX.2 JSON needs hex codes)
+  const hexColors: string[] = [];
+  for (const color of rawColors) {
+    if (!color) continue;
+    
+    // Already hex
+    if (color.startsWith('#')) {
+      hexColors.push(color);
+      continue;
+    }
+    
+    // Try to convert to hex
+    const lower = color.toLowerCase().trim();
+    if (COLOR_TO_HEX[lower]) {
+      hexColors.push(COLOR_TO_HEX[lower]);
+    } else {
+      // Try partial matching
+      const normalized = normalizeColor(color);
+      if (normalized && normalized.startsWith('#')) {
+        hexColors.push(normalized);
+      }
+      // Skip non-hex colors - we'll derive from style
+    }
+  }
+  
+  // Deduplicate
+  const uniqueHexColors = Array.from(new Set(hexColors));
+  
+  // For Mixed sources: ALWAYS blend colors from both implicit and explicit styles
+  // Even if we have hex colors, we need to blend them for differentiation
+  if (isMixed && dominantStyle) {
+    // Extract base styles from blended style string
+    const styleParts = dominantStyle.toLowerCase().split(/\s+(?:with|and|\+)\s+/);
+    const primaryStyle = styleParts[0] || dominantStyle.toLowerCase();
+    const secondaryStyle = styleParts[1] || null;
+    
+    // Get colors for primary style
+    const primaryColors = deriveColorsFromStyle(primaryStyle);
+    
+    // If we have a secondary style, blend colors
+    if (secondaryStyle) {
+      const secondaryColors = deriveColorsFromStyle(secondaryStyle);
+      
+      // For Mixed: emphasize implicit (primary) colors more
+      // For MixedFunctional: emphasize explicit (secondary) colors more
+      const implicitWeight = isMixedFunctional ? 0.4 : 0.6;
+      const explicitWeight = isMixedFunctional ? 0.6 : 0.4;
+      
+      // Blend palettes: take more from primary for Mixed, more from secondary for MixedFunctional
+      const blendedPalette: string[] = [];
+      const primaryCount = Math.ceil(4 * implicitWeight);
+      const secondaryCount = 4 - primaryCount;
+      
+      blendedPalette.push(...primaryColors.palette.slice(0, primaryCount));
+      blendedPalette.push(...secondaryColors.palette.slice(0, secondaryCount));
+      
+      // Deduplicate and ensure we have 4 colors
+      const finalPalette = Array.from(new Set(blendedPalette)).slice(0, 4);
+      
+      // If we don't have enough, fill from the other source
+      if (finalPalette.length < 4) {
+        const remaining = isMixedFunctional 
+          ? primaryColors.palette.filter(c => !finalPalette.includes(c))
+          : secondaryColors.palette.filter(c => !finalPalette.includes(c));
+        finalPalette.push(...remaining.slice(0, 4 - finalPalette.length));
+      }
+      
+      return {
+        palette: finalPalette.length > 0 ? finalPalette : primaryColors.palette,
+        temperature
+      };
+    }
+    
+    // Single style - use its colors
+    return { palette: primaryColors.palette, temperature };
+  }
+  
+  // If we have valid hex colors and NOT Mixed source, use them
+  if (uniqueHexColors.length >= 2 && !isMixed) {
+    return {
+      palette: uniqueHexColors.slice(0, 4),
+      temperature
+    };
+  }
+  
+  // No valid colors - derive from style (most specific)
+  if (dominantStyle) {
+    const styleColors = deriveColorsFromStyle(dominantStyle);
+    return { palette: styleColors.palette, temperature };
+  }
+  
+  // No style - derive from personality
+  if (personality) {
+    return deriveColorsFromPersonality(personality);
+  }
+  
+  // Final fallback: temperature-based colors
+  if (temperature > 0.6) {
+    return { palette: ['#D4A574', '#F5F5DC', '#8B7355', '#CD853F'], temperature };
+  } else if (temperature < 0.4) {
+    return { palette: ['#6B8E9F', '#A9A9A9', '#87CEEB', '#4682B4'], temperature };
+  } else {
+    return { palette: ['#FFFFFF', '#F5F5DC', '#808080', '#2C3E50'], temperature };
+  }
 }
 
 function calculateBiophiliaIntegration(
@@ -571,8 +1264,13 @@ function calculateBiophiliaIntegration(
   density: number;
   elements: string[];
 } {
-  // Normalize biophilia score to 0-1
+  // Normalize biophilia score to 0-1 (score is 0-3)
   const density = biophiliaScore / 3;
+  
+  // If biophiliaScore is 0, user explicitly wants NO plants
+  if (biophiliaScore === 0) {
+    return { density: 0, elements: [] };
+  }
   
   // Elements based on score + nature metaphor
   const elements: string[] = [];
@@ -587,13 +1285,15 @@ function calculateBiophiliaIntegration(
     elements.push('organic shapes', 'abundant greenery');
   }
   
-  // Nature metaphor influences specific elements
-  if (natureMetaphor === 'ocean') {
-    elements.push('flowing forms', 'water-inspired colors');
-  } else if (natureMetaphor === 'forest') {
-    elements.push('layered textures', 'wood elements');
-  } else if (natureMetaphor === 'mountain') {
-    elements.push('stone materials', 'strong vertical lines');
+  // Nature metaphor influences specific elements (only if biophilia > 0 and natureMetaphor is provided)
+  if (natureMetaphor && natureMetaphor.length > 0) {
+    if (natureMetaphor === 'ocean') {
+      elements.push('flowing forms', 'water-inspired colors');
+    } else if (natureMetaphor === 'forest') {
+      elements.push('layered textures', 'wood elements');
+    } else if (natureMetaphor === 'mountain') {
+      elements.push('stone materials', 'strong vertical lines');
+    }
   }
   
   return { density, elements };
@@ -655,15 +1355,22 @@ function determineLightingStrategy(
   mood: string;
   naturalImportance: number;
 } {
-  // Direct from sensory preference
-  const mood = lightPreference;
+  // Handle empty lightPreference - default to balanced lighting
+  let mood: string;
+  if (lightPreference && lightPreference.length > 0) {
+    mood = lightPreference;
+  } else {
+    // Default to balanced lighting when no preference
+    mood = 'neutral';
+  }
   
   // Natural light importance from PRS target (inspiring spaces need more light)
+  // When PRS is neutral (0,0), naturalImportance = 0.5 (moderate)
   const naturalImportance = (prsTarget.y + 1) / 2; // Convert -1:1 to 0:1
   
   // Activities that need good lighting
   const lightIntensiveActivities = ['work', 'read', 'creative', 'cook'];
-  const needsGoodLight = activities.some(a =>
+  const needsGoodLight = activities && activities.length > 0 && activities.some(a =>
     lightIntensiveActivities.includes(a.type) && a.frequency !== 'rarely'
   );
   
@@ -917,7 +1624,11 @@ function integrateInspirationTags(inspirations: PromptInputs['inspirations']): {
 
   inspirations.forEach(inspiration => {
     if (inspiration.tags) {
-      inspiration.tags.styles?.forEach(style => allStyles.add(style));
+      // Extract valid styles from each style tag (may contain garbage)
+      inspiration.tags.styles?.forEach(style => {
+        const validStyles = extractAllValidStyles([style]);
+        validStyles.forEach(s => allStyles.add(s));
+      });
       inspiration.tags.colors?.forEach(color => allColors.add(color));
       inspiration.tags.materials?.forEach(material => allMaterials.add(material));
       

@@ -23,6 +23,7 @@ interface NatureMetaphorTestProps {
 export function NatureMetaphorTest({ onSelect, className = '', frameless = false }: NatureMetaphorTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   const handleSelect = (option: SensoryOption) => {
     setSelectedId(option.id);
@@ -75,12 +76,16 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
             >
               {/* Image */}
               <div className="relative w-full h-28 overflow-hidden rounded-xl bg-gray-200">
-                {option.imageUrl ? (
+                {option.imageUrl && !imageErrors.has(option.imageUrl) ? (
                   <Image
                     src={option.imageUrl}
                     alt={t(option.label)}
                     fill
+                    sizes="(max-width: 768px) 50vw, 33vw"
                     className="object-cover"
+                    onError={() => {
+                      setImageErrors(prev => new Set(prev).add(option.imageUrl!));
+                    }}
                   />
                 ) : (
                   // Placeholder with gradient

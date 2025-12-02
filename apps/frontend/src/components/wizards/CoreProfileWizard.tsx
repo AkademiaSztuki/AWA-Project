@@ -12,6 +12,7 @@ import { AwaContainer } from '@/components/awa/AwaContainer';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { SensoryTestSuite } from '@/components/research';
 import { COLOR_PALETTE_OPTIONS, getPaletteLabel } from '@/components/setup/paletteOptions';
+import { STYLE_OPTIONS } from '@/lib/questions/style-options';
 import { ArrowRight, ArrowLeft, Sparkles, Heart, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal } from '@/components/auth/LoginModal';
@@ -109,8 +110,9 @@ interface CoreProfileData {
     texture: number;
   };
   colorsAndMaterials?: {
-    selectedPalette: string;
-    topMaterials: string[];
+    selectedPalette?: string;
+    topMaterials?: string[];
+    selectedStyle?: string;
   };
   sensoryPreferences?: {
     music: string;
@@ -308,7 +310,7 @@ export function CoreProfileWizard() {
         semanticDifferential: profileData.semanticDifferential,
         
         // Colors & Materials (explicit)
-        colorsAndMaterials: profileData.colorsAndMaterials,
+        colorsAndMaterials: profileData.colorsAndMaterials as any,
         
         // Sensory preferences (explicit)
         sensoryPreferences: profileData.sensoryPreferences,
@@ -455,6 +457,17 @@ export function CoreProfileWizard() {
                           }
                         }))
                       }
+                      styleOptions={STYLE_OPTIONS}
+                      selectedStyle={profileData.colorsAndMaterials?.selectedStyle}
+                      onStyleSelect={(styleId) =>
+                        updateProfile((prev) => ({
+                          colorsAndMaterials: {
+                            selectedPalette: prev.colorsAndMaterials?.selectedPalette,
+                            topMaterials: prev.colorsAndMaterials?.topMaterials || [],
+                            selectedStyle: styleId
+                          }
+                        }))
+                      }
                       onComplete={(results) => {
                         updateProfile({
                           sensoryPreferences: {
@@ -463,7 +476,13 @@ export function CoreProfileWizard() {
                             light: results.light
                           },
                           natureMetaphor: results.natureMetaphor,
-                          biophiliaScore: results.biophiliaScore
+                          biophiliaScore: results.biophiliaScore,
+                          ...(results.style && {
+                            colorsAndMaterials: {
+                              ...profileData.colorsAndMaterials,
+                              selectedStyle: results.style
+                            }
+                          })
                         });
                         handleNext();
                       }}

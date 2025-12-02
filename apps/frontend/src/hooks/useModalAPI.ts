@@ -4,6 +4,7 @@ import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 interface GenerationRequest {
   prompt: string;
   base_image?: string;
+  inspiration_images?: string[]; // Base64 images for multi-reference (FLUX 2 supports up to 8)
   style: string;
   modifications: string[];
   strength: number;
@@ -28,7 +29,7 @@ interface GenerationResponse {
 }
 
 /**
- * Request for generating multiple images from different sources (5-image matrix)
+ * Request for generating multiple images from different sources (6-image matrix)
  */
 interface MultiSourceGenerationRequest {
   prompts: Array<{
@@ -36,6 +37,7 @@ interface MultiSourceGenerationRequest {
     prompt: string;
   }>;
   base_image?: string;
+  inspiration_images?: string[]; // Base64 images for multi-reference (InspirationReference source)
   style: string;
   parameters: {
     strength: number;
@@ -345,8 +347,8 @@ export const useModalAPI = () => {
       // Use base_image directly - it's already clean base64 without MIME header
       const base64Image = request.base_image;
 
-      // Send generation request - now expecting synchronous response
-      const response = await fetch(`${apiBase}/generate`, {
+      // Use Next.js API route as proxy to avoid CORS issues with Modal API redirects
+      const response = await fetch('/api/modal/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...request, base_image: base64Image }),
@@ -429,6 +431,8 @@ export const useModalAPI = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        redirect: 'follow', // Follow redirects
+        mode: 'cors', // Explicitly enable CORS
       });
 
       if (!response.ok) {
@@ -470,7 +474,10 @@ export const useModalAPI = () => {
       }
       
       console.log('Sprawdzam health endpoint:', `${apiBase}/health`);
-      const response = await fetch(`${apiBase}/health`);
+      const response = await fetch(`${apiBase}/health`, {
+        redirect: 'follow', // Follow redirects
+        mode: 'cors', // Explicitly enable CORS
+      });
       console.log('Health check response:', response.status, response.ok);
       return response.ok;
     } catch (err) {
@@ -502,6 +509,8 @@ export const useModalAPI = () => {
           room_description: roomDescription,
           context: context
         }),
+        redirect: 'follow', // Follow redirects
+        mode: 'cors', // Explicitly enable CORS
       });
 
       if (!response.ok) {
@@ -546,6 +555,8 @@ export const useModalAPI = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
+        redirect: 'follow', // Follow redirects
+        mode: 'cors', // Explicitly enable CORS
       });
 
       if (!response.ok) {
@@ -569,11 +580,18 @@ export const useModalAPI = () => {
   }, []);
 
   /**
-   * Generates images for multiple sources in parallel (5-image matrix).
+   * Generates images for multiple sources in parallel (6-image matrix).
    * Each source gets one image generated with its specific prompt.
+   * InspirationReference source uses multi-reference with inspiration images.
+   * 
+   * @param request - Generation request with prompts for each source
+   * @param onImageReady - Optional callback called when each image is ready (for progressive display)
+   * @param abortSignal - Optional AbortSignal to cancel the generation
    */
-  const generateFiveImagesParallel = useCallback(async (
-    request: MultiSourceGenerationRequest
+  const generateSixImagesParallel = useCallback(async (
+    request: MultiSourceGenerationRequest,
+    onImageReady?: (result: SourceGenerationResult) => void,
+    abortSignal?: AbortSignal
   ): Promise<MultiSourceGenerationResponse> => {
     setIsLoading(true);
     setError(null);
@@ -591,10 +609,16 @@ export const useModalAPI = () => {
       throw new Error(msg);
     }
 
+    // Check if already aborted
+    if (abortSignal?.aborted) {
+      setIsLoading(false);
+      throw new Error('Generation cancelled');
+    }
+
     const startTime = Date.now();
     const results: SourceGenerationResult[] = [];
 
-    console.log(`[5-Image Matrix] Generating ${request.prompts.length} images in parallel...`);
+    console.log(`[6-Image Matrix] Generating ${request.prompts.length} images in parallel...`);
 
     try {
       // Generate all images in parallel
@@ -602,11 +626,19 @@ export const useModalAPI = () => {
         const sourceStartTime = Date.now();
         
         try {
-          console.log(`[5-Image Matrix] Starting generation for source: ${source}`);
+          console.log(`[6-Image Matrix] Starting generation for source: ${source}`);
+          
+          // For InspirationReference, include inspiration images for multi-reference
+          // FLUX.2 [dev] supports up to 6 reference images
+          // Reference: https://docs.bfl.ai/flux_2/flux2_image_editing
+          const inspirationImages = source === GenerationSource.InspirationReference 
+            ? request.inspiration_images?.slice(0, 6) // Limit to 6 for FLUX.2 [dev]
+            : undefined;
           
           const generationRequest: GenerationRequest = {
             prompt,
             base_image: request.base_image,
+            inspiration_images: inspirationImages,
             style: request.style,
             modifications: [],
             strength: request.parameters.strength,
@@ -616,10 +648,18 @@ export const useModalAPI = () => {
             image_size: request.parameters.image_size || 1024
           };
 
-          const response = await fetch(`${apiBase}/generate`, {
+          // Check if aborted before making request
+          if (abortSignal?.aborted) {
+            throw new Error('Generation cancelled');
+          }
+
+          // Use Next.js API route as proxy to avoid CORS issues with Modal API redirects
+          // Server-side proxy can handle 303 redirects without CORS restrictions
+          const response = await fetch('/api/modal/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(generationRequest),
+            signal: abortSignal, // Pass abort signal to fetch
           });
 
           if (!response.ok) {
@@ -630,40 +670,46 @@ export const useModalAPI = () => {
           const result: GenerationResponse = await response.json();
           const processingTime = Date.now() - sourceStartTime;
 
-          console.log(`[5-Image Matrix] Source ${source} completed in ${processingTime}ms`);
+          console.log(`[6-Image Matrix] Source ${source} completed in ${processingTime}ms`);
 
-          return {
+          const successResult: SourceGenerationResult = {
             source,
             image: result.images[0],
             prompt,
             processing_time: processingTime,
             success: true
-          } as SourceGenerationResult;
+          };
+
+          // Call callback to show image immediately
+          if (onImageReady) {
+            onImageReady(successResult);
+          }
+
+          results.push(successResult);
 
         } catch (err: any) {
           const processingTime = Date.now() - sourceStartTime;
-          console.error(`[5-Image Matrix] Source ${source} failed:`, err);
+          console.error(`[6-Image Matrix] Source ${source} failed:`, err);
           
-          return {
+          results.push({
             source,
             image: '',
             prompt,
             processing_time: processingTime,
             success: false,
             error: err.message || 'Unknown error'
-          } as SourceGenerationResult;
+          } as SourceGenerationResult);
         }
       });
 
       // Wait for all generations to complete
-      const allResults = await Promise.all(generationPromises);
-      results.push(...allResults);
+      await Promise.all(generationPromises);
 
       const totalTime = Date.now() - startTime;
       const successCount = results.filter(r => r.success).length;
       const failCount = results.filter(r => !r.success).length;
 
-      console.log(`[5-Image Matrix] All generations complete. Success: ${successCount}, Failed: ${failCount}, Total time: ${totalTime}ms`);
+      console.log(`[6-Image Matrix] All generations complete. Success: ${successCount}, Failed: ${failCount}, Total time: ${totalTime}ms`);
 
       setIsLoading(false);
 
@@ -675,16 +721,22 @@ export const useModalAPI = () => {
       };
 
     } catch (err: any) {
-      console.error('[5-Image Matrix] Fatal error:', err);
+      console.error('[6-Image Matrix] Fatal error:', err);
       setError(err.message || 'Wystąpił nieznany błąd.');
       setIsLoading(false);
       throw err;
     }
   }, []);
 
+  /**
+   * @deprecated Use generateSixImagesParallel instead
+   */
+  const generateFiveImagesParallel = generateSixImagesParallel;
+
   return {
     generateImages,
     generateFiveImagesParallel,
+    generateSixImagesParallel,
     analyzeRoom,
     generateLLMComment,
     analyzeInspiration,

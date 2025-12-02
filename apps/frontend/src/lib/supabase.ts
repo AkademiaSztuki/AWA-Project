@@ -86,6 +86,80 @@ export const saveGenerationSet = async (projectId: string, prompt: string) => {
   return data;
 };
 
+export const saveGenerationFeedback = async (
+  feedback: {
+    sessionId: string;
+    projectId?: string;
+    generatedSources: string[];
+    selectedSource: string | null;
+    selectionTime: number;
+    hasCompleteBigFive: boolean;
+    tinderSwipeCount: number;
+    explicitAnswerCount: number;
+    sourceQuality?: Record<string, string> | Record<string, any>;
+    implicitQuality?: any;
+    conflictAnalysis?: any;
+    userRating?: number;
+  }
+) => {
+  const { error } = await supabase
+    .from('generation_feedback')
+    .insert({
+      session_id: feedback.sessionId,
+      project_id: feedback.projectId || null,
+      generated_sources: feedback.generatedSources,
+      selected_source: feedback.selectedSource,
+      selection_time_ms: feedback.selectionTime,
+      has_complete_bigfive: feedback.hasCompleteBigFive,
+      tinder_swipe_count: feedback.tinderSwipeCount,
+      explicit_answer_count: feedback.explicitAnswerCount,
+      source_quality: feedback.sourceQuality || {},
+      implicit_quality: feedback.implicitQuality || null,
+      conflict_analysis: feedback.conflictAnalysis || null,
+      user_rating: feedback.userRating || null,
+    });
+
+  if (error) {
+    console.error('Błąd zapisywania feedbacku generacji:', error);
+    return false;
+  }
+  return true;
+};
+
+export const saveRegenerationEvent = async (
+  event: {
+    sessionId: string;
+    projectId?: string;
+    previousSources: string[];
+    previousSelected: string | null;
+    regenerationCount: number;
+    timeSinceLastGen: number;
+    interpretation: string;
+    sourceQuality?: Record<string, string>;
+    implicitQuality?: any;
+  }
+) => {
+  const { error } = await supabase
+    .from('regeneration_events')
+    .insert({
+      session_id: event.sessionId,
+      project_id: event.projectId || null,
+      previous_sources: event.previousSources,
+      previous_selected: event.previousSelected,
+      regeneration_count: event.regenerationCount,
+      time_since_last_ms: event.timeSinceLastGen,
+      interpretation: event.interpretation,
+      source_quality: event.sourceQuality || {},
+      implicit_quality: event.implicitQuality || null,
+    });
+
+  if (error) {
+    console.error('Błąd zapisywania eventu regeneracji:', error);
+    return false;
+  }
+  return true;
+};
+
 export const saveFullSessionToSupabase = async (sessionData: any) => {
   if (!sessionData?.userHash) return;
   const { error } = await supabase
@@ -261,9 +335,13 @@ export const endGenerationJob = async (
   jobId: string,
   outcome: { status: 'success' | 'error'; latency_ms: number; error_message?: string }
 ) => {
+  // Ensure latency_ms is within integer range (max ~2.1 billion)
+  // Sometimes timestamps are passed instead of durations
+  const safeLatency = Math.min(Math.max(0, Math.round(outcome.latency_ms)), 2147483647);
+  
   const { error } = await supabase
     .from('generation_jobs')
-    .update({ finished_at: new Date().toISOString(), status: outcome.status, latency_ms: outcome.latency_ms, error_message: outcome.error_message || null })
+    .update({ finished_at: new Date().toISOString(), status: outcome.status, latency_ms: safeLatency, error_message: outcome.error_message || null })
     .eq('id', jobId);
   if (error) console.error('Błąd endGenerationJob:', error);
 };

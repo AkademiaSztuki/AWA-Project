@@ -51,7 +51,8 @@ export default function VisualDNAPage() {
     const likes = tinderData?.swipes?.filter((s: any) => s.direction === 'right') || [];
 
     const weighted = computeWeightedDNAFromSwipes(likes, tinderData?.totalImages || likes.length || 30);
-    const dominantStyle = weighted.top.styles.join(' + ') || 'Modern';
+    // Use only the first (top) style to avoid tag soup
+    const dominantStyle = weighted.top.styles[0] || 'modern';
     const colorPalette = weighted.top.colors.join(' + ') || 'Neutral colors';
     const materials = weighted.top.materials.join(' + ') || 'Natural materials';
     const lighting = weighted.top.lighting.join(' + ') || 'Soft lighting';

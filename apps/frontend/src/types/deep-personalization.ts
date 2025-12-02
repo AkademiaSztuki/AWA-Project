@@ -224,6 +224,7 @@ export interface RoomPreferencePayload {
   colorsAndMaterials?: {
     selectedPalette?: string;
     topMaterials?: string[];
+    selectedStyle?: string;
   };
   sensoryPreferences?: {
     music?: string;

@@ -18,6 +18,7 @@ import { useSession, useSessionData } from '@/hooks';
 import { SessionData } from '@/types';
 import { RoomPreferencePayload, RoomActivity } from '@/types/deep-personalization';
 import { COLOR_PALETTE_OPTIONS, getPaletteLabel } from '@/components/setup/paletteOptions';
+import { STYLE_OPTIONS } from '@/lib/questions/style-options';
 import { SensoryTestSuite } from '@/components/research/SensoryTests';
 import {
   SEMANTIC_DIFFERENTIAL_DIMENSIONS,
@@ -1307,6 +1308,19 @@ function PreferenceQuestionsStep({
     }));
   };
 
+  const [selectedStyle, setSelectedStyle] = useState<string | undefined>(explicitPreferences?.colorsAndMaterials?.selectedStyle);
+
+  const handleStyleSelect = (styleId: string) => {
+    setSelectedStyle(styleId);
+    setLocalPrefs((prev) => ({
+      ...prev,
+      colorsAndMaterials: {
+        ...(prev.colorsAndMaterials || {}),
+        selectedStyle: styleId
+      }
+    }));
+  };
+
   const canSubmitComplete = Boolean(
     localPrefs.sensoryPreferences?.music &&
       localPrefs.sensoryPreferences?.texture &&
@@ -1409,6 +1423,9 @@ function PreferenceQuestionsStep({
                 paletteOptions={COLOR_PALETTE_OPTIONS}
                 selectedPalette={localPrefs.colorsAndMaterials?.selectedPalette}
                 onPaletteSelect={(paletteId) => handlePaletteSelect(paletteId)}
+                styleOptions={STYLE_OPTIONS}
+                selectedStyle={selectedStyle}
+                onStyleSelect={(styleId) => handleStyleSelect(styleId)}
                 onComplete={(results) => {
                   setLocalPrefs((prev) => ({
                     ...prev,
@@ -1416,10 +1433,19 @@ function PreferenceQuestionsStep({
                       music: results.music,
                       texture: results.texture,
                       light: results.light
-                    }
+                    },
+                    ...(results.style && {
+                      colorsAndMaterials: {
+                        ...(prev.colorsAndMaterials || {}),
+                        selectedStyle: results.style
+                      }
+                    })
                   }));
                   setNatureMetaphor(results.natureMetaphor);
                   setBiophiliaScore(results.biophiliaScore);
+                  if (results.style) {
+                    setSelectedStyle(results.style);
+                  }
                 }}
               />
             </motion.div>

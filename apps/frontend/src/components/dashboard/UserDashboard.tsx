@@ -25,6 +25,7 @@ import {
 import Image from 'next/image';
 import {
   VisualDNASection,
+  ExplicitPreferencesSection,
   CoreNeedsSection,
   RoomAnalysisSection,
   InspirationsPreviewSection,
@@ -271,53 +272,73 @@ export function UserDashboard() {
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-              <GlassCard className="p-4 sm:p-6 min-h-[80px]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                    <Home size={20} className="text-white" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-2xl font-nasalization text-graphite">{spaces.length}</p>
-                    <p className="text-xs text-silver-dark font-modern">
-                      {language === 'pl' ? 'Przestrzenie' : 'Spaces'}
-                    </p>
-                  </div>
-                </div>
-              </GlassCard>
+            {(() => {
+              // Calculate stats from multiple sources
+              const typedSession = sessionData as any;
+              
+              // Rooms/Spaces count
+              const roomCount = typedSession?.roomType ? 1 : 0;
+              const spacesCount = Math.max(spaces.length, roomCount);
+              
+              // Generated images - check multiple sources
+              const generatedFromSpaces = spaces.reduce((sum, s) => 
+                sum + (s.images?.filter(img => img.type === 'generated').length || 0), 0);
+              const generatedFromSession = typedSession?.generatedImages?.length || 0;
+              const generatedFromGenerations = typedSession?.generations?.length || 0;
+              const generatedCount = Math.max(generatedFromSpaces, generatedFromSession, generatedFromGenerations);
+              
+              // Inspirations - check multiple sources
+              const inspirationsFromSpaces = spaces.reduce((sum, s) => 
+                sum + (s.images?.filter(img => img.type === 'inspiration').length || 0), 0);
+              const inspirationsFromSession = typedSession?.inspirations?.length || 0;
+              const inspirationsCount = Math.max(inspirationsFromSpaces, inspirationsFromSession);
+              
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+                  <GlassCard className="p-4 sm:p-6 min-h-[80px]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                        <Home size={20} className="text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-2xl font-nasalization text-graphite">{spacesCount}</p>
+                        <p className="text-xs text-silver-dark font-modern">
+                          {language === 'pl' ? 'Pomieszczenia' : 'Rooms'}
+                        </p>
+                      </div>
+                    </div>
+                  </GlassCard>
 
-              <GlassCard className="p-4 sm:p-6 min-h-[80px]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                    <ImageIcon size={20} className="text-white" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-2xl font-nasalization text-graphite">
-                      {spaces.reduce((sum, s) => sum + s.images.filter(img => img.type === 'generated').length, 0)}
-                    </p>
-                    <p className="text-xs text-silver-dark font-modern">
-                      {language === 'pl' ? 'Wygenerowane' : 'Generated'}
-                    </p>
-                  </div>
-                </div>
-              </GlassCard>
+                  <GlassCard className="p-4 sm:p-6 min-h-[80px]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                        <ImageIcon size={20} className="text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-2xl font-nasalization text-graphite">{generatedCount}</p>
+                        <p className="text-xs text-silver-dark font-modern">
+                          {language === 'pl' ? 'Wygenerowane' : 'Generated'}
+                        </p>
+                      </div>
+                    </div>
+                  </GlassCard>
 
-              <GlassCard className="p-4 sm:p-6 min-h-[80px]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                    <Sparkles size={20} className="text-white" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-2xl font-nasalization text-graphite">
-                      {spaces.reduce((sum, s) => sum + s.images.filter(img => img.type === 'inspiration').length, 0)}
-                    </p>
-                    <p className="text-xs text-silver-dark font-modern">
-                      {language === 'pl' ? 'Inspiracje' : 'Inspirations'}
-                    </p>
-                  </div>
+                  <GlassCard className="p-4 sm:p-6 min-h-[80px]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                        <Sparkles size={20} className="text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-2xl font-nasalization text-graphite">{inspirationsCount}</p>
+                        <p className="text-xs text-silver-dark font-modern">
+                          {language === 'pl' ? 'Inspiracje' : 'Inspirations'}
+                        </p>
+                      </div>
+                    </div>
+                  </GlassCard>
                 </div>
-              </GlassCard>
-            </div>
+              );
+            })()}
           </motion.div>
 
           {/* User Profile Overview */}
@@ -326,11 +347,16 @@ export function UserDashboard() {
           {/* Big Five Results - Enhanced with details link */}
           <BigFiveResults userHash={(sessionData as any)?.userHash} />
 
-          {/* Visual DNA */}
+          {/* Visual DNA (Ukryte preferencje) */}
           <VisualDNASection visualDNA={(sessionData as any)?.visualDNA} />
 
-          {/* Core Needs / Laddering */}
-          <CoreNeedsSection ladderResults={(sessionData as any)?.ladderResults} />
+          {/* Explicit Preferences Section */}
+          <ExplicitPreferencesSection sessionData={sessionData} />
+
+          {/* Core Needs / Laddering (opcjonalne, ukryte jeśli nie ma danych) */}
+          {(sessionData as any)?.ladderResults && (
+            <CoreNeedsSection ladderResults={(sessionData as any)?.ladderResults} />
+          )}
 
           {/* Room Analysis */}
           <RoomAnalysisSection 
@@ -347,6 +373,7 @@ export function UserDashboard() {
                 router.push(`/space/${spaces[0].id}?filter=inspiration`);
               }
             }}
+            onAddInspirations={() => router.push('/flow/inspirations')}
           />
 
           {/* Generation Stats */}
@@ -413,13 +440,16 @@ function ProfileOverview({ sessionData }: { sessionData: any }) {
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
 
   // Calculate profile completion
-  const hasVisualDNA = !!sessionData?.visualDNA;
-  const hasLadder = !!sessionData?.ladderResults;
+  const hasVisualDNA = !!sessionData?.visualDNA; // Ukryte preferencje (z Tinder)
+  const hasExplicitPreferences = !!(sessionData?.colorsAndMaterials?.selectedStyle || 
+                                    sessionData?.colorsAndMaterials?.selectedPalette ||
+                                    sessionData?.sensoryPreferences?.light ||
+                                    sessionData?.sensoryPreferences?.texture); // Jawne preferencje (z kwestionariuszy)
   const hasBigFive = !!sessionData?.bigFive;
   const hasInspirations = sessionData?.inspirations?.length > 0;
   const hasRoom = !!sessionData?.roomImage;
 
-  const completedItems = [hasVisualDNA, hasLadder, hasBigFive, hasInspirations, hasRoom].filter(Boolean).length;
+  const completedItems = [hasVisualDNA, hasExplicitPreferences, hasBigFive, hasInspirations, hasRoom].filter(Boolean).length;
   const totalItems = 5;
   const completionPercentage = Math.round((completedItems / totalItems) * 100);
 
@@ -455,8 +485,8 @@ function ProfileOverview({ sessionData }: { sessionData: any }) {
 
         {/* Profile Items */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
-          <ProfileItem completed={hasVisualDNA} label={t('Visual DNA', 'Visual DNA')} />
-          <ProfileItem completed={hasLadder} label={t('Core Needs', 'Core Needs')} />
+          <ProfileItem completed={hasVisualDNA} label={t('Ukryte preferencje', 'Implicit preferences')} />
+          <ProfileItem completed={hasExplicitPreferences} label={t('Jawne preferencje', 'Explicit preferences')} />
           <ProfileItem completed={hasBigFive} label={t('Big Five', 'Big Five')} />
           <ProfileItem completed={hasInspirations} label={t('Inspiracje', 'Inspirations')} />
           <ProfileItem completed={hasRoom} label={t('Pokój', 'Room')} />
