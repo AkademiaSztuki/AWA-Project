@@ -73,7 +73,7 @@ const LandingScreen: React.FC = () => {
 
       {!showAuraSection && (
         <div className="flex-1 ml-[0px] flex items-center justify-center h-screen">
-          <div className="w-full max-w-3xl">
+          <div className="w-full min-h-[380px] flex items-center justify-center">
             <AwaDialogue currentStep="landing" onDialogueEnd={handleDialogueEnd} />
           </div>
         </div>

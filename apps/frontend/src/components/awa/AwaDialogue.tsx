@@ -107,6 +107,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const [hasStarted, setHasStarted] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
   const [isVisible, setIsVisible] = useState(true); // Nowy stan dla widoczności
+  const [showClickPrompt, setShowClickPrompt] = useState(false); // Stan dla opóźnionego pojawienia się napisu
   
   // Zabezpieczenie przed pustą tablicą
   if (!dialogues || dialogues.length === 0) {
@@ -158,12 +159,23 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     setHasStarted(false);
     setAudioReady(false);
     setIsVisible(true); // Resetuj widoczność
+    setShowClickPrompt(false); // Resetuj widoczność napisu
     
     // Zatrzymaj poprzedni dźwięk przy zmianie kroku
     // audioManager.unregisterDialogueAudio(audioRef.current); // audioRef.current nie istnieje
     // audioRef.current.pause();
     // audioRef.current = null;
   }, [currentStep, audioManager]);
+
+  // Opóźnione pojawienie się napisu "Kliknij gdziekolwiek..." dla landing page
+  useEffect(() => {
+    if (currentStep === 'landing' && !audioReady) {
+      const timer = setTimeout(() => {
+        setShowClickPrompt(true);
+      }, 900); // 2 sekundy opóźnienia
+      return () => clearTimeout(timer);
+    }
+  }, [currentStep, audioReady]);
 
   // Cleanup przy odmontowywaniu komponentu
   useEffect(() => {
@@ -190,16 +202,32 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     }
   }, [currentStep, currentSentenceIndex, hasStarted]);
 
+  // Różne style dla Landing vs inne strony
+  const isLanding = currentStep === 'landing';
+  
   // Jeśli audio nie jest gotowe
   if (!audioReady) {
     // Dla landing page pokaż "Kliknij aby rozpocząć"
     if (currentStep === 'landing') {
+      // Używamy DOKŁADNIE tych samych stylów kontenera co w głównym return
       return (
         <div 
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center text-center cursor-pointer"
+          className={`z-50 flex flex-col items-center justify-start w-full text-center ${
+            fullWidth ? 'fixed bottom-0 left-0 right-0' : ''
+          } ${
+            isLanding 
+              ? 'min-h-[380px] p-8' 
+              : 'min-h-[260px] p-6 pb-8'
+          } cursor-pointer`}
           onClick={handleClickToStart}
         >
-          <span className="inline-block whitespace-pre-wrap tracking-tight w-full text-3xl md:text-4xl font-nasalization font-bold text-white drop-shadow-lg select-none text-center hover:text-champagne transition-colors px-8">
+          <span className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center hover:text-champagne transition-opacity duration-300 ${
+            showClickPrompt ? 'opacity-100' : 'opacity-0'
+          } ${
+            isLanding 
+              ? 'text-3xl md:text-4xl text-white' 
+              : 'text-2xl md:text-3xl text-white/90'
+          }`}>
             Kliknij gdziekolwiek, aby rozpocząć...
           </span>
         </div>
@@ -224,30 +252,28 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     shouldRender: !!(audioFile && voiceEnabled && audioReady) 
   });
   
-  // Różne style dla Landing vs inne strony
-  const isLanding = currentStep === 'landing';
-  
   return (
     <div className={`z-50 flex flex-col items-center justify-start w-full text-center ${
       fullWidth ? 'fixed bottom-0 left-0 right-0' : ''
     } ${
       isLanding 
-        ? 'min-h-[220px] p-8' 
-        : 'min-h-[180px] p-6 pb-8'
+        ? 'min-h-[380px] p-8' 
+        : 'min-h-[260px] p-6 pb-8'
     }`}>
-      <span className={`inline-block whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center ${
-        isLanding 
-          ? 'text-3xl md:text-4xl text-white' 
-          : 'text-2xl md:text-3xl text-white/90'
-      }`}>
-        <TextType
-          text={dialogues?.[currentSentenceIndex] ?? ""}
-          typingSpeed={45}
-          pauseDuration={500}
-          onSentenceComplete={handleSentenceComplete}
-          loop={false}
-        />
-      </span>
+      <TextType
+        as="div"
+        initialDelay={isLanding ? 300 : 0} // Dodajemy opóźnienie tylko dla Landing
+        className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center ${
+          isLanding 
+            ? 'text-3xl md:text-4xl text-white' 
+            : 'text-2xl md:text-3xl text-white/90'
+        }`}
+        text={dialogues?.[currentSentenceIndex] ?? ""}
+        typingSpeed={45}
+        pauseDuration={500}
+        onSentenceComplete={handleSentenceComplete}
+        loop={false}
+      />
       {audioFile && voiceEnabled && audioReady && (
         <DialogueAudioPlayer
           src={audioFile}

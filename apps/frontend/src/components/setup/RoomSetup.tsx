@@ -231,11 +231,11 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
-      {/* Dialog IDA na dole - cała szerokość */}
-      <div className="w-full">
+      {/* Dialog IDA na dole - ograniczona szerokość */}
+      <div className="w-full max-w-3xl mx-auto">
         <AwaDialogue 
           currentStep="onboarding" 
-          fullWidth={true}
+          fullWidth={false}
           autoHide={true}
         />
       </div>

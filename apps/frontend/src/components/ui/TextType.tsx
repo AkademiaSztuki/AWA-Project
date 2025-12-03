@@ -1,7 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState, createElement } from "react";
-import { gsap } from "gsap";
-import "./TextType.css";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 
 interface VariableSpeed {
   min: number;
@@ -24,7 +22,7 @@ interface TextTypeProps {
   cursorBlinkDuration?: number;
   textColors?: string[];
   variableSpeed?: VariableSpeed;
-  onSentenceComplete?: (text: string, index: number) => void;
+  onSentenceComplete?: (sentence: string, index: number) => void;
   startOnVisible?: boolean;
   reverseMode?: boolean;
   [key: string]: any;
@@ -43,7 +41,7 @@ const TextType = ({
   hideCursorWhileTyping = false,
   cursorCharacter = "|",
   cursorClassName = "",
-  cursorBlinkDuration = 0.5,
+  cursorBlinkDuration = 0.8,
   textColors = [],
   variableSpeed,
   onSentenceComplete,
@@ -51,32 +49,26 @@ const TextType = ({
   reverseMode = false,
   ...props
 }: TextTypeProps) => {
-  const [displayedText, setDisplayedText] = useState("");
-  const [currentCharIndex, setCurrentCharIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentTextIndex, setCurrentTextIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(!startOnVisible);
-  const cursorRef = useRef<HTMLSpanElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLElement>(null);
 
-  const textArray = Array.isArray(text) ? text : [text];
+  const textArray = useMemo(() => (Array.isArray(text) ? text : [text]), [text]);
+  const currentFullText = textArray[currentTextIndex] || "";
 
+  // Resetuj stan gdy zmienia się tekst wejściowy (np. z zewnątrz)
   useEffect(() => {
-    setDisplayedText("");
-    setCurrentCharIndex(0);
+    setCurrentIndex(0);
     setIsDeleting(false);
     setCurrentTextIndex(0);
-  }, [text]);
+  }, [JSON.stringify(text)]);
 
   const getRandomSpeed = () => {
     if (!variableSpeed) return typingSpeed;
     const { min, max } = variableSpeed;
     return Math.random() * (max - min) + min;
-  };
-
-  const getCurrentTextColor = () => {
-    if (textColors.length === 0) return "#ffffff";
-    return textColors[currentTextIndex % textColors.length];
   };
 
   useEffect(() => {
@@ -98,123 +90,160 @@ const TextType = ({
   }, [startOnVisible]);
 
   useEffect(() => {
-    if (showCursor && cursorRef.current) {
-      gsap.set(cursorRef.current, { opacity: 1 });
-      gsap.to(cursorRef.current, {
-        opacity: 0,
-        duration: cursorBlinkDuration,
-        repeat: -1,
-        yoyo: true,
-        ease: "power2.inOut",
-      });
-    }
-  }, [showCursor, cursorBlinkDuration]);
-
-  useEffect(() => {
     if (!isVisible) return;
 
-    let timeout: ReturnType<typeof setTimeout>;
-    const currentText = textArray[currentTextIndex];
-    // Zabezpieczenie przed undefined/null
-    const processedText = currentText ?? "";
+    let timeout: NodeJS.Timeout;
 
-    const executeTypingAnimation = () => {
+    const animate = () => {
+      const currentLength = currentFullText.length;
+
       if (isDeleting) {
-        if (displayedText === "") {
-          setIsDeleting(false);
-          if (currentTextIndex === textArray.length - 1 && !loop) {
-            return;
-          }
-
-          if (onSentenceComplete) {
-            onSentenceComplete(textArray[currentTextIndex], currentTextIndex);
-          }
-
-          setCurrentTextIndex((prev) => (prev + 1) % textArray.length);
-          setCurrentCharIndex(0);
-          timeout = setTimeout(() => { }, pauseDuration);
-        } else {
+        if (currentIndex > 0) {
           timeout = setTimeout(() => {
-            setDisplayedText((prev) => prev.slice(0, -1));
+            setCurrentIndex((prev) => prev - 1);
           }, deletingSpeed);
+        } else {
+          setIsDeleting(false);
+          const nextTextIndex = (currentTextIndex + 1) % textArray.length;
+          
+          if (!loop && nextTextIndex === 0 && textArray.length > 1) {
+             return;
+          }
+
+          setCurrentTextIndex(nextTextIndex);
+          timeout = setTimeout(animate, 500);
         }
       } else {
-        if (currentCharIndex < processedText.length) {
-          timeout = setTimeout(
-            () => {
-              setDisplayedText(
-                (prev) => prev + processedText[currentCharIndex]
-              );
-              setCurrentCharIndex((prev) => prev + 1);
-            },
-            variableSpeed ? getRandomSpeed() : typingSpeed
-          );
+        if (currentIndex < currentLength) {
+          timeout = setTimeout(() => {
+            setCurrentIndex((prev) => prev + 1);
+          }, variableSpeed ? getRandomSpeed() : typingSpeed);
         } else {
-          // Tekst został w całości napisany, poczekaj przed wywołaniem callback
+          // Tekst skończony
           timeout = setTimeout(() => {
             if (onSentenceComplete) {
-              onSentenceComplete(textArray[currentTextIndex], currentTextIndex);
+              onSentenceComplete(currentFullText, currentTextIndex);
+            }
+
+            // Automatyczne zapętlenie tylko jeśli mamy listę tekstów wewnętrznie
+            if (textArray.length > 1 && (loop || currentTextIndex < textArray.length - 1)) {
+               setIsDeleting(true);
             }
           }, pauseDuration);
         }
       }
     };
 
-    if (currentCharIndex === 0 && !isDeleting && displayedText === "") {
-      timeout = setTimeout(executeTypingAnimation, initialDelay);
+    if (currentIndex === 0 && !isDeleting && initialDelay > 0 && currentTextIndex === 0) {
+        timeout = setTimeout(animate, initialDelay);
     } else {
-      executeTypingAnimation();
+        animate();
     }
 
     return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    currentCharIndex,
-    displayedText,
-    isDeleting,
-    typingSpeed,
-    deletingSpeed,
-    pauseDuration,
-    textArray,
-    currentTextIndex,
+    currentIndex, 
+    isDeleting, 
+    currentTextIndex, 
+    isVisible, 
+    textArray, 
+    typingSpeed, 
+    deletingSpeed, 
+    pauseDuration, 
     loop,
     initialDelay,
-    isVisible,
-    reverseMode,
-    variableSpeed,
+    currentFullText,
     onSentenceComplete,
+    variableSpeed
   ]);
 
-  const shouldHideCursor =
-    hideCursorWhileTyping &&
-    (currentCharIndex < textArray[currentTextIndex].length || isDeleting);
+  const textColor = textColors.length > 0 
+    ? textColors[currentTextIndex % textColors.length] 
+    : undefined;
 
-  return createElement(
+  return React.createElement(
     Component,
     {
       ref: containerRef,
       className: `text-type ${reverseMode ? 'text-type-rtl' : ''} ${className}`,
+      style: { 
+        color: textColor, 
+        position: 'relative', 
+        ...props.style 
+      },
+      "aria-label": currentFullText,
       ...props,
     },
-    <span
-      className="text-type__content"
-      style={{
-        color: getCurrentTextColor(),
-        direction: reverseMode ? 'rtl' : 'ltr',
-        textAlign: reverseMode ? 'right' : 'left',
-        unicodeBidi: reverseMode ? 'bidi-override' : 'normal',
-      }}
-    >
-      {displayedText}
-    </span>,
-    showCursor && (
-      <span
-        ref={cursorRef}
-        className={`text-type__cursor ${cursorClassName} ${shouldHideCursor ? "text-type__cursor--hidden" : ""}`}
-      >
-        {cursorCharacter}
-      </span>
-    )
+    <>
+      {/* Renderujemy tekst znak po znaku, zachowując miejsce na niewidoczne znaki */}
+      {currentFullText.split("").map((char, index) => {
+        const isVisibleChar = index < currentIndex;
+        // Force spaces to be visible (opacity 1) to prevent layout collapsing
+        // even if "invisible" to user, it must be "visible" to layout engine.
+        // Although opacity: 0 usually preserves layout, some browsers/engines might quirk on spaces.
+        const isSpace = char === ' ';
+        const isActuallyVisible = isVisibleChar || isSpace;
+        
+        const isCursorPosition = index === currentIndex; // Kursor jest PRZED tym znakiem (lub na jego miejscu)
+
+        return (
+          <React.Fragment key={index}>
+            <span 
+                style={{ 
+                    opacity: isActuallyVisible ? 1 : 0,
+                    position: 'relative' 
+                }}
+            >
+                {char}
+                
+                {isCursorPosition && showCursor && !hideCursorWhileTyping && (
+                   <span 
+                        style={{
+                            position: 'absolute',
+                            left: 0, // Kursor po lewej stronie znaku
+                            bottom: 0,
+                            width: '1px', // Minimalna szerokość wizualna
+                            height: '1.2em',
+                            backgroundColor: 'currentColor', // Kolor tekstu
+                            animation: `blink ${cursorBlinkDuration}s step-end infinite`,
+                            pointerEvents: 'none'
+                        }}
+                        className={cursorClassName}
+                   />
+                )}
+            </span>
+          </React.Fragment>
+        );
+      })}
+      
+      {/* Kursor na samym końcu tekstu (po ostatnim znaku) */}
+      {currentIndex === currentFullText.length && showCursor && (
+         <span style={{ position: 'relative', display: 'inline-block', width: 0 }}>
+             <span 
+                style={{
+                    position: 'absolute',
+                    left: 0,
+                    bottom: 0,
+                    width: '1px', // Minimalna szerokość
+                    height: '1.2em',
+                    backgroundColor: 'currentColor',
+                    animation: `blink ${cursorBlinkDuration}s step-end infinite`
+                }}
+                className={cursorClassName}
+             />
+         </span>
+      )}
+      
+      <style>{`
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+        .text-type-rtl {
+            direction: rtl;
+        }
+      `}</style>
+    </>
   );
 };
 

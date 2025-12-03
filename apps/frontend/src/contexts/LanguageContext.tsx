@@ -67,8 +67,8 @@ export function LanguageToggle() {
         onClick={() => setLanguage('pl')}
         className={`px-3 py-1.5 text-xs rounded-full transition-all font-modern ${
           language === 'pl'
-            ? 'bg-gold-500 text-white font-semibold shadow-md'
-            : 'text-gray-600 hover:text-gray-800 hover:bg-white/10'
+            ? 'text-white font-semibold'
+            : 'text-white/60 hover:text-white/80'
         }`}
       >
         PL
@@ -77,8 +77,8 @@ export function LanguageToggle() {
         onClick={() => setLanguage('en')}
         className={`px-3 py-1.5 text-xs rounded-full transition-all font-modern ${
           language === 'en'
-            ? 'bg-gold-500 text-white font-semibold shadow-md'
-            : 'text-gray-600 hover:text-gray-800 hover:bg-white/10'
+            ? 'text-white font-semibold'
+            : 'text-white/60 hover:text-white/80'
         }`}
       >
         EN
