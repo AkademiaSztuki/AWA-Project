@@ -7,6 +7,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
+import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { 
   Zap, 
   Heart
@@ -114,7 +115,7 @@ export default function PathSelectionScreen() {
     <div className="min-h-screen flex relative">
       {/* Main content area - centered like landing page */}
       <div className="flex-1 ml-[0px] flex flex-col items-center justify-center h-screen p-8">
-        <div className="w-full max-w-4xl z-30">
+        <div className="w-full max-w-4xl z-30 mb-32"> {/* Added margin bottom for dialogue */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -197,7 +198,15 @@ export default function PathSelectionScreen() {
           </motion.div>
         </div>
       </div>
+
+      {/* Dialog IDA na dole - cała szerokość */}
+      <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+        <AwaDialogue 
+          currentStep="path_selection"
+          fullWidth={true}
+          autoHide={true}
+        />
+      </div>
     </div>
   );
 }
-

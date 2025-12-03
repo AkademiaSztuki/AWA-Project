@@ -54,6 +54,20 @@ type SetupStep =
   | 'prs_target'
   | 'summary';
 
+// Map room setup steps to AwaDialogue flow steps
+const STEP_TO_DIALOGUE: Record<SetupStep, string> = {
+  photo_upload: 'upload',
+  preference_source: 'room_preference_source',
+  preference_questions: 'wizard_semantic', // Uses semantic for preference questions
+  prs_current: 'room_prs_current',
+  usage_context: 'room_usage',
+  activities: 'room_activities',
+  pain_points: 'room_pain_points',
+  social_dynamics: 'room_usage', // Fallback
+  prs_target: 'room_prs_target',
+  summary: 'room_summary'
+};
+
 const BASE_STEPS: SetupStep[] = [
   'photo_upload',
   'preference_source',
@@ -231,11 +245,11 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
-      {/* Dialog IDA na dole - ograniczona szerokość */}
-      <div className="w-full max-w-3xl mx-auto">
+      {/* Dialog IDA na dole - dynamiczny dla każdego kroku */}
+      <div className="fixed bottom-0 left-0 right-0 w-full z-50">
         <AwaDialogue 
-          currentStep="onboarding" 
-          fullWidth={false}
+          currentStep={STEP_TO_DIALOGUE[currentStep]} 
+          fullWidth={true}
           autoHide={true}
         />
       </div>

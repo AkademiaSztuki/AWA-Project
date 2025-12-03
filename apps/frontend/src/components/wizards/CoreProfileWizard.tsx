@@ -29,6 +29,16 @@ type WizardStep =
   | 'semantic_diff'
   | 'sensory_tests';
 
+// Map wizard steps to AwaDialogue flow steps
+const STEP_TO_DIALOGUE: Record<WizardStep, string> = {
+  consent: 'onboarding',
+  demographics: 'wizard_demographics',
+  lifestyle: 'wizard_lifestyle',
+  tinder_swipes: 'tinder',
+  semantic_diff: 'wizard_semantic',
+  sensory_tests: 'wizard_sensory'
+};
+
 const LIVING_SITUATION_OPTIONS = [
   { id: 'alone', label: { pl: 'Sam/Sama', en: 'Alone' } },
   { id: 'partner', label: { pl: 'Z Partnerem', en: 'With Partner' } },
@@ -502,11 +512,10 @@ export function CoreProfileWizard() {
         </div>
       </div>
 
-      {/* Dialog IDA na dole - cała szerokość */}
-      <div className="w-full">
+      {/* Dialog IDA na dole - dynamiczny dla każdego kroku */}
+      <div className="fixed bottom-0 left-0 right-0 w-full z-50">
         <AwaDialogue 
-          currentStep="onboarding" 
-          message={currentInsight}
+          currentStep={STEP_TO_DIALOGUE[currentStep]} 
           fullWidth={true}
           autoHide={true}
         />
