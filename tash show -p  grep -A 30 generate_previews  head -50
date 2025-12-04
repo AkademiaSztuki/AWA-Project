@@ -1,0 +1,15 @@
+[33m4e01479[m[33m ([m[1;35mrefs/stash[m[33m)[m WIP on main: 0096832 feat: Add dynamic IDA dialogue system with instructional texts
+[33mc459f6a[m index on main: 0096832 feat: Add dynamic IDA dialogue system with instructional texts
+[33m0096832[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m feat: Add dynamic IDA dialogue system with instructional texts
+[33m7ebbf14[m Fix typing animation layout shifts and improve dialogue UX - Fixed text wrapping issues in TextType component - Added stable container heights to prevent layout shifts - Improved landing page dialogue positioning - Added delay for click prompt appearance - Simplified language toggle styling
+[33mf787cd7[m fix: poprawa różnicowania biophilia i dekodowania obrazów inspirations
+[33m4cbafc5[m feat: dodaj skrypty czyszczenia danych Supabase i ulepszenia systemu promptów
+[33mb431810[m Fix CORS issues for /generate endpoint - add CORS headers and OPTIONS preflight support
+[33m763b520[m feat: 5-Image Generation Matrix with blind comparison
+[33m501f486[m Poprawki UI na stronie generowania: usunięcie tekstu AI, przeniesienie historii na dół, zmiana kolorów na paletę projektu, uproszczenie oceny do 'Zgodność z gustem', poprawa animacji i przycisku Oryginalny
+[33mf5ad5a3[m feat: unify layout and styling across Core Profile, Inspirations, and Big Five pages
+[33mc1e7b60[m Add HDRI environment map support for metallic materials in AwaModel - Use useEnvironment hook with studio preset for realistic metal reflections - Increase envMapIntensity to 3.5 for better visibility - Set global environment map on scene for compatibility - Improve metalness (0.95) and roughness (0.05) for more realistic metal appearance
+[33m4b75058[m feat: Ujednolicenie interfejsu testów sensorycznych i layoutu
+[33mb0d6073[m[33m ([m[1;31morigin/cursor/fix-missing-room-image-for-generation-b73f[m[33m, [m[1;32mcursor/fix-missing-room-image-for-generation-b73f[m[33m)[m Fix: Map roomAnalysis to expected currentRoomAnalysis structure or set undefined
+[33m973bcb3[m Update pnpm-lock.yaml: sync @react-spring/web to ^9.7.5
+[33m00c037b[m feat: Introduce room preference management and activity context enhancements

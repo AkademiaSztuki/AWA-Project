@@ -46,14 +46,33 @@ export interface GenerationMetadata {
 }
 
 export type InteriorStyle = 
-  | 'skandynawski'
-  | 'industrialny' 
-  | 'boho'
-  | 'klasyczny'
-  | 'nowoczesny'
-  | 'rustykalny'
-  | 'artdeco'
-  | 'zen';
+  // Modern & Minimal
+  | 'modern' | 'nowoczesny'
+  | 'minimalist' | 'minimalistyczny'
+  | 'contemporary' | 'współczesny'
+  | 'transitional' | 'przejściowy'
+  // Nordic & Zen
+  | 'scandinavian' | 'skandynawski'
+  | 'japanese' | 'japoński'
+  | 'zen'
+  // Industrial
+  | 'industrial' | 'industrialny'
+  // Classic & Traditional
+  | 'traditional' | 'klasyczny'
+  | 'mid-century'
+  | 'art-deco' | 'artdeco'
+  | 'vintage'
+  // Bold & Eclectic
+  | 'bohemian' | 'boho'
+  | 'maximalist' | 'maksymalistyczny'
+  | 'eclectic' | 'eklektyczny'
+  | 'gothic' | 'gotycki'
+  // Natural & Warm
+  | 'rustic' | 'rustykalny'
+  | 'farmhouse'
+  | 'coastal' | 'nadmorski'
+  | 'mediterranean' | 'śródziemnomorski'
+  | 'tropical' | 'tropikalny';
 
 export type ModificationType =
   | 'colors_warmer'

@@ -43,7 +43,7 @@ class GenerationRequest(BaseModel):
     steps: int = 20
     guidance: float = 7.0
     num_images: int = 1
-    image_size: int = 512
+    image_size: int = 1024
 
 class GenerationResponse(BaseModel):
     images: List[str]

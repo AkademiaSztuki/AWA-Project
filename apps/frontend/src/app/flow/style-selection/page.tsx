@@ -9,75 +9,13 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { Palette, Check } from 'lucide-react';
+import { STYLE_OPTIONS } from '@/lib/questions/style-options';
 
 /**
  * Style Selection Page for Fast Track
  * User picks a dominant style for their interior
+ * Uses shared STYLE_OPTIONS from style-options.ts for consistency
  */
-
-interface StyleOption {
-  id: string;
-  labelPl: string;
-  labelEn: string;
-  description: string;
-}
-
-const STYLE_OPTIONS: StyleOption[] = [
-  {
-    id: 'modern',
-    labelPl: 'Nowoczesny',
-    labelEn: 'Modern',
-    description: 'Clean lines, minimalist approach, neutral colors'
-  },
-  {
-    id: 'scandinavian',
-    labelPl: 'Skandynawski',
-    labelEn: 'Scandinavian',
-    description: 'Bright, natural light, wood accents, hygge'
-  },
-  {
-    id: 'industrial',
-    labelPl: 'Industrialny',
-    labelEn: 'Industrial',
-    description: 'Exposed brick, metal, raw materials'
-  },
-  {
-    id: 'minimalist',
-    labelPl: 'Minimalistyczny',
-    labelEn: 'Minimalist',
-    description: 'Less is more, simple forms, functional'
-  },
-  {
-    id: 'rustic',
-    labelPl: 'Rustykalny',
-    labelEn: 'Rustic',
-    description: 'Natural wood, warm tones, countryside charm'
-  },
-  {
-    id: 'bohemian',
-    labelPl: 'Bohemian',
-    labelEn: 'Bohemian',
-    description: 'Eclectic, colorful, artistic, free-spirited'
-  },
-  {
-    id: 'contemporary',
-    labelPl: 'Współczesny',
-    labelEn: 'Contemporary',
-    description: 'Current trends, balanced, sophisticated'
-  },
-  {
-    id: 'traditional',
-    labelPl: 'Klasyczny',
-    labelEn: 'Traditional',
-    description: 'Timeless elegance, classic furniture, warm'
-  },
-  {
-    id: 'mid-century',
-    labelPl: 'Mid-Century',
-    labelEn: 'Mid-Century Modern',
-    description: 'Retro 50s-60s, organic curves, vintage'
-  }
-];
 
 export default function StyleSelectionPage() {
   const router = useRouter();

@@ -76,7 +76,7 @@ class GenerationRequest(BaseModel):
     steps: int = 20
     guidance: float = 7.0
     num_images: int = 1
-    image_size: int = 512
+    image_size: int = 1024
 
 class GenerationResponse(BaseModel):
     images: List[str]
@@ -129,7 +129,7 @@ class FluxKontextModel:
         prompt: str,
         guidance_scale: float = 3.5,
         num_inference_steps: int = 20,
-        image_size: int = 512,
+        image_size: int = 1024,
         num_images: int = 1,
         inspiration_images: Optional[List[bytes]] = None
     ) -> List[bytes]:
@@ -219,7 +219,7 @@ class FluxKontextModel:
         prompt: str,
         guidance_scale: float = 7.0,
         num_inference_steps: int = 20,
-        image_size: int = 512,
+        image_size: int = 1024,
         num_images: int = 1
     ) -> List[bytes]:
         """Generate images from text only"""

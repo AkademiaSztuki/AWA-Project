@@ -128,6 +128,23 @@ export function UserDashboard() {
         setIsLoading(false);
       }
       
+      // Try to load spaces from user profile metadata first
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('metadata')
+        .eq('user_hash', userHash)
+        .single();
+      
+      if (!profileError && profileData?.metadata?.spaces) {
+        console.log('[Dashboard] Loaded spaces from user profile metadata');
+        const spacesFromMetadata = profileData.metadata.spaces as Space[];
+        if (spacesFromMetadata && spacesFromMetadata.length > 0) {
+          setSpaces(spacesFromMetadata);
+          setIsLoading(false);
+          return; // Early return - we have spaces from metadata
+        }
+      }
+      
       // Call Supabase function to get complete profile
       const { data, error } = await supabase
         .rpc('get_user_complete_profile', { p_user_hash: userHash });
@@ -366,7 +383,30 @@ export function UserDashboard() {
 
           {/* Inspirations Preview */}
           <InspirationsPreviewSection 
-            inspirations={(sessionData as any)?.inspirations || []}
+            inspirations={(() => {
+              // Get inspirations from multiple sources
+              const typedSession = sessionData as any;
+              
+              // First try sessionData.inspirations
+              if (typedSession?.inspirations && typedSession.inspirations.length > 0) {
+                return typedSession.inspirations;
+              }
+              
+              // Then try spaces - extract inspiration images
+              const inspirationImages = spaces
+                .flatMap(space => space.images || [])
+                .filter(img => img.type === 'inspiration')
+                .map(img => ({
+                  id: img.id,
+                  url: img.url,
+                  imageBase64: img.url,
+                  tags: img.tags || {},
+                  description: undefined,
+                  addedAt: img.addedAt
+                }));
+              
+              return inspirationImages;
+            })()}
             onViewAll={() => {
               const spaces = (sessionData as any)?.spaces || [];
               if (spaces.length > 0) {
@@ -519,9 +559,11 @@ function SpaceCard({ space, index, onOpenSpace }: {
   const { language } = useLanguage();
   const generatedImages = space.images.filter(img => img.type === 'generated');
   const inspirationImages = space.images.filter(img => img.type === 'inspiration');
-  const allImages = [...inspirationImages, ...generatedImages];
-  const displayImages = allImages.slice(0, 6);
-  const remainingCount = allImages.length - displayImages.length;
+  
+  // In "Moja Główna Przestrzeń" show only generated images, not inspirations
+  // Inspirations should be shown in the separate "Inspiracje" section
+  const displayImages = generatedImages.slice(0, 6);
+  const remainingCount = generatedImages.length - displayImages.length;
 
   return (
     <motion.div
@@ -551,7 +593,7 @@ function SpaceCard({ space, index, onOpenSpace }: {
         </div>
 
         {/* Images Gallery Preview */}
-        {allImages.length > 0 ? (
+        {displayImages.length > 0 ? (
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
             {displayImages.map((image, idx) => (
               <div key={image.id} className="relative aspect-square rounded-lg overflow-hidden glass-panel group">

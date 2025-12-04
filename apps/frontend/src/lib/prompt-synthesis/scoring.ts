@@ -650,9 +650,19 @@ function integrateStylePreferences(
       explicitStyle = extractValidStyle(aestheticDNA.explicit.selectedPalette) || '';
     }
     if (!explicitStyle) {
-      // No fallback - if quality gates work correctly, this should not happen
-      // If it does, the source should have been skipped
-      throw new Error(`Mixed source requires explicit style data, but none found. This indicates a quality gate failure.`);
+      // Fallback: try to use implicit style or personality style if available
+      if (hasImplicitStyles) {
+        explicitStyle = implicitValidStyles[0];
+        console.log('[StylePreferences] Mixed: No explicit style, using implicit style as fallback:', explicitStyle);
+      } else if (personality) {
+        const personalityStyle = deriveStyleFromPersonality(personality);
+        explicitStyle = personalityStyle.dominantStyle.split(' ')[0].toLowerCase();
+        console.log('[StylePreferences] Mixed: No explicit style, using personality style as fallback:', explicitStyle);
+      } else {
+        // Last resort: use default
+        explicitStyle = 'modern';
+        console.warn('[StylePreferences] Mixed: No style data available, using default "modern"');
+      }
     }
     
     // For Mixed sources, ALWAYS blend with personality or implicit if available

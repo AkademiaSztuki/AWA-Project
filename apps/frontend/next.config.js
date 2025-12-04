@@ -1,7 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['your-supabase-project.supabase.co', 'modal-api-domain.com'],
+    domains: [
+      'zcaaqbbcqpkzunepnhpb.supabase.co',  // Supabase storage
+      'your-supabase-project.supabase.co', 
+      'modal-api-domain.com'
+    ],
   },
   // Podstawowe optymalizacje
   compress: true,

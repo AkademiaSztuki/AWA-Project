@@ -29,7 +29,7 @@ export function GlassHeader() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="w-full sticky top-4 z-50 mb-2"
+          className="w-full sticky top-4 z-[100] mb-2"
         >
           <div className="glass-panel rounded-[32px] border border-white/20 bg-white/10 backdrop-blur-2xl shadow-2xl px-3 py-2 flex items-center gap-2">
             

@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startGenerationJob, endGenerationJob, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { assessAllSourcesQuality, getViableSources, type DataStatus } from '@/lib/prompt-synthesis/data-quality';
 import { calculateImplicitQuality } from '@/lib/prompt-synthesis/implicit-quality';
 import { analyzeSourceConflict } from '@/lib/prompt-synthesis/conflict-analysis';
@@ -100,7 +101,7 @@ const MACRO_MODIFICATIONS: ModificationOption[] = [
 export default function GeneratePage() {
   const router = useRouter();
   const { sessionData, updateSessionData } = useSessionData();
-  const { generateImages, generateFiveImagesParallel, generateSixImagesParallel, isLoading, error, setError, checkHealth, generateLLMComment } = useModalAPI();
+  const { generateImages, generatePreviews, upscaleImage, generateFiveImagesParallel, generateSixImagesParallel, isLoading, error, setError, checkHealth, generateLLMComment } = useModalAPI();
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
@@ -129,10 +130,13 @@ export default function GeneratePage() {
   const [carouselIndex, setCarouselIndex] = useState(0); // Current carousel position
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [isGenerating, setIsGenerating] = useState(false); // Prevent duplicate generations
+  const [isUpscaling, setIsUpscaling] = useState(false); // Track upscale in progress
+  const [upscaledImage, setUpscaledImage] = useState<GeneratedImage | null>(null); // Store upscaled version
   const [regenerateCount, setRegenerateCount] = useState(0); // Track regeneration count
   const [lastGenerationTime, setLastGenerationTime] = useState<number>(0); // For regeneration tracking
   const [qualityReport, setQualityReport] = useState<any>(null); // Store quality report for feedback
   const [synthesisResult, setSynthesisResult] = useState<SixPromptSynthesisResult | null>(null); // Store synthesis result for skipped sources info
+  const [imageProgress, setImageProgress] = useState<Record<string, number>>({}); // Track progress for each image source
   
   const [generationHistory, setGenerationHistory] = useState<Array<{
     id: string;
@@ -175,6 +179,9 @@ export default function GeneratePage() {
     waitForApi();
   }, []);
 
+  // Track pageViewId in a ref to avoid cleanup on every change
+  const pageViewIdRef = useRef<number | null>(null);
+  
   useEffect(() => {
     (async () => {
       try {
@@ -182,26 +189,53 @@ export default function GeneratePage() {
         if (projectId) {
           const id = await startPageView(projectId, 'generate');
           setPageViewId(id);
+          pageViewIdRef.current = id;
         }
       } catch {}
     })();
     
     // Cleanup: abort any ongoing generation when leaving the page
     return () => { 
+      // console.log('[Generate] Page unmounting - cleaning up...');
       (async () => { 
-        if (pageViewId) await endPageView(pageViewId); 
+        if (pageViewIdRef.current) await endPageView(pageViewIdRef.current); 
       })();
-      // Abort any ongoing generation
+      // Abort any ongoing generation - use ref to get latest abortController
+      // Note: We can't use abortController in dependencies as it changes on each generation
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount/unmount
+  
+  // Separate effect to handle abortController cleanup
+  useEffect(() => {
+    return () => {
       if (abortController) {
-        console.log('[Generate] Page unmounting - aborting ongoing generation');
+        // console.log('[Generate] Aborting ongoing generation');
+        abortController.abort();
+      }
+      setIsGenerating(false);
+      setIsUpscaling(false);
+    };
+  }, [abortController]);
+  
+  // Additional cleanup on browser back/forward
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (abortController) {
+        console.log('[Generate] Browser navigation - aborting generation');
         abortController.abort();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, [abortController]);
 
   useEffect(() => {
     if (isApiReady && generationCount === 0 && !hasAttemptedGeneration) {
+      console.log('[Generate] Auto-triggering initial generation:', { isApiReady, generationCount, hasAttemptedGeneration, isMatrixMode });
       setHasAttemptedGeneration(true);
       handleInitialGeneration();
     }
@@ -221,6 +255,7 @@ export default function GeneratePage() {
    * This is the new 6-image matrix generation flow with multi-reference support.
    */
   const handleMatrixGeneration = async () => {
+    console.log("[6-Image Matrix] handleMatrixGeneration called", { isApiReady, isGenerating });
     if (!isApiReady) {
       console.log("[6-Image Matrix] API not ready, generation cancelled.");
       return;
@@ -232,13 +267,36 @@ export default function GeneratePage() {
       return;
     }
     
+    console.log("[6-Image Matrix] Starting generation...");
+    
     const typedSessionData = sessionData as any;
     
-    if (!typedSessionData || !typedSessionData.roomImage) {
-      console.error("[6-Image Matrix] Missing roomImage in session data");
-      setError("Nie można rozpocząć generowania - brak zdjęcia pokoju w sesji.");
+    // Try to get roomImage from sessionStorage if not in sessionData (Supabase might be disconnected)
+    let roomImage = typedSessionData?.roomImage;
+    if (!roomImage && typeof window !== 'undefined') {
+      const sessionRoomImage = sessionStorage.getItem('aura_session_room_image');
+      if (sessionRoomImage) {
+        console.log("[6-Image Matrix] Found roomImage in sessionStorage, restoring to sessionData");
+        roomImage = sessionRoomImage;
+        // Update sessionData with the restored image
+        updateSessionData({ roomImage: sessionRoomImage });
+      }
+    }
+    
+    if (!roomImage) {
+      console.error("[6-Image Matrix] Missing roomImage in session data and sessionStorage");
+      console.error("[6-Image Matrix] Session data keys:", Object.keys(typedSessionData || {}));
+      console.error("[6-Image Matrix] sessionStorage roomImage:", typeof window !== 'undefined' ? sessionStorage.getItem('aura_session_room_image')?.substring(0, 50) : 'N/A');
+      setError("Nie można rozpocząć generowania - brak zdjęcia pokoju w sesji. Proszę wrócić do kroku uploadu zdjęcia.");
       return;
     }
+    
+    console.log("[6-Image Matrix] Using roomImage:", {
+      hasImage: !!roomImage,
+      length: roomImage?.length || 0,
+      startsWith: roomImage?.substring(0, 50) || 'N/A',
+      source: typedSessionData?.roomImage ? 'sessionData' : 'sessionStorage'
+    });
     
     // Create new AbortController for this generation
     const controller = new AbortController();
@@ -248,6 +306,7 @@ export default function GeneratePage() {
     // Reset images for new generation
     setMatrixImages([]);
     setGeneratedImages([]);
+    setImageProgress({}); // Reset progress for new generation
     
     console.log("[6-Image Matrix] Starting 6-image matrix generation...");
     const generationStartTime = Date.now();
@@ -257,6 +316,7 @@ export default function GeneratePage() {
     setLoadingStage(2);
     setLoadingProgress(30);
     setEstimatedTime(150);
+    setIsGenerating(true); // Ensure isGenerating is set to true for placeholders
     
     // Track regeneration if this is not the first generation
     if (regenerateCount > 0) {
@@ -351,7 +411,14 @@ export default function GeneratePage() {
         prompt: synthesisResult.results[source]!.prompt
       }));
       
-      const parameters = getGenerationParameters('initial', generationCount);
+      // Use preview mode for faster initial generation (512x512, 20 steps)
+      const parameters = getGenerationParameters('preview', generationCount);
+      console.log('[6-Image Matrix] Preview parameters:', { 
+        image_size: parameters.image_size, 
+        steps: parameters.steps, 
+        guidance: parameters.guidance,
+        strength: parameters.strength 
+      });
       
       // Log generation job
       const projectId = await getOrCreateProjectId(typedSessionData.userHash);
@@ -370,6 +437,35 @@ export default function GeneratePage() {
       
       // Track completed images for progress
       let completedCount = 0;
+      
+      // Track progress for each image
+      const startTime = Date.now();
+      let progressInterval: NodeJS.Timeout | null = null;
+      
+      const updateProgress = () => {
+        prompts.forEach(({ source }) => {
+          // Check if image already exists
+          const existingImage = matrixImages.find(img => img.source === source);
+          if (!existingImage) {
+            const elapsed = Date.now() - startTime;
+            // Estimate progress: 0-90% over ~30 seconds per image
+            const estimatedProgress = Math.min(90, Math.floor((elapsed / 30000) * 90));
+            setImageProgress(prev => {
+              // Only update if not already at 100%
+              if (prev[source] !== 100) {
+                return {
+                  ...prev,
+                  [source]: estimatedProgress
+                };
+              }
+              return prev;
+            });
+          }
+        });
+      };
+      
+      // Update progress every 500ms
+      progressInterval = setInterval(updateProgress, 500);
       
       // Callback to show images as they complete
       const onImageReady = (result: any) => {
@@ -396,6 +492,12 @@ export default function GeneratePage() {
             isBlindSelected: false
           };
           
+          // Mark as 100% complete
+          setImageProgress(prev => ({
+            ...prev,
+            [result.source]: 100
+          }));
+          
           // Add to matrix images progressively
           setMatrixImages(prev => {
             // Remove any existing image with same source to avoid duplicates
@@ -415,14 +517,88 @@ export default function GeneratePage() {
           const progressPercent = 55 + (completedCount / prompts.length) * 30;
           setLoadingProgress(progressPercent);
           setStatusMessage(`Wygenerowano ${completedCount}/${prompts.length} wizji...`);
+          
+          // Cleanup interval when all images are done
+          if (completedCount >= prompts.length && progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+          }
         }
       };
+      
+      // Use the restored roomImage from above
+      const baseImageForGeneration = roomImage || typedSessionData.roomImage;
+      
+      // Ensure roomImage is in correct format (base64 without data URI prefix)
+      let baseImage = baseImageForGeneration;
+      if (baseImage) {
+        // Remove data URI prefix if present
+        if (baseImage.includes(',')) {
+          baseImage = baseImage.split(',')[1];
+        }
+        console.log("[6-Image Matrix] Using roomImage (cleaned):", {
+          hasImage: !!baseImage,
+          length: baseImage?.length || 0,
+          startsWith: baseImage?.substring(0, 50) || 'N/A',
+          isBase64: baseImage && !baseImage.startsWith('http') && !baseImage.startsWith('blob:')
+        });
+      } else {
+        console.error("[6-Image Matrix] ERROR: roomImage is missing or empty after restoration!");
+        setError("Brak zdjęcia pokoju w sesji. Proszę wrócić do kroku uploadu zdjęcia.");
+        setIsGenerating(false);
+        return;
+      }
+      
+      // Filter out blob URLs from inspiration images - they cannot be used for generation
+      // Only use base64 strings or HTTP/HTTPS URLs
+      let filteredInspirationImages: string[] | undefined = undefined;
+      if (synthesisResult.inspirationImages && synthesisResult.inspirationImages.length > 0) {
+        filteredInspirationImages = synthesisResult.inspirationImages.filter((img: string) => {
+          // Skip blob URLs - they cannot be fetched or used
+          if (img.startsWith('blob:')) {
+            console.warn("[6-Image Matrix] Skipping blob URL inspiration image:", img.substring(0, 50));
+            return false;
+          }
+          // Keep base64 (with or without data: prefix) and HTTP/HTTPS URLs
+          return true;
+        });
+        
+        // Process remaining images: extract base64 from data URIs, keep HTTP URLs as-is
+        if (filteredInspirationImages.length > 0) {
+          filteredInspirationImages = filteredInspirationImages.map((img: string) => {
+            // If it's base64 with data URI prefix, extract just the base64 part
+            if (img.startsWith('data:')) {
+              return img.split(',')[1];
+            }
+            // Otherwise keep as-is (base64 without prefix or HTTP/HTTPS URL)
+            return img;
+          });
+          console.log("[6-Image Matrix] Filtered inspiration images:", {
+            original: synthesisResult.inspirationImages.length,
+            filtered: filteredInspirationImages.length,
+            removed: synthesisResult.inspirationImages.length - filteredInspirationImages.length
+          });
+        } else {
+          console.warn("[6-Image Matrix] All inspiration images were blob URLs, skipping inspiration images");
+          filteredInspirationImages = undefined;
+        }
+      }
+      
+      console.log("[6-Image Matrix] Calling generateSixImagesParallel with:", {
+        promptsCount: prompts.length,
+        hasBaseImage: !!baseImage,
+        baseImageLength: baseImage?.length || 0,
+        hasInspirationImages: !!filteredInspirationImages,
+        inspirationImagesCount: filteredInspirationImages?.length || 0,
+        style: typedSessionData.visualDNA?.dominantStyle || 'modern',
+        parameters
+      });
       
       const generationResponse = await generateSixImagesParallel(
         {
           prompts,
-          base_image: typedSessionData.roomImage,
-          inspiration_images: synthesisResult.inspirationImages, // For InspirationReference source
+          base_image: baseImage,  // Use cleaned base64
+          inspiration_images: filteredInspirationImages, // Use filtered inspiration images (no blob URLs)
           style: typedSessionData.visualDNA?.dominantStyle || 'modern',
           parameters: {
             strength: parameters.strength,
@@ -434,6 +610,12 @@ export default function GeneratePage() {
         onImageReady,
         controller.signal
       );
+      
+      console.log("[6-Image Matrix] generateSixImagesParallel returned:", {
+        successful_count: generationResponse?.successful_count,
+        failed_count: generationResponse?.failed_count,
+        results_count: generationResponse?.results?.length || 0
+      });
       
       // Step 4: Process results
       setLoadingProgress(85);
@@ -551,6 +733,43 @@ export default function GeneratePage() {
         }
         await updateSessionData({ spaces: updatedSpaces } as any);
         
+        // Save spaces to Supabase for persistence across sessions
+        // This ensures data is available after logout/login
+        try {
+          const userHash = (sessionData as any).userHash;
+          if (userHash && updatedSpaces.length > 0) {
+            // Store spaces in user profile metadata or as a separate table
+            // For now, we'll ensure localStorage is synced and Supabase RPC can access it
+            // The get_user_complete_profile RPC should return spaces from user_profiles.metadata or a spaces table
+            console.log('[Generate] Spaces saved locally, syncing to Supabase...');
+            
+            // Try to save to user profile metadata
+            const { ensureUserProfileExists } = await import('@/lib/supabase-deep-personalization');
+            const profileExists = await ensureUserProfileExists(userHash);
+            if (profileExists) {
+              // Update user profile with spaces metadata
+              const { data, error } = await supabase
+                .from('user_profiles')
+                .update({
+                  metadata: {
+                    spaces: updatedSpaces,
+                    last_updated: new Date().toISOString()
+                  }
+                })
+                .eq('user_hash', userHash);
+              
+              if (error) {
+                console.warn('[Generate] Failed to save spaces to user profile:', error);
+              } else {
+                console.log('[Generate] Spaces saved to Supabase user profile');
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[Generate] Failed to save spaces to Supabase:', e);
+          // Non-critical - spaces are saved locally and will be available in localStorage
+        }
+        
         if (projectId && jobId) {
           const totalTime = Date.now() - matrixGenerationStartTime;
           await endGenerationJob(jobId, { 
@@ -607,6 +826,61 @@ export default function GeneratePage() {
    * Handles selection in blind comparison mode.
    * Now with full feedback collection including quality metrics.
    */
+  /**
+   * Upscale a selected preview image to full resolution
+   */
+  const handleUpscale = async (image: GeneratedImage) => {
+    if (isUpscaling || !image) return;
+    
+    setIsUpscaling(true);
+    setError(null);
+    
+    try {
+      console.log('Upscaling image:', image.id);
+      
+      // Get the prompt and seed from the image
+      const prompt = image.prompt || '';
+      const seed = image.parameters?.seed || image.parameters?.generation_info?.seed || 42;
+      const targetSize = 1024; // Full resolution
+      
+      // Get inspiration images if available
+      const typedSessionData = sessionData as any;
+      const inspirationImages = synthesisResult?.inspirationImages;
+      
+      // Upscale the image
+      const upscaledBase64 = await upscaleImage(
+        image.base64,
+        seed,
+        prompt,
+        targetSize,
+        inspirationImages
+      );
+      
+      // Create upscaled image object
+      const upscaled: GeneratedImage = {
+        ...image,
+        id: `${image.id}-upscaled`,
+        url: `data:image/png;base64,${upscaledBase64}`,
+        base64: upscaledBase64,
+        parameters: {
+          ...image.parameters,
+          mode: 'upscale',
+          target_size: targetSize,
+        }
+      };
+      
+      setUpscaledImage(upscaled);
+      setSelectedImage(upscaled); // Update selected image to upscaled version
+      
+      console.log('Image upscaled successfully');
+    } catch (err: any) {
+      console.error('Error upscaling image:', err);
+      setError(err.message || 'Nie udało się upscalować obrazu.');
+    } finally {
+      setIsUpscaling(false);
+    }
+  };
+
   const handleBlindSelection = async (image: GeneratedImage) => {
     if (blindSelectionMade) return;
     
@@ -622,6 +896,94 @@ export default function GeneratePage() {
       ...img,
       isBlindSelected: img.id === image.id
     })));
+    
+    // Start upscaling the selected image automatically
+    setIsUpscaling(true);
+    setError(null);
+    
+    try {
+      console.log('[Upscale] Starting upscale for selected image...');
+      
+      // Get upscale parameters
+      const upscaleParams = getGenerationParameters('upscale');
+      
+      // Get inspiration images if this was InspirationReference source
+      const inspirationImages = image.source === GenerationSource.InspirationReference
+        ? synthesisResult?.inspirationImages
+        : undefined;
+      
+      // Get seed from image parameters
+      const seed = image.parameters?.seed || image.parameters?.generation_info?.seed || 42;
+      const targetSize = upscaleParams.image_size || 1536; // Use upscale size (1536 for upscale mode)
+      
+      console.log('[Upscale] Starting upscale for selected image with params:', {
+        target_size: targetSize,
+        seed,
+        has_inspiration_images: !!inspirationImages,
+        image_id: image.id
+      });
+      
+      // Use the dedicated upscale endpoint (not generate - this upscales the existing image)
+      // Clean image base64 (remove data: prefix if present)
+      let imageBase64 = image.base64;
+      if (imageBase64.includes(',')) {
+        imageBase64 = imageBase64.split(',')[1];
+      }
+      
+      const upscaledBase64 = await upscaleImage(
+        imageBase64,
+        seed,
+        image.prompt,
+        targetSize,
+        inspirationImages
+      );
+      
+      // Create upscaled image object
+      const upscaled: GeneratedImage = {
+        ...image,
+        id: `${image.id}-upscaled`,
+        url: `data:image/png;base64,${upscaledBase64}`,
+        base64: upscaledBase64,
+        parameters: {
+          ...image.parameters,
+          mode: 'upscale',
+          target_size: upscaleParams.image_size,
+          steps: upscaleParams.steps
+        }
+      };
+      
+      setUpscaledImage(upscaled);
+      setSelectedImage(upscaled); // Update selected image to upscaled version
+      
+      // Add upscaled image to generatedImages and history
+      setGeneratedImages(prev => {
+        const exists = prev.find(img => img.id === upscaled.id);
+        if (exists) return prev;
+        return [...prev, upscaled];
+      });
+      
+      // Add to generation history
+      const historyNode = {
+        id: upscaled.id,
+        image: upscaled.url,
+        prompt: upscaled.prompt,
+        timestamp: Date.now(),
+        modificationType: 'upscale' as const
+      };
+      setGenerationHistory(prev => {
+        const exists = prev.find(h => h.id === historyNode.id);
+        if (exists) return prev;
+        return [...prev, historyNode];
+      });
+      
+      console.log('[Upscale] Image upscaled successfully and added to history');
+    } catch (err: any) {
+      console.error('[Upscale] Error upscaling image:', err);
+      setError(err.message || 'Nie udało się upscalować obrazu.');
+      // Continue with original image if upscale fails
+    } finally {
+      setIsUpscaling(false);
+    }
     
     // Collect full feedback with quality metrics
     try {
@@ -738,14 +1100,19 @@ export default function GeneratePage() {
   const getOptimalParameters = getGenerationParameters;
 
   const handleInitialGeneration = async (force = false) => {
+    console.log('[Generate] handleInitialGeneration called', { isApiReady, generationCount, force, isMatrixMode });
     if (!isApiReady) {
       console.log("API not ready, generation cancelled.");
       return;
     }
-    if (!force && generationCount > 0) return;
+    if (!force && generationCount > 0) {
+      console.log('[Generate] Generation already done, skipping');
+      return;
+    }
     
     // Use matrix generation mode (6 images from different sources)
     if (isMatrixMode) {
+      console.log('[Generate] Using matrix mode, calling handleMatrixGeneration');
       return handleMatrixGeneration();
     }
     
@@ -770,7 +1137,12 @@ export default function GeneratePage() {
     setEstimatedTime(60);
     
     const prompt = buildInitialPrompt();
-    const parameters = getOptimalParameters('initial', generationCount);
+    const parameters = {
+      ...getOptimalParameters('initial', generationCount),
+      image_size: 512,  // First 6 images should be generated at 512 instead of 1024
+      width: 512,
+      height: 512,
+    };
     
     console.log("FLUX Kontext Structured Prompt:", prompt);
     console.log("FLUX Kontext Parameters:", parameters);
@@ -1418,8 +1790,10 @@ export default function GeneratePage() {
 
   return (
     <div className="min-h-screen flex flex-col w-full relative">
+      
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
-      <div className="flex-1 px-8 pb-8 pt-2">
+      {/* Ensure navigation is always accessible - no blocking overlays */}
+      <div className="flex-1 px-8 pb-8 pt-2 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1432,7 +1806,9 @@ export default function GeneratePage() {
             </h1>
           </div>
 
-          {(isLoading || !isApiReady) && (
+          {/* Only show LoadingProgress if NOT in matrix mode (when placeholders are visible) */}
+          {/* Hide LoadingProgress completely when in matrix mode - placeholders show progress instead */}
+          {(isLoading || !isApiReady) && !isMatrixMode && (
             <div className="flex items-center justify-center py-12">
               <LoadingProgress
                 currentStage={loadingStage}
@@ -1462,16 +1838,19 @@ export default function GeneratePage() {
             </GlassCard>
           )}
 
-          {/* 6-Image Matrix - Full Width Carousel View (TEST MODE) */}
-          {isMatrixMode && matrixImages.length > 0 && !blindSelectionMade && (
-            <div className="space-y-4">
+          {/* 6-Image Matrix - Grid 2x3 with Loading Placeholders */}
+          {/* Show grid if: matrix mode enabled OR generation in progress OR we have images */}
+          {(isMatrixMode || isGenerating || matrixImages.length > 0) && !blindSelectionMade && (
+            <div className="space-y-6">
               {/* Header */}
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-graphite mb-2">
-                  Porównaj wizje ({carouselIndex + 1}/{matrixImages.length})
+                  {isGenerating ? 'Generowanie wizji...' : `Porównaj wizje (${matrixImages.length}/6)`}
                 </h2>
                 <p className="text-silver-dark text-sm">
-                  Przeglądaj obrazy i wybierz ten, który najbardziej Ci odpowiada
+                  {isGenerating 
+                    ? 'Twoje wizje są generowane. Obrazy pojawią się poniżej gdy będą gotowe.' 
+                    : 'Wybierz wizję, która najbardziej Ci odpowiada'}
                 </p>
               </div>
               
@@ -1517,194 +1896,263 @@ export default function GeneratePage() {
                 </GlassCard>
               )}
               
-              {/* Full Width Carousel */}
-              <div className="relative">
-                {/* Main Image - Full Width */}
-                <GlassCard className="p-2 overflow-hidden">
-                  <AnimatePresence mode="wait">
+              {/* Grid 3x2 with Loading Placeholders - 3 columns for better fit */}
+              <div className="grid grid-cols-3 gap-3 max-w-5xl mx-auto">
+                {/* Generate 6 slots - show placeholders for missing images */}
+                {Array.from({ length: 6 }).map((_, index) => {
+                  const expectedSource = synthesisResult?.displayOrder[index] || null;
+                  const image = matrixImages.find(img => img.source === expectedSource);
+                  // Show loading if: generating AND no image yet, OR if we have synthesisResult but no image (initial state)
+                  const isLoading = (isGenerating || (synthesisResult && !image)) && !image;
+                  const sourceLabel = expectedSource ? GENERATION_SOURCE_LABELS[expectedSource]?.pl : `Wizja ${index + 1}`;
+                  
+                  return (
                     <motion.div
-                      key={matrixImages[carouselIndex]?.id}
-                      initial={{ opacity: 0, x: 50 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -50 }}
-                      transition={{ duration: 0.3 }}
+                      key={expectedSource || `placeholder-${index}`}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3, delay: index * 0.1 }}
                       className="relative"
                     >
-                      <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden">
-                        <Image
-                          src={matrixImages[carouselIndex]?.url || ''}
-                          alt={`Wizja ${carouselIndex + 1}`}
-                          fill
-                          className="object-cover"
-                          priority
-                        />
-                        
-                        {/* Source Label - Always Visible for Testing */}
-                        <div className="absolute top-4 left-4">
-                          <div className="px-4 py-2 bg-black/70 backdrop-blur-sm rounded-lg">
-                            <p className="text-white text-xs font-medium opacity-70">Źródło danych:</p>
-                            <p className="text-gold font-bold text-lg">
-                              {GENERATION_SOURCE_LABELS[matrixImages[carouselIndex]?.source!]?.pl || 'Nieznane'}
-                            </p>
+                      {/* No GlassCard wrapper - image fills the entire placeholder */}
+                      <div className="relative aspect-square w-full rounded-lg overflow-hidden group">
+                        {isLoading ? (
+                          /* Loading Skeleton - Futuristic transparent glass style */
+                          <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10">
+                            {/* Animated gradient shimmer */}
+                            <motion.div 
+                              className="absolute inset-0 bg-gradient-to-r from-transparent via-gold/20 to-transparent"
+                              animate={{ 
+                                x: ['-100%', '200%'],
+                                opacity: [0.3, 0.6, 0.3]
+                              }}
+                              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                              style={{ width: '50%', height: '100%' }}
+                            />
+                            
+                            {/* Pulsing grid pattern overlay */}
+                            <div className="absolute inset-0 opacity-10">
+                              <div className="absolute inset-0" style={{
+                                backgroundImage: `linear-gradient(rgba(255,215,0,0.1) 1px, transparent 1px),
+                                                  linear-gradient(90deg, rgba(255,215,0,0.1) 1px, transparent 1px)`,
+                                backgroundSize: '20px 20px'
+                              }} />
+                            </div>
+                            
+                            {/* Futuristic loading indicator */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                              {/* Animated ring loader with particles */}
+                              <div className="relative w-14 h-14">
+                                {/* Outer rotating ring */}
+                                <motion.div
+                                  className="absolute inset-0 border-2 border-gold/40 rounded-full"
+                                  animate={{ rotate: 360 }}
+                                  transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                                />
+                                {/* Inner pulsing ring */}
+                                <motion.div
+                                  className="absolute inset-2 border-2 border-gold rounded-full"
+                                  animate={{ 
+                                    scale: [1, 1.2, 1],
+                                    opacity: [0.6, 1, 0.6]
+                                  }}
+                                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                                />
+                                {/* Center dot */}
+                                <motion.div
+                                  className="absolute top-1/2 left-1/2 w-2 h-2 bg-gold rounded-full -translate-x-1/2 -translate-y-1/2"
+                                  animate={{ 
+                                    scale: [1, 1.5, 1],
+                                    opacity: [0.8, 1, 0.8]
+                                  }}
+                                  transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+                                />
+                                {/* Orbiting particles - 3 particles at 120° intervals */}
+                                {[0, 1, 2].map((i) => {
+                                  const angle = (i * 120) * (Math.PI / 180); // 120 degrees apart
+                                  const radius = 20;
+                                  return (
+                                    <motion.div
+                                      key={i}
+                                      className="absolute w-1.5 h-1.5 bg-champagne rounded-full"
+                                      style={{
+                                        top: '50%',
+                                        left: '50%',
+                                        transformOrigin: '0 0',
+                                      }}
+                                      animate={{
+                                        rotate: [0, 360],
+                                        x: [0, Math.cos(angle) * radius],
+                                        y: [0, Math.sin(angle) * radius],
+                                      }}
+                                      transition={{
+                                        duration: 2,
+                                        repeat: Infinity,
+                                        ease: "linear",
+                                        delay: i * 0.3,
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </div>
+                              
+                              {/* Progress percentage with glow effect */}
+                              <div className="text-center">
+                                <motion.p 
+                                  className="text-gold font-bold text-xl drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]"
+                                  animate={{ opacity: [0.8, 1, 0.8] }}
+                                  transition={{ duration: 1.5, repeat: Infinity }}
+                                >
+                                  {imageProgress[expectedSource || ''] !== undefined 
+                                    ? `${Math.round(imageProgress[expectedSource || ''])}%`
+                                    : `${Math.min(95, Math.floor((Date.now() - (matrixGenerationStartTime || Date.now())) / 300))}%`}
+                                </motion.p>
+                                <p className="text-white/70 text-xs mt-1 font-medium">Generowanie...</p>
+                              </div>
+                            </div>
+                            
+                            {/* Source label at bottom with glass effect */}
+                            <div className="absolute bottom-2 left-2 right-2">
+                              <div className="px-2.5 py-1.5 bg-black/50 backdrop-blur-md rounded-lg border border-gold/20">
+                                <p className="text-gold/90 font-semibold text-xs">{sourceLabel}</p>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                        
-                        {/* Image Counter */}
-                        <div className="absolute top-4 right-4 px-3 py-1.5 bg-black/50 backdrop-blur-sm rounded-full">
-                          <span className="text-white font-medium">
-                            {carouselIndex + 1} / {matrixImages.length}
-                          </span>
-                        </div>
+                        ) : image ? (
+                          /* Generated Image - No border, fills entire space */
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.5 }}
+                            className={`relative aspect-square w-full rounded-lg overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform ${
+                              selectedImage?.id === image.id 
+                                ? 'ring-2 ring-gold ring-offset-2 ring-offset-transparent shadow-xl' 
+                                : ''
+                            }`}
+                            onClick={() => setSelectedImage(image)}
+                          >
+                            <Image
+                              src={image.url}
+                              alt={sourceLabel}
+                              fill
+                              className="object-cover"
+                              priority={index < 2}
+                            />
+                            
+                            {/* Source Label */}
+                            <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="px-3 py-1.5 bg-black/70 backdrop-blur-sm rounded-lg">
+                                <p className="text-white text-xs font-medium opacity-70">Źródło danych:</p>
+                                <p className="text-gold font-bold text-sm">{sourceLabel}</p>
+                              </div>
+                            </div>
+                            
+                            {/* Hover overlay */}
+                            <div className="absolute inset-0 bg-gold/0 group-hover:bg-gold/10 transition-colors" />
+                            
+                            {/* Selection indicator */}
+                            {selectedImage?.id === image.id && !isUpscaling && (
+                              <div className="absolute top-2 right-2">
+                                <div className="w-6 h-6 bg-gold rounded-full flex items-center justify-center">
+                                  <CheckCircle2 size={16} className="text-white" />
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Upscaling overlay */}
+                            {isUpscaling && selectedImage?.id === image.id && (
+                              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+                                <RefreshCw size={32} className="animate-spin text-gold" />
+                                <div className="text-center">
+                                  <p className="text-white font-semibold text-sm">Przetwarzanie...</p>
+                                  <p className="text-gold/80 text-xs mt-1">Zwiększanie rozdzielczości</p>
+                                </div>
+                              </div>
+                            )}
+                          </motion.div>
+                        ) : (
+                          /* Empty slot (shouldn't happen, but fallback) */
+                          <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10">
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <p className="text-white/40 text-sm">Brak wizji</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
-                  </AnimatePresence>
+                  );
+                })}
+              </div>
+              
+              {/* Selected Image Info - Show when image is selected */}
+              {selectedImage && (
+                <GlassCard className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gold/10 rounded-lg">
+                      <Eye size={20} className="text-gold" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-graphite">
+                        Wybrana wizja: {GENERATION_SOURCE_LABELS[selectedImage.source!]?.pl}
+                      </h3>
+                      <p className="text-sm text-silver-dark mt-1">
+                        {selectedImage.source === GenerationSource.Implicit && 
+                          "Wygenerowane na podstawie Twoich intuicyjnych wyborów z Tindera i inspiracji."}
+                        {selectedImage.source === GenerationSource.Explicit && 
+                          "Wygenerowane na podstawie Twoich świadomych deklaracji preferencji."}
+                        {selectedImage.source === GenerationSource.Personality && 
+                          "Wygenerowane na podstawie Twojego profilu osobowości Big Five."}
+                        {selectedImage.source === GenerationSource.Mixed && 
+                          "Mix wszystkich danych estetycznych (40% implicit, 30% explicit, 30% personality)."}
+                        {selectedImage.source === GenerationSource.MixedFunctional && 
+                          "Pełny mix + dane funkcjonalne (aktywności, problemy, nastrój PRS)."}
+                        {selectedImage.source === GenerationSource.InspirationReference && 
+                          "Multi-reference z polubionych inspiracji - style i kolory z obrazów referencyjnych."}
+                      </p>
+                    </div>
+                  </div>
                 </GlassCard>
-                
-                {/* Navigation Arrows */}
-                <button
-                  onClick={() => setCarouselIndex(prev => prev > 0 ? prev - 1 : matrixImages.length - 1)}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg transition-all z-10"
-                >
-                  <ChevronLeft size={28} className="text-graphite" />
-                </button>
-                <button
-                  onClick={() => setCarouselIndex(prev => prev < matrixImages.length - 1 ? prev + 1 : 0)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-white/90 hover:bg-white rounded-full shadow-lg transition-all z-10"
-                >
-                  <ChevronRight size={28} className="text-graphite" />
-                </button>
-              </div>
+              )}
               
-              {/* Thumbnail Navigation */}
-              <div className="flex justify-center gap-2 px-4">
-                {matrixImages.map((img, index) => (
-                  <button
-                    key={img.id}
-                    onClick={() => setCarouselIndex(index)}
-                    className={`relative w-16 h-12 rounded-lg overflow-hidden border-2 transition-all ${
-                      carouselIndex === index 
-                        ? 'border-gold shadow-lg scale-110' 
-                        : 'border-transparent hover:border-gold/30'
-                    }`}
+              {/* Select Button - Only show when images are ready */}
+              {matrixImages.length > 0 && !isGenerating && (
+                <div className="flex justify-center">
+                  <GlassButton
+                    onClick={() => {
+                      if (selectedImage && !isUpscaling) {
+                        handleBlindSelection(selectedImage);
+                      }
+                    }}
+                    disabled={!selectedImage || isUpscaling}
+                    className="px-8 py-3 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Image
-                      src={img.url}
-                      alt={`Miniatura ${index + 1}`}
-                      fill
-                      className="object-cover"
-                    />
-                    {carouselIndex === index && (
-                      <div className="absolute inset-0 bg-gold/20" />
+                    {isUpscaling ? (
+                      <>
+                        <RefreshCw size={20} className="animate-spin" />
+                        <span>Przetwarzanie wybranej wizji...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={20} />
+                        <span>Wybieram tę wizję</span>
+                      </>
                     )}
-                  </button>
-                ))}
-              </div>
-              
-              {/* Source Info Card */}
-              <GlassCard className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-gold/10 rounded-lg">
-                    <Eye size={20} className="text-gold" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-graphite">
-                      {GENERATION_SOURCE_LABELS[matrixImages[carouselIndex]?.source!]?.pl}
-                    </h3>
-                    <p className="text-sm text-silver-dark mt-1">
-                      {matrixImages[carouselIndex]?.source === GenerationSource.Implicit && 
-                        "Wygenerowane na podstawie Twoich intuicyjnych wyborów z Tindera i inspiracji."}
-                      {matrixImages[carouselIndex]?.source === GenerationSource.Explicit && 
-                        "Wygenerowane na podstawie Twoich świadomych deklaracji preferencji."}
-                      {matrixImages[carouselIndex]?.source === GenerationSource.Personality && 
-                        "Wygenerowane na podstawie Twojego profilu osobowości Big Five."}
-                      {matrixImages[carouselIndex]?.source === GenerationSource.Mixed && 
-                        "Mix wszystkich danych estetycznych (40% implicit, 30% explicit, 30% personality)."}
-                      {matrixImages[carouselIndex]?.source === GenerationSource.MixedFunctional && 
-                        "Pełny mix + dane funkcjonalne (aktywności, problemy, nastrój PRS)."}
-                      {matrixImages[carouselIndex]?.source === GenerationSource.InspirationReference && 
-                        "Multi-reference z polubionych inspiracji - style i kolory z obrazów referencyjnych."}
-                    </p>
-                  </div>
+                  </GlassButton>
                 </div>
-              </GlassCard>
+              )}
               
-              {/* DEV: Prompt Debug Panel */}
-              <GlassCard className="p-4 bg-gray-900/95 border-yellow-500/50">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-yellow-400">
-                    <span className="text-xs font-mono px-2 py-0.5 bg-yellow-500/20 rounded">DEV</span>
-                    <h3 className="font-mono font-bold text-sm">Prompt użyty do generacji:</h3>
-                  </div>
-                  <div className="bg-black/50 rounded-lg p-3 overflow-x-auto">
-                    <pre className="text-xs font-mono text-green-400 whitespace-pre-wrap break-words">
-                      {matrixImages[carouselIndex]?.prompt || 'Brak promptu'}
-                    </pre>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-xs font-mono">
+              {/* Upscaling feedback */}
+              {isUpscaling && selectedImage && (
+                <GlassCard className="p-4">
+                  <div className="flex items-center gap-3">
+                    <RefreshCw size={24} className="animate-spin text-gold" />
                     <div>
-                      <span className="text-gray-400">Source:</span>{' '}
-                      <span className="text-cyan-400">{matrixImages[carouselIndex]?.source}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400">Token count:</span>{' '}
-                      <span className="text-cyan-400">
-                        ~{matrixImages[carouselIndex]?.prompt?.split(/\s+/).length || 0} words
-                      </span>
+                      <p className="font-semibold text-graphite">Przetwarzanie wybranej wizji...</p>
+                      <p className="text-sm text-silver-dark">Zwiększanie rozdzielczości do pełnej jakości</p>
                     </div>
                   </div>
-                </div>
-              </GlassCard>
-              
-              {/* DEV: All Prompts Comparison */}
-              <details className="group">
-                <summary className="cursor-pointer px-4 py-2 bg-gray-800 rounded-lg text-yellow-400 font-mono text-sm flex items-center gap-2">
-                  <span className="text-xs px-2 py-0.5 bg-yellow-500/20 rounded">DEV</span>
-                  Pokaż wszystkie prompty ({matrixImages.length})
-                </summary>
-                <div className="mt-2 space-y-3">
-                  {matrixImages.map((img, idx) => (
-                    <GlassCard 
-                      key={img.id} 
-                      className={`p-3 bg-gray-900/90 ${idx === carouselIndex ? 'border-gold' : 'border-gray-700'}`}
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                              idx === carouselIndex ? 'bg-gold text-white' : 'bg-gray-700 text-gray-300'
-                            }`}>
-                              {idx + 1}
-                            </span>
-                            <span className="font-mono text-sm text-cyan-400">{img.source}</span>
-                            <span className="text-gray-400 text-xs">
-                              ({GENERATION_SOURCE_LABELS[img.source!]?.pl})
-                            </span>
-                          </div>
-                          <span className="text-xs text-gray-500 font-mono">
-                            {img.prompt?.split(/\s+/).length || 0} words
-                          </span>
-                        </div>
-                        <div className="bg-black/40 rounded p-2">
-                          <pre className="text-xs font-mono text-green-300 whitespace-pre-wrap break-words">
-                            {img.prompt || 'Brak'}
-                          </pre>
-                        </div>
-                      </div>
-                    </GlassCard>
-                  ))}
-                </div>
-              </details>
-              
-              {/* Select Button */}
-              <div className="flex justify-center">
-                <GlassButton
-                  onClick={() => handleBlindSelection(matrixImages[carouselIndex])}
-                  className="px-8 py-3 flex items-center gap-2"
-                >
-                  <CheckCircle2 size={20} />
-                  <span>Wybieram tę wizję</span>
-                </GlassButton>
-              </div>
+                </GlassCard>
+              )}
             </div>
           )}
 
@@ -1740,6 +2188,41 @@ export default function GeneratePage() {
                     >
                       <Heart size={20} fill={selectedImage.isFavorite ? 'currentColor' : 'none'} />
                     </button>
+                    {/* Upscale button - only show if not already upscaled */}
+                    {!upscaledImage && selectedImage.parameters?.mode !== 'upscale' && (
+                      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+                        <GlassButton
+                          onClick={() => handleUpscale(selectedImage)}
+                          disabled={isUpscaling}
+                          className="px-6 py-2 flex items-center gap-2 bg-gold/90 hover:bg-gold text-white"
+                        >
+                          {isUpscaling ? (
+                            <>
+                              <RefreshCw size={16} className="animate-spin" />
+                              <span>Upscalowanie...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ArrowRight size={16} />
+                              <span>Upscaluj do pełnej rozdzielczości</span>
+                            </>
+                          )}
+                        </GlassButton>
+                      </div>
+                    )}
+                    {/* Show indicator if already upscaled */}
+                    {upscaledImage && (
+                      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="px-4 py-2 bg-green-500/90 backdrop-blur-sm rounded-full flex items-center gap-2"
+                        >
+                          <CheckCircle2 size={16} className="text-white" />
+                          <span className="text-sm font-medium text-white">Upscalowane do 1024x1024</span>
+                        </motion.div>
+                      </div>
+                    )}
                   </div>
                   
                   {/* Source Reveal */}
@@ -1829,6 +2312,115 @@ export default function GeneratePage() {
                 </motion.div>
               )}
               
+              {/* Modifications and History - Show after upscale */}
+              {upscaledImage && !isUpscaling && (
+                <>
+                  {/* Modifications Button */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="flex justify-center space-x-3"
+                  >
+                    <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="flex-1">
+                      <Settings size={16} className="mr-2" />
+                      {showModifications ? 'Ukryj opcje' : 'Modyfikuj'}
+                    </GlassButton>
+
+                    <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="flex-1">
+                      <Home size={16} className="mr-2" />
+                      Usuń meble
+                    </GlassButton>
+
+                    <GlassButton onClick={handleQualityImprovement} variant="secondary" className="flex-1">
+                      <RefreshCw size={16} className="mr-2" />
+                      Popraw Jakość
+                    </GlassButton>
+                  </motion.div>
+
+                  {/* Modifications Panel */}
+                  <AnimatePresence>
+                    {showModifications && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.4 }}
+                      >
+                        <GlassCard className="p-6">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div>
+                              <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
+                                <Wand2 size={20} className="mr-3" />
+                                Drobne modyfikacje
+                              </h4>
+                              <p className="text-sm text-silver-dark mb-4">
+                                Subtelne zmiany w kolorach i detalach
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {MICRO_MODIFICATIONS.map((mod) => (
+                                  <GlassButton
+                                    key={mod.id}
+                                    onClick={() => handleModification(mod)}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="justify-start text-sm h-12 px-4"
+                                    disabled={isLoading}
+                                  >
+                                    {mod.label}
+                                  </GlassButton>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
+                                <RefreshCw size={20} className="mr-3" />
+                                Zupełnie inny kierunek
+                              </h4>
+                              <p className="text-sm text-silver-dark mb-4">
+                                Zmiana całego stylu mebli i aranżacji
+                              </p>
+                              <div className="grid grid-cols-2 gap-3">
+                                {MACRO_MODIFICATIONS.map((mod) => (
+                                  <GlassButton
+                                    key={mod.id}
+                                    onClick={() => handleModification(mod)}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="justify-start text-sm h-12 px-4"
+                                    disabled={isLoading}
+                                  >
+                                    {mod.label}
+                                  </GlassButton>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </GlassCard>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Generation History */}
+                  {generationHistory.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 }}
+                      className="mt-8"
+                    >
+                      <GenerationHistory
+                        history={generationHistory}
+                        currentIndex={currentHistoryIndex}
+                        onNodeClick={handleHistoryNodeClick}
+                        onNavigate={setCurrentHistoryIndex}
+                      />
+                    </motion.div>
+                  )}
+                </>
+              )}
+
               {/* Continue Button */}
               {showSourceReveal && (
                 <motion.div

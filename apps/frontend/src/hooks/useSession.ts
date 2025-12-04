@@ -270,6 +270,52 @@ export const useSession = (): UseSessionReturn => {
         }
       }
 
+      // Load inspirations with gamma tags from user_profiles.inspirations
+      if (userHash) {
+        try {
+          const { getUserProfile } = await import('@/lib/supabase-deep-personalization');
+          const userProfile = await getUserProfile(userHash);
+          if (userProfile?.inspirations && Array.isArray(userProfile.inspirations) && userProfile.inspirations.length > 0) {
+            // Convert user_profiles.inspirations format to SessionData.inspirations format
+            const inspirationsFromProfile = userProfile.inspirations.map((insp: any) => ({
+              id: insp.fileId || `insp_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+              fileId: insp.fileId,
+              url: insp.url,
+              tags: insp.tags, // Tags from gamma model (Gemma3VisionModel)
+              description: insp.description, // Description from gamma model
+              addedAt: insp.addedAt || new Date().toISOString()
+            }));
+
+            // Merge inspirations: prefer Supabase (with gamma tags) over localStorage
+            const existingInspirations = mergedSession?.inspirations || [];
+            const hasLocalInspirations = existingInspirations.length > 0;
+            const hasSupabaseInspirations = inspirationsFromProfile.length > 0;
+
+            if (hasSupabaseInspirations) {
+              // Use Supabase inspirations (with gamma tags) if available
+              mergedSession = {
+                ...(mergedSession || {}),
+                inspirations: inspirationsFromProfile
+              };
+              console.log('[useSession] Loaded inspirations with gamma tags from user_profiles.inspirations:', inspirationsFromProfile.length);
+              console.log('[useSession] Tags structure:', inspirationsFromProfile.map((i: any) => ({
+                hasTags: !!i.tags,
+                styles: i.tags?.styles?.length || 0,
+                colors: i.tags?.colors?.length || 0,
+                materials: i.tags?.materials?.length || 0,
+                biophilia: i.tags?.biophilia,
+                description: i.description ? 'present' : 'missing'
+              })));
+            } else if (hasLocalInspirations) {
+              // Keep local inspirations if no Supabase data
+              console.log('[useSession] Using local inspirations (no Supabase data)');
+            }
+          }
+        } catch (error) {
+          console.warn('[useSession] Nie udało się pobrać inspirations z user_profiles:', error);
+        }
+      }
+
       const finalSession: SessionData = {
         ...createEmptySession(),
         ...(mergedSession || {}),

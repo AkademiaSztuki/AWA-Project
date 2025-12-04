@@ -10,13 +10,13 @@ interface DialogueAudioPlayerProps {
 const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, autoPlay = true, onEnded }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  console.log('DialogueAudioPlayer: Rendering with props:', { src, volume, autoPlay });
+  // console.log('DialogueAudioPlayer: Rendering with props:', { src, volume, autoPlay });
 
   // Ustaw src i volume na każdą zmianę
   useEffect(() => {
-    console.log('DialogueAudioPlayer: audioRef.current exists:', !!audioRef.current);
+    // console.log('DialogueAudioPlayer: audioRef.current exists:', !!audioRef.current);
     if (audioRef.current) {
-      console.log('DialogueAudioPlayer: Setting src and volume:', { src, volume });
+      // console.log('DialogueAudioPlayer: Setting src and volume:', { src, volume });
       
       // Stop current playback before changing src
       if (!audioRef.current.paused) {
@@ -43,7 +43,7 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
   // Synchronizuj volume na każdą zmianę
   useEffect(() => {
     if (audioRef.current) {
-      console.log('DialogueAudioPlayer: Syncing volume to:', volume);
+      // console.log('DialogueAudioPlayer: Syncing volume to:', volume);
       audioRef.current.volume = volume;
     }
   }, [volume]);

@@ -216,6 +216,55 @@ export function RoomSetup({ householdId }: { householdId: string }) {
       
       console.log('[RoomSetup] Navigating to generate flow');
       
+      // CRITICAL: Use base64 photos, not blob URLs
+      // roomData.photos contains blob URLs for display, but we need base64 for generation
+      // We need to get base64 from PhotoUploadStep - check if we can access it from roomData
+      // If roomData.photos exists but is blob URLs, we need to convert them
+      let roomImageBase64: string | undefined = undefined;
+      
+      if (roomData.photos && roomData.photos.length > 0) {
+        const firstPhoto = roomData.photos[0];
+        // Check if it's a blob URL
+        if (firstPhoto.startsWith('blob:')) {
+          console.log('[RoomSetup] Converting blob URL to base64 for roomImage');
+          try {
+            const response = await fetch(firstPhoto);
+            const blob = await response.blob();
+            roomImageBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const result = reader.result as string;
+                // Extract only the base64 part without the MIME header
+                const base64Part = result.split(',')[1];
+                resolve(base64Part);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+            console.log('[RoomSetup] Converted blob URL to base64, length:', roomImageBase64.length);
+          } catch (error) {
+            console.error('[RoomSetup] Error converting blob URL to base64:', error);
+            // Fallback to sessionData.roomImage if conversion fails
+            roomImageBase64 = sessionData.roomImage;
+          }
+        } else if (firstPhoto.startsWith('data:')) {
+          // Already base64 with data URI prefix
+          roomImageBase64 = firstPhoto.split(',')[1];
+        } else {
+          // Assume it's already base64 without prefix
+          roomImageBase64 = firstPhoto;
+        }
+      } else {
+        roomImageBase64 = sessionData.roomImage;
+      }
+      
+      console.log('[RoomSetup] Saving roomImage to sessionData:', {
+        hasRoomImage: !!roomImageBase64,
+        length: roomImageBase64?.length || 0,
+        isBase64: roomImageBase64 && !roomImageBase64.startsWith('blob:') && !roomImageBase64.startsWith('http'),
+        firstChars: roomImageBase64?.substring(0, 50) || 'N/A'
+      });
+      
       await updateSessionData({
         roomType: roomData.roomType,
         roomName: roomData.name,
@@ -225,7 +274,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         roomPreferenceSource: roomData.preferenceSource,
         roomPreferences: roomData.explicitPreferences,
         roomActivityContext: activityContext,
-        roomImage: roomData.photos && roomData.photos.length > 0 ? roomData.photos[0] : sessionData.roomImage,
+        roomImage: roomImageBase64, // Use converted base64, not blob URL
         prsCurrent: roomData.prsCurrent,
         prsTarget: roomData.prsTarget
       });

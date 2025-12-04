@@ -103,16 +103,25 @@ class GenerationRequest(BaseModel):
     negative_prompt: str = ""  # Not used in FLUX 2, kept for compatibility
     num_images: int = 1
     guidance_scale: float = 4.0  # FLUX 2 default
-    guidance: Optional[float] = None  # Alias for guidance_scale (from frontend)
-    num_inference_steps: int = 20  # Default: 20 for preview, can be overridden
-    steps: Optional[int] = None  # Alias for num_inference_steps (from frontend)
-    width: Optional[int] = None  # Changed to None to detect if actually sent
-    height: Optional[int] = None  # Changed to None to detect if actually sent
-    image_size: Optional[int] = 512  # Default to 512 for preview mode - CRITICAL for initial generations
+    num_inference_steps: int = 35  # FLUX 2 recommended: 28-50
+    width: int = 512
+    height: int = 512
     seed: Optional[int] = None
 
 class GenerationResponse(BaseModel):
     images: List[str]  # base64 encoded images
+    generation_info: dict
+    cost_estimate: float
+
+class UpscaleRequest(BaseModel):
+    image: str  # base64 encoded preview image
+    prompt: str
+    seed: int
+    target_size: int = 512
+    inspiration_images: Optional[List[str]] = None  # Additional reference images for multi-reference (base64)
+
+class UpscaleResponse(BaseModel):
+    image: str  # base64 encoded upscaled image
     generation_info: dict
     cost_estimate: float
 
@@ -231,10 +240,13 @@ def _call_groq_for_comment(room_type: str, room_description: str, context: str =
     gpu="A100",  # A100 (40GB) - 4-bit FLUX.2 needs ~30GB
     volumes=volumes,
     secrets=[modal.Secret.from_name("huggingface-secret-new")],
-    scaledown_window=120,  # 2 minutes to save costs
-    max_containers=1,  # Only one container at a time - sequential processing
-    min_containers=0   # Allow container to scale down to zero when idle
+    scaledown_window=600,  # 10 minutes for testing - prevents frequent cold starts
+    max_containers=1,  # Only 1 container for cost control
+    min_containers=0  # Allow scaling down when not in use
 )
+# REMOVED @modal.concurrent - scheduler state is not thread-safe, concurrent requests corrupt sigmas array
+# This causes IndexError: "index X is out of bounds" during generation
+# Sequential processing is slower but reliable
 class Flux2Model:
     @modal.enter()
     def enter(self):
@@ -242,8 +254,9 @@ class Flux2Model:
         try:
             print("Downloading FLUX 2 Dev model if necessary...")
             
-            # Set up secrets
+            # Set up secrets and CUDA memory optimization
             import os
+            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"  # Fix CUDA memory fragmentation
             self.hf_token = os.environ["HF_NEWTOKEN"]
             
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -265,62 +278,113 @@ class Flux2Model:
             raise e
 
     @modal.method()
-    def generate_images(self, request: GenerationRequest, image_bytes: bytes = None, inspiration_images_bytes: Optional[List[bytes]] = None, image_size_override: Optional[int] = None) -> dict:
+    def generate_previews(self, request: GenerationRequest, image_bytes: bytes = None, inspiration_images_bytes: Optional[List[bytes]] = None) -> dict:
+        """Generate fast preview images at 512x512 for quick selection"""
+        try:
+            print(f"Generating {request.num_images} preview images with prompt: {request.prompt[:100]}...")
+            
+            if not image_bytes:
+                raise ValueError("FLUX 2 requires a base image for image-to-image editing!")
+            
+            # Preview settings: 512x512 (0.26MP - valid per BFL docs, min 64x64)
+            preview_size = 512
+            preview_steps = 30  # FLUX 2: 28 steps causes IndexError (scheduler has 29 sigmas, needs steps < 29)
+            
+            # Load and prepare base image
+            init_image = Image.open(BytesIO(image_bytes)).convert('RGB').resize((preview_size, preview_size))
+            print(f"Loaded base image for preview, resized to: {init_image.size}")
+            
+            # Prepare image list for FLUX 2 (supports multi-reference)
+            image_list = [init_image]
+            
+            # Add inspiration images if provided (for multi-reference editing)
+            if inspiration_images_bytes:
+                print(f"Adding {len(inspiration_images_bytes)} inspiration images for multi-reference editing")
+                for i, insp_bytes in enumerate(inspiration_images_bytes[:6]):  # FLUX 2 dev supports up to 6 reference images
+                    try:
+                        insp_img = Image.open(BytesIO(insp_bytes)).convert('RGB')
+                        # Resize to match preview size
+                        insp_img = insp_img.resize((preview_size, preview_size))
+                        image_list.append(insp_img)
+                        print(f"Loaded inspiration image {i+1}, size: {insp_img.size}")
+                    except Exception as e:
+                        print(f"Failed to load inspiration image {i+1}: {e}")
+                        # Continue with other images
+                print(f"Total images for multi-reference: {len(image_list)}")
+            
+            # Set random seed if provided
+            if request.seed is not None:
+                torch.manual_seed(request.seed)
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed(request.seed)
+                seed = request.seed
+            else:
+                # Use fixed seed for consistency
+                seed = self.seed
+                torch.manual_seed(seed)
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed(seed)
+            
+            # Generate preview images with FLUX 2
+            print(f"Running FLUX 2 Dev preview generation (512x512, {preview_steps} steps) with {len(image_list)} reference image(s)...")
+            
+            # Clear CUDA cache before generation to prevent OOM
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            with torch.inference_mode():
+                result = self.pipe(
+                    prompt=request.prompt,
+                    image=image_list,  # FLUX 2 accepts list of images for multi-reference
+                    guidance_scale=request.guidance_scale,
+                    num_inference_steps=preview_steps,  # FLUX 2 minimum: 28 steps
+                    output_type="pil",
+                    generator=torch.Generator(device=self.device).manual_seed(seed),
+                    num_images_per_prompt=request.num_images,
+                )
+            
+            # Clear CUDA cache after generation
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            # Convert images to base64
+            images_b64 = []
+            for image in result.images:
+                buffer = BytesIO()
+                image.save(buffer, format="PNG")
+                img_b64 = base64.b64encode(buffer.getvalue()).decode()
+                images_b64.append(img_b64)
+            
+            # Calculate cost estimate (rough approximation - FLUX 2 is free for dev model)
+            cost_estimate = 0.0  # Dev model is free, only compute costs
+            
+            return {
+                "images": images_b64,
+                "generation_info": {
+                    "model": MODEL_NAME,
+                    "prompt": request.prompt[:200],  # Truncate for logging
+                    "num_images": request.num_images,
+                    "guidance_scale": request.guidance_scale,
+                    "num_inference_steps": preview_steps,
+                    "width": preview_size,
+                    "height": preview_size,
+                    "seed": seed,
+                    "multi_reference": len(image_list) > 1,
+                    "reference_count": len(image_list),
+                    "mode": "preview"
+                },
+                "cost_estimate": cost_estimate
+            }
+            
+        except Exception as e:
+            print(f"Error generating preview images: {str(e)}")
+            raise e
+
+    @modal.method()
+    def generate_images(self, request: GenerationRequest, image_bytes: bytes = None, inspiration_images_bytes: Optional[List[bytes]] = None) -> dict:
         """Generate images using FLUX 2 Dev - IMAGE-TO-IMAGE MODE with optional multi-reference"""
         try:
-            # CRITICAL FIX: Force image_size to 512 if it's None or invalid
-            # This ensures preview images are ALWAYS 512x512, not 1024x1024
-            if request.image_size is None or request.image_size <= 0:
-                request.image_size = 512
-                print(f"[PARAMS] FORCED image_size to 512 (was None or invalid)")
-            
-            # Debug: log all size-related parameters - CRITICAL for debugging
-            print(f"[PARAMS DEBUG] image_size={request.image_size} (type: {type(request.image_size)}), width={request.width}, height={request.height}")
-            print(f"[PARAMS DEBUG] image_size_override={image_size_override} (type: {type(image_size_override)})")
-            print(f"[PARAMS DEBUG] request.model_dump(): image_size={request.model_dump().get('image_size')}")
-            
-            # Resolve parameter aliases (frontend sends steps/guidance/image_size)
-            actual_steps = request.steps if request.steps is not None else request.num_inference_steps
-            actual_guidance = request.guidance if request.guidance is not None else request.guidance_scale
-            
-            # CRITICAL: Determine actual_size - prioritize image_size_override, then request.image_size, then defaults
-            # IMPORTANT: ALWAYS default to 512 for preview mode (NOT 1024)
-            # This is the critical fix - preview images should be 512x512, not 1024x1024
-            if image_size_override is not None and image_size_override > 0:
-                actual_size = image_size_override
-                # Force set on request object (Modal may not pass keyword args correctly)
-                request.image_size = image_size_override
-                print(f"[PARAMS] ✓ Using image_size_override: {actual_size} (set on request.image_size)")
-            elif request.image_size is not None and request.image_size > 0:
-                actual_size = request.image_size
-                print(f"[PARAMS] ✓ Using image_size from request: {actual_size}")
-            elif request.width is not None and request.height is not None:
-                # Only use width/height if both are explicitly provided (not None)
-                actual_size = max(request.width, request.height)
-                print(f"[PARAMS] ⚠ Using max(width={request.width}, height={request.height}) as fallback: {actual_size}")
-                print(f"[PARAMS] ⚠ WARNING: image_size was None or 0! Frontend should send image_size for preview mode.")
-            elif request.width is not None:
-                actual_size = request.width
-                print(f"[PARAMS] Using width={request.width} as fallback")
-            elif request.height is not None:
-                actual_size = request.height
-                print(f"[PARAMS] Using height={request.height} as fallback")
-            else:
-                # CRITICAL: ALWAYS default to 512 for preview mode, NOT 1024
-                # This is the key fix - preview images must be 512x512
-                actual_size = 512
-                # Force set on request object to ensure it's used
-                request.image_size = 512
-                print(f"[PARAMS] ⚠ Using default size: {actual_size} (no image_size, width, or height provided) - FORCED to 512 for preview mode")
-            
-            # Update request values for consistency
-            request.num_inference_steps = actual_steps
-            request.guidance_scale = actual_guidance
-            request.width = actual_size
-            request.height = actual_size
-            
             print(f"Generating {request.num_images} images with prompt: {request.prompt[:100]}...")
-            print(f"[PARAMS] steps={actual_steps}, guidance={actual_guidance}, size={actual_size}")
             
             if not image_bytes:
                 raise ValueError("FLUX 2 requires a base image for image-to-image editing!")
@@ -330,8 +394,7 @@ class Flux2Model:
             print(f"[PROMPT] Token count: {prompt_tokens} (FLUX 2 supports up to 32K tokens)")
             
             # Load and prepare base image
-            # Use actual_size from request (can be 512 for preview, 1024+ for full quality)
-            target_size = actual_size  # Use the resolved size from request (no minimum enforced)
+            target_size = max(1024, min(request.width, request.height))
             init_image = Image.open(BytesIO(image_bytes)).convert('RGB').resize((target_size, target_size))
             print(f"Loaded base image, resized to: {init_image.size}")
             
@@ -368,6 +431,11 @@ class Flux2Model:
             
             # Generate images with FLUX 2
             print(f"Running FLUX 2 Dev image-to-image inference with {len(image_list)} reference image(s)...")
+            
+            # Clear CUDA cache before generation to prevent OOM
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
             with torch.inference_mode():
                 result = self.pipe(
                     prompt=request.prompt,
@@ -378,6 +446,10 @@ class Flux2Model:
                     generator=torch.Generator(device=self.device).manual_seed(seed),
                     num_images_per_prompt=request.num_images,
                 )
+            
+            # Clear CUDA cache after generation
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             
             # Convert images to base64
             images_b64 = []
@@ -411,14 +483,111 @@ class Flux2Model:
             print(f"Error generating images: {str(e)}")
             raise e
 
+    @modal.method()
+    def upscale_image(self, image_bytes: bytes, target_size: int = 1024, seed: int = None, prompt: str = None, inspiration_images_bytes: Optional[List[bytes]] = None) -> dict:
+        """Upscale a selected preview image to full resolution"""
+        try:
+            print(f"Upscaling image to {target_size}x{target_size} with seed {seed}...")
+            
+            # Ensure target_size is multiple of 16 (FLUX 2 requirement)
+            target_size = (target_size // 16) * 16
+            
+            # Load and prepare base image
+            init_image = Image.open(BytesIO(image_bytes)).convert('RGB').resize((target_size, target_size))
+            print(f"Loaded base image for upscale, resized to: {init_image.size}")
+            
+            # Prepare image list for FLUX 2 (supports multi-reference)
+            image_list = [init_image]
+            
+            # Add inspiration images if provided (for multi-reference editing)
+            if inspiration_images_bytes:
+                print(f"Adding {len(inspiration_images_bytes)} inspiration images for multi-reference editing")
+                for i, insp_bytes in enumerate(inspiration_images_bytes[:6]):  # FLUX 2 dev supports up to 6 reference images
+                    try:
+                        insp_img = Image.open(BytesIO(insp_bytes)).convert('RGB')
+                        # Resize to match target size
+                        insp_img = insp_img.resize((target_size, target_size))
+                        image_list.append(insp_img)
+                        print(f"Loaded inspiration image {i+1}, size: {insp_img.size}")
+                    except Exception as e:
+                        print(f"Failed to load inspiration image {i+1}: {e}")
+                        # Continue with other images
+                print(f"Total images for multi-reference: {len(image_list)}")
+            
+            # Set seed for reproducibility
+            if seed is not None:
+                torch.manual_seed(seed)
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed(seed)
+            else:
+                # Use fixed seed for consistency
+                seed = self.seed
+                torch.manual_seed(seed)
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed(seed)
+            
+            # Generate upscaled image with FLUX 2 (full quality settings)
+            print(f"Running FLUX 2 Dev upscale generation ({target_size}x{target_size}, 35 steps) with {len(image_list)} reference image(s)...")
+            
+            # Clear CUDA cache before generation to prevent OOM
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            with torch.inference_mode():
+                result = self.pipe(
+                    prompt=prompt or "High quality interior design",
+                    image=image_list,  # FLUX 2 accepts list of images for multi-reference
+                    guidance_scale=4.5,  # BFL recommended default
+                    num_inference_steps=35,  # Full steps for quality
+                    output_type="pil",
+                    generator=torch.Generator(device=self.device).manual_seed(seed),
+                    num_images_per_prompt=1,
+                )
+            
+            # Clear CUDA cache after generation
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            # Convert image to base64
+            buffer = BytesIO()
+            result.images[0].save(buffer, format="PNG")
+            img_b64 = base64.b64encode(buffer.getvalue()).decode()
+            
+            # Calculate cost estimate (rough approximation - FLUX 2 is free for dev model)
+            cost_estimate = 0.0  # Dev model is free, only compute costs
+            
+            return {
+                "image": img_b64,
+                "generation_info": {
+                    "model": MODEL_NAME,
+                    "prompt": prompt[:200] if prompt else "High quality interior design",
+                    "guidance_scale": 4.5,
+                    "num_inference_steps": 35,
+                    "width": target_size,
+                    "height": target_size,
+                    "seed": seed,
+                    "multi_reference": len(image_list) > 1,
+                    "reference_count": len(image_list),
+                    "mode": "upscale"
+                },
+                "cost_estimate": cost_estimate
+            }
+            
+        except Exception as e:
+            print(f"Error upscaling image: {str(e)}")
+            raise e
+
 # Gemma 3 4B-IT Model - MULTIMODAL MODEL WITH EXCELLENT POLISH SUPPORT
 @app.cls(
     image=image,
     gpu="T4",  # Changed from H100 to T4 for cost savings (~$0.59/h vs $4.76/h) - 4B model fits in 16GB
     volumes=volumes,
     secrets=[modal.Secret.from_name("huggingface-secret-new")],
-    scaledown_window=120  # Reduced to 2 minutes to save costs
+    scaledown_window=120,  # Reduced to 2 minutes to save costs
+    max_containers=1,  # Limit to 1 container - all requests (room analysis, 10 inspirations) in one container
+    min_containers=0  # Allow scaling down when not in use
 )
+@modal.concurrent(max_inputs=10)  # Allow up to 10 parallel requests (10 inspirations) in one container = 1 GPU instead of 10
 class Gemma3VisionModel:
     """Gemma 3 4B-IT multimodal model for room analysis and comments with excellent Polish support
     
@@ -788,8 +957,7 @@ def generate_images_endpoint(request: GenerationRequest):
     from fastapi import Response
     import json
     try:
-        print(f"[ENDPOINT DEBUG] Received generation request: {request.prompt[:100]}...")
-        print(f"[ENDPOINT DEBUG] Request object: image_size={request.image_size}, width={request.width}, height={request.height}, steps={request.steps}, num_inference_steps={request.num_inference_steps}, guidance={request.guidance}, guidance_scale={request.guidance_scale}")
+        print(f"Received generation request: {request.prompt[:100]}...")
         
         if not request.base_image:
             raise HTTPException(status_code=400, detail="FLUX 2 requires a base_image for image-to-image editing")
@@ -815,60 +983,23 @@ def generate_images_endpoint(request: GenerationRequest):
                     # Continue with other images
             print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
         
-        # CRITICAL: Pass image_size, steps, and guidance to the model
-        # Resolve aliases: steps/num_inference_steps, guidance/guidance_scale
-        actual_steps = request.steps if request.steps is not None else request.num_inference_steps
-        actual_guidance = request.guidance if request.guidance is not None else request.guidance_scale
-        
-        # CRITICAL: ALWAYS default to 512 for preview mode if image_size is not explicitly provided
-        # This ensures preview images are generated at 512x512, not 1024x1024
-        if request.image_size is not None and request.image_size > 0:
-            actual_image_size = request.image_size
-        else:
-            # FORCE 512 for preview mode - this is the critical fix
-            actual_image_size = 512
-        print(f"[ENDPOINT] Final resolved params: image_size={actual_image_size} (from request: {request.image_size}), steps={actual_steps}, guidance={actual_guidance}")
-        print(f"[ENDPOINT] Creating GenerationRequest with image_size={actual_image_size} (FORCED to 512 if None)")
-        
         # Generate images in image-to-image mode with optional multi-reference
-        # CRITICAL: Modal may lose fields during Pydantic serialization, so we use model_dump() and recreate
-        # This ensures all fields including image_size are preserved
-        request_dict = {
-            "prompt": full_prompt,
-            "base_image": request.base_image,
-            "inspiration_images": request.inspiration_images,
-            "negative_prompt": request.negative_prompt,
-            "num_images": request.num_images,
-            "guidance_scale": actual_guidance,
-            "guidance": request.guidance,
-            "num_inference_steps": actual_steps,
-            "steps": request.steps,
-            "image_size": actual_image_size,  # CRITICAL: Explicitly set image_size
-            "width": request.width,
-            "height": request.height,
-            "seed": request.seed,
-        }
-        print(f"[ENDPOINT] Request dict: image_size={request_dict['image_size']}, steps={request_dict['steps']}, guidance={request_dict.get('guidance')}")
-        
-        # Recreate GenerationRequest from dict to ensure all fields are set
-        new_request = GenerationRequest(**request_dict)
-        # CRITICAL: ALWAYS set image_size to actual_image_size using model_copy
-        # This ensures Modal serializes the correct value, regardless of what was in the original request
-        # FORCE image_size to 512 if it's None or 0 (preview mode)
-        final_image_size = actual_image_size if actual_image_size > 0 else 512
-        new_request = new_request.model_copy(update={"image_size": final_image_size})
-        print(f"[ENDPOINT] Created request object: image_size={new_request.image_size}, steps={new_request.steps}, guidance={new_request.guidance}")
-        print(f"[ENDPOINT] Request model_dump: image_size={new_request.model_dump().get('image_size')}")
-        print(f"[ENDPOINT] About to call generate_images.remote with image_size_override={final_image_size} (type: {type(final_image_size)})")
-        print(f"[ENDPOINT] CRITICAL: new_request.image_size is now: {new_request.image_size} (FORCED to {final_image_size})")
-        
         result = flux_model.generate_images.remote(
-            new_request,
+            GenerationRequest(
+                prompt=full_prompt,
+                base_image=request.base_image,
+                inspiration_images=request.inspiration_images,
+                negative_prompt=request.negative_prompt,
+                num_images=request.num_images,
+                guidance_scale=request.guidance_scale,
+                num_inference_steps=request.num_inference_steps,
+                width=request.width,
+                height=request.height,
+                seed=request.seed,
+            ),
             image_bytes,  # Pass the decoded bytes
-            inspiration_images_bytes,  # Pass inspiration images bytes
-            image_size_override=actual_image_size  # CRITICAL: Pass image_size separately to avoid Modal serialization issues
+            inspiration_images_bytes  # Pass inspiration images bytes
         )
-        print(f"[ENDPOINT] generate_images.remote call completed")
         
         response_data = GenerationResponse(
             images=result["images"],
@@ -910,6 +1041,210 @@ def generate_images_endpoint(request: GenerationRequest):
         return error_response
     except Exception as e:
         print(f"Error in generate_images_endpoint: {str(e)}")
+        from fastapi import Response
+        import json
+        error_response = Response(
+            content=json.dumps({"detail": str(e)}),
+            media_type="application/json",
+            status_code=500,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
+        )
+        return error_response
+
+@app.function(
+    image=image,
+    timeout=600,  # 10 minutes timeout
+    secrets=[modal.Secret.from_name("huggingface-secret-new")],
+)
+@modal.fastapi_endpoint(method="POST", label="aura-flux-api")
+def generate_previews_endpoint(request: GenerationRequest):
+    """Generate preview images endpoint with CORS support"""
+    from fastapi import Response
+    import json
+    try:
+        print(f"Received preview generation request: {request.prompt[:100]}...")
+        
+        if not request.base_image:
+            raise HTTPException(status_code=400, detail="FLUX 2 requires a base_image for image-to-image editing")
+        
+        # Build comprehensive prompt
+        full_prompt = build_prompt(request)
+        
+        # Decode base64 image to bytes
+        image_bytes = decode_base64_image(request.base_image)
+        print(f"Decoded base image: {len(image_bytes)} bytes")
+        
+        # Decode inspiration images if provided (for multi-reference)
+        inspiration_images_bytes = None
+        if request.inspiration_images and len(request.inspiration_images) > 0:
+            inspiration_images_bytes = []
+            for i, insp_b64 in enumerate(request.inspiration_images[:6]):  # Limit to 6 for FLUX.2 [dev]
+                try:
+                    insp_bytes = decode_base64_image(insp_b64)
+                    inspiration_images_bytes.append(insp_bytes)
+                    print(f"Decoded inspiration image {i+1}, size: {len(insp_bytes)} bytes")
+                except Exception as e:
+                    print(f"Failed to decode inspiration image {i+1}: {e}")
+                    # Continue with other images
+            print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
+        
+        # Generate preview images in image-to-image mode with optional multi-reference
+        result = flux_model.generate_previews.remote(
+            GenerationRequest(
+                prompt=full_prompt,
+                base_image=request.base_image,
+                inspiration_images=request.inspiration_images,
+                negative_prompt=request.negative_prompt,
+                num_images=request.num_images,
+                guidance_scale=request.guidance_scale,
+                num_inference_steps=request.num_inference_steps,
+                width=request.width,
+                height=request.height,
+                seed=request.seed,
+            ),
+            image_bytes,  # Pass the decoded bytes
+            inspiration_images_bytes  # Pass inspiration images bytes
+        )
+        
+        response_data = GenerationResponse(
+            images=result["images"],
+            generation_info=result["generation_info"],
+            cost_estimate=result["cost_estimate"]
+        )
+        
+        # Add CORS headers
+        response_dict = response_data.model_dump()
+        
+        response = Response(
+            content=json.dumps(response_dict),
+            media_type="application/json",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                "Access-Control-Max-Age": "3600"
+            }
+        )
+        
+        return response
+        
+    except HTTPException as e:
+        print(f"HTTP Error in generate_previews_endpoint: {str(e)}")
+        from fastapi import Response
+        import json
+        error_response = Response(
+            content=json.dumps({"detail": str(e.detail)}),
+            media_type="application/json",
+            status_code=e.status_code,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
+        )
+        return error_response
+    except Exception as e:
+        print(f"Error in generate_previews_endpoint: {str(e)}")
+        from fastapi import Response
+        import json
+        error_response = Response(
+            content=json.dumps({"detail": str(e)}),
+            media_type="application/json",
+            status_code=500,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
+        )
+        return error_response
+
+@app.function(
+    image=image,
+    timeout=600,  # 10 minutes timeout
+    secrets=[modal.Secret.from_name("huggingface-secret-new")],
+)
+@modal.fastapi_endpoint(method="POST", label="aura-flux-api")
+def upscale_image_endpoint(request: UpscaleRequest):
+    """Upscale image endpoint with CORS support"""
+    from fastapi import Response
+    import json
+    try:
+        print(f"Received upscale request: target_size={request.target_size}, seed={request.seed}...")
+        
+        if not request.image:
+            raise HTTPException(status_code=400, detail="Upscale requires an image")
+        
+        # Decode base64 image to bytes
+        image_bytes = decode_base64_image(request.image)
+        print(f"Decoded preview image: {len(image_bytes)} bytes")
+        
+        # Decode inspiration images if provided (for multi-reference)
+        inspiration_images_bytes = None
+        if request.inspiration_images and len(request.inspiration_images) > 0:
+            inspiration_images_bytes = []
+            for i, insp_b64 in enumerate(request.inspiration_images[:6]):  # Limit to 6 for FLUX.2 [dev]
+                try:
+                    insp_bytes = decode_base64_image(insp_b64)
+                    inspiration_images_bytes.append(insp_bytes)
+                    print(f"Decoded inspiration image {i+1}, size: {len(insp_bytes)} bytes")
+                except Exception as e:
+                    print(f"Failed to decode inspiration image {i+1}: {e}")
+                    # Continue with other images
+            print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
+        
+        # Upscale image
+        result = flux_model.upscale_image.remote(
+            image_bytes,
+            request.target_size,
+            request.seed,
+            request.prompt,
+            inspiration_images_bytes
+        )
+        
+        response_data = UpscaleResponse(
+            image=result["image"],
+            generation_info=result["generation_info"],
+            cost_estimate=result["cost_estimate"]
+        )
+        
+        # Add CORS headers
+        response_dict = response_data.model_dump()
+        
+        response = Response(
+            content=json.dumps(response_dict),
+            media_type="application/json",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                "Access-Control-Max-Age": "3600"
+            }
+        )
+        
+        return response
+        
+    except HTTPException as e:
+        print(f"HTTP Error in upscale_image_endpoint: {str(e)}")
+        from fastapi import Response
+        import json
+        error_response = Response(
+            content=json.dumps({"detail": str(e.detail)}),
+            media_type="application/json",
+            status_code=e.status_code,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
+        )
+        return error_response
+    except Exception as e:
+        print(f"Error in upscale_image_endpoint: {str(e)}")
         from fastapi import Response
         import json
         error_response = Response(
@@ -985,12 +1320,11 @@ async def health_check_web():
         "legacy_models": "minicpm-o-2.6 (commented out), florence-2 (hidden but available)"
     }
 
-@web_app.post("/generate", response_model=GenerationResponse)
-async def generate_images(request: GenerationRequest):
-    """Generate images endpoint - DUPLICATE of modal.fastapi_endpoint, kept for compatibility"""
+@web_app.post("/generate-previews", response_model=GenerationResponse)
+async def generate_previews(request: GenerationRequest):
+    """Generate preview images endpoint"""
     try:
-        print(f"[ENDPOINT DEBUG] Received generation request: {request.prompt[:100]}...")
-        print(f"[ENDPOINT DEBUG] Request: image_size={request.image_size}, width={request.width}, height={request.height}, steps={request.steps}, guidance={request.guidance}")
+        print(f"Received preview generation request: {request.prompt[:100]}...")
         
         if not request.base_image:
             raise HTTPException(status_code=400, detail="FLUX 2 requires a base_image for image-to-image editing")
@@ -1013,14 +1347,112 @@ async def generate_images(request: GenerationRequest):
                     print(f"Decoded inspiration image {i+1}, size: {len(insp_bytes)} bytes")
                 except Exception as e:
                     print(f"Failed to decode inspiration image {i+1}: {e}")
+                    # Continue with other images
             print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
         
-        # CRITICAL: Resolve parameters and ensure image_size is set
-        actual_steps = request.steps if request.steps is not None else request.num_inference_steps
-        actual_guidance = request.guidance if request.guidance is not None else request.guidance_scale
-        actual_image_size = request.image_size if request.image_size is not None and request.image_size > 0 else 512
-        print(f"[ENDPOINT] Resolved: image_size={actual_image_size} (from request: {request.image_size}), steps={actual_steps}, guidance={actual_guidance}")
-        print(f"[ENDPOINT] About to call generate_images.remote with image_size_override={actual_image_size} (type: {type(actual_image_size)})")
+        # Generate preview images in image-to-image mode with optional multi-reference
+        result = flux_model.generate_previews.remote(
+            GenerationRequest(
+                prompt=full_prompt,
+                base_image=request.base_image,
+                inspiration_images=request.inspiration_images,
+                negative_prompt=request.negative_prompt,
+                num_images=request.num_images,
+                guidance_scale=request.guidance_scale,
+                num_inference_steps=request.num_inference_steps,
+                width=request.width,
+                height=request.height,
+                seed=request.seed,
+            ),
+            image_bytes,  # Pass the decoded bytes
+            inspiration_images_bytes  # Pass inspiration images bytes
+        )
+        
+        return GenerationResponse(
+            images=result["images"],
+            generation_info=result["generation_info"],
+            cost_estimate=result["cost_estimate"]
+        )
+        
+    except Exception as e:
+        print(f"Error in generate_previews: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@web_app.post("/upscale", response_model=UpscaleResponse)
+async def upscale_image(request: UpscaleRequest):
+    """Upscale image endpoint"""
+    try:
+        print(f"Received upscale request: target_size={request.target_size}, seed={request.seed}...")
+        
+        if not request.image:
+            raise HTTPException(status_code=400, detail="Upscale requires an image")
+        
+        # Decode base64 image to bytes
+        image_bytes = decode_base64_image(request.image)
+        print(f"Decoded preview image: {len(image_bytes)} bytes")
+        
+        # Decode inspiration images if provided (for multi-reference)
+        inspiration_images_bytes = None
+        if request.inspiration_images and len(request.inspiration_images) > 0:
+            inspiration_images_bytes = []
+            for i, insp_b64 in enumerate(request.inspiration_images[:6]):  # Limit to 6 for FLUX.2 [dev]
+                try:
+                    insp_bytes = decode_base64_image(insp_b64)
+                    inspiration_images_bytes.append(insp_bytes)
+                    print(f"Decoded inspiration image {i+1}, size: {len(insp_bytes)} bytes")
+                except Exception as e:
+                    print(f"Failed to decode inspiration image {i+1}: {e}")
+                    # Continue with other images
+            print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
+        
+        # Upscale image
+        result = flux_model.upscale_image.remote(
+            image_bytes,
+            request.target_size,
+            request.seed,
+            request.prompt,
+            inspiration_images_bytes
+        )
+        
+        return UpscaleResponse(
+            image=result["image"],
+            generation_info=result["generation_info"],
+            cost_estimate=result["cost_estimate"]
+        )
+        
+    except Exception as e:
+        print(f"Error in upscale_image: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@web_app.post("/generate", response_model=GenerationResponse)
+async def generate_images(request: GenerationRequest):
+    """Generate images endpoint"""
+    try:
+        print(f"Received generation request: {request.prompt[:100]}...")
+        
+        if not request.base_image:
+            raise HTTPException(status_code=400, detail="FLUX 2 requires a base_image for image-to-image editing")
+        
+        # Build comprehensive prompt
+        full_prompt = build_prompt(request)
+        
+        # Decode base64 image to bytes
+        image_bytes = decode_base64_image(request.base_image)
+        print(f"Decoded base image: {len(image_bytes)} bytes")
+        
+        # Decode inspiration images if provided (for multi-reference)
+        inspiration_images_bytes = None
+        if request.inspiration_images and len(request.inspiration_images) > 0:
+            inspiration_images_bytes = []
+            for i, insp_b64 in enumerate(request.inspiration_images[:6]):  # Limit to 6 for FLUX.2 [dev]
+                try:
+                    insp_bytes = decode_base64_image(insp_b64)
+                    inspiration_images_bytes.append(insp_bytes)
+                    print(f"Decoded inspiration image {i+1}, size: {len(insp_bytes)} bytes")
+                except Exception as e:
+                    print(f"Failed to decode inspiration image {i+1}: {e}")
+                    # Continue with other images
+            print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
         
         # Generate images in image-to-image mode with optional multi-reference
         result = flux_model.generate_images.remote(
@@ -1030,20 +1462,15 @@ async def generate_images(request: GenerationRequest):
                 inspiration_images=request.inspiration_images,
                 negative_prompt=request.negative_prompt,
                 num_images=request.num_images,
-                guidance_scale=actual_guidance,
-                guidance=request.guidance,
-                num_inference_steps=actual_steps,
-                steps=request.steps,
-                image_size=actual_image_size,  # CRITICAL: Pass image_size!
+                guidance_scale=request.guidance_scale,
+                num_inference_steps=request.num_inference_steps,
                 width=request.width,
                 height=request.height,
                 seed=request.seed,
             ),
-            image_bytes,
-            inspiration_images_bytes,
-            image_size_override=actual_image_size  # CRITICAL: Pass image_size separately to avoid Modal serialization issues
+            image_bytes,  # Pass the decoded bytes
+            inspiration_images_bytes  # Pass inspiration images bytes
         )
-        print(f"[ENDPOINT] generate_images.remote call completed")
         
         return GenerationResponse(
             images=result["images"],

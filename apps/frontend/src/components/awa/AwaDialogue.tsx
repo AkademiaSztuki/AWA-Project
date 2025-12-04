@@ -333,26 +333,26 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     return null;
   }
   
-  console.log('AwaDialogue render:', { currentStep, language, dialogues, audioFile, fullWidth, autoHide, audioReady, hasStarted, currentSentenceIndex });
+  // console.log('AwaDialogue render:', { currentStep, language, dialogues, audioFile, fullWidth, autoHide, audioReady, hasStarted, currentSentenceIndex });
   const audioManager = useAudioManager();
   const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
 
-  console.log('AwaDialogue: useDialogueVoice hook returned:', { voiceVolume, voiceEnabled });
+  // console.log('AwaDialogue: useDialogueVoice hook returned:', { voiceVolume, voiceEnabled });
 
   const handleSentenceComplete = () => {
-    console.log(`Completed sentence ${currentSentenceIndex + 1}/${dialogues.length}`);
+    // console.log(`Completed sentence ${currentSentenceIndex + 1}/${dialogues.length}`);
     
     if (currentSentenceIndex < dialogues.length - 1) {
       setTimeout(() => {
         setCurrentSentenceIndex(prev => prev + 1);
       }, 800);
     } else {
-      console.log('All sentences completed');
+      // console.log('All sentences completed');
       setIsDone(true);
       
       if (autoHide) {
         setTimeout(() => {
-          console.log('AwaDialogue: Hiding dialogue after completion');
+          // console.log('AwaDialogue: Hiding dialogue after completion');
           setIsVisible(false);
         }, 5000); // Increased from 2000 to 5000ms to give more time to read
       }
@@ -366,7 +366,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   };
 
   useEffect(() => {
-    console.log('AwaDialogue: Resetting for new step:', currentStep);
+    // console.log('AwaDialogue: Resetting for new step:', currentStep);
     setCurrentSentenceIndex(0);
     setIsDone(false);
     setHasStarted(false);
@@ -441,14 +441,14 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     return null;
   }
 
-  console.log('AwaDialogue rendering with:', { currentSentenceIndex, dialogues, audioReady, hasStarted });
+  // console.log('AwaDialogue rendering with:', { currentSentenceIndex, dialogues, audioReady, hasStarted });
   
-  console.log('AwaDialogue: Render conditions:', { 
-    audioFile: !!audioFile, 
-    voiceEnabled, 
-    audioReady, 
-    shouldRender: !!(audioFile && voiceEnabled && audioReady) 
-  });
+  // console.log('AwaDialogue: Render conditions:', { 
+  //   audioFile: !!audioFile, 
+  //   voiceEnabled, 
+  //   audioReady, 
+  //   shouldRender: !!(audioFile && voiceEnabled && audioReady) 
+  // });
   
   return (
     <div className={`z-50 flex flex-col items-center justify-start w-full text-center pointer-events-none ${

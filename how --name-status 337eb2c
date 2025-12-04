@@ -1,0 +1,28 @@
+[33mcommit 337eb2c599595b91aaee988054ae5ff3643c6606[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: Jakub Palka <jakub.palka@akademiasztuki.eu>
+Date:   Thu Dec 4 20:11:17 2025 +0100
+
+    Fix: Force image_size to 512 for preview mode instead of 1024
+    
+    - Changed default image_size from 1024 to 512 in GenerationRequest model
+    - Added forced image_size=512 at start of generate_images method
+    - Fixed Supabase saveRoom to skip non-existent preference_source column
+    - Updated all fallbacks to use 512 instead of 1024 for preview images
+    - Deployed to Modal
+
+M	apps/frontend/src/app/api/modal/generate/route.ts
+M	apps/frontend/src/lib/supabase-deep-personalization.ts
+M	apps/modal-backend/main.py
+
+[33mcommit 4e01479a748e0524d1c91f9912dc0253ba8b4bd7[m[33m ([m[1;35mrefs/stash[m[33m)[m
+Merge: 0096832 c459f6a
+Author: Jakub Palka <jakub.palka@akademiasztuki.eu>
+Date:   Thu Dec 4 14:00:41 2025 +0100
+
+    WIP on main: 0096832 feat: Add dynamic IDA dialogue system with instructional texts
+
+[33mcommit c459f6a126f3a08aaa0efb850b5e9ab0e295b562[m
+Author: Jakub Palka <jakub.palka@akademiasztuki.eu>
+Date:   Thu Dec 4 14:00:41 2025 +0100
+
+    index on main: 0096832 feat: Add dynamic IDA dialogue system with instructional texts

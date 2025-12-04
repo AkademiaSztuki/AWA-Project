@@ -24,10 +24,20 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
       .eq('user_hash', userHash)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // PGRST116 means no rows found - this is normal for new users
+      if (error.code === 'PGRST116') {
+        console.log('User profile not found (new user) - this is normal');
+        return null;
+      }
+      throw error;
+    }
     return data as UserProfile;
   } catch (error) {
-    console.error('Error fetching user profile:', error);
+    // Only log non-PGRST116 errors as warnings
+    if (error && typeof error === 'object' && 'code' in error && error.code !== 'PGRST116') {
+      console.error('Error fetching user profile:', error);
+    }
     return null;
   }
 }

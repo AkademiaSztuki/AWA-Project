@@ -30,6 +30,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log('[API] Request body keys:', Object.keys(body));
     console.log('[API] Has base_image:', !!body.base_image, 'Length:', body.base_image?.length || 0);
+    console.log('[API] 🔍 base_image type check:', {
+      isString: typeof body.base_image === 'string',
+      startsWithBlob: body.base_image?.startsWith?.('blob:'),
+      startsWithHttp: body.base_image?.startsWith?.('http'),
+      startsWithData: body.base_image?.startsWith?.('data:'),
+      firstChars: body.base_image?.substring?.(0, 100) || 'N/A',
+      isBase64Like: body.base_image && body.base_image.length > 100 && !body.base_image.startsWith('blob:') && !body.base_image.startsWith('http')
+    });
     console.log('[API] Prompt preview:', body.prompt?.substring(0, 100) || 'N/A');
     
     // CRITICAL DEBUG: Check if image_size is in body
@@ -77,12 +85,34 @@ export async function POST(request: NextRequest) {
       body.inspiration_images = convertedImages;
     }
     
+    // CRITICAL: Convert base_image from blob URL to base64 if needed
+    // The base_image should be base64, but if it's a blob URL or regular URL, convert it
+    let baseImage = body.base_image;
+    if (baseImage) {
+      // If it's a blob URL, we need to fetch and convert it
+      if (baseImage.startsWith('blob:')) {
+        console.log('[API] Converting blob URL to base64 for base_image');
+        baseImage = await urlToBase64(baseImage);
+      }
+      // If it's a regular HTTP/HTTPS URL, convert it
+      else if (baseImage.startsWith('http://') || baseImage.startsWith('https://')) {
+        console.log('[API] Converting HTTP URL to base64 for base_image');
+        baseImage = await urlToBase64(baseImage);
+      }
+      // If it's already base64 with data URI prefix, extract just the base64 part
+      else if (baseImage.startsWith('data:')) {
+        console.log('[API] Extracting base64 from data URI for base_image');
+        baseImage = baseImage.split(',')[1];
+      }
+      // Otherwise assume it's already base64 without prefix
+    }
+    
     // Forward request to Modal API
     // CRITICAL: Ensure image_size, steps, and guidance are explicitly set from body
     // Backend expects: image_size (or width/height), steps (or num_inference_steps), guidance (or guidance_scale)
     const requestBody: any = {
       prompt: body.prompt,
-      base_image: body.base_image,
+      base_image: baseImage,  // Use converted base_image
       style: body.style,
       modifications: body.modifications || [],
       strength: body.strength,

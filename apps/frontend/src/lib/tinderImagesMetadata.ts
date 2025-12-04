@@ -1,9 +1,11 @@
 // Tinder Image Metadata for Core Profile Swipes
 // Tags for behavioral analysis and pattern detection
 
+import { StyleId } from './questions/style-options';
+
 export interface TinderImageMetadata {
   filename: string;
-  style: 'modern' | 'traditional' | 'eclectic' | 'minimalist' | 'maximalist';
+  style: StyleId;  // Use shared StyleId type for consistency
   colors: 'warm' | 'cool' | 'neutral';
   materials: string[];
   biophilia: number; // 0-3

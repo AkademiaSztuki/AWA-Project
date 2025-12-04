@@ -10,18 +10,22 @@ const AwaBackground: React.FC = () => {
   return (
     <div className="fixed inset-0 z-0 pointer-events-none w-screen h-screen">
       <Canvas
-        camera={{ position: [-1.2, 0.4, 2.2], fov:70 }}
+        camera={{ position: [-1.2, 0.4, 2.2], fov: 70 }}
         className="w-screen h-screen bg-transparent"
       >
         <Environment preset="studio" />
-        <ambientLight intensity={0.6} color="#FFE5B4" />
+        <ambientLight intensity={0.5} color="#F7E7CE" />
         <directionalLight
           position={[2, 2, 2]}
-          intensity={0.5}
+          intensity={0.8}
           color="#FFD700"
           castShadow
         />
-        <AwaModel currentStep="landing" onLoaded={() => setIsLoading(false)} position={[-1.4, -0.8, 0]} />
+        <AwaModel 
+          currentStep="landing" 
+          onLoaded={() => setIsLoading(false)} 
+          position={[-1.4, -0.9, 0]}
+        />
         <OrbitControls enablePan={false} enableZoom={false} enableRotate={false} />
       </Canvas>
       {/* Loading overlay - wyłączone */}

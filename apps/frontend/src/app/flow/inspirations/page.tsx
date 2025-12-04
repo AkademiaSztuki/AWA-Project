@@ -211,6 +211,63 @@ export default function InspirationsPage() {
           inspirationsForSpaces
         );
         await updateSessionData({ spaces: updatedSpaces } as any);
+        
+        // Save spaces and inspirations to Supabase for persistence across sessions
+        try {
+          const userHash = (sessionData as any)?.userHash;
+          if (userHash) {
+            const { ensureUserProfileExists, getUserProfile, saveUserProfile } = await import('@/lib/supabase-deep-personalization');
+            const profileExists = await ensureUserProfileExists(userHash);
+            if (profileExists) {
+              // Get existing profile to preserve other data
+              const existingProfile = await getUserProfile(userHash);
+              
+              // Prepare inspirations for user_profiles (with tags from gamma model)
+              const inspirationsForProfile = payload.map(p => ({
+                fileId: p.fileId,
+                url: p.url,
+                tags: p.tags, // Tags from gamma model (Gemma3VisionModel)
+                description: p.description, // Description from gamma model
+                addedAt: p.addedAt
+              }));
+              
+              // Update user profile with inspirations (with gamma tags) and spaces metadata
+              const updateData: any = {
+                inspirations: inspirationsForProfile,
+                updated_at: new Date().toISOString()
+              };
+              
+              if (updatedSpaces.length > 0) {
+                updateData.metadata = {
+                  spaces: updatedSpaces,
+                  last_updated: new Date().toISOString()
+                };
+              }
+              
+              const { error } = await supabase
+                .from('user_profiles')
+                .update(updateData)
+                .eq('user_hash', userHash);
+              
+              if (error) {
+                console.warn('[Inspirations] Failed to save inspirations to user profile:', error);
+              } else {
+                console.log('[Inspirations] Inspirations with gamma tags saved to Supabase user_profiles.inspirations');
+                console.log('[Inspirations] Tags structure:', inspirationsForProfile.map(i => ({
+                  hasTags: !!i.tags,
+                  styles: i.tags?.styles?.length || 0,
+                  colors: i.tags?.colors?.length || 0,
+                  materials: i.tags?.materials?.length || 0,
+                  biophilia: i.tags?.biophilia,
+                  description: i.description ? 'present' : 'missing'
+                })));
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[Inspirations] Failed to save inspirations to Supabase:', e);
+          // Non-critical - inspirations are saved locally
+        }
       }
       
       router.push("/flow/big-five");

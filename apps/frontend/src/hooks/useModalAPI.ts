@@ -283,7 +283,46 @@ const persistRoomAnalysisCache = (cacheKey: string, data: RoomAnalysisResponse) 
 };
 
 // Centralized generation parameters - single source of truth
-export const getGenerationParameters = (modificationType: 'initial' | 'micro' | 'macro', iterationCount: number = 0) => {
+export const getGenerationParameters = (
+  mode: 'preview' | 'full' | 'upscale' | 'initial' | 'micro' | 'macro',
+  iterationCount: number = 0
+) => {
+  // New preview/upscale modes
+  if (mode === 'preview') {
+    return {
+      steps: 20,  // Szybkie preview - mniej kroków dla szybszego generowania
+      guidance: 3.5,  // Niższe guidance = mniej agresywne zmiany, zachowuje strukturę (okna, drzwi) - kompromis między jakością a zachowaniem struktury
+      strength: 0.35,  // Niskie strength = zachowuje więcej oryginalnej struktury (okna, drzwi, układ) - 0.35 to dobry balans
+      image_size: 512,  // Niższa rozdzielczość dla szybszego generowania (max 512px)
+      width: 512,
+      height: 512,
+      num_images: 1,
+    };
+  }
+  
+  if (mode === 'upscale') {
+    return {
+      steps: 35,
+      guidance: 4.5,
+      image_size: 1536,  // Up to 2MP per BFL docs
+      width: 1536,
+      height: 1536,
+      num_images: 1,
+    };
+  }
+  
+  if (mode === 'full') {
+    return {
+      steps: 35,
+      guidance: 4.5,
+      image_size: 1024,
+      width: 1024,
+      height: 1024,
+      num_images: 1,
+    };
+  }
+  
+  // Legacy modes (initial, micro, macro)
   const qualityAdjustment = Math.max(0.1, 1 - (iterationCount * 0.1));
   
   const baseParams = {
@@ -316,7 +355,7 @@ export const getGenerationParameters = (modificationType: 'initial' | 'micro' | 
     }
   };
 
-  return baseParams[modificationType];
+  return baseParams[mode as 'initial' | 'micro' | 'macro'];
 };
 
 export const useModalAPI = () => {
@@ -618,35 +657,79 @@ export const useModalAPI = () => {
     const startTime = Date.now();
     const results: SourceGenerationResult[] = [];
 
-    console.log(`[6-Image Matrix] Generating ${request.prompts.length} images in parallel...`);
+    console.log(`[6-Image Matrix] Generating ${request.prompts.length} images sequentially (one at a time)...`);
 
     try {
-      // Generate all images in parallel
-      const generationPromises = request.prompts.map(async ({ source, prompt }) => {
+      // Generate all images sequentially (one at a time) to avoid multiple containers
+      // This is slower but ensures only one container is used at a time
+      const results: SourceGenerationResult[] = [];
+      
+      for (const { source, prompt } of request.prompts) {
         const sourceStartTime = Date.now();
         
         try {
           console.log(`[6-Image Matrix] Starting generation for source: ${source}`);
           
-          // For InspirationReference, include inspiration images for multi-reference
-          // FLUX.2 [dev] supports up to 6 reference images
-          // Reference: https://docs.bfl.ai/flux_2/flux2_image_editing
-          const inspirationImages = source === GenerationSource.InspirationReference 
-            ? request.inspiration_images?.slice(0, 6) // Limit to 6 for FLUX.2 [dev]
-            : undefined;
+          // NOTE: inspiration_images disabled - they fail to load on backend
+          // InspirationReference source uses tags from Gemma analysis in the prompt instead
+          // This is more reliable than multi-reference image loading
+          const inspirationImages = undefined;
+          
+          // Log base_image for debugging
+          console.log(`[6-Image Matrix] base_image for ${source}:`, {
+            present: !!request.base_image,
+            length: request.base_image?.length || 0,
+            startsWith: request.base_image?.substring(0, 50) || 'N/A',
+            isDataUrl: request.base_image?.startsWith('data:') || false
+          });
+          
+          if (!request.base_image) {
+            console.error(`[6-Image Matrix] ERROR: base_image is missing for source ${source}!`);
+            throw new Error(`base_image is required for FLUX 2 image-to-image generation (source: ${source})`);
+          }
+          
+          // Build generation request - exclude inspiration_images if undefined
+          // IMPORTANT: Use image_size from parameters, default to 512 for preview
+          const finalImageSize = request.parameters.image_size ?? 512;
+          console.log(`[6-Image Matrix] Building request for ${source}:`, {
+            'request.parameters.image_size': request.parameters.image_size,
+            'finalImageSize (will be sent)': finalImageSize,
+            steps: request.parameters.steps,
+            guidance: request.parameters.guidance,
+            strength: request.parameters.strength
+          });
           
           const generationRequest: GenerationRequest = {
             prompt,
             base_image: request.base_image,
-            inspiration_images: inspirationImages,
             style: request.style,
             modifications: [],
             strength: request.parameters.strength,
             steps: request.parameters.steps,
             guidance: request.parameters.guidance,
             num_images: 1, // One image per source
-            image_size: request.parameters.image_size || 1024
+            image_size: finalImageSize  // Use 512 for preview - MUST be included
+            // NOTE: DO NOT include width/height - backend uses max(width, height) as fallback
+            // which can override image_size. We want backend to use image_size only.
           };
+          
+          // Debug: verify image_size is included BEFORE sending
+          console.log(`[6-Image Matrix] generationRequest object:`, {
+            has_image_size: 'image_size' in generationRequest,
+            image_size_value: generationRequest.image_size,
+            image_size_type: typeof generationRequest.image_size,
+            all_keys: Object.keys(generationRequest)
+          });
+          
+          if (!generationRequest.image_size || generationRequest.image_size !== 512) {
+            console.warn(`[6-Image Matrix] WARNING: image_size is ${generationRequest.image_size}, expected 512 for preview!`);
+          }
+          
+          // Only include inspiration_images if explicitly provided (currently disabled)
+          // InspirationReference uses tags in prompt instead of image references
+          if (inspirationImages !== undefined) {
+            generationRequest.inspiration_images = inspirationImages;
+          }
 
           // Check if aborted before making request
           if (abortSignal?.aborted) {
@@ -655,12 +738,32 @@ export const useModalAPI = () => {
 
           // Use Next.js API route as proxy to avoid CORS issues with Modal API redirects
           // Server-side proxy can handle 303 redirects without CORS restrictions
+          console.log(`[6-Image Matrix] Sending request to /api/modal/generate for source: ${source}`);
+          
+          // Debug: verify JSON serialization includes image_size
+          // CRITICAL: Ensure image_size is explicitly included even if it's optional
+          const jsonBody = JSON.stringify({
+            ...generationRequest,
+            image_size: generationRequest.image_size // Explicitly include even if undefined
+          });
+          const parsedBack = JSON.parse(jsonBody);
+          console.log(`[6-Image Matrix] JSON serialization check:`, {
+            'image_size in JSON': 'image_size' in parsedBack,
+            'image_size value': parsedBack.image_size,
+            'image_size type': typeof parsedBack.image_size,
+            'JSON keys': Object.keys(parsedBack),
+            'JSON preview': jsonBody.substring(0, 300),
+            'full JSON has image_size': jsonBody.includes('"image_size"')
+          });
+          
           const response = await fetch('/api/modal/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(generationRequest),
+            body: jsonBody,
             signal: abortSignal, // Pass abort signal to fetch
           });
+          
+          console.log(`[6-Image Matrix] Response status for ${source}:`, response.status, response.statusText);
 
           if (!response.ok) {
             const errorText = await response.text();
@@ -700,10 +803,7 @@ export const useModalAPI = () => {
             error: err.message || 'Unknown error'
           } as SourceGenerationResult);
         }
-      });
-
-      // Wait for all generations to complete
-      await Promise.all(generationPromises);
+      }
 
       const totalTime = Date.now() - startTime;
       const successCount = results.filter(r => r.success).length;
@@ -733,8 +833,127 @@ export const useModalAPI = () => {
    */
   const generateFiveImagesParallel = generateSixImagesParallel;
 
+  /**
+   * Generate preview images at 512x512 for fast selection
+   */
+  const generatePreviews = useCallback(async (request: GenerationRequest): Promise<GenerationResponse> => {
+    setIsLoading(true);
+    setError(null);
+
+    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    
+    // Fix for incorrect dev URL in Vercel
+    if (apiBase.includes('-dev')) {
+      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    }
+    
+    if (!apiBase) {
+      const msg = 'Brak konfiguracji ENDPOINTU generacji (NEXT_PUBLIC_MODAL_API_URL)';
+      setError(msg);
+      setIsLoading(false);
+      throw new Error(msg);
+    }
+    
+    try {
+      console.log('Rozpoczynam generowanie podglądów z parametrami:', request);
+      
+      // Use base_image directly - it's already clean base64 without MIME header
+      const base64Image = request.base_image;
+
+      // Use Next.js API route as proxy to avoid CORS issues with Modal API redirects
+      const response = await fetch('/api/modal/generate-previews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...request, base_image: base64Image }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        throw new Error(`Błąd serwera: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Generowanie podglądów zakończone! Otrzymano wynik:', result);
+      
+      setIsLoading(false);
+      return result;
+
+    } catch (err: any) {
+      console.error('Wystąpił błąd w generatePreviews:', err);
+      setError(err.message || 'Wystąpił nieznany błąd.');
+      setIsLoading(false);
+      throw err;
+    }
+  }, []);
+
+  /**
+   * Upscale a selected preview image to full resolution
+   */
+  const upscaleImage = useCallback(async (
+    previewImage: string,
+    seed: number,
+    prompt: string,
+    targetSize: number = 1024,
+    inspirationImages?: string[]
+  ): Promise<string> => {
+    setIsLoading(true);
+    setError(null);
+
+    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    
+    // Fix for incorrect dev URL in Vercel
+    if (apiBase.includes('-dev')) {
+      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    }
+    
+    if (!apiBase) {
+      const msg = 'Brak konfiguracji ENDPOINTU upscalowania (NEXT_PUBLIC_MODAL_API_URL)';
+      setError(msg);
+      setIsLoading(false);
+      throw new Error(msg);
+    }
+    
+    try {
+      console.log('Rozpoczynam upscalowanie obrazu...', { targetSize, seed });
+      
+      // Use Next.js API route as proxy
+      const response = await fetch('/api/modal/upscale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: previewImage,
+          seed,
+          prompt,
+          target_size: targetSize,
+          inspiration_images: inspirationImages,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Upscale API error response:', errorText);
+        throw new Error(`Błąd serwera: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Upscalowanie zakończone! Otrzymano wynik.');
+      
+      setIsLoading(false);
+      return result.image;
+
+    } catch (err: any) {
+      console.error('Wystąpił błąd w upscaleImage:', err);
+      setError(err.message || 'Wystąpił nieznany błąd podczas upscalowania.');
+      setIsLoading(false);
+      throw err;
+    }
+  }, []);
+
   return {
     generateImages,
+    generatePreviews,
+    upscaleImage,
     generateFiveImagesParallel,
     generateSixImagesParallel,
     analyzeRoom,
