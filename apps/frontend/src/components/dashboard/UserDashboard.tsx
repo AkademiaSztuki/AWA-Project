@@ -129,20 +129,27 @@ export function UserDashboard() {
       }
       
       // Try to load spaces from user profile metadata first
+      // Note: metadata column may not exist in all schemas, so we use '*' and check if metadata exists
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
-        .select('metadata')
+        .select('*')
         .eq('user_hash', userHash)
-        .single();
+        .maybeSingle();
       
-      if (!profileError && profileData?.metadata?.spaces) {
-        console.log('[Dashboard] Loaded spaces from user profile metadata');
-        const spacesFromMetadata = profileData.metadata.spaces as Space[];
-        if (spacesFromMetadata && spacesFromMetadata.length > 0) {
-          setSpaces(spacesFromMetadata);
-          setIsLoading(false);
-          return; // Early return - we have spaces from metadata
+      if (!profileError && profileData) {
+        // Check if metadata exists and has spaces
+        if (profileData.metadata && (profileData.metadata as any).spaces) {
+          console.log('[Dashboard] Loaded spaces from user profile metadata');
+          const spacesFromMetadata = (profileData.metadata as any).spaces as Space[];
+          if (spacesFromMetadata && spacesFromMetadata.length > 0) {
+            setSpaces(spacesFromMetadata);
+            setIsLoading(false);
+            return; // Early return - we have spaces from metadata
+          }
         }
+      } else if (profileError && profileError.code !== 'PGRST116') {
+        // Log non-404 errors (PGRST116 means no rows found, which is normal for new users)
+        console.warn('[Dashboard] Error loading profile metadata:', profileError);
       }
       
       // Call Supabase function to get complete profile

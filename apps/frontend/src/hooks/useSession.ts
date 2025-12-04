@@ -277,14 +277,30 @@ export const useSession = (): UseSessionReturn => {
           const userProfile = await getUserProfile(userHash);
           if (userProfile?.inspirations && Array.isArray(userProfile.inspirations) && userProfile.inspirations.length > 0) {
             // Convert user_profiles.inspirations format to SessionData.inspirations format
-            const inspirationsFromProfile = userProfile.inspirations.map((insp: any) => ({
-              id: insp.fileId || `insp_${Date.now()}_${Math.random().toString(36).substring(2)}`,
-              fileId: insp.fileId,
-              url: insp.url,
-              tags: insp.tags, // Tags from gamma model (Gemma3VisionModel)
-              description: insp.description, // Description from gamma model
-              addedAt: insp.addedAt || new Date().toISOString()
-            }));
+            const inspirationsFromProfile = userProfile.inspirations.map((insp: any) => {
+              const result = {
+                id: insp.fileId || `insp_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+                fileId: insp.fileId,
+                url: insp.url,
+                tags: insp.tags, // Tags from gamma model (Gemma3VisionModel)
+                description: insp.description, // Description from gamma model
+                addedAt: insp.addedAt || new Date().toISOString()
+              };
+              
+              // DEBUG: Log tags when loading from Supabase
+              console.log('[useSession] Loading inspiration from Supabase:', {
+                id: result.id,
+                hasTags: !!result.tags,
+                tagsType: typeof result.tags,
+                tagsIsObject: result.tags && typeof result.tags === 'object',
+                tagsKeys: result.tags ? Object.keys(result.tags) : [],
+                tagsValue: result.tags,
+                rawInspTags: insp.tags,
+                rawInspTagsType: typeof insp.tags
+              });
+              
+              return result;
+            });
 
             // Merge inspirations: prefer Supabase (with gamma tags) over localStorage
             const existingInspirations = mergedSession?.inspirations || [];

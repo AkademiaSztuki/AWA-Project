@@ -784,6 +784,44 @@ class Gemma3VisionModel:
         return base
     
     @modal.method()
+    def _color_name_to_hex(self, color_name: str) -> Optional[str]:
+        """Convert color name to hex code"""
+        color_map = {
+            # Basic colors
+            'white': '#FFFFFF',
+            'black': '#000000',
+            'gray': '#808080',
+            'grey': '#808080',
+            'red': '#FF0000',
+            'green': '#008000',
+            'blue': '#0000FF',
+            'yellow': '#FFFF00',
+            'orange': '#FFA500',
+            'purple': '#800080',
+            'pink': '#FFC0CB',
+            'brown': '#8B4513',
+            'beige': '#F5F5DC',
+            'cream': '#FFFDD0',
+            'neutral': '#F5F5F5',
+            # Interior design colors
+            'warm neutrals': '#F5F5DC',
+            'cool grays': '#A9A9A9',
+            'earth tones': '#8B7355',
+            'charcoal': '#36454F',
+            'warm beige': '#D4A574',
+            'light oak': '#D4A574',
+            'warm gray': '#8B7355',
+            'sage green': '#9DC183',
+            'navy': '#000080',
+            'burgundy': '#800020',
+            'teal': '#008080',
+            'coral': '#FF7F50',
+            'lavender': '#E6E6FA',
+            'ivory': '#FFFFF0',
+            'taupe': '#8B8589',
+        }
+        return color_map.get(color_name.lower().strip())
+    
     def analyze_inspiration(self, image_bytes: bytes) -> dict:
         """Analyze inspiration image and extract design elements using Gemma 3 4B-IT"""
         import time
@@ -808,20 +846,28 @@ class Gemma3VisionModel:
                     "role": "user",
                     "content": [
                         {"type": "image", "image": image},
-                        {"type": "text", "text": """Przeanalizuj to zdjęcie wnętrza i wyciągnij kluczowe elementy designu.
+                        {"type": "text", "text": """Przeanalizuj to zdjęcie wnętrza i wyciągnij kluczowe elementy designu w formacie gotowym do użycia w prompcie FLUX 2.
 
-STYLE: [scandinavian, modern, industrial, bohemian, minimalist, rustic, contemporary, traditional, mid-century, art-deco, etc.]
-KOLORY: [warm neutrals, cool grays, earth tones, pastels, bold colors, monochrome, etc.]
-MATERIAŁY: [wood, metal, glass, stone, fabric, leather, concrete, ceramic, etc.]
-BIOPHILIA: [0-3 gdzie 0=brak roślin, 1=minimalne, 2=umiarkowane, 3=dużo roślin/natury]
-OPIS: [krótki opis stylu i atmosfery w języku angielskim dla AI prompt]
+WYMAGANIA:
+- STYLE: Zwróć 1-3 główne style (scandinavian, modern, industrial, bohemian, minimalist, rustic, contemporary, traditional, mid-century, art-deco, eclectic, maximalist, etc.)
+- KOLORY: WYMAGANE - tylko hex codes #RRGGBB (np. #FFFFFF, #36454F, #F5F5DC, #8B7355). Zwróć 2-4 główne kolory widoczne na zdjęciu w formacie hex. NIE używaj opisów jak "bold colors", "vibrant" - tylko konkretne hex codes.
+- MATERIAŁY: Zwróć 2-4 główne materiały (wood, metal, glass, stone, fabric, leather, concrete, ceramic, velvet, marble, etc.)
+- BIOPHILIA: Liczba 0-3 gdzie 0=brak roślin, 1=minimalne (1-2 małe rośliny), 2=umiarkowane (3-5 roślin), 3=dużo roślin/natury (6+ roślin, zielone ściany, etc.)
+- OPIS: Krótki opis stylu i atmosfery w języku angielskim (max 100 słów) dla AI prompt - opisuj konkretne elementy wizualne, nie ogólne terminy
 
-Format odpowiedzi:
-STYLE: [lista stylów oddzielonych przecinkami]
-KOLORY: [lista kolorów oddzielonych przecinkami]  
-MATERIAŁY: [lista materiałów oddzielonych przecinkami]
+Format odpowiedzi (dokładnie w tym formacie):
+STYLE: [główny styl], [drugi styl opcjonalnie], [trzeci styl opcjonalnie]
+KOLORY: [hex code #RRGGBB], [hex code #RRGGBB], [hex code #RRGGBB], [hex code #RRGGBB]
+MATERIAŁY: [materiał 1], [materiał 2], [materiał 3]
 BIOPHILIA: [liczba 0-3]
-OPIS: [krótki opis w języku angielskim]"""}
+OPIS: [krótki opis w języku angielskim, max 100 słów]
+
+PRZYKŁAD:
+STYLE: modern, scandinavian
+KOLORY: #FFFFFF, #F5F5DC, #36454F, #8B7355
+MATERIAŁY: wood, fabric, metal
+BIOPHILIA: 2
+OPIS: Modern Scandinavian living room with light wood furniture, white walls, and natural textiles. Minimalist design with clean lines and warm neutral tones. Soft natural lighting creates a cozy, inviting atmosphere."""}
                     ]
                 }
             ]
@@ -844,7 +890,7 @@ OPIS: [krótki opis w języku angielskim]"""}
             with torch.no_grad():
                 generation = self.model.generate(
                     **inputs,
-                    max_new_tokens=120,
+                    max_new_tokens=200,  # Increased for more detailed responses with hex colors and descriptions
                     do_sample=False,  # Greedy decoding for speed
                     temperature=0.1,
                     top_p=0.8,
@@ -870,7 +916,23 @@ OPIS: [krótki opis w języku angielskim]"""}
                     styles = [s.strip() for s in styles_raw.split(',') if s.strip()]
                 elif line.startswith("KOLORY:"):
                     colors_raw = line.replace("KOLORY:", "").strip()
-                    colors = [c.strip() for c in colors_raw.split(',') if c.strip()]
+                    colors_raw_list = [c.strip() for c in colors_raw.split(',') if c.strip()]
+                    # Convert colors to hex format if needed
+                    colors = []
+                    for color in colors_raw_list:
+                        # If already hex code, use as is
+                        if color.startswith('#'):
+                            colors.append(color)
+                        else:
+                            # Try to convert color name to hex
+                            hex_color = self._color_name_to_hex(color)
+                            if hex_color:
+                                colors.append(hex_color)
+                            # Skip if can't convert (descriptive terms like "bold colors", "vibrant")
+                    
+                    # If no valid hex colors found, use fallback
+                    if not colors:
+                        colors = ["#808080"]  # Default gray
                 elif line.startswith("MATERIAŁY:"):
                     materials_raw = line.replace("MATERIAŁY:", "").strip()
                     materials = [m.strip() for m in materials_raw.split(',') if m.strip()]
@@ -887,7 +949,7 @@ OPIS: [krótki opis w języku angielskim]"""}
             if not styles:
                 styles = ["modern"]
             if not colors:
-                colors = ["neutral"]
+                colors = ["#808080"]  # Default gray hex code
             if not materials:
                 materials = ["wood"]
             
@@ -911,7 +973,7 @@ OPIS: [krótki opis w języku angielskim]"""}
             # Fallback response
             return {
                 "styles": ["modern"],
-                "colors": ["neutral"],
+                "colors": ["#808080"],  # Default gray hex code
                 "materials": ["wood"],
                 "biophilia": 1,
                 "description": "Modern interior design inspiration"

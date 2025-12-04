@@ -473,7 +473,7 @@ function normalizeStyle(styleString: string): string {
 /**
  * Ensures color is in HEX format.
  */
-function ensureHexColor(color: string): string {
+export function ensureHexColor(color: string): string {
   if (!color) return '#808080';
   
   // Already a hex code

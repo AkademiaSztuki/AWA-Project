@@ -22,21 +22,24 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
       .from('user_profiles')
       .select('*')
       .eq('user_hash', userHash)
-      .single();
+      .maybeSingle(); // Use maybeSingle() instead of single() to avoid 406 errors
 
     if (error) {
       // PGRST116 means no rows found - this is normal for new users
-      if (error.code === 'PGRST116') {
+      // 406 Not Acceptable can also occur when using .single() with no rows
+      if (error.code === 'PGRST116' || error.message?.includes('406') || error.message?.includes('Not Acceptable')) {
         console.log('User profile not found (new user) - this is normal');
         return null;
       }
-      throw error;
+      // Log other errors but don't throw - return null gracefully
+      console.warn('Error fetching user profile:', error.code, error.message);
+      return null;
     }
-    return data as UserProfile;
+    return data as UserProfile | null;
   } catch (error) {
     // Only log non-PGRST116 errors as warnings
     if (error && typeof error === 'object' && 'code' in error && error.code !== 'PGRST116') {
-      console.error('Error fetching user profile:', error);
+      console.warn('Error fetching user profile (catch):', error);
     }
     return null;
   }
@@ -106,7 +109,7 @@ export async function getUserHouseholds(userHash: string): Promise<Household[]> 
  * Ensures a user profile exists for the given userHash.
  * Creates a minimal profile if it doesn't exist.
  */
-async function ensureUserProfileExists(userHash: string): Promise<boolean> {
+export async function ensureUserProfileExists(userHash: string): Promise<boolean> {
   try {
     // Check if profile exists
     const existing = await getUserProfile(userHash);

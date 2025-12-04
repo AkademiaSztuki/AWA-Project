@@ -411,6 +411,43 @@ export default function GeneratePage() {
         prompt: synthesisResult.results[source]!.prompt
       }));
       
+      // DEV: Log all prompts for debugging
+      console.log("=".repeat(80));
+      console.log("🔍 [DEV] PROMPTS FOR ALL SOURCES:");
+      console.log("=".repeat(80));
+      prompts.forEach(({ source, prompt }) => {
+        const sourceLabel = GENERATION_SOURCE_LABELS[source];
+        console.log(`\n📝 [${source}] ${sourceLabel?.pl || source}:`);
+        console.log("-".repeat(80));
+        try {
+          // Try to parse as JSON for pretty printing
+          const parsed = JSON.parse(prompt);
+          console.log(JSON.stringify(parsed, null, 2));
+        } catch {
+          // If not JSON, print as-is
+          console.log(prompt);
+        }
+        console.log("-".repeat(80));
+      });
+      console.log("=".repeat(80));
+      
+      // Also log synthesis result details
+      console.log("[DEV] Synthesis Result Details:", {
+        generatedSources: synthesisResult.generatedSources,
+        skippedSources: synthesisResult.skippedSources,
+        displayOrder: synthesisResult.displayOrder,
+        results: Object.keys(synthesisResult.results).map(source => ({
+          source,
+          hasPrompt: !!synthesisResult.results[source as GenerationSource]?.prompt,
+          promptLength: synthesisResult.results[source as GenerationSource]?.prompt?.length || 0,
+          weights: synthesisResult.results[source as GenerationSource]?.weights ? {
+            dominantStyle: synthesisResult.results[source as GenerationSource]?.weights.dominantStyle,
+            colorPalette: synthesisResult.results[source as GenerationSource]?.weights.colorPalette?.slice(0, 3),
+            primaryMaterials: synthesisResult.results[source as GenerationSource]?.weights.primaryMaterials?.slice(0, 2)
+          } : null
+        }))
+      });
+      
       // Use preview mode for faster initial generation (512x512, 20 steps)
       const parameters = getGenerationParameters('preview', generationCount);
       console.log('[6-Image Matrix] Preview parameters:', { 
@@ -593,6 +630,24 @@ export default function GeneratePage() {
         style: typedSessionData.visualDNA?.dominantStyle || 'modern',
         parameters
       });
+      
+      // DEV: Log prompts being sent to API
+      console.log("=".repeat(80));
+      console.log("🚀 [DEV] PROMPTS BEING SENT TO API:");
+      console.log("=".repeat(80));
+      prompts.forEach(({ source, prompt }, index) => {
+        const sourceLabel = GENERATION_SOURCE_LABELS[source];
+        console.log(`\n📤 [${index + 1}/${prompts.length}] ${sourceLabel?.pl || source}:`);
+        console.log("-".repeat(80));
+        try {
+          const parsed = JSON.parse(prompt);
+          console.log(JSON.stringify(parsed, null, 2));
+        } catch {
+          console.log(prompt.substring(0, 500) + (prompt.length > 500 ? '...' : ''));
+        }
+        console.log("-".repeat(80));
+      });
+      console.log("=".repeat(80));
       
       const generationResponse = await generateSixImagesParallel(
         {
@@ -1800,12 +1855,6 @@ export default function GeneratePage() {
           transition={{ duration: 0.6 }}
           className="space-y-4"
         >
-          <div className="text-center">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent">
-              Twoje Wymarzone Wnętrza
-            </h1>
-          </div>
-
           {/* Only show LoadingProgress if NOT in matrix mode (when placeholders are visible) */}
           {/* Hide LoadingProgress completely when in matrix mode - placeholders show progress instead */}
           {(isLoading || !isApiReady) && !isMatrixMode && (
@@ -1854,42 +1903,74 @@ export default function GeneratePage() {
                 </p>
               </div>
               
-              {/* Skipped Sources Info */}
-              {synthesisResult && synthesisResult.skippedSources.length > 0 && (
-                <GlassCard className="p-4 border-amber-500/30 bg-amber-500/5">
+              {/* Data Quality Info - Always show */}
+              {synthesisResult && synthesisResult.qualityReports && (
+                <GlassCard className={`p-4 mb-6 ${synthesisResult.skippedSources.length > 0 ? 'border-amber-500/30 bg-amber-500/5' : 'border-green-500/30 bg-green-500/5'}`}>
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-amber-500/10 rounded-lg">
-                      <Lightbulb size={20} className="text-amber-500" />
+                    <div className={`p-2 rounded-lg ${synthesisResult.skippedSources.length > 0 ? 'bg-amber-500/10' : 'bg-green-500/10'}`}>
+                      {synthesisResult.skippedSources.length > 0 ? (
+                        <Lightbulb size={20} className="text-amber-500" />
+                      ) : (
+                        <CheckCircle2 size={20} className="text-green-500" />
+                      )}
                     </div>
                     <div className="flex-1">
                       <h3 className="font-semibold text-graphite mb-2">
-                        Niektóre źródła zostały pominięte
+                        {synthesisResult.skippedSources.length > 0 
+                          ? 'Niektóre źródła zostały pominięte'
+                          : 'Wszystkie źródła danych dostępne'}
                       </h3>
                       <p className="text-sm text-silver-dark mb-3">
-                        Niektóre wizje nie zostały wygenerowane, ponieważ brakuje wystarczających danych:
+                        {synthesisResult.skippedSources.length > 0
+                          ? 'Niektóre wizje nie zostały wygenerowane, ponieważ brakuje wystarczających danych:'
+                          : `Wygenerowano ${synthesisResult.generatedSources.length} wizji z różnych źródeł danych.`}
                       </p>
+                      
+                      {/* Show all sources with their status */}
                       <div className="space-y-2">
-                        {synthesisResult.qualityReports
-                          .filter(report => !report.shouldGenerate)
-                          .map(report => (
-                            <div key={report.source} className="text-sm">
-                              <div className="flex items-center gap-2 mb-1">
+                        {synthesisResult.qualityReports.map(report => {
+                          const isSkipped = !report.shouldGenerate;
+                          const statusColor = report.status === 'insufficient' 
+                            ? 'text-red-500' 
+                            : report.status === 'limited' 
+                            ? 'text-amber-500' 
+                            : 'text-green-500';
+                          const statusText = report.status === 'insufficient' 
+                            ? 'Brak danych' 
+                            : report.status === 'limited' 
+                            ? 'Niewystarczające dane' 
+                            : 'Gotowe';
+                          
+                          return (
+                            <div key={report.source} className={`text-sm p-2 rounded ${isSkipped ? 'bg-amber-500/5' : 'bg-green-500/5'}`}>
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <span className="font-medium text-graphite">
                                   {GENERATION_SOURCE_LABELS[report.source]?.pl || report.source}:
                                 </span>
-                                <span className="text-amber-500 text-xs">
-                                  {report.status === 'insufficient' ? 'Brak danych' : 'Niewystarczające dane'}
+                                <span className={`text-xs font-medium ${statusColor}`}>
+                                  {statusText}
                                 </span>
+                                {report.confidence > 0 && (
+                                  <span className="text-xs text-silver-dark">
+                                    (pewność: {report.confidence}%)
+                                  </span>
+                                )}
                               </div>
                               {report.warnings.length > 0 && (
-                                <ul className="list-disc list-inside text-silver-dark text-xs ml-4">
+                                <ul className="list-disc list-inside text-silver-dark text-xs ml-4 mt-1">
                                   {report.warnings.map((warning, idx) => (
                                     <li key={idx}>{warning}</li>
                                   ))}
                                 </ul>
                               )}
+                              {!isSkipped && report.dataPoints > 0 && (
+                                <p className="text-xs text-silver-dark mt-1 ml-4">
+                                  Punkty danych: {report.dataPoints}
+                                </p>
+                              )}
                             </div>
-                          ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

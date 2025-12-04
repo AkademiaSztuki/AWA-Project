@@ -263,15 +263,21 @@ export function assessSourceQuality(
   if (source === GenerationSource.InspirationReference) {
     const inspirations = inputs.inspirations || [];
     const hasInspirations = inspirations.length >= QUALITY_THRESHOLDS.inspiration_reference.minInspirations;
-    const hasUrls = inspirations.some(i => i.url || (i as any).previewUrl);
+    // Check for url, imageBase64, previewUrl, or image (multiple possible formats)
+    const hasUrls = inspirations.some(i => {
+      const insp = i as any;
+      return insp.url || insp.imageBase64 || insp.previewUrl || insp.image;
+    });
     
     if (!hasInspirations) {
       warnings.push('No inspiration images provided');
       status = 'insufficient';
       shouldGenerate = false;
     } else if (!hasUrls) {
-      warnings.push('Inspiration images missing URLs');
+      warnings.push('Inspiration images missing URLs or base64 data');
       status = 'limited';
+      // Still allow generation if we have inspirations - base64 can be extracted later
+      shouldGenerate = hasInspirations;
     }
     
     dataPoints = inspirations.length;

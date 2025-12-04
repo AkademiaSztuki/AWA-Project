@@ -93,6 +93,19 @@ export default function InspirationsPage() {
     for (const targetItem of itemsToTag) {
       try {
         const [analysis] = await analyzeInspirationsWithGamma([targetItem.file]);
+        
+        // DEBUG: Log what gamma model returned
+        console.log('[Inspirations] Gamma model returned (auto-tag):', {
+          itemId: targetItem.id,
+          hasTags: !!analysis.tags,
+          tagsType: typeof analysis.tags,
+          tagsIsObject: analysis.tags && typeof analysis.tags === 'object',
+          tagsKeys: analysis.tags ? Object.keys(analysis.tags) : [],
+          tagsValue: analysis.tags,
+          hasDescription: !!analysis.description,
+          description: analysis.description
+        });
+        
         setItems(prev => {
           const updated = prev.map(item =>
             item.id === targetItem.id
@@ -105,6 +118,16 @@ export default function InspirationsPage() {
                 }
               : item
           );
+          
+          // DEBUG: Log what is being saved to sessionData
+          const itemWithTags = updated.find(item => item.id === targetItem.id);
+          console.log('[Inspirations] Saving to sessionData:', {
+            itemId: itemWithTags?.id,
+            hasTags: !!itemWithTags?.tags,
+            tagsType: typeof itemWithTags?.tags,
+            tagsValue: itemWithTags?.tags
+          });
+          
           setTimeout(() => updateSessionData({ inspirations: payload(updated) } as any), 0);
           return updated;
         });
@@ -126,8 +149,21 @@ export default function InspirationsPage() {
     try {
       const res = await analyzeInspirationsWithGamma([items[index].file]);
       const first = res[0];
+      
+      // DEBUG: Log what gamma model returned
+      console.log('[Inspirations] Gamma model returned:', {
+        hasTags: !!first.tags,
+        tagsType: typeof first.tags,
+        tagsIsObject: first.tags && typeof first.tags === 'object',
+        tagsKeys: first.tags ? Object.keys(first.tags) : [],
+        tagsValue: first.tags,
+        hasDescription: !!first.description,
+        description: first.description
+      });
+      
       setItems(prev => prev.map((it, i) => (i === index ? { ...it, isTagging: false, tags: first.tags, description: first.description } : it)));
     } catch (e: any) {
+      console.error('[Inspirations] Tagging failed:', e);
       setItems(prev => prev.map((it, i) => (i === index ? { ...it, isTagging: false, error: e?.message || "Tagging failed" } : it)));
     }
   };
@@ -179,7 +215,7 @@ export default function InspirationsPage() {
       const payload = items.map(i => {
         const up = uploads.find(u => u.id === i.id);
         const base64 = i.imageBase64 || i.previewUrl; // Keep base64 if available
-        return {
+        const result = {
           id: i.id,
           fileId: up?.fileId,
           url: up?.url,
@@ -188,6 +224,19 @@ export default function InspirationsPage() {
           description: i.description,
           addedAt: new Date().toISOString(),
         };
+        
+        // DEBUG: Log tags before saving
+        console.log('[Inspirations] Saving inspiration:', {
+          id: result.id,
+          hasTags: !!result.tags,
+          tagsType: typeof result.tags,
+          tagsIsObject: result.tags && typeof result.tags === 'object',
+          tagsKeys: result.tags ? Object.keys(result.tags) : [],
+          tagsValue: result.tags,
+          hasDescription: !!result.description
+        });
+        
+        return result;
       });
       await updateSessionData({ inspirations: payload } as any);
       

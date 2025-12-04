@@ -91,6 +91,18 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
   console.log('  - visualDNA.preferences.styles:', visualDNA?.preferences?.styles);
   console.log('  - visualDNA.preferences.colors:', visualDNA?.preferences?.colors);
   console.log('  - inspirations count:', sessionData.inspirations?.length || 0);
+  if (sessionData.inspirations && sessionData.inspirations.length > 0) {
+    console.log('  - inspirations with tags:', sessionData.inspirations.map((insp: any) => ({
+      hasTags: !!insp.tags,
+      tags: insp.tags ? {
+        styles: insp.tags.styles?.length || 0,
+        colors: insp.tags.colors?.length || 0,
+        materials: insp.tags.materials?.length || 0,
+        biophilia: insp.tags.biophilia
+      } : null,
+      hasDescription: !!insp.description
+    })));
+  }
   console.log('  - tinderData swipes:', (sessionData as any).tinderData?.swipes?.length || 0);
 
   return {

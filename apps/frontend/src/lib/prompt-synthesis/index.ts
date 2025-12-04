@@ -3,7 +3,7 @@
 // Exports main synthesizePrompt() function for use throughout app
 
 import { PromptInputs, PromptWeights, calculatePromptWeights } from './scoring';
-import { buildPromptFromWeights, buildFlux2Prompt, validatePromptLength, PromptComponents } from './builder';
+import { buildPromptFromWeights, buildFlux2Prompt, validatePromptLength, PromptComponents, ensureHexColor } from './builder';
 import { refineSyntaxWithLLM } from './refinement';
 import { 
   GenerationSource, 
@@ -384,13 +384,80 @@ export async function synthesizeSixPrompts(
   const fullInputs = buildPromptInputsFromSession(sessionData);
   
   // Extract Tinder swipes for quality assessment
+  // Check both tinderData.swipes and tinderResults (for backward compatibility)
   const typedSessionData = sessionData as any;
-  const tinderSwipes: TinderSwipe[] | undefined = typedSessionData?.tinderData?.swipes?.map((s: any) => ({
-    direction: s.direction,
-    imageId: s.imageId || s.id,
-    categories: s.categories,
-    tags: s.tags
-  }));
+  const tinderSwipesArray = typedSessionData?.tinderData?.swipes || typedSessionData?.tinderResults || [];
+  const tinderSwipes: TinderSwipe[] | undefined = Array.isArray(tinderSwipesArray) && tinderSwipesArray.length > 0
+    ? tinderSwipesArray.map((s: any) => ({
+        direction: s.direction,
+        imageId: s.imageId || s.id,
+        categories: s.categories,
+        tags: s.tags
+      }))
+    : undefined;
+  
+  // DEBUG: Comprehensive data availability check
+  console.log('[6-Image Matrix] ========================================');
+  console.log('[6-Image Matrix] DATA AVAILABILITY CHECK:');
+  console.log('[6-Image Matrix] ========================================');
+  console.log('[6-Image Matrix] SessionData keys:', Object.keys(typedSessionData || {}));
+  console.log('[6-Image Matrix] Tinder data:', {
+    hasTinderData: !!typedSessionData?.tinderData,
+    hasTinderResults: !!typedSessionData?.tinderResults,
+    tinderDataSwipes: typedSessionData?.tinderData?.swipes?.length || 0,
+    tinderResultsLength: typedSessionData?.tinderResults?.length || 0,
+    finalTinderSwipes: tinderSwipes?.length || 0,
+    tinderDataStructure: typedSessionData?.tinderData ? Object.keys(typedSessionData.tinderData) : null,
+    tinderResultsSample: typedSessionData?.tinderResults?.slice(0, 2)
+  });
+  console.log('[6-Image Matrix] Big Five data:', {
+    hasBigFive: !!typedSessionData?.bigFive,
+    hasScores: !!typedSessionData?.bigFive?.scores,
+    scores: typedSessionData?.bigFive?.scores,
+    fullBigFive: typedSessionData?.bigFive
+  });
+  console.log('[6-Image Matrix] Inspirations:', {
+    count: typedSessionData?.inspirations?.length || 0,
+    hasInspirations: !!(typedSessionData?.inspirations && typedSessionData.inspirations.length > 0),
+    firstInspiration: typedSessionData?.inspirations?.[0],
+    allInspirations: typedSessionData?.inspirations
+  });
+  console.log('[6-Image Matrix] VisualDNA:', {
+    hasVisualDNA: !!typedSessionData?.visualDNA,
+    dominantStyle: typedSessionData?.visualDNA?.dominantStyle,
+    preferences: typedSessionData?.visualDNA?.preferences,
+    fullVisualDNA: typedSessionData?.visualDNA
+  });
+  console.log('[6-Image Matrix] Room data:', {
+    hasActivities: !!(typedSessionData?.roomActivities && typedSessionData.roomActivities.length > 0),
+    activitiesCount: typedSessionData?.roomActivities?.length || 0,
+    hasPainPoints: !!(typedSessionData?.roomPainPoints && typedSessionData.roomPainPoints.length > 0),
+    painPointsCount: typedSessionData?.roomPainPoints?.length || 0,
+    activities: typedSessionData?.roomActivities,
+    painPoints: typedSessionData?.roomPainPoints
+  });
+  console.log('[6-Image Matrix] ColorsAndMaterials:', {
+    hasColorsAndMaterials: !!typedSessionData?.colorsAndMaterials,
+    selectedStyle: typedSessionData?.colorsAndMaterials?.selectedStyle,
+    selectedPalette: typedSessionData?.colorsAndMaterials?.selectedPalette,
+    topMaterials: typedSessionData?.colorsAndMaterials?.topMaterials,
+    fullColorsAndMaterials: typedSessionData?.colorsAndMaterials
+  });
+  console.log('[6-Image Matrix] PromptInputs summary:', {
+    hasImplicitStyles: fullInputs.aestheticDNA.implicit.dominantStyles.length > 0,
+    implicitStyles: fullInputs.aestheticDNA.implicit.dominantStyles,
+    hasExplicitStyle: !!fullInputs.aestheticDNA.explicit.selectedStyle,
+    explicitStyle: fullInputs.aestheticDNA.explicit.selectedStyle,
+    hasPersonality: !!fullInputs.personality,
+    personality: fullInputs.personality,
+    hasInspirations: !!(fullInputs.inspirations && fullInputs.inspirations.length > 0),
+    inspirationsCount: fullInputs.inspirations?.length || 0,
+    hasActivities: !!(fullInputs.activities && fullInputs.activities.length > 0),
+    activitiesCount: fullInputs.activities?.length || 0,
+    hasPainPoints: !!(fullInputs.painPoints && fullInputs.painPoints.length > 0),
+    painPointsCount: fullInputs.painPoints?.length || 0
+  });
+  console.log('[6-Image Matrix] ========================================');
   
   // Assess quality for all sources using strict quality gates
   const qualityReports = assessAllSourcesQuality(fullInputs, tinderSwipes);
@@ -477,6 +544,8 @@ export async function synthesizeSixPrompts(
       hasPersonality: !!filteredInputs.personality,
       hasLifestyle: !!filteredInputs.lifestyle.vibe,
       hasSensory: !!filteredInputs.sensory.light,
+      hasInspirations: !!(filteredInputs.inspirations && filteredInputs.inspirations.length > 0),
+      inspirationsCount: filteredInputs.inspirations?.length || 0,
       implicitStyles: filteredInputs.aestheticDNA.implicit.dominantStyles,
       explicitStyle: filteredInputs.aestheticDNA.explicit.selectedStyle,
       personality: filteredInputs.personality ? {
@@ -485,6 +554,11 @@ export async function synthesizeSixPrompts(
         E: filteredInputs.personality.extraversion
       } : null
     });
+    
+    // DEBUG: For InspirationReference, also log full inspirations structure
+    if (source === GenerationSource.InspirationReference) {
+      console.log(`[${source}] Full inspirations structure:`, JSON.stringify(filteredInputs.inspirations, null, 2));
+    }
     
     // Special handling for InspirationReference - use concrete VLM tags from gamma model (Gemma3VisionModel)
     // Tags are stored in Supabase user_profiles.inspirations and loaded into sessionData.inspirations
@@ -512,25 +586,68 @@ export async function synthesizeSixPrompts(
           'transitional', 'japanese', 'gothic', 'tropical'
         ];
         
-        inspirations.forEach(inspiration => {
+        inspirations.forEach((inspiration, index) => {
+          console.log(`[InspirationReference] Processing inspiration ${index}:`, {
+            hasTags: !!inspiration.tags,
+            tagsType: typeof inspiration.tags,
+            tagsValue: inspiration.tags,
+            hasDescription: !!inspiration.description
+          });
+          
           if (inspiration.tags) {
-            inspiration.tags.styles?.forEach(style => {
-              // Extract valid style (case-insensitive check)
-              const validStyle = style.toLowerCase().trim();
-              if (validStyleList.includes(validStyle)) {
-                allStyles.add(validStyle);
-              }
-            });
-            inspiration.tags.colors?.forEach(color => allColors.add(color));
-            inspiration.tags.materials?.forEach(material => allMaterials.add(material));
-            if (inspiration.tags.biophilia !== undefined) {
+            // Process styles
+            if (inspiration.tags.styles && Array.isArray(inspiration.tags.styles)) {
+              inspiration.tags.styles.forEach(style => {
+                // Extract valid style (case-insensitive check)
+                const validStyle = style.toLowerCase().trim();
+                if (validStyleList.includes(validStyle)) {
+                  allStyles.add(validStyle);
+                  console.log(`[InspirationReference] Added style: ${validStyle}`);
+                } else {
+                  console.warn(`[InspirationReference] Style not in valid list: ${style} (normalized: ${validStyle})`);
+                }
+              });
+            } else {
+              console.warn(`[InspirationReference] No styles array in tags:`, inspiration.tags.styles);
+            }
+            
+            // Process colors - accept both hex codes and color names
+            if (inspiration.tags.colors && Array.isArray(inspiration.tags.colors)) {
+              inspiration.tags.colors.forEach(color => {
+                // Accept both hex codes (#FFFFFF) and color names (white, beige, etc.)
+                allColors.add(color);
+                console.log(`[InspirationReference] Added color: ${color}`);
+              });
+            } else {
+              console.warn(`[InspirationReference] No colors array in tags:`, inspiration.tags.colors);
+            }
+            
+            // Process materials
+            if (inspiration.tags.materials && Array.isArray(inspiration.tags.materials)) {
+              inspiration.tags.materials.forEach(material => {
+                allMaterials.add(material);
+                console.log(`[InspirationReference] Added material: ${material}`);
+              });
+            } else {
+              console.warn(`[InspirationReference] No materials array in tags:`, inspiration.tags.materials);
+            }
+            
+            // Process biophilia
+            if (inspiration.tags.biophilia !== undefined && inspiration.tags.biophilia !== null) {
               totalBiophilia += inspiration.tags.biophilia;
               validInspirations++;
+              console.log(`[InspirationReference] Added biophilia: ${inspiration.tags.biophilia}`);
+            } else {
+              console.warn(`[InspirationReference] No biophilia value in tags`);
             }
+          } else {
+            console.warn(`[InspirationReference] Inspiration ${index} has no tags object`);
           }
+          
           // Collect description from Gemma analysis if available
           if (inspiration.description && inspiration.description.trim()) {
             descriptions.push(inspiration.description.trim());
+            console.log(`[InspirationReference] Added description: ${inspiration.description.substring(0, 50)}...`);
           }
         });
         
@@ -543,7 +660,42 @@ export async function synthesizeSixPrompts(
         };
       };
       
+      // DEBUG: Log inspirations structure before extraction - FULL DETAILS
+      console.log('[InspirationReference] ========================================');
+      console.log('[InspirationReference] INSPIRATIONS BEFORE EXTRACTION:');
+      console.log('[InspirationReference] ========================================');
+      console.log('[InspirationReference] Count:', filteredInputs.inspirations?.length || 0);
+      console.log('[InspirationReference] Full structure:', JSON.stringify(filteredInputs.inspirations, null, 2));
+      
+      if (filteredInputs.inspirations && filteredInputs.inspirations.length > 0) {
+        filteredInputs.inspirations.forEach((insp: any, idx: number) => {
+          console.log(`[InspirationReference] Inspiration ${idx + 1}:`, {
+            hasTags: !!insp.tags,
+            tagsType: typeof insp.tags,
+            tagsIsObject: insp.tags && typeof insp.tags === 'object',
+            tagsIsEmptyObject: insp.tags && typeof insp.tags === 'object' && Object.keys(insp.tags).length === 0,
+            tagsKeys: insp.tags ? Object.keys(insp.tags) : [],
+            tagsValue: insp.tags,
+            hasDescription: !!insp.description,
+            description: insp.description
+          });
+        });
+      } else {
+        console.warn('[InspirationReference] WARNING: No inspirations found in filteredInputs!');
+        console.warn('[InspirationReference] This means inspirations were not passed or were filtered out.');
+      }
+      console.log('[InspirationReference] ========================================');
+      
       const inspirationTags = extractInspirationTags(filteredInputs.inspirations);
+      
+      // DEBUG: Log extracted tags
+      console.log('[InspirationReference] Extracted tags from gamma model:', {
+        styles: inspirationTags.additionalStyles,
+        colors: inspirationTags.additionalColors,
+        materials: inspirationTags.additionalMaterials,
+        biophiliaBoost: inspirationTags.biophiliaBoost,
+        descriptions: inspirationTags.descriptions
+      });
       
       // For InspirationReference, use ONLY tags from inspirations, ignore other sources
       // Build weights ONLY from inspiration tags
@@ -591,7 +743,8 @@ export async function synthesizeSixPrompts(
         activityNeeds: null
       };
       
-      // Build prompt with concrete tags from inspirations ONLY
+      // Build JSON prompt (same format as other sources) with concrete tags from inspirations ONLY
+      // FLUX 2 dev supports JSON structured prompts - use same format as other sources
       const roomName = roomType === 'living room' ? 'living room' : 
                       roomType === 'bedroom' ? 'bedroom' :
                       roomType === 'kitchen' ? 'kitchen' : roomType;
@@ -606,39 +759,82 @@ export async function synthesizeSixPrompts(
       // Add concrete tags from gamma model (Gemma3VisionModel) analysis - ONLY from inspirations
       // These tags come from Supabase user_profiles.inspirations (generated by gamma model)
       if (inspirationTags.additionalStyles.length > 0) {
-        promptJson.style = `${inspirationTags.additionalStyles[0]} style`;
-        promptJson.reference_styles = inspirationTags.additionalStyles.slice(0, 3);
-        promptJson.style_instruction = `Apply ${inspirationTags.additionalStyles.slice(0, 2).join(' and ')} style elements from reference images`;
+        const primaryStyle = inspirationTags.additionalStyles[0];
+        const secondaryStyles = inspirationTags.additionalStyles.slice(1, 3);
+        promptJson.style = primaryStyle;
+        if (secondaryStyles.length > 0) {
+          promptJson.style_influences = secondaryStyles;
+          promptJson.style_instruction = `Apply ${primaryStyle} style with ${secondaryStyles.join(' and ')} influences from reference images`;
+        } else {
+          promptJson.style_instruction = `Apply ${primaryStyle} style elements from reference images`;
+        }
       }
       
       if (inspirationTags.additionalColors.length > 0) {
-        promptJson.color_palette = inspirationTags.additionalColors.slice(0, 4);
-        promptJson.color_instruction = `Use color palette: ${inspirationTags.additionalColors.slice(0, 3).join(', ')} from reference images`;
+        // Convert colors to hex if needed (FLUX.2 JSON requires hex codes)
+        // Filter out non-color values (like "Bold colors", "vibrant", "multicolored") and convert valid colors to hex
+        const hexColors = inspirationTags.additionalColors
+          .slice(0, 6) // Take more colors initially to have enough after filtering
+          .map(color => {
+            // Skip descriptive color terms that aren't actual colors
+            const descriptiveTerms = ['bold colors', 'vibrant', 'multicolored', 'colorful', 'bright', 'muted', 'neutral'];
+            if (descriptiveTerms.includes(color.toLowerCase())) {
+              return null;
+            }
+            // Convert to hex using ensureHexColor
+            return ensureHexColor(color);
+          })
+          .filter((color): color is string => color !== null && color !== '#808080') // Remove nulls and default gray
+          .slice(0, 4); // Take first 4 valid hex colors
+        
+        if (hexColors.length > 0) {
+          promptJson.color_palette = hexColors;
+          promptJson.color_instruction = `Use color palette from reference images: ${hexColors.slice(0, 3).join(', ')}`;
+        } else {
+          console.warn('[InspirationReference] No valid hex colors found after conversion. Original colors:', inspirationTags.additionalColors);
+        }
       }
       
       if (inspirationTags.additionalMaterials.length > 0) {
         promptJson.materials = inspirationTags.additionalMaterials.slice(0, 3);
-        promptJson.material_instruction = `Incorporate materials: ${inspirationTags.additionalMaterials.slice(0, 2).join(', ')} from reference images`;
+        promptJson.material_instruction = `Incorporate materials from reference images: ${inspirationTags.additionalMaterials.slice(0, 2).join(', ')}`;
       }
       
       if (inspirationTags.biophiliaBoost > 0.1) {
-        promptJson.biophilia_level = inspirationTags.biophiliaBoost > 0.5 ? 'abundant' : 'moderate';
-        promptJson.natural_elements = "Include natural elements from reference images";
+        const biophiliaLevel = inspirationTags.biophiliaBoost > 0.5 ? 'abundant' : 'moderate';
+        promptJson.biophilia = {
+          level: biophiliaLevel,
+          description: `${biophiliaLevel} natural elements from reference images`,
+          natural_elements: ['indoor plants', 'natural materials']
+        };
       }
       
       // Add descriptions from Gemma analysis if available
       if (inspirationTags.descriptions && inspirationTags.descriptions.length > 0) {
-        // Combine descriptions from all inspirations
         const combinedDescription = inspirationTags.descriptions
-          .slice(0, 3) // Limit to first 3 descriptions
+          .slice(0, 2) // Limit to first 2 descriptions
           .join('; '); // Join with semicolon
         promptJson.reference_description = combinedDescription;
-        promptJson.atmosphere = `Create atmosphere matching: ${combinedDescription.substring(0, 150)}`;
+        promptJson.atmosphere = `Create atmosphere matching reference images: ${combinedDescription.substring(0, 150)}`;
       }
       
       // Fallback if no tags available
-      if (!promptJson.style && !promptJson.color_palette && !promptJson.materials && !promptJson.reference_description) {
+      if (inspirationTags.additionalStyles.length === 0 && 
+          inspirationTags.additionalColors.length === 0 && 
+          inspirationTags.additionalMaterials.length === 0 && 
+          (!inspirationTags.descriptions || inspirationTags.descriptions.length === 0)) {
+        console.warn('[InspirationReference] WARNING: No tags from gamma model found! Using fallback prompt.');
+        console.warn('[InspirationReference] This means inspirations either have no tags or tags are not in expected format.');
+        console.warn('[InspirationReference] Inspirations structure:', JSON.stringify(filteredInputs.inspirations, null, 2));
         promptJson.reference_usage = "Combine style, colors, and mood from the inspiration images into this room";
+      } else {
+        console.log('[InspirationReference] Successfully built JSON prompt with gamma tags:', {
+          hasStyle: inspirationTags.additionalStyles.length > 0,
+          hasColors: inspirationTags.additionalColors.length > 0,
+          hasMaterials: inspirationTags.additionalMaterials.length > 0,
+          hasDescription: inspirationTags.descriptions && inspirationTags.descriptions.length > 0,
+          promptPreview: JSON.stringify(promptJson, null, 2).substring(0, 500)
+        });
       }
       
       // Generate explainability metadata for InspirationReference
