@@ -214,54 +214,50 @@ export async function getRoom(roomId: string): Promise<Room | null> {
 
 export async function saveRoom(room: Omit<Room, 'id' | 'createdAt' | 'updatedAt'>): Promise<Room | null> {
   try {
+    // Build insert object, excluding columns that don't exist in schema
+    const insertData: any = {
+      household_id: room.householdId,
+      name: room.name,
+      room_type: room.roomType,
+      usage_type: room.usageType,
+      shared_with: room.sharedWith,
+      ownership_feeling: room.ownershipFeeling,
+      current_photos: room.currentPhotos,
+      // preference_source column doesn't exist in schema - skip it
+      // preference_source: room.preferenceSource,
+      // room_preference_payload column doesn't exist in schema - skip it
+      // room_preference_payload: room.roomPreferencePayload,
+      prs_pre_test: room.prsCurrent,
+      pain_points: room.painPoints,
+      activities: room.activities,
+      room_visual_dna: room.roomVisualDNA,
+      aspirational_state: room.aspirationalState
+    };
+
     const { data, error } = await supabase
       .from('rooms')
-      .insert({
-        household_id: room.householdId,
-        name: room.name,
-        room_type: room.roomType,
-        usage_type: room.usageType,
-        shared_with: room.sharedWith,
-        ownership_feeling: room.ownershipFeeling,
-        current_photos: room.currentPhotos,
-        preference_source: room.preferenceSource,
-        room_preference_payload: room.roomPreferencePayload,
-        prs_pre_test: room.prsCurrent,
-        pain_points: room.painPoints,
-        activities: room.activities,
-        room_visual_dna: room.roomVisualDNA,
-        aspirational_state: room.aspirationalState
-      })
+      .insert(insertData)
       .select()
       .single();
 
     if (error) {
-      // If error is about missing column, try without activity_context
-      if (error.message?.includes('activity_context')) {
-        console.warn('activity_context column not found, saving without it');
-        const { data: retryData, error: retryError } = await supabase
+      // If error is about missing column, try without problematic columns
+      if (error.message?.includes('preference_source') || error.message?.includes('activity_context') || error.message?.includes('room_preference_payload')) {
+        console.warn('Some columns not found in schema, saving without them:', error.message);
+        // Remove problematic fields and retry
+        const retryData: any = { ...insertData };
+        delete retryData.preference_source;
+        delete retryData.room_preference_payload;
+        delete retryData.activity_context;
+        
+        const { data: retryDataResult, error: retryError } = await supabase
           .from('rooms')
-          .insert({
-            household_id: room.householdId,
-            name: room.name,
-            room_type: room.roomType,
-            usage_type: room.usageType,
-            shared_with: room.sharedWith,
-            ownership_feeling: room.ownershipFeeling,
-            current_photos: room.currentPhotos,
-            preference_source: room.preferenceSource,
-            room_preference_payload: room.roomPreferencePayload,
-            prs_pre_test: room.prsCurrent,
-            pain_points: room.painPoints,
-            activities: room.activities,
-            room_visual_dna: room.roomVisualDNA,
-            aspirational_state: room.aspirationalState
-          })
+          .insert(retryData)
           .select()
           .single();
         
         if (retryError) throw retryError;
-        return retryData as Room;
+        return retryDataResult as Room;
       }
       throw error;
     }

@@ -103,9 +103,12 @@ class GenerationRequest(BaseModel):
     negative_prompt: str = ""  # Not used in FLUX 2, kept for compatibility
     num_images: int = 1
     guidance_scale: float = 4.0  # FLUX 2 default
-    num_inference_steps: int = 35  # FLUX 2 recommended: 28-50
-    width: int = 1024
-    height: int = 1024
+    guidance: Optional[float] = None  # Alias for guidance_scale (from frontend)
+    num_inference_steps: int = 20  # Default: 20 for preview, can be overridden
+    steps: Optional[int] = None  # Alias for num_inference_steps (from frontend)
+    width: Optional[int] = None  # Changed to None to detect if actually sent
+    height: Optional[int] = None  # Changed to None to detect if actually sent
+    image_size: Optional[int] = 512  # Default to 512 for preview mode - CRITICAL for initial generations
     seed: Optional[int] = None
 
 class GenerationResponse(BaseModel):
@@ -228,7 +231,9 @@ def _call_groq_for_comment(room_type: str, room_description: str, context: str =
     gpu="A100",  # A100 (40GB) - 4-bit FLUX.2 needs ~30GB
     volumes=volumes,
     secrets=[modal.Secret.from_name("huggingface-secret-new")],
-    scaledown_window=120  # 2 minutes to save costs
+    scaledown_window=120,  # 2 minutes to save costs
+    max_containers=1,  # Only one container at a time - sequential processing
+    min_containers=0   # Allow container to scale down to zero when idle
 )
 class Flux2Model:
     @modal.enter()
@@ -260,10 +265,62 @@ class Flux2Model:
             raise e
 
     @modal.method()
-    def generate_images(self, request: GenerationRequest, image_bytes: bytes = None, inspiration_images_bytes: Optional[List[bytes]] = None) -> dict:
+    def generate_images(self, request: GenerationRequest, image_bytes: bytes = None, inspiration_images_bytes: Optional[List[bytes]] = None, image_size_override: Optional[int] = None) -> dict:
         """Generate images using FLUX 2 Dev - IMAGE-TO-IMAGE MODE with optional multi-reference"""
         try:
+            # CRITICAL FIX: Force image_size to 512 if it's None or invalid
+            # This ensures preview images are ALWAYS 512x512, not 1024x1024
+            if request.image_size is None or request.image_size <= 0:
+                request.image_size = 512
+                print(f"[PARAMS] FORCED image_size to 512 (was None or invalid)")
+            
+            # Debug: log all size-related parameters - CRITICAL for debugging
+            print(f"[PARAMS DEBUG] image_size={request.image_size} (type: {type(request.image_size)}), width={request.width}, height={request.height}")
+            print(f"[PARAMS DEBUG] image_size_override={image_size_override} (type: {type(image_size_override)})")
+            print(f"[PARAMS DEBUG] request.model_dump(): image_size={request.model_dump().get('image_size')}")
+            
+            # Resolve parameter aliases (frontend sends steps/guidance/image_size)
+            actual_steps = request.steps if request.steps is not None else request.num_inference_steps
+            actual_guidance = request.guidance if request.guidance is not None else request.guidance_scale
+            
+            # CRITICAL: Determine actual_size - prioritize image_size_override, then request.image_size, then defaults
+            # IMPORTANT: ALWAYS default to 512 for preview mode (NOT 1024)
+            # This is the critical fix - preview images should be 512x512, not 1024x1024
+            if image_size_override is not None and image_size_override > 0:
+                actual_size = image_size_override
+                # Force set on request object (Modal may not pass keyword args correctly)
+                request.image_size = image_size_override
+                print(f"[PARAMS] ✓ Using image_size_override: {actual_size} (set on request.image_size)")
+            elif request.image_size is not None and request.image_size > 0:
+                actual_size = request.image_size
+                print(f"[PARAMS] ✓ Using image_size from request: {actual_size}")
+            elif request.width is not None and request.height is not None:
+                # Only use width/height if both are explicitly provided (not None)
+                actual_size = max(request.width, request.height)
+                print(f"[PARAMS] ⚠ Using max(width={request.width}, height={request.height}) as fallback: {actual_size}")
+                print(f"[PARAMS] ⚠ WARNING: image_size was None or 0! Frontend should send image_size for preview mode.")
+            elif request.width is not None:
+                actual_size = request.width
+                print(f"[PARAMS] Using width={request.width} as fallback")
+            elif request.height is not None:
+                actual_size = request.height
+                print(f"[PARAMS] Using height={request.height} as fallback")
+            else:
+                # CRITICAL: ALWAYS default to 512 for preview mode, NOT 1024
+                # This is the key fix - preview images must be 512x512
+                actual_size = 512
+                # Force set on request object to ensure it's used
+                request.image_size = 512
+                print(f"[PARAMS] ⚠ Using default size: {actual_size} (no image_size, width, or height provided) - FORCED to 512 for preview mode")
+            
+            # Update request values for consistency
+            request.num_inference_steps = actual_steps
+            request.guidance_scale = actual_guidance
+            request.width = actual_size
+            request.height = actual_size
+            
             print(f"Generating {request.num_images} images with prompt: {request.prompt[:100]}...")
+            print(f"[PARAMS] steps={actual_steps}, guidance={actual_guidance}, size={actual_size}")
             
             if not image_bytes:
                 raise ValueError("FLUX 2 requires a base image for image-to-image editing!")
@@ -273,7 +330,8 @@ class Flux2Model:
             print(f"[PROMPT] Token count: {prompt_tokens} (FLUX 2 supports up to 32K tokens)")
             
             # Load and prepare base image
-            target_size = max(1024, min(request.width, request.height))
+            # Use actual_size from request (can be 512 for preview, 1024+ for full quality)
+            target_size = actual_size  # Use the resolved size from request (no minimum enforced)
             init_image = Image.open(BytesIO(image_bytes)).convert('RGB').resize((target_size, target_size))
             print(f"Loaded base image, resized to: {init_image.size}")
             
@@ -730,7 +788,8 @@ def generate_images_endpoint(request: GenerationRequest):
     from fastapi import Response
     import json
     try:
-        print(f"Received generation request: {request.prompt[:100]}...")
+        print(f"[ENDPOINT DEBUG] Received generation request: {request.prompt[:100]}...")
+        print(f"[ENDPOINT DEBUG] Request object: image_size={request.image_size}, width={request.width}, height={request.height}, steps={request.steps}, num_inference_steps={request.num_inference_steps}, guidance={request.guidance}, guidance_scale={request.guidance_scale}")
         
         if not request.base_image:
             raise HTTPException(status_code=400, detail="FLUX 2 requires a base_image for image-to-image editing")
@@ -756,23 +815,60 @@ def generate_images_endpoint(request: GenerationRequest):
                     # Continue with other images
             print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
         
+        # CRITICAL: Pass image_size, steps, and guidance to the model
+        # Resolve aliases: steps/num_inference_steps, guidance/guidance_scale
+        actual_steps = request.steps if request.steps is not None else request.num_inference_steps
+        actual_guidance = request.guidance if request.guidance is not None else request.guidance_scale
+        
+        # CRITICAL: ALWAYS default to 512 for preview mode if image_size is not explicitly provided
+        # This ensures preview images are generated at 512x512, not 1024x1024
+        if request.image_size is not None and request.image_size > 0:
+            actual_image_size = request.image_size
+        else:
+            # FORCE 512 for preview mode - this is the critical fix
+            actual_image_size = 512
+        print(f"[ENDPOINT] Final resolved params: image_size={actual_image_size} (from request: {request.image_size}), steps={actual_steps}, guidance={actual_guidance}")
+        print(f"[ENDPOINT] Creating GenerationRequest with image_size={actual_image_size} (FORCED to 512 if None)")
+        
         # Generate images in image-to-image mode with optional multi-reference
+        # CRITICAL: Modal may lose fields during Pydantic serialization, so we use model_dump() and recreate
+        # This ensures all fields including image_size are preserved
+        request_dict = {
+            "prompt": full_prompt,
+            "base_image": request.base_image,
+            "inspiration_images": request.inspiration_images,
+            "negative_prompt": request.negative_prompt,
+            "num_images": request.num_images,
+            "guidance_scale": actual_guidance,
+            "guidance": request.guidance,
+            "num_inference_steps": actual_steps,
+            "steps": request.steps,
+            "image_size": actual_image_size,  # CRITICAL: Explicitly set image_size
+            "width": request.width,
+            "height": request.height,
+            "seed": request.seed,
+        }
+        print(f"[ENDPOINT] Request dict: image_size={request_dict['image_size']}, steps={request_dict['steps']}, guidance={request_dict.get('guidance')}")
+        
+        # Recreate GenerationRequest from dict to ensure all fields are set
+        new_request = GenerationRequest(**request_dict)
+        # CRITICAL: ALWAYS set image_size to actual_image_size using model_copy
+        # This ensures Modal serializes the correct value, regardless of what was in the original request
+        # FORCE image_size to 512 if it's None or 0 (preview mode)
+        final_image_size = actual_image_size if actual_image_size > 0 else 512
+        new_request = new_request.model_copy(update={"image_size": final_image_size})
+        print(f"[ENDPOINT] Created request object: image_size={new_request.image_size}, steps={new_request.steps}, guidance={new_request.guidance}")
+        print(f"[ENDPOINT] Request model_dump: image_size={new_request.model_dump().get('image_size')}")
+        print(f"[ENDPOINT] About to call generate_images.remote with image_size_override={final_image_size} (type: {type(final_image_size)})")
+        print(f"[ENDPOINT] CRITICAL: new_request.image_size is now: {new_request.image_size} (FORCED to {final_image_size})")
+        
         result = flux_model.generate_images.remote(
-            GenerationRequest(
-                prompt=full_prompt,
-                base_image=request.base_image,
-                inspiration_images=request.inspiration_images,
-                negative_prompt=request.negative_prompt,
-                num_images=request.num_images,
-                guidance_scale=request.guidance_scale,
-                num_inference_steps=request.num_inference_steps,
-                width=request.width,
-                height=request.height,
-                seed=request.seed,
-            ),
+            new_request,
             image_bytes,  # Pass the decoded bytes
-            inspiration_images_bytes  # Pass inspiration images bytes
+            inspiration_images_bytes,  # Pass inspiration images bytes
+            image_size_override=actual_image_size  # CRITICAL: Pass image_size separately to avoid Modal serialization issues
         )
+        print(f"[ENDPOINT] generate_images.remote call completed")
         
         response_data = GenerationResponse(
             images=result["images"],
@@ -891,9 +987,10 @@ async def health_check_web():
 
 @web_app.post("/generate", response_model=GenerationResponse)
 async def generate_images(request: GenerationRequest):
-    """Generate images endpoint"""
+    """Generate images endpoint - DUPLICATE of modal.fastapi_endpoint, kept for compatibility"""
     try:
-        print(f"Received generation request: {request.prompt[:100]}...")
+        print(f"[ENDPOINT DEBUG] Received generation request: {request.prompt[:100]}...")
+        print(f"[ENDPOINT DEBUG] Request: image_size={request.image_size}, width={request.width}, height={request.height}, steps={request.steps}, guidance={request.guidance}")
         
         if not request.base_image:
             raise HTTPException(status_code=400, detail="FLUX 2 requires a base_image for image-to-image editing")
@@ -916,8 +1013,14 @@ async def generate_images(request: GenerationRequest):
                     print(f"Decoded inspiration image {i+1}, size: {len(insp_bytes)} bytes")
                 except Exception as e:
                     print(f"Failed to decode inspiration image {i+1}: {e}")
-                    # Continue with other images
             print(f"Decoded {len(inspiration_images_bytes)} inspiration images for multi-reference")
+        
+        # CRITICAL: Resolve parameters and ensure image_size is set
+        actual_steps = request.steps if request.steps is not None else request.num_inference_steps
+        actual_guidance = request.guidance if request.guidance is not None else request.guidance_scale
+        actual_image_size = request.image_size if request.image_size is not None and request.image_size > 0 else 512
+        print(f"[ENDPOINT] Resolved: image_size={actual_image_size} (from request: {request.image_size}), steps={actual_steps}, guidance={actual_guidance}")
+        print(f"[ENDPOINT] About to call generate_images.remote with image_size_override={actual_image_size} (type: {type(actual_image_size)})")
         
         # Generate images in image-to-image mode with optional multi-reference
         result = flux_model.generate_images.remote(
@@ -927,15 +1030,20 @@ async def generate_images(request: GenerationRequest):
                 inspiration_images=request.inspiration_images,
                 negative_prompt=request.negative_prompt,
                 num_images=request.num_images,
-                guidance_scale=request.guidance_scale,
-                num_inference_steps=request.num_inference_steps,
+                guidance_scale=actual_guidance,
+                guidance=request.guidance,
+                num_inference_steps=actual_steps,
+                steps=request.steps,
+                image_size=actual_image_size,  # CRITICAL: Pass image_size!
                 width=request.width,
                 height=request.height,
                 seed=request.seed,
             ),
-            image_bytes,  # Pass the decoded bytes
-            inspiration_images_bytes  # Pass inspiration images bytes
+            image_bytes,
+            inspiration_images_bytes,
+            image_size_override=actual_image_size  # CRITICAL: Pass image_size separately to avoid Modal serialization issues
         )
+        print(f"[ENDPOINT] generate_images.remote call completed")
         
         return GenerationResponse(
             images=result["images"],
