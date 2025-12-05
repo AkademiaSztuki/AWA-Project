@@ -4,6 +4,11 @@ import React, { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Environment, OrbitControls } from '@react-three/drei';
 import { AwaModel } from './AwaModel';
+import { AwaModelParticlesDiscs } from './AwaModelParticlesDiscs';
+import { AwaModelParticlesInstanced } from './AwaModelParticlesInstanced';
+
+// Szybki przełącznik testu partiklowego na landing
+const PARTICLE_MODE = 'disc' as 'off' | 'disc' | 'instanced';
 
 const AwaBackground: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -26,6 +31,7 @@ const AwaBackground: React.FC = () => {
           onLoaded={() => setIsLoading(false)} 
           position={[-1.4, -0.9, 0]}
         />
+        {/* Particles wyłączone – wracamy do samego teksturowanego modelu */}
         <OrbitControls enablePan={false} enableZoom={false} enableRotate={false} />
       </Canvas>
       {/* Loading overlay - wyłączone */}
