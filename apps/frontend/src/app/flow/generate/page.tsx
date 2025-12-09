@@ -1035,10 +1035,10 @@ export default function GeneratePage() {
       // Get upscale parameters
       const upscaleParams = getGenerationParameters('upscale');
       
-      // Get inspiration images if this was InspirationReference source
-      const inspirationImages = image.source === GenerationSource.InspirationReference
-        ? synthesisResult?.inspirationImages
-        : undefined;
+      // DO NOT pass inspiration images during upscaling - style is already baked into the generated image
+      // Passing 6 inspiration images at 1536x1536 causes CUDA OOM (7 total images = 1 base + 6 inspiration)
+      // The prompt already contains style/material cues from the inspiration analysis
+      const inspirationImages = undefined;
       
       // Get seed from image parameters
       const seed = image.parameters?.seed || image.parameters?.generation_info?.seed || 42;

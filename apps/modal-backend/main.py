@@ -488,72 +488,85 @@ class Flux2Model:
 
     @modal.method()
     def upscale_image(self, image_bytes: bytes, target_size: int = 1024, seed: int = None, prompt: str = None, inspiration_images_bytes: Optional[List[bytes]] = None) -> dict:
-        """Upscale a selected preview image to full resolution"""
+        """Upscale a selected preview image to full resolution - NO inspiration images, only the selected image"""
         try:
             print(f"Upscaling image to {target_size}x{target_size} with seed {seed}...")
             
             # Ensure target_size is multiple of 16 (FLUX 2 requirement)
             target_size = (target_size // 16) * 16
             
-            # Load and prepare base image
-            init_image = Image.open(BytesIO(image_bytes)).convert('RGB').resize((target_size, target_size))
-            print(f"Loaded base image for upscale, resized to: {init_image.size}")
+            # Aggressive memory cleanup before upscaling
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                torch.cuda.ipc_collect()
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
             
-            # Prepare image list for FLUX 2 (supports multi-reference)
-            image_list = [init_image]
+            # Load the original image first (before resizing)
+            original_image = Image.open(BytesIO(image_bytes)).convert('RGB')
+            original_size = original_image.size
+            print(f"Loaded original image, size: {original_size}")
             
-            # Add inspiration images if provided (for multi-reference editing)
-            if inspiration_images_bytes:
-                print(f"Adding {len(inspiration_images_bytes)} inspiration images for multi-reference editing")
-                for i, insp_bytes in enumerate(inspiration_images_bytes[:6]):  # FLUX 2 dev supports up to 6 reference images
-                    try:
-                        insp_img = Image.open(BytesIO(insp_bytes)).convert('RGB')
-                        # Resize to match target size
-                        insp_img = insp_img.resize((target_size, target_size))
-                        image_list.append(insp_img)
-                        print(f"Loaded inspiration image {i+1}, size: {insp_img.size}")
-                    except Exception as e:
-                        print(f"Failed to load inspiration image {i+1}: {e}")
-                        # Continue with other images
-                print(f"Total images for multi-reference: {len(image_list)}")
+            # Simple resize using high-quality Lanczos resampling
+            # This preserves the image structure without generation
+            upscaled_image = original_image.resize((target_size, target_size), Image.Resampling.LANCZOS)
+            print(f"Upscaled image using Lanczos resampling to: {upscaled_image.size}")
             
-            # Set seed for reproducibility
+            # Set seed for reproducibility (if we do any enhancement)
             if seed is not None:
                 torch.manual_seed(seed)
                 if torch.cuda.is_available():
                     torch.cuda.manual_seed(seed)
             else:
-                # Use fixed seed for consistency
                 seed = self.seed
                 torch.manual_seed(seed)
                 if torch.cuda.is_available():
                     torch.cuda.manual_seed(seed)
             
-            # Generate upscaled image with FLUX 2 (full quality settings)
-            print(f"Running FLUX 2 Dev upscale generation ({target_size}x{target_size}, 35 steps) with {len(image_list)} reference image(s)...")
+            # Optional: Light enhancement pass with very few steps to improve quality
+            # Skip image-to-image if original is already close to target size
+            skip_generation = abs(original_size[0] - target_size) < 200
             
-            # Clear CUDA cache before generation to prevent OOM
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            
-            with torch.inference_mode():
-                result = self.pipe(
-                    prompt=prompt or "High quality interior design",
-                    image=image_list,  # FLUX 2 accepts list of images for multi-reference
-                    guidance_scale=4.5,  # BFL recommended default
-                    num_inference_steps=35,  # Full steps for quality
-                    output_type="pil",
-                    generator=torch.Generator(device=self.device).manual_seed(seed),
-                    num_images_per_prompt=1,
-                )
+            if skip_generation:
+                print("Original image size close to target, skipping image-to-image enhancement")
+                result_images = [upscaled_image]
+            else:
+                # Very light enhancement: minimal steps to preserve original
+                enhancement_steps = 10  # Very few steps to minimize changes
+                
+                print(f"Applying light enhancement ({enhancement_steps} steps) to improve quality...")
+                
+                # Final memory cleanup before generation
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+                
+                with torch.inference_mode():
+                    result = self.pipe(
+                        prompt=prompt or "Enhance image quality, preserve all details",
+                        image=upscaled_image,  # Single image - already upscaled
+                        guidance_scale=2.5,  # Very low guidance to minimize changes
+                        num_inference_steps=enhancement_steps,  # Minimal steps
+                        output_type="pil",
+                        generator=torch.Generator(device=self.device).manual_seed(seed),
+                        num_images_per_prompt=1,
+                    )
+                    result_images = result.images
             
             # Clear CUDA cache after generation
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                torch.cuda.ipc_collect()
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
             
             # Convert image to base64
             buffer = BytesIO()
-            result.images[0].save(buffer, format="PNG")
+            result_images[0].save(buffer, format="PNG")
             img_b64 = base64.b64encode(buffer.getvalue()).decode()
             
             # Calculate cost estimate (rough approximation - FLUX 2 is free for dev model)
@@ -563,21 +576,26 @@ class Flux2Model:
                 "image": img_b64,
                 "generation_info": {
                     "model": MODEL_NAME,
-                    "prompt": prompt[:200] if prompt else "High quality interior design",
-                    "guidance_scale": 4.5,
-                    "num_inference_steps": 35,
+                    "prompt": prompt[:200] if prompt else "Enhance image quality",
+                    "guidance_scale": 2.5 if not skip_generation else None,
+                    "num_inference_steps": 10 if not skip_generation else 0,
                     "width": target_size,
                     "height": target_size,
                     "seed": seed,
-                    "multi_reference": len(image_list) > 1,
-                    "reference_count": len(image_list),
-                    "mode": "upscale"
+                    "multi_reference": False,
+                    "reference_count": 1,
+                    "mode": "upscale",
+                    "method": "resize_lanczos" if skip_generation else "resize_lanczos+light_enhancement"
                 },
                 "cost_estimate": cost_estimate
             }
             
         except Exception as e:
             print(f"Error upscaling image: {str(e)}")
+            # Cleanup on error
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
             raise e
 
 # Gemma 3 4B-IT Model - MULTIMODAL MODEL WITH EXCELLENT POLISH SUPPORT
