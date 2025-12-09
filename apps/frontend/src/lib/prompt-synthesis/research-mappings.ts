@@ -277,6 +277,161 @@ export const BIGFIVE_STYLE_MAPPINGS: StyleMapping[] = [
     confidenceMultiplier: 0.8,
     description: "Moderate-High Openness + Low Neuroticism + Conscientiousness → confident, modern, balanced"
   },
+  {
+    id: "japandi_calm",
+    style: "japandi",
+    conditions: {
+      C2_Order: ">0.65",
+      O: "0.45-0.65",
+      N: "<0.55"
+    },
+    materials: ["light wood", "linen", "stone", "clean lines"],
+    complexity: 0.35,
+    researchBasis: "gosling2002",
+    confidenceMultiplier: 0.9,
+    description: "Order + moderate Openness + low Neuroticism → serene, minimal, natural"
+  },
+  {
+    id: "coastal_relaxed",
+    style: "coastal",
+    conditions: {
+      O2_Aesthetics: ">0.55",
+      N: "<0.5",
+      E: ">0.5"
+    },
+    materials: ["light wood", "rattan", "linen", "white and blue accents"],
+    complexity: 0.4,
+    researchBasis: "graham2017",
+    confidenceMultiplier: 0.85,
+    description: "Aesthetics + sociability + low tension → airy, beach-influenced"
+  },
+  {
+    id: "farmhouse_warm",
+    style: "farmhouse",
+    conditions: {
+      C: ">0.5",
+      A: ">0.5",
+      O: "<0.55"
+    },
+    materials: ["wood beams", "shiplap", "wrought iron", "cotton textiles"],
+    complexity: 0.45,
+    researchBasis: "nasar1989",
+    confidenceMultiplier: 0.8,
+    description: "Order + warmth + lower novelty → comfortable, homey farmhouse"
+  },
+  {
+    id: "mediterranean_breezy",
+    style: "mediterranean",
+    conditions: {
+      O: ">0.55",
+      E: ">0.5",
+      E1_Warmth: ">0.55"
+    },
+    materials: ["terracotta", "stone", "wrought iron", "plaster"],
+    complexity: 0.6,
+    researchBasis: "gosling2002",
+    confidenceMultiplier: 0.85,
+    description: "Openness + sociability + warmth → sunny, textural Mediterranean"
+  },
+  {
+    id: "art_deco_glam",
+    style: "art-deco",
+    conditions: {
+      O: ">0.6",
+      E: ">0.55",
+      C2_Order: ">0.5",
+      E5_ExcitementSeeking: ">0.55"
+    },
+    materials: ["brass", "lacquer", "geometric patterns", "marble"],
+    complexity: 0.7,
+    researchBasis: "whitfield1990",
+    confidenceMultiplier: 0.9,
+    description: "High Openness + Excitement + structure → bold, glamorous, geometric"
+  },
+  {
+    id: "rustic_natural",
+    style: "rustic",
+    conditions: {
+      O2_Aesthetics: ">0.5",
+      A: ">0.5",
+      N: "<0.6"
+    },
+    materials: ["reclaimed wood", "stone", "natural fibers", "forged metal"],
+    complexity: 0.45,
+    researchBasis: "graham2017",
+    confidenceMultiplier: 0.85,
+    description: "Nature-loving + warm + low tension → grounded, tactile rustic"
+  },
+  {
+    id: "traditional_refined",
+    style: "traditional",
+    conditions: {
+      C: ">0.6",
+      A: ">0.5",
+      N: "<0.6"
+    },
+    materials: ["dark wood", "classic textiles", "molding details", "symmetry"],
+    complexity: 0.5,
+    researchBasis: "nasar1989",
+    confidenceMultiplier: 0.8,
+    description: "Order + agreeableness + stability → refined, classic traditional"
+  },
+  {
+    id: "midcentury_modern",
+    style: "mid-century",
+    conditions: {
+      O: ">0.55",
+      C: ">0.45",
+      N: "<0.55"
+    },
+    materials: ["walnut", "tapered legs", "molded plastic", "brass accents"],
+    complexity: 0.45,
+    researchBasis: "gosling2002",
+    confidenceMultiplier: 0.85,
+    description: "Openness + light structure + calm → iconic mid-century modern"
+  },
+  {
+    id: "vintage_charm",
+    style: "vintage",
+    conditions: {
+      O: ">0.6",
+      A: ">0.5",
+      N: "<0.6"
+    },
+    materials: ["antiques", "patina metals", "patterned textiles", "curated decor"],
+    complexity: 0.55,
+    researchBasis: "graham2017",
+    confidenceMultiplier: 0.85,
+    description: "Curiosity + warmth + composure → collected, nostalgic vintage"
+  },
+  {
+    id: "zen_minimal",
+    style: "zen",
+    conditions: {
+      N: "<0.45",
+      O: ">0.5",
+      A6_TenderMindedness: ">0.55"
+    },
+    materials: ["bamboo", "stone", "washi textures", "low silhouettes"],
+    complexity: 0.25,
+    researchBasis: "graham2017",
+    confidenceMultiplier: 0.9,
+    description: "Calm + sensitivity → meditative, minimal zen"
+  },
+  {
+    id: "transitional_balance",
+    style: "transitional",
+    conditions: {
+      O: "0.4-0.65",
+      C: "0.45-0.65",
+      N: "<0.6"
+    },
+    materials: ["balanced wood/metal", "clean-lined upholstery", "muted palette", "soft accents"],
+    complexity: 0.5,
+    researchBasis: "nasar1989",
+    confidenceMultiplier: 0.8,
+    description: "Balanced openness/order → mix of traditional and modern in harmony"
+  },
   
   {
     id: "modern_classic",

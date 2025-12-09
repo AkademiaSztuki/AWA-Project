@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
@@ -8,8 +8,9 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { supabase } from '@/lib/supabase';
-import { getUserHouseholds, saveHousehold } from '@/lib/supabase-deep-personalization';
+import { supabase, fetchLatestSessionSnapshot, DISABLE_SESSION_SYNC } from '@/lib/supabase';
+import { getUserHouseholds, saveHousehold, getCompletionStatus } from '@/lib/supabase-deep-personalization';
+import { fetchSpacesWithImages, toggleSpaceImageFavorite } from '@/lib/remote-spaces';
 import { 
   Home, 
   Plus, 
@@ -24,13 +25,13 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import {
-  VisualDNASection,
-  ExplicitPreferencesSection,
+  PreferencesOverviewSection,
   CoreNeedsSection,
   RoomAnalysisSection,
   InspirationsPreviewSection,
   GenerationStatsSection
 } from '@/components/dashboard/ProfileSections';
+import { CompletionStatus } from '@/types/deep-personalization';
 
 interface Space {
   id: string;
@@ -46,6 +47,7 @@ interface SpaceImage {
   url: string;
   type: 'generated' | 'inspiration';
   addedAt: string;
+  isFavorite?: boolean;
   thumbnailUrl?: string;
   tags?: string[];
 }
@@ -65,16 +67,70 @@ export function UserDashboard() {
   const { language } = useLanguage();
   
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [remoteSession, setRemoteSession] = useState<any>(null);
+  const [completionStatus, setCompletionStatus] = useState<CompletionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  
+  const extractUrl = useCallback((item: any): string | null => {
+    if (!item) return null;
+    if (typeof item === 'string') {
+      return item.startsWith('data:') ? item : `data:image/png;base64,${item}`;
+    }
+    if (item.url) return item.url;
+    if (item.imageBase64) return item.imageBase64;
+    if (item.image) return item.image;
+    if (item.base64) return item.base64.startsWith('data:') ? item.base64 : `data:image/png;base64,${item.base64}`;
+    if (item.previewUrl) return item.previewUrl;
+    if (item.thumbnailUrl) return item.thumbnailUrl;
+    return null;
+  }, []);
+
+  const allGeneratedImages = useMemo(() => {
+    const generatedFromSpaces = spaces.flatMap(space =>
+      (space.images || [])
+        .filter(img => img.type === 'generated')
+        .map(img => ({ ...img }))
+    );
+
+    const seen = new Set<string>();
+    return generatedFromSpaces.filter((img: any) => {
+      const url = extractUrl(img);
+      if (!url || seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    });
+  }, [spaces, extractUrl]);
+
+  const handleToggleFavorite = useCallback(async (imageId?: string, imageUrl?: string) => {
+    if (!imageUrl && !imageId) return;
+    const userHash = (sessionData as any)?.userHash;
+    // Optimistic update
+    const updatedSpaces = spaces.map(space => ({
+      ...space,
+      images: (space.images || []).map(img =>
+        (img.id === imageId || img.url === imageUrl)
+          ? { ...img, isFavorite: !img.isFavorite }
+          : img
+      )
+    }));
+    setSpaces(updatedSpaces);
+    updateSessionData({ spaces: updatedSpaces } as any);
+
+    if (userHash && imageId) {
+      await toggleSpaceImageFavorite(userHash, imageId, !!updatedSpaces.flatMap(s => s.images).find(i => i.id === imageId)?.isFavorite);
+    }
+  }, [spaces, sessionData, updateSessionData]);
   
 
   useEffect(() => {
     loadUserData();
-  }, [sessionData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionData?.userHash]);
 
   const loadUserData = async () => {
     try {
+      setIsLoading(true);
       // Try to get userHash from multiple sources
       let userHash = sessionData?.userHash;
       
@@ -92,97 +148,82 @@ export function UserDashboard() {
 
       console.log('[Dashboard] Loading data for user:', userHash);
       
-      // Check if we have session data with spaces
+      // Pull freshest session snapshot from Supabase (used for completion flags)
+      if (!DISABLE_SESSION_SYNC) {
+      try {
+        const remote = await fetchLatestSessionSnapshot(userHash);
+        if (remote) {
+          setRemoteSession(remote);
+        }
+      } catch (e) {
+        console.warn('[Dashboard] Failed to load remote session snapshot', e);
+        }
+      }
+
+      // Completion status (RPC) – may fail on unauthenticated clients
+      try {
+        const status = await getCompletionStatus(userHash);
+        if (status) setCompletionStatus(status);
+      } catch (e) {
+        console.warn('[Dashboard] getCompletionStatus failed (likely unauthenticated):', e);
+      }
+
+      // Fetch spaces + images from Supabase (primary)
+      try {
+        const remoteSpaces = await fetchSpacesWithImages(userHash, 6, 0);
+        if (remoteSpaces && Array.isArray(remoteSpaces)) {
+          const mapped: Space[] = remoteSpaces.map((entry: any) => {
+            const s = entry.space || entry;
+            const imgs = (entry.images || []).map((img: any) => ({
+              id: img.id,
+              url: img.url,
+              type: img.type,
+              addedAt: img.created_at || img.added_at || img.addedAt || new Date().toISOString(),
+              isFavorite: img.is_favorite ?? img.isFavorite,
+              thumbnailUrl: img.thumbnail_url || img.thumbnailUrl,
+              tags: img.tags
+            }));
+            return {
+              id: s.id,
+              name: s.name,
+              type: s.type || 'personal',
+              images: imgs,
+              createdAt: s.created_at || s.createdAt,
+              updatedAt: s.updated_at || s.updatedAt
+            };
+          });
+          setSpaces(mapped);
+          // lightweight cache in session
+          updateSessionData({ spaces: mapped } as any);
+          setIsLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn('[Dashboard] fetchSpacesWithImages failed, fallback to local/session', e);
+      }
+
+      // Fallback: sessionData
       if (sessionData?.spaces && sessionData.spaces.length > 0) {
-        console.log('[Dashboard] Loaded from sessionData');
         setSpaces(sessionData.spaces);
         setIsLoading(false);
         return;
       }
       
-      // First try to load from localStorage for immediate display
+      // Fallback: localStorage
       const localSessionData = localStorage.getItem('aura_session');
-      console.log('[Dashboard] localStorage data:', localSessionData);
       if (localSessionData) {
         try {
           const parsed = JSON.parse(localSessionData);
-          console.log('[Dashboard] Parsed localStorage data:', parsed);
           if (parsed.spaces && parsed.spaces.length > 0) {
-            console.log('[Dashboard] Loaded from localStorage');
             setSpaces(parsed.spaces);
             setIsLoading(false);
-            // Continue with Supabase load in background
-          } else {
-            console.log('[Dashboard] No spaces in localStorage data');
-            setSpaces([]);
-            setIsLoading(false);
+            return;
           }
-        } catch (e) {
-          console.log('[Dashboard] Failed to parse localStorage data:', e);
-          setSpaces([]);
-          setIsLoading(false);
-        }
-      } else {
-        console.log('[Dashboard] No localStorage data found');
-        setSpaces([]);
-        setIsLoading(false);
+        } catch {}
       }
-      
-      // Try to load spaces from user profile metadata first
-      // Note: metadata column may not exist in all schemas, so we use '*' and check if metadata exists
-      const { data: profileData, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('user_hash', userHash)
-        .maybeSingle();
-      
-      if (!profileError && profileData) {
-        // Check if metadata exists and has spaces
-        if (profileData.metadata && (profileData.metadata as any).spaces) {
-          console.log('[Dashboard] Loaded spaces from user profile metadata');
-          const spacesFromMetadata = (profileData.metadata as any).spaces as Space[];
-          if (spacesFromMetadata && spacesFromMetadata.length > 0) {
-            setSpaces(spacesFromMetadata);
-            setIsLoading(false);
-            return; // Early return - we have spaces from metadata
-          }
-        }
-      } else if (profileError && profileError.code !== 'PGRST116') {
-        // Log non-404 errors (PGRST116 means no rows found, which is normal for new users)
-        console.warn('[Dashboard] Error loading profile metadata:', profileError);
-      }
-      
-      // Call Supabase function to get complete profile
-      const { data, error } = await supabase
-        .rpc('get_user_complete_profile', { p_user_hash: userHash });
-      
-      if (error) {
-        console.error('[Dashboard] Supabase error:', error);
-        // If we don't have localStorage data, show empty state
-        if (!localSessionData) {
+
           setSpaces([]);
-        }
-      } else if (data && data.spaces && data.spaces.length > 0) {
-        console.log('[Dashboard] Loaded profile data from Supabase:', data);
-        
-        // Transform Supabase data to UI format
-        const transformedSpaces: Space[] = (data.spaces || []).map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          type: s.type || 'personal',
-          images: s.images || [],
-          createdAt: s.created_at,
-          updatedAt: s.updated_at
-        }));
-        
-        setSpaces(transformedSpaces);
-      } else {
-        // No profile yet - empty state
-        console.log('[Dashboard] No profile data found in Supabase');
-        if (!localSessionData) {
-          setSpaces([]);
-        }
-      }
+      setIsLoading(false);
     } catch (error) {
       console.error('[Dashboard] Failed to load user data:', error);
       // Only set empty if we don't have localStorage data
@@ -247,6 +288,32 @@ export function UserDashboard() {
 
   const handleOpenSpace = (spaceId: string) => {
     router.push(`/space/${spaceId}`);
+  };
+
+  const handleDeleteInspiration = (inspiration: any) => {
+    const id = inspiration?.id;
+    const url = inspiration?.url || inspiration?.imageBase64 || inspiration?._imageUrl;
+    
+    const currentInspirations = (sessionData as any)?.inspirations || [];
+    const filteredInspirations = currentInspirations.filter((insp: any) => {
+      const matchId = id && insp.id === id;
+      const matchUrl = url && (insp.url === url || insp.imageBase64 === url || insp._imageUrl === url);
+      return !(matchId || matchUrl);
+    });
+
+    const spaces = (sessionData as any)?.spaces || [];
+    const updatedSpaces = spaces.map((space: any) => ({
+      ...space,
+      images: (space.images || []).filter((img: any) => {
+        if (img.type !== 'inspiration') return true;
+        const matchId = id && img.id === id;
+        const matchUrl = url && img.url === url;
+        return !(matchId || matchUrl);
+      })
+    }));
+
+    updateSessionData({ inspirations: filteredInspirations, spaces: updatedSpaces } as any);
+    setSpaces(updatedSpaces);
   };
 
 
@@ -366,16 +433,20 @@ export function UserDashboard() {
           </motion.div>
 
           {/* User Profile Overview */}
-          <ProfileOverview sessionData={sessionData} />
+          <ProfileOverview
+            sessionData={sessionData}
+            remoteSession={remoteSession}
+            completionStatus={completionStatus}
+          />
 
           {/* Big Five Results - Enhanced with details link */}
           <BigFiveResults userHash={(sessionData as any)?.userHash} />
 
-          {/* Visual DNA (Ukryte preferencje) */}
-          <VisualDNASection visualDNA={(sessionData as any)?.visualDNA} />
-
-          {/* Explicit Preferences Section */}
-          <ExplicitPreferencesSection sessionData={sessionData} />
+          {/* Połączone preferencje (ukryte + jawne) */}
+          <PreferencesOverviewSection
+            sessionData={sessionData}
+            visualDNA={(sessionData as any)?.visualDNA}
+          />
 
           {/* Core Needs / Laddering (opcjonalne, ukryte jeśli nie ma danych) */}
           {(sessionData as any)?.ladderResults && (
@@ -420,13 +491,15 @@ export function UserDashboard() {
                 router.push(`/space/${spaces[0].id}?filter=inspiration`);
               }
             }}
-            onAddInspirations={() => router.push('/flow/inspirations')}
+            onAddInspirations={() => router.push('/flow/inspirations?from=dashboard')}
+            onDeleteInspiration={handleDeleteInspiration}
           />
 
           {/* Generation Stats */}
           <GenerationStatsSection 
             generations={(sessionData as any)?.generations || []}
-            generatedImages={(sessionData as any)?.generatedImages}
+            generatedImages={allGeneratedImages}
+            onToggleFavorite={(imageId, imageUrl) => handleToggleFavorite(imageId, imageUrl)}
           />
 
           {/* Spaces List */}
@@ -480,21 +553,29 @@ export function UserDashboard() {
 
 // ========== SUB-COMPONENTS ==========
 
-function ProfileOverview({ sessionData }: { sessionData: any }) {
+function ProfileOverview({ sessionData, remoteSession, completionStatus }: { sessionData: any; remoteSession: any; completionStatus: CompletionStatus | null }) {
   const { language } = useLanguage();
   const router = useRouter();
 
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
 
-  // Calculate profile completion
-  const hasVisualDNA = !!sessionData?.visualDNA; // Ukryte preferencje (z Tinder)
-  const hasExplicitPreferences = !!(sessionData?.colorsAndMaterials?.selectedStyle || 
-                                    sessionData?.colorsAndMaterials?.selectedPalette ||
-                                    sessionData?.sensoryPreferences?.light ||
-                                    sessionData?.sensoryPreferences?.texture); // Jawne preferencje (z kwestionariuszy)
-  const hasBigFive = !!sessionData?.bigFive;
-  const hasInspirations = sessionData?.inspirations?.length > 0;
-  const hasRoom = !!sessionData?.roomImage;
+  const source = remoteSession || sessionData;
+
+  // Calculate profile completion (prefer remote snapshot / RPC)
+  const hasVisualDNA =
+    !!source?.visualDNA ||
+    !!completionStatus?.coreProfileComplete;
+
+  const hasExplicitPreferences =
+    !!(source?.colorsAndMaterials?.selectedStyle ||
+      source?.colorsAndMaterials?.selectedPalette ||
+      source?.sensoryPreferences?.light ||
+      source?.sensoryPreferences?.texture ||
+      completionStatus?.coreProfileComplete);
+
+  const hasBigFive = !!source?.bigFive || !!completionStatus?.coreProfileComplete;
+  const hasInspirations = (source?.inspirations?.length || 0) > 0;
+  const hasRoom = !!source?.roomImage || !!source?.currentRoomId || !!(completionStatus?.roomCount && completionStatus.roomCount > 0);
 
   const completedItems = [hasVisualDNA, hasExplicitPreferences, hasBigFive, hasInspirations, hasRoom].filter(Boolean).length;
   const totalItems = 5;

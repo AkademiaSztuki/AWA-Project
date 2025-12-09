@@ -4,6 +4,10 @@ import { Database } from '@/types/supabase';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+// Allow turning off full session sync to avoid RLS/CORS loops.
+// By default we disable it (value "1"), set NEXT_PUBLIC_DISABLE_SESSION_SYNC=0 to re-enable.
+export const DISABLE_SESSION_SYNC = (process.env.NEXT_PUBLIC_DISABLE_SESSION_SYNC ?? '1') !== '0';
+
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
 // Funkcje pomocnicze do logowania danych badawczych
@@ -161,6 +165,7 @@ export const saveRegenerationEvent = async (
 };
 
 export const saveFullSessionToSupabase = async (sessionData: any) => {
+  if (DISABLE_SESSION_SYNC) return true;
   if (!sessionData?.userHash) return;
   const { error } = await supabase
     .from('sessions')

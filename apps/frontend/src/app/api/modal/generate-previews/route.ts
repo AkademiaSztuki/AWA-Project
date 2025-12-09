@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const MODAL_API_URL = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+const MODAL_API_URL = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
 
 // Helper to convert image URL to base64
 async function urlToBase64(url: string): Promise<string> {

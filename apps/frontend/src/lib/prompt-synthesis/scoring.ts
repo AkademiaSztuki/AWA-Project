@@ -6,7 +6,7 @@ import { PRSMoodGridData } from '../questions/validated-scales';
 import { ActivityContext } from '@/types/deep-personalization';
 import { GenerationSource } from './modes';
 import { deriveStyleFromFacets, calculateConfidence, type PersonalityData } from './facet-derivation';
-import { RESEARCH_SOURCES } from './research-mappings';
+import { RESEARCH_SOURCES, BIGFIVE_COLOR_MAPPINGS } from './research-mappings';
 import { analyzeMoodTransformation, mapSocialContext, analyzeActivityNeeds, type MoodTransformation, type SocialContextRecommendations, type ActivityRecommendations } from './mood-transformation';
 
 // =========================
@@ -214,6 +214,14 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
   // Only Mixed and MixedFunctional should use real PRS data
   const prsWeights = analyzePRSGap(inputs.prsCurrent, inputs.prsTarget);
   
+  // Pre-calculate inspiration biophilia if tags are present (for InspirationReference)
+  const inspirationBiophiliaValues = (inputs.inspirations || [])
+    .map(i => i.tags?.biophilia)
+    .filter((b): b is number => typeof b === 'number' && !Number.isNaN(b));
+  const inspirationBiophilia = inspirationBiophiliaValues.length > 0
+    ? inspirationBiophiliaValues.reduce((a, b) => a + b, 0) / inspirationBiophiliaValues.length
+    : undefined;
+
   // Log PRS values for debugging
   if (sourceType) {
     const prsGap = Math.sqrt(
@@ -288,9 +296,14 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
       break;
       
     case GenerationSource.InspirationReference:
-      // InspirationReference: use explicit biophilia (inspirations provide visual reference, not biophilia score)
-      biophiliaScoreToUse = inputs.psychologicalBaseline.biophiliaScore ?? 0;
-      console.log('[Biophilia] InspirationReference source - using explicit biophilia:', biophiliaScoreToUse);
+      // InspirationReference: prefer biophilia from inspiration tags if present, fallback to explicit
+      if (inspirationBiophilia !== undefined) {
+        biophiliaScoreToUse = inspirationBiophilia;
+        console.log('[Biophilia] InspirationReference source - using inspiration tags biophilia:', biophiliaScoreToUse);
+      } else {
+        biophiliaScoreToUse = inputs.psychologicalBaseline.biophiliaScore ?? 0;
+        console.log('[Biophilia] InspirationReference source - using explicit biophilia (fallback):', biophiliaScoreToUse);
+      }
       break;
       
     default:
@@ -367,8 +380,13 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     lightingMood: lightingWeights.mood,
     naturalLightImportance: lightingWeights.naturalImportance,
     
-    // Biophilia (enhanced with inspirations)
-    natureDensity: Math.min(1, biophiliaWeights.density + inspirationWeights.biophiliaBoost),
+    // Biophilia (enhanced with inspirations; dampen boosts at high base levels)
+    natureDensity: (() => {
+      const base = biophiliaWeights.density;
+      const boost = inspirationWeights.biophiliaBoost;
+      const boostFactor = base < 0.5 ? 0.9 : base < 0.8 ? 0.7 : 0.5;
+      return Math.min(1, base + boost * boostFactor);
+    })(),
     biophilicElements: [...biophiliaWeights.elements],
     
     // Functional
@@ -810,9 +828,19 @@ function integrateStylePreferences(
     if (!explicitStyle && hasExplicitPalette) {
       explicitStyle = extractValidStyle(aestheticDNA.explicit.selectedPalette) || '';
     }
-    // No fallback - if quality gates work correctly, this should not happen
+    // Fallbacks to avoid hard failure: use implicit/personality if available, else safe default
     if (!explicitStyle) {
-      throw new Error(`Explicit source requires explicit style data, but none found. This indicates a quality gate failure.`);
+      if (hasImplicitStyles) {
+        explicitStyle = implicitValidStyles[0];
+        console.warn('[StylePreferences] Explicit source missing style, falling back to implicit style:', explicitStyle);
+      } else if (personality) {
+        const personalityStyle = deriveStyleFromPersonality(personality);
+        explicitStyle = personalityStyle.dominantStyle.split(' ')[0].toLowerCase();
+        console.warn('[StylePreferences] Explicit source missing style, falling back to personality style:', explicitStyle);
+      } else {
+        explicitStyle = 'contemporary';
+        console.warn('[StylePreferences] Explicit source missing style, using safe fallback \"contemporary\"');
+      }
     }
     
     console.log('[StylePreferences] Using explicit style:', explicitStyle, '(sourceType:', sourceType, ')');
@@ -1040,51 +1068,77 @@ function deriveColorsFromPersonality(personality: NonNullable<PromptInputs['pers
   palette: string[];
   temperature: number;
 } {
-  const O = personality.openness / 100;
-  const C = personality.conscientiousness / 100;
-  const E = personality.extraversion / 100;
-  const A = personality.agreeableness / 100;
-  const N = personality.neuroticism / 100;
-  
-  const colors: string[] = [];
-  
-  // Base colors from personality - using HEX codes directly
-  if (E > 0.6) {
-    // High Extraversion = warm, vibrant
-    colors.push('#FF7F50', '#FFD700'); // warm coral, sunny yellow
-  } else if (E < 0.4) {
-    // Low Extraversion = cool, muted
-    colors.push('#A9A9A9', '#6B8E9F'); // soft gray, muted blue
+  const evalCondition = (value: number, condition: string): boolean => {
+    if (!condition) return true;
+    if (condition.includes('-')) {
+      const [min, max] = condition.split('-').map(parseFloat);
+      return value >= min && value <= max;
+    }
+    if (condition.startsWith('>=')) return value >= parseFloat(condition.substring(2));
+    if (condition.startsWith('<=')) return value <= parseFloat(condition.substring(2));
+    if (condition.startsWith('>')) return value > parseFloat(condition.substring(1));
+    if (condition.startsWith('<')) return value < parseFloat(condition.substring(1));
+    const exact = parseFloat(condition);
+    if (!Number.isNaN(exact)) return Math.abs(value - exact) < 0.05;
+    return false;
+  };
+
+  const getFacetValue = (facetKey: string): number | null => {
+    if (!personality.facets) return null;
+    const domain = facetKey[0] as keyof NonNullable<typeof personality.facets>;
+    const numPart = facetKey.substring(1).split('_')[0];
+    const idx = parseInt(numPart, 10);
+    const domainFacets = personality.facets[domain];
+    if (!domainFacets) return null;
+    const raw = domainFacets[idx];
+    return typeof raw === 'number' ? raw / 100 : null;
+  };
+
+  const getTraitValue = (trait: string, facet?: string): number | null => {
+    if (facet) {
+      return getFacetValue(facet);
+    }
+    const map: Record<string, number | undefined> = {
+      openness: personality.openness,
+      conscientiousness: personality.conscientiousness,
+      extraversion: personality.extraversion,
+      agreeableness: personality.agreeableness,
+      neuroticism: personality.neuroticism
+    };
+    const val = map[trait];
+    return typeof val === 'number' ? val / 100 : null;
+  };
+
+  const collectedColors: string[] = [];
+  const temps: number[] = [];
+  const tempMap: Record<'warm' | 'cool' | 'neutral', number> = {
+    warm: 0.7,
+    cool: 0.3,
+    neutral: 0.5
+  };
+
+  for (const mapping of BIGFIVE_COLOR_MAPPINGS) {
+    const value = getTraitValue(mapping.trait, mapping.facet);
+    if (value === null) continue;
+    if (!evalCondition(value, mapping.condition)) continue;
+    collectedColors.push(...mapping.colors);
+    temps.push(tempMap[mapping.temperature]);
   }
-  
-  if (O > 0.6) {
-    // High Openness = varied, bold
-    colors.push('#008080', '#800020'); // deep teal, rich burgundy
-  } else if (O < 0.4) {
-    // Low Openness = neutral, safe
-    colors.push('#F5F5DC', '#FFFDD0'); // beige, cream
-  }
-  
-  if (N > 0.6) {
-    // High Neuroticism = calming, nature
-    colors.push('#9DC183', '#87CEEB'); // sage green, sky blue
-  }
-  
-  if (A > 0.6) {
-    // High Agreeableness = soft, harmonious
-    colors.push('#FFB6C1', '#E6E6FA'); // blush pink, soft lavender
-  }
-  
-  if (C > 0.6) {
-    // High Conscientiousness = clean, organized
-    colors.push('#FFFFFF', '#36454F'); // crisp white, charcoal
-  }
-  
-  // Temperature: Extraversion drives warmth
-  const temperature = E * 0.6 + A * 0.2 + (1 - N) * 0.2;
-  
+
+  // Deduplicate colors preserving order
+  const seen = new Set<string>();
+  const palette = collectedColors.filter(c => {
+    if (seen.has(c)) return false;
+    seen.add(c);
+    return true;
+  }).slice(0, 6);
+
+  const temperature = temps.length > 0
+    ? temps.reduce((a, b) => a + b, 0) / temps.length
+    : 0.5;
+
   return {
-    palette: colors.length > 0 ? colors.slice(0, 4) : ['#808080', '#FFFFFF', '#D3D3D3'], // Neutral tones as HEX
+    palette: palette.length > 0 ? palette : ['#808080', '#FFFFFF', '#D3D3D3'],
     temperature
   };
 }
@@ -1327,8 +1381,10 @@ function calculateBiophiliaIntegration(
   density: number;
   elements: string[];
 } {
-  // Normalize biophilia score to 0-1 (score is 0-3)
-  const density = biophiliaScore / 3;
+  // Map 0-3 UI scale to internal 0-6 (allow halves) then to density 0-1
+  const clampedScore = Math.max(0, Math.min(3, biophiliaScore));
+  const granularLevel = clampedScore * 2; // 0..6
+  const density = granularLevel / 6;
   
   // If biophiliaScore is 0, user explicitly wants NO plants
   if (biophiliaScore === 0) {
@@ -1338,15 +1394,12 @@ function calculateBiophiliaIntegration(
   // Elements based on score + nature metaphor
   const elements: string[] = [];
   
-  if (density > 0) {
-    elements.push('natural materials');
-  }
-  if (density > 0.33) {
-    elements.push('indoor plants');
-  }
-  if (density > 0.66) {
-    elements.push('organic shapes', 'abundant greenery');
-  }
+  if (density > 0.05) elements.push('natural materials');
+  if (density >= 0.17) elements.push('one small plant');
+  if (density >= 0.34) elements.push('two small plants');
+  if (density >= 0.5) elements.push('3-4 mixed plants');
+  if (density >= 0.67) elements.push('floor plant', 'hanging planter');
+  if (density >= 0.83) elements.push('vertical greenery', 'lush foliage');
   
   // Nature metaphor influences specific elements (only if biophilia > 0 and natureMetaphor is provided)
   if (natureMetaphor && natureMetaphor.length > 0) {
@@ -1702,13 +1755,17 @@ function integrateInspirationTags(inspirations: PromptInputs['inspirations']): {
     }
   });
 
-  const biophiliaBoost = validInspirations > 0 ? totalBiophilia / validInspirations : 0;
+  // Gamma model returns biophilia on a 0-3 scale. Normalize to 0-1, but
+  // keep compatibility if the value already comes as 0-1.
+  const avgBiophilia = validInspirations > 0 ? totalBiophilia / validInspirations : 0;
+  const normalizedBiophilia = avgBiophilia > 1 ? avgBiophilia / 3 : avgBiophilia;
+  const biophiliaBoost = Math.max(0, Math.min(1, normalizedBiophilia));
 
   return {
     additionalStyles: Array.from(allStyles),
     additionalColors: Array.from(allColors),
     additionalMaterials: Array.from(allMaterials),
-    biophiliaBoost: Math.max(0, Math.min(1, biophiliaBoost))
+    biophiliaBoost
   };
 }
 

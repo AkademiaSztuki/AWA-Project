@@ -38,10 +38,12 @@ export const MusicTestButton: React.FC = () => {
 
   const musicPercentage = musicVolume * 100;
   const voicePercentage = voiceVolume * 100;
-  const thumbWidth = 48;
+  const thumbWidth = 16;
   const thumbHalf = thumbWidth / 2;
-  const musicLeftPosition = musicPercentage === 0 ? 0 : musicPercentage === 100 ? `calc(100% - ${thumbWidth}px)` : `calc(${musicPercentage}% - ${thumbHalf}px)`;
-  const voiceLeftPosition = voicePercentage === 0 ? 0 : voicePercentage === 100 ? `calc(100% - ${thumbWidth}px)` : `calc(${voicePercentage}% - ${thumbHalf}px)`;
+  const calcLeft = (pct: number) =>
+    pct === 0 ? 0 : pct === 100 ? `calc(100% - ${thumbWidth}px)` : `calc(${pct}% - ${thumbHalf}px)`;
+  const musicLeftPosition = calcLeft(musicPercentage);
+  const voiceLeftPosition = calcLeft(voicePercentage);
 
   const handleVoiceVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
@@ -66,10 +68,10 @@ export const MusicTestButton: React.FC = () => {
       <div className="flex items-center gap-3">
         {/* Główny przycisk */}
         <div
-          className="w-10 h-10 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full cursor-pointer select-none transition-all duration-300 hover:scale-110 shadow-lg flex items-center justify-center hover:bg-white/20"
+          className="w-10 h-10 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full cursor-pointer select-none transition-all duration-300 hover:scale-110 shadow-lg flex items-center justify-center hover:bg-white/20 text-graphite"
           onClick={togglePlay}
         >
-          <Volume2 className="w-5 h-5 text-graphite" />
+          <Volume2 className="w-5 h-5" />
         </div>
 
         {/* Panel kontroli głośności */}
@@ -77,7 +79,7 @@ export const MusicTestButton: React.FC = () => {
           <div className="absolute top-full right-0 pt-4 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
             <div
               style={{ width: 280 }}
-              className="flex flex-col gap-3 p-4 shadow-2xl bg-white/90 backdrop-blur-2xl border border-white/50 rounded-[20px]"
+              className="flex flex-col gap-3 p-4 shadow-2xl bg-[#c7b07a]/95 backdrop-blur-sm border border-white/25 ring-1 ring-gold/35 rounded-[20px]"
             >
               {/* Muzyka - górny rząd */}
               <div className="flex items-center gap-3">
@@ -92,7 +94,7 @@ export const MusicTestButton: React.FC = () => {
 
                 {/* Custom Glass Slider dla muzyki */}
                 <div className="flex-1 relative">
-                  <div className="relative w-full h-5 bg-gray-100/50 backdrop-blur-sm border border-white/60 shadow-inner rounded-full overflow-hidden">
+                  <div className="relative w-full h-5 bg-white/25 backdrop-blur-sm border border-white/30 shadow-inner rounded-full overflow-hidden">
                     {/* Track background */}
                     <div className="absolute inset-0 bg-black/5 rounded-full"></div>
                     {/* Progress track */}
@@ -137,16 +139,16 @@ export const MusicTestButton: React.FC = () => {
                     console.log('MusicTestButton: toggleVoiceEnabled button clicked');
                     toggleVoiceEnabled();
                   }}
-                  className="text-graphite hover:scale-110 transition-transform duration-200 flex-shrink-0"
+                  className="text-white hover:scale-110 transition-transform duration-200 flex-shrink-0"
                   title={voiceEnabled ? 'Wyłącz głos' : 'Włącz głos'}
                 >
-                  {voiceEnabled ? <MessageCircle className="w-5 h-5 text-graphite" /> : <MessageCircleOff className="w-5 h-5 text-silver-dark" />}
+                  {voiceEnabled ? <MessageCircle className="w-5 h-5" /> : <MessageCircleOff className="w-5 h-5 text-white/60" />}
                 </button>
 
                 {/* Custom Glass Slider dla głosu */}
                 <div className="flex-1 relative">
                   <div className="text-xs text-graphite mb-1 font-modern">Voice: {Math.round(voicePercentage)}%</div>
-                  <div className="relative w-full h-4 bg-gray-100/50 backdrop-blur-sm border border-white/60 shadow-inner rounded-full overflow-hidden">
+                  <div className="relative w-full h-4 bg-white/25 backdrop-blur-sm border border-white/30 shadow-inner rounded-full overflow-hidden">
                     {/* Track background */}
                     <div className="absolute inset-0 bg-black/5 rounded-full"></div>
                     {/* Progress track */}

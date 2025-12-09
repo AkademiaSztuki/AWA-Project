@@ -15,9 +15,12 @@ import {
   ChevronRight,
   Sparkles,
   Leaf,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
 import Image from 'next/image';
+import { getPaletteLabel } from '@/components/setup/paletteOptions';
+import { getStyleLabel } from '@/lib/questions/style-options';
 
 // Visual DNA Section
 export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
@@ -119,6 +122,184 @@ export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
             </div>
           </div>
         )}
+      </GlassCard>
+    </motion.div>
+  );
+}
+
+// Combined preferences overview (implicit + explicit in one card)
+export function PreferencesOverviewSection({
+  sessionData,
+  visualDNA
+}: {
+  sessionData: any;
+  visualDNA: any;
+}) {
+  const { language } = useLanguage();
+
+  const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
+
+  const colorsAndMaterials = sessionData?.colorsAndMaterials;
+  const sensoryPreferences = sessionData?.sensoryPreferences;
+  const semantic = sessionData?.semanticDifferential;
+
+  const implicitStyleRaw = visualDNA?.dominantStyle || visualDNA?.preferences?.styles?.[0];
+  const implicitStyleLabel = implicitStyleRaw ? getStyleLabel(implicitStyleRaw, language) : undefined;
+  const implicitPalette = visualDNA?.preferences?.colors || [];
+  const implicitMaterials = visualDNA?.preferences?.materials || [];
+  const implicitWarmth = visualDNA?.preferences?.warmth ?? visualDNA?.implicitScores?.warmth;
+  const implicitBrightness = visualDNA?.preferences?.brightness ?? visualDNA?.implicitScores?.brightness;
+  const implicitComplexity = visualDNA?.preferences?.complexity ?? visualDNA?.implicitScores?.complexity;
+
+  const explicitStyleLabel = colorsAndMaterials?.selectedStyle
+    ? getStyleLabel(colorsAndMaterials.selectedStyle, language)
+    : undefined;
+  const explicitPaletteLabel = colorsAndMaterials?.selectedPalette
+    ? getPaletteLabel(colorsAndMaterials.selectedPalette, language)
+    : undefined;
+  const explicitMaterials = colorsAndMaterials?.topMaterials || [];
+
+  const hasExplicit =
+    !!(explicitStyleLabel ||
+      explicitPaletteLabel ||
+      (explicitMaterials.length || 0) > 0 ||
+      sensoryPreferences ||
+      semantic);
+  const hasImplicit = Boolean(visualDNA);
+
+  if (!hasExplicit && !hasImplicit) return null;
+
+  const formatPercent = (value?: number) => {
+    if (value === undefined || value === null) return null;
+    return Math.round(Math.max(0, Math.min(1, value)) * 100);
+  };
+
+  const renderBar = (value?: number) => {
+    const pct = formatPercent(value);
+    if (pct === null) return <span className="text-silver-dark text-sm font-modern">—</span>;
+    return (
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-2 rounded-full bg-white/15 overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-gold to-champagne"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className="text-xs font-semibold text-gold">{pct}%</span>
+      </div>
+    );
+  };
+
+  const renderChips = (values?: string[]) => {
+    if (!values || values.length === 0) return <span className="text-silver-dark text-sm font-modern">—</span>;
+    return (
+      <div className="flex gap-2 flex-wrap">
+        {values.slice(0, 6).map((item, idx) => (
+          <span
+            key={`${item}-${idx}`}
+            className="px-3 py-1 rounded-full text-xs font-modern bg-white/15 text-graphite border border-white/10"
+          >
+            {item}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
+  const rows = [
+    {
+      id: 'style',
+      label: t('Styl', 'Style'),
+      implicitValue: implicitStyleLabel || implicitStyleRaw,
+      explicitValue: explicitStyleLabel
+    },
+    {
+      id: 'palette',
+      label: t('Paleta', 'Palette'),
+      implicitList: implicitPalette,
+      explicitList: explicitPaletteLabel ? [explicitPaletteLabel] : []
+    },
+    {
+      id: 'materials',
+      label: t('Materiały', 'Materials'),
+      implicitList: implicitMaterials,
+      explicitList: explicitMaterials
+    },
+    {
+      id: 'warmth',
+      label: t('Ciepło', 'Warmth'),
+      implicitValue: implicitWarmth,
+      explicitValue: semantic?.warmth,
+      type: 'bar'
+    },
+    {
+      id: 'brightness',
+      label: t('Jasność', 'Brightness'),
+      implicitValue: implicitBrightness,
+      explicitValue: semantic?.brightness,
+      type: 'bar'
+    },
+    {
+      id: 'complexity',
+      label: t('Złożoność', 'Complexity'),
+      implicitValue: implicitComplexity,
+      explicitValue: semantic?.complexity,
+      type: 'bar'
+    }
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="mb-6"
+    >
+      <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+              <Sparkles size={20} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-nasalization text-graphite">
+                {t('Preferencje – ukryte i jawne', 'Preferences – implicit & explicit')}
+              </h3>
+              <p className="text-sm text-silver-dark font-modern">
+                {t('W jednym miejscu: Tinder + świadome wybory', 'One place: swipe DNA + explicit choices')}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+          <div className="grid grid-cols-3 gap-3 px-4 py-3 text-xs uppercase tracking-[0.2em] text-silver-dark font-modern border-b border-white/10">
+            <span>{t('Kategoria', 'Category')}</span>
+            <span>{t('Ukryte (Tinder)', 'Implicit (swipe)')}</span>
+            <span>{t('Jawne (świadome)', 'Explicit (conscious)')}</span>
+          </div>
+          <div className="divide-y divide-white/10">
+            {rows.map((row) => (
+              <div key={row.id} className="grid grid-cols-3 gap-3 px-4 py-3 items-center">
+                <span className="text-sm font-modern text-silver-dark">{row.label}</span>
+                <div>
+                  {row.type === 'bar'
+                    ? renderBar(row.implicitValue as number | undefined)
+                    : row.implicitList
+                    ? renderChips(row.implicitList as string[])
+                    : renderChips(row.implicitValue ? [row.implicitValue as string] : [])}
+                </div>
+                <div>
+                  {row.type === 'bar'
+                    ? renderBar(row.explicitValue as number | undefined)
+                    : row.explicitList
+                    ? renderChips(row.explicitList as string[])
+                    : renderChips(row.explicitValue ? [row.explicitValue as string] : [])}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </GlassCard>
     </motion.div>
   );
@@ -415,11 +596,13 @@ function getImageUrl(item: any): string | null {
 export function InspirationsPreviewSection({ 
   inspirations, 
   onViewAll,
-  onAddInspirations 
+  onAddInspirations,
+  onDeleteInspiration
 }: { 
   inspirations: any[]; 
   onViewAll?: () => void;
   onAddInspirations?: () => void;
+  onDeleteInspiration?: (inspiration: any) => void;
 }) {
   const { language } = useLanguage();
   const [isExpanded, setIsExpanded] = React.useState(false);
@@ -551,6 +734,19 @@ export function InspirationsPreviewSection({
                   onError={() => handleImageError(insp._idx)}
                   unoptimized={insp._imageUrl?.startsWith('data:')}
                 />
+                
+                {onDeleteInspiration && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteInspiration(insp);
+                    }}
+                    className="absolute top-1 right-1 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 border border-white/20 flex items-center justify-center transition-colors"
+                    aria-label={t('Usuń inspirację', 'Delete inspiration')}
+                  >
+                    <Trash2 size={16} className="text-white" />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -601,7 +797,7 @@ export function InspirationsPreviewSection({
 }
 
 // Generation Stats Section with expandable images
-export function GenerationStatsSection({ generations, generatedImages }: { generations: any[]; generatedImages?: any[] }) {
+export function GenerationStatsSection({ generations, generatedImages, onToggleFavorite }: { generations: any[]; generatedImages?: any[]; onToggleFavorite?: (imageId?: string, imageUrl?: string) => void }) {
   const { language } = useLanguage();
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [imageErrors, setImageErrors] = React.useState<Set<number>>(new Set());
@@ -611,9 +807,9 @@ export function GenerationStatsSection({ generations, generatedImages }: { gener
   // Handle both string[] and object[] formats for generatedImages
   const normalizedImages = (generatedImages || []).map((img, idx) => {
     if (typeof img === 'string') {
-      return { _idx: idx, _imageUrl: img.startsWith('data:') ? img : `data:image/png;base64,${img}` };
+      return { _idx: idx, _imageUrl: img.startsWith('data:') ? img : `data:image/png;base64,${img}`, _isFavorite: false, _id: undefined };
     }
-    return { _idx: idx, _imageUrl: getImageUrl(img) };
+    return { _idx: idx, _imageUrl: getImageUrl(img), _isFavorite: !!(img as any)?.isFavorite, _id: (img as any)?.id };
   }).filter(img => img._imageUrl !== null);
   
   const totalImages = normalizedImages.length;
@@ -688,6 +884,22 @@ export function GenerationStatsSection({ generations, generatedImages }: { gener
                     onError={() => handleImageError(img._idx)}
                     unoptimized={img._imageUrl?.startsWith('data:')}
                   />
+                  {onToggleFavorite && (
+                    <button
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/35 hover:bg-black/50 border border-white/20 flex items-center justify-center transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleFavorite(img._id, img._imageUrl!);
+                      }}
+                      aria-label={img._isFavorite ? 'Unfavorite' : 'Favorite'}
+                    >
+                      <Heart
+                        size={16}
+                        className={img._isFavorite ? 'text-gold' : 'text-white'}
+                        fill={img._isFavorite ? '#E2B66B' : 'none'}
+                      />
+                    </button>
+                  )}
                 </div>
               );
             })}

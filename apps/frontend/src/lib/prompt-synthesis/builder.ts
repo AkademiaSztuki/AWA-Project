@@ -239,30 +239,14 @@ function buildLightingPhrase(weights: PromptWeights): string {
 }
 
 function buildBiophiliaPhrase(weights: PromptWeights): string {
-  if (weights.natureDensity < 0.1) {
-    return ''; // No nature elements
+  const descriptor = getBiophiliaDescriptors(weights.natureDensity, weights.biophilicElements);
+  if (descriptor.tier === 'none') return '';
+
+  const extraElements = descriptor.naturalElements.slice(0, 2);
+  if (extraElements.length > 0) {
+    return `${descriptor.shortPhrase}, including ${extraElements.join(' and ')}`;
   }
-  
-  const phrases: string[] = [];
-  
-  // Density-based base phrase
-  if (weights.natureDensity > 0.75) {
-    phrases.push('abundant natural elements');
-  } else if (weights.natureDensity > 0.5) {
-    phrases.push('significant natural presence');
-  } else if (weights.natureDensity > 0.25) {
-    phrases.push('subtle natural accents');
-  } else {
-    phrases.push('minimal natural touches');
-  }
-  
-  // Specific elements
-  if (weights.biophilicElements.length > 0) {
-    const elements = weights.biophilicElements.slice(0, 2).join(' and ');
-    phrases.push(`including ${elements}`);
-  }
-  
-  return phrases.join(', ');
+  return descriptor.shortPhrase;
 }
 
 function buildFunctionalPhrase(weights: PromptWeights, roomType: string): string {
@@ -612,19 +596,99 @@ function getLightingDescription(lightingMood: string, naturalLightImportance: nu
 /**
  * Gets biophilia description
  */
-function getBiophiliaDescription(natureDensity: number, elements: string[]): string {
-  if (natureDensity < 0.1) {
-    return 'minimal natural elements';
-  }
-  
-  const level = Math.round(natureDensity * 3); // 0-3
-  const levelDesc = level === 3 ? 'abundant' : level === 2 ? 'moderate' : level === 1 ? 'subtle' : 'minimal';
-  
-  if (elements.length > 0) {
-    return `${levelDesc} natural elements including ${elements.slice(0, 2).join(' and ')}`;
-  }
-  
-  return `${levelDesc} natural elements`;
+function getBiophiliaDescriptors(
+  natureDensity: number,
+  elements: string[]
+): {
+  tier: 'none' | 'minimal' | 'subtle' | 'light' | 'moderate' | 'abundant' | 'lush';
+  description: string;
+  plantDensity: string;
+  naturalElements: string[];
+  shortPhrase: string;
+} {
+  const d = Math.max(0, Math.min(1, natureDensity));
+
+  type TierSpec = {
+    max: number;
+    tier: 'none' | 'minimal' | 'subtle' | 'light' | 'moderate' | 'abundant' | 'lush';
+    plantDensity: string;
+    baseElements: string[];
+    shortPhrase: string;
+    description: string;
+  };
+
+  const tiers: TierSpec[] = [
+    {
+      max: 0.05,
+      tier: 'none',
+      plantDensity: 'no plants',
+      baseElements: [],
+      shortPhrase: 'no plants or greenery',
+      description: 'no plants or greenery - clean, plant-free space'
+    },
+    {
+      max: 0.17, // ~1/6
+      tier: 'minimal',
+      plantDensity: 'minimal plants',
+      baseElements: ['one tiny plant'],
+      shortPhrase: 'minimal natural touches (1 tiny plant)',
+      description: 'minimal natural touches - one tiny potted plant on a shelf'
+    },
+    {
+      max: 0.34, // ~2/6
+      tier: 'subtle',
+      plantDensity: 'few plants',
+      baseElements: ['two small plants', 'light wood'],
+      shortPhrase: 'subtle natural accents (2 small plants)',
+      description: 'subtle natural accents - 2 small plants and light wood detail'
+    },
+    {
+      max: 0.5, // ~3/6
+      tier: 'light',
+      plantDensity: 'several plants',
+      baseElements: ['3-4 small/medium plants', 'natural materials'],
+      shortPhrase: 'natural presence (3-4 small/medium plants)',
+      description: 'natural presence - 3-4 small/medium plants, natural materials'
+    },
+    {
+      max: 0.67, // ~4/6
+      tier: 'moderate',
+      plantDensity: 'many plants',
+      baseElements: ['4-6 mixed plants', 'rattan', 'linen', 'wood'],
+      shortPhrase: 'moderate greenery (4-6 mixed plants)',
+      description: 'moderate greenery - 4-6 mixed plants, visible natural textures'
+    },
+    {
+      max: 0.83, // ~5/6
+      tier: 'abundant',
+      plantDensity: 'abundant plants',
+      baseElements: ['6-8 plants', 'one floor plant', 'one hanging planter', 'natural textures'],
+      shortPhrase: 'abundant greenery (floor + hanging planters)',
+      description: 'abundant greenery - floor plant plus hanging planter, 6-8 plants total'
+    },
+    {
+      max: 1.0,
+      tier: 'lush',
+      plantDensity: 'jungle-like',
+      baseElements: ['8-12 plants', 'large floor plants', 'vertical greenery', 'botanical atmosphere'],
+      shortPhrase: 'lush indoor jungle (8-12 plants)',
+      description: 'lush indoor jungle - many large plants, vertical green accents'
+    }
+  ];
+
+  const tier = tiers.find(t => d <= t.max) || tiers[tiers.length - 1];
+
+  const mergedElements = Array.from(
+    new Set([...(tier.baseElements || []), ...(elements || [])])
+  ).slice(0, 5);
+
+  return {
+    tier: tier.tier,
+    description: tier.description,
+    plantDensity: tier.plantDensity,
+    naturalElements: mergedElements,
+    shortPhrase: tier.shortPhrase
+  };
 }
 
 /**
@@ -1138,19 +1202,6 @@ export function buildFlux2Prompt(
     styleDescription = styleOption ? styleOption.description : '';
   }
   
-  // For InspirationReference, use tags from inspirations (handled in index.ts)
-  // This function should not be called for InspirationReference, but if it is, return minimal prompt
-  if (sourceType === GenerationSource.InspirationReference) {
-    const promptJson = {
-      scene: `${roomName} interior design transformation`,
-      instruction: "Transform using specific style elements from reference images while preserving all architectural structure - walls, windows, doors, ceiling, floor positions, and perspective must remain exactly as in the input image",
-      reference_usage: "Apply concrete style, colors, and materials from the analyzed inspiration images",
-      preserve: ["walls", "windows", "doors", "ceiling", "floor layout", "room perspective", "architectural elements"],
-      photography: "professional interior photography, high quality"
-    };
-    return JSON.stringify(promptJson, null, 2);
-  }
-  
   // Mood determination - differentiate by source type
   const isMixed = sourceType === GenerationSource.Mixed || sourceType === GenerationSource.MixedFunctional;
   const isMixedFunctional = sourceType === GenerationSource.MixedFunctional;
@@ -1259,49 +1310,15 @@ export function buildFlux2Prompt(
   }
   
   // Biophilia - convert numeric level to descriptive text for FLUX.2
-  const biophiliaLevel = weights.natureDensity;
-  const biophiliaElements = weights.biophilicElements?.slice(0, 4) || [];
-  
-  let biophiliaDescription: string;
-  let plantDensity: string;
-  let naturalElements: string[];
-  
-  if (biophiliaLevel <= 0.05) {
-    // User explicitly chose NO plants (biophiliaScore = 0)
-    biophiliaDescription = 'no plants or greenery - clean, plant-free space';
-    plantDensity = 'no plants';
-    naturalElements = [];
-  } else if (biophiliaLevel < 0.2) {
-    biophiliaDescription = 'minimal greenery - one small potted plant on a shelf';
-    plantDensity = 'minimal plants';
-    naturalElements = ['one small plant'];
-  } else if (biophiliaLevel < 0.4) {
-    biophiliaDescription = 'subtle natural touches - 2-3 small plants, natural wood accents';
-    plantDensity = 'few plants';
-    naturalElements = biophiliaElements.length > 0 ? biophiliaElements : ['small plants', 'natural wood'];
-  } else if (biophiliaLevel < 0.6) {
-    biophiliaDescription = 'moderate greenery - several medium plants, natural materials throughout';
-    plantDensity = 'several plants';
-    naturalElements = biophiliaElements.length > 0 ? biophiliaElements : ['medium plants', 'natural materials'];
-  } else if (biophiliaLevel < 0.8) {
-    biophiliaDescription = 'abundant plants - large floor plants, hanging planters, natural textures';
-    plantDensity = 'many plants';
-    naturalElements = biophiliaElements.length > 0 ? biophiliaElements : ['large plants', 'hanging planters'];
-  } else {
-    biophiliaDescription = 'lush indoor jungle - many large plants, vertical garden elements, botanical atmosphere';
-    plantDensity = 'abundant plants';
-    naturalElements = biophiliaElements.length > 0 ? biophiliaElements : ['large plants', 'vertical garden', 'botanical'];
-  }
-  
-  // Add specific elements if available and not already included
-  if (biophiliaElements.length > 0 && biophiliaLevel > 0.05) {
-    biophiliaDescription += `, featuring ${biophiliaElements.join(', ')}`;
-  }
+  const biophiliaDescriptor = getBiophiliaDescriptors(
+    weights.natureDensity,
+    weights.biophilicElements?.slice(0, 4) || []
+  );
   
   const biophilia = {
-    description: biophiliaDescription,
-    plant_density: plantDensity,
-    natural_elements: naturalElements
+    description: biophiliaDescriptor.description,
+    plant_density: biophiliaDescriptor.plantDensity,
+    natural_elements: biophiliaDescriptor.naturalElements
   };
   
   // Build style string - use enriched description if available
@@ -1321,7 +1338,7 @@ export function buildFlux2Prompt(
   
   const promptJson: any = {
     scene: `Complete ${roomName} redesign in ${sceneStyleLabel} style`,
-    instruction: `REMOVE all existing furniture, decorations, rugs, curtains, and accessories. REPLACE with new ${instructionStyleLabel} style furniture and decor. KEEP only the architectural shell: walls, windows, doors, ceiling structure, and floor.`,
+    instruction: `REMOVE furniture, decorations, rugs, curtains, and accessories. REPLACE with new ${instructionStyleLabel} style furniture and decor. KEEP the base image geometry EXACTLY: walls, windows, doors, ceiling structure, floor layout, and perspective must stay unchanged. Do NOT add or move openings.`,
     style: styleString,
     mood: mood,
     color_palette: uniqueColors,
@@ -1338,7 +1355,15 @@ export function buildFlux2Prompt(
     },
     biophilia: biophilia,
     remove: ["all existing furniture", "current rugs and carpets", "existing curtains", "current decorations", "old accessories"],
-    preserve: ["wall positions", "window locations", "door frames", "ceiling height", "floor material"],
+    preserve: [
+      "wall positions",
+      "window locations",
+      "door frames",
+      "ceiling height",
+      "floor material",
+      "room perspective",
+      "structural openings (doors/windows)"
+    ],
     photography: "professional interior photography, high resolution, realistic"
   };
   
@@ -1490,7 +1515,8 @@ export function buildFlux2Prompt(
 // =========================
 
 export {
-  type PromptComponents
+  type PromptComponents,
+  getBiophiliaDescriptors
   // buildFlux2Prompt is already exported above as a named export
 };
 

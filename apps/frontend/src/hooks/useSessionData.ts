@@ -1,20 +1,23 @@
 import { useSession } from './useSession';
 import { SessionData } from '@/types';
-import { saveFullSessionToSupabase } from '@/lib/supabase';
+import { saveFullSessionToSupabase, DISABLE_SESSION_SYNC } from '@/lib/supabase';
 
 interface UseSessionDataReturn {
   sessionData: SessionData;
   updateSessionData: (updates: Partial<SessionData>) => void;
   exportSessionData: () => string;
+  isInitialized: boolean;
 }
 
 export const useSessionData = (): UseSessionDataReturn => {
-  const { sessionData, updateSession } = useSession();
+  const { sessionData, updateSession, isInitialized } = useSession();
 
   const updateSessionData = (updates: Partial<SessionData>) => {
     updateSession(updates);
     // Zapisz całą sesję do supabase
+    if (!DISABLE_SESSION_SYNC) {
     setTimeout(() => saveFullSessionToSupabase({ ...sessionData, ...updates }), 0);
+    }
   };
 
   const exportSessionData = () => {
@@ -30,5 +33,6 @@ export const useSessionData = (): UseSessionDataReturn => {
     sessionData,
     updateSessionData,
     exportSessionData,
+    isInitialized,
   };
 }; 

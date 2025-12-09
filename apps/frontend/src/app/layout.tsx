@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { cookies, headers } from 'next/headers';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Inter, Audiowide, Exo_2 } from 'next/font/google';
 import './globals.css';
@@ -13,6 +14,7 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LayoutProvider } from '@/contexts/LayoutContext';
 import { GlassHeader } from '@/components/ui/GlassHeader';
+import type { Language } from '@/lib/questions/validated-scales';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const audiowide = Audiowide({ 
@@ -31,15 +33,40 @@ export const metadata: Metadata = {
   keywords: ['AI', 'Interior Design', 'Research', 'Akademia Sztuk Pięknych'],
 };
 
+const LANGUAGE_COOKIE = 'app_language';
+
+const isLanguage = (value: string | undefined | null): value is Language =>
+  value === 'pl' || value === 'en';
+
+function detectInitialLanguage(): Language {
+  const cookieStore = cookies();
+  const cookieLang = cookieStore.get(LANGUAGE_COOKIE)?.value;
+  if (isLanguage(cookieLang)) return cookieLang;
+
+  const headerList = headers();
+  const country =
+    headerList.get('x-vercel-ip-country') ??
+    headerList.get('cf-ipcountry') ??
+    headerList.get('x-country');
+  if (country?.toUpperCase() === 'PL') return 'pl';
+
+  const acceptLanguage = headerList.get('accept-language')?.toLowerCase() ?? '';
+  if (acceptLanguage.startsWith('pl')) return 'pl';
+
+  return 'en';
+}
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const initialLanguage = detectInitialLanguage();
+
   return (
-    <html lang="pl" className={`${inter.variable} ${audiowide.variable} ${exo2.variable}`}>
+    <html lang={initialLanguage} className={`${inter.variable} ${audiowide.variable} ${exo2.variable}`}>
       <body className="min-h-screen overflow-y-auto font-nasalization">
-        <LanguageProvider>
+        <LanguageProvider initialLanguage={initialLanguage}>
           <AuthProvider>
             <LayoutProvider>
               <LandscapeGuard>

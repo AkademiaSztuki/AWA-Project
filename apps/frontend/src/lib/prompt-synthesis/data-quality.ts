@@ -3,6 +3,7 @@ import { GenerationSource } from './modes';
 import { calculateImplicitQuality, isImplicitQualitySufficient, ImplicitQualityMetrics } from './implicit-quality';
 import { analyzeSourceConflict, SourceConflictAnalysis } from './conflict-analysis';
 import { TinderSwipe } from '@/lib/dna';
+import { calculateConfidence as calculateFacetConfidence, hasAllFacets, calculateExtremity } from './facet-derivation';
 
 /**
  * Data quality assessment for prompt generation sources
@@ -161,12 +162,23 @@ export function assessSourceQuality(
   // PERSONALITY SOURCE
   if (source === GenerationSource.Personality) {
     const hasBigFive = !!inputs.personality;
-    const isComplete = hasBigFive && 
-      inputs.personality!.openness !== 50 &&
-      inputs.personality!.conscientiousness !== 50 &&
-      inputs.personality!.extraversion !== 50 &&
-      inputs.personality!.agreeableness !== 50 &&
-      inputs.personality!.neuroticism !== 50;
+    const p = inputs.personality;
+    const domainScores = p ? [
+      p.openness,
+      p.conscientiousness,
+      p.extraversion,
+      p.agreeableness,
+      p.neuroticism
+    ] : [];
+
+    const allDomainsAre50 = domainScores.length === 5 && domainScores.every(v => v === 50);
+    const facetsObj = p?.facets;
+    const facetCount = facetsObj
+      ? Object.values(facetsObj).reduce((sum, domainFacets) => sum + Object.keys(domainFacets || {}).length, 0)
+      : 0;
+
+    const hasFacetData = facetCount > 0;
+    const isComplete = hasBigFive && (!allDomainsAre50 || hasFacetData);
     
     if (!hasBigFive) {
       warnings.push('No Big Five personality data');
@@ -178,8 +190,35 @@ export function assessSourceQuality(
       // Still generate, but with warning
     }
     
-    dataPoints = hasBigFive ? 5 : 0;
-    confidence = isComplete ? 80 : (hasBigFive ? 40 : 0);
+    // Data points: prefer facet granularity, else domain count
+    dataPoints = hasBigFive ? Math.max(facetCount, 5) : 0;
+
+    // Confidence: leverage facet-based confidence when available
+    if (hasFacetData) {
+      // Reuse facet-derivation scoring (0-0.95) → percent
+      const personalityPayload: any = {
+        openness: p!.openness,
+        conscientiousness: p!.conscientiousness,
+        extraversion: p!.extraversion,
+        agreeableness: p!.agreeableness,
+        neuroticism: p!.neuroticism,
+        facets: p!.facets
+      };
+      confidence = Math.round(calculateFacetConfidence(personalityPayload) * 100);
+    } else if (isComplete) {
+      // Domains only but not all 50
+      const extremity = calculateExtremity({
+        openness: p!.openness,
+        conscientiousness: p!.conscientiousness,
+        extraversion: p!.extraversion,
+        agreeableness: p!.agreeableness,
+        neuroticism: p!.neuroticism,
+        facets: p!.facets
+      } as any);
+      confidence = Math.round(60 + extremity * 25); // 60-85 range
+    } else {
+      confidence = hasBigFive ? 40 : 0;
+    }
     
     return {
       source,
@@ -188,7 +227,7 @@ export function assessSourceQuality(
       dataPoints,
       confidence,
       warnings,
-      hasCompleteBigFive: isComplete
+      hasCompleteBigFive: isComplete || hasFacetData
     };
   }
   

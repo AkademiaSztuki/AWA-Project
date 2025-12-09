@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassButton } from "@/components/ui/GlassButton";
@@ -10,6 +10,7 @@ import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
 import { analyzeInspirationsWithGamma, type InspirationTaggingResult } from "@/lib/vision/gamma-tagging";
+import { getOrCreateSpaceId, saveSpaceImagesMetadata } from "@/lib/remote-spaces";
 import { supabase } from "@/lib/supabase";
 import { addMultipleInspirationsToSpace } from "@/lib/spaces";
 import { 
@@ -23,12 +24,15 @@ import {
 
 interface LocalInspiration {
   id: string;
-  file: File;
-  previewUrl: string;
+  file?: File;
+  previewUrl: string;          // blob: url for quick preview
+  imageBase64?: string;        // data URL (preferred for persistence/generation)
   tags?: InspirationTaggingResult["tags"];
   description?: string;
   isTagging?: boolean;
   error?: string;
+  persisted?: boolean;         // true when loaded from existing session (avoid duplicate appends)
+  addedAt?: string;
 }
 
 const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[85vh]";
@@ -36,6 +40,7 @@ const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[85vh]";
 export default function InspirationsPage() {
   const { language } = useLanguage();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { sessionData, updateSessionData } = useSessionData();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [items, setItems] = useState<LocalInspiration[]>([]);
@@ -44,10 +49,36 @@ export default function InspirationsPage() {
   const t = (pl: string, en: string) => (language === "pl" ? pl : en);
 
   const progress = Math.min((items.length / 10) * 100, 100);
+  const fromDashboard = searchParams?.get("from") === "dashboard";
+
+  const fileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const ensureBase64 = async (item: LocalInspiration): Promise<LocalInspiration> => {
+    if (item.imageBase64) return item;
+    if (item.file) {
+      try {
+        const dataUrl = await fileToDataUrl(item.file);
+        return { ...item, imageBase64: dataUrl };
+      } catch (error) {
+        console.warn('[Inspirations] Failed to convert file to base64 for', item.id, error);
+        return item;
+      }
+    }
+    // Fallback when no file (loaded from existing session)
+    const safeUrl = sanitizeUrl(item.previewUrl);
+    return safeUrl ? { ...item, imageBase64: safeUrl } : item;
+  };
 
   // Auto-tag on upload in background (non-blocking)
   useEffect(() => {
-    const untagged = items.filter(i => !i.tags && !i.isTagging && !i.error);
+    const untagged = items.filter(i => i.file && !i.tags && !i.isTagging && !i.error);
     if (untagged.length === 0) return;
     // mark as tagging immediately for UX
     setItems(prev => prev.map(it => untagged.some(u => u.id === it.id) ? { ...it, isTagging: true } : it));
@@ -68,6 +99,7 @@ export default function InspirationsPage() {
       previewUrl: URL.createObjectURL(file),
       // Start as not tagging; the effect will flip to tagging and call the analyzer
       isTagging: false,
+      persisted: false
     }));
     setItems(prev => [...prev, ...mapped]);
   };
@@ -80,17 +112,52 @@ export default function InspirationsPage() {
     });
   };
 
+  const sanitizeUrl = (value?: string) => {
+    if (!value) return undefined;
+    if (value.startsWith('http')) return value;
+    if (value.startsWith('data:')) return value;
+    // ignore blob: and other schemes
+    return undefined;
+  };
+
+  // Preload existing inspirations when entering from dashboard to avoid overwrite
+  useEffect(() => {
+    const existing = (sessionData as any)?.inspirations || [];
+    if (existing.length === 0 || items.length > 0) return;
+    const mapped: LocalInspiration[] = existing.map((insp: any, idx: number) => {
+      const url = sanitizeUrl(insp.url) || sanitizeUrl(insp.imageBase64) || '';
+      return {
+        id: insp.id || `persisted_${idx}_${Date.now()}`,
+        previewUrl: url,
+        imageBase64: insp.imageBase64 || url,
+        tags: insp.tags,
+        description: insp.description,
+        isTagging: false,
+        error: undefined,
+        persisted: true
+      };
+    });
+    if (mapped.length > 0) {
+      setItems(mapped);
+    }
+  }, [sessionData?.inspirations]);
+
   const tagItems = async (itemsToTag: LocalInspiration[]) => {
     const payload = (current: LocalInspiration[]) => current.map(i => ({
       id: i.id,
       fileId: undefined,
-      url: i.previewUrl, // Include previewUrl (base64 data URL) for immediate use
+      url: sanitizeUrl(i.previewUrl), // only keep http/data URLs
+      imageBase64: i.imageBase64,
       tags: i.tags,
       description: i.description,
       addedAt: new Date().toISOString(),
     }));
 
     for (const targetItem of itemsToTag) {
+      if (!targetItem.file) {
+        // Cannot tag without original file; skip persisted items
+        continue;
+      }
       try {
         const [analysis] = await analyzeInspirationsWithGamma([targetItem.file]);
         
@@ -106,6 +173,9 @@ export default function InspirationsPage() {
           description: analysis.description
         });
         
+        // Ensure we persist base64 (data URL) for later generation usage
+        const dataUrl = await fileToDataUrl(targetItem.file);
+
         setItems(prev => {
           const updated = prev.map(item =>
             item.id === targetItem.id
@@ -115,6 +185,7 @@ export default function InspirationsPage() {
                   description: analysis.description,
                   isTagging: false,
                   error: undefined,
+                  imageBase64: dataUrl || item.imageBase64
                 }
               : item
           );
@@ -145,10 +216,14 @@ export default function InspirationsPage() {
   };
 
   const tagOne = async (index: number) => {
+    if (!items[index]?.file) {
+      return;
+    }
     setItems(prev => prev.map((it, i) => (i === index ? { ...it, isTagging: true, error: undefined } : it)));
     try {
       const res = await analyzeInspirationsWithGamma([items[index].file]);
       const first = res[0];
+      const dataUrl = await fileToDataUrl(items[index].file);
       
       // DEBUG: Log what gamma model returned
       console.log('[Inspirations] Gamma model returned:', {
@@ -161,7 +236,7 @@ export default function InspirationsPage() {
         description: first.description
       });
       
-      setItems(prev => prev.map((it, i) => (i === index ? { ...it, isTagging: false, tags: first.tags, description: first.description } : it)));
+      setItems(prev => prev.map((it, i) => (i === index ? { ...it, isTagging: false, tags: first.tags, description: first.description, imageBase64: dataUrl || it.imageBase64 } : it)));
     } catch (e: any) {
       console.error('[Inspirations] Tagging failed:', e);
       setItems(prev => prev.map((it, i) => (i === index ? { ...it, isTagging: false, error: e?.message || "Tagging failed" } : it)));
@@ -169,7 +244,7 @@ export default function InspirationsPage() {
   };
 
   const tagAll = async () => {
-    const notTagged = items.map((it, i) => ({ it, i })).filter(x => !x.it.tags);
+    const notTagged = items.map((it, i) => ({ it, i })).filter(x => x.it.file && !x.it.tags);
     for (const { i } of notTagged) {
       // sequential to avoid overloading the endpoint by default
       // can be parallelized later if endpoint supports it
@@ -181,21 +256,30 @@ export default function InspirationsPage() {
   const handleSave = async () => {
     setIsSubmitting(true);
     try {
+      // Ensure every item has base64 (data URL) for downstream generation
+      const itemsWithBase64 = await Promise.all(items.map(ensureBase64));
+      setItems(itemsWithBase64);
+
       // Upload files to Supabase Storage (background tolerate failures)
       // Note: If bucket doesn't exist, we'll skip upload but keep base64 in session
       const userHash = (sessionData as any)?.userHash || 'anonymous';
-      const uploads = await Promise.all(items.map(async (i) => {
+      const uploads = await Promise.all(itemsWithBase64.map(async (i) => {
         try {
+          if (!i.file) {
+            // Persist base64/session even if original file is missing (loaded from session/Supabase)
+            return { id: i.id };
+          }
           // Try to upload to storage, but don't fail if bucket doesn't exist
           const path = `inspirations/${userHash}/${i.id}`;
           const { data, error } = await supabase
             .storage
             .from('aura-assets')
-            .upload(path, i.file, { upsert: true, contentType: i.file.type || 'image/jpeg' });
+            .upload(path, i.file, { upsert: true, contentType: i.file?.type || 'image/jpeg' });
           
           if (error) {
             // If bucket doesn't exist, log warning but continue
-            if (error.message?.includes('Bucket not found') || error.statusCode === '404') {
+            const status = (error as any)?.statusCode ?? (error as any)?.status;
+            if (error.message?.includes('Bucket not found') || status === 404 || status === '404') {
               console.warn('Bucket aura-assets not found - skipping upload, using base64 only');
               return { id: i.id };
             }
@@ -212,17 +296,22 @@ export default function InspirationsPage() {
 
       // Persist inspirations with public URLs to session (and Supabase via saveFullSession)
       // Include base64 for local storage if upload failed
-      const payload = items.map(i => {
+      const payload = itemsWithBase64.map(i => {
         const up = uploads.find(u => u.id === i.id);
-        const base64 = i.imageBase64 || i.previewUrl; // Keep base64 if available
+        const persistedUrl = up?.url ? sanitizeUrl(up.url) : undefined;
+        const safePreview = sanitizeUrl(i.previewUrl);
+        const storedUrl = persistedUrl || safePreview; // avoid blob:
+        // If we have a persisted URL, drop base64 to reduce localStorage footprint
+        const base64 = persistedUrl ? undefined : (i.imageBase64 || safePreview); // Prefer data URL only when no persisted URL
         const result = {
           id: i.id,
           fileId: up?.fileId,
-          url: up?.url,
-          imageBase64: base64, // Keep base64 for InspirationReference source
+          url: storedUrl,
+          imageBase64: base64, // Keep base64 only if no URL available
           tags: i.tags,
           description: i.description,
-          addedAt: new Date().toISOString(),
+          addedAt: i.persisted ? i.addedAt || new Date().toISOString() : new Date().toISOString(),
+          persisted: i.persisted || false
         };
         
         // DEBUG: Log tags before saving
@@ -238,95 +327,113 @@ export default function InspirationsPage() {
         
         return result;
       });
-      await updateSessionData({ inspirations: payload } as any);
+
+      // Merge with existing inspirations to avoid overwriting when adding from dashboard
+      const existingInspirations = (sessionData as any)?.inspirations || [];
+      const mergedMap = new Map<string, any>();
+      const addToMap = (item: any) => {
+        const key = item.id || item.url;
+        if (!key) return;
+        const prev = mergedMap.get(key) || {};
+        mergedMap.set(key, { ...prev, ...item });
+      };
+      existingInspirations.forEach(addToMap);
+      payload.forEach(addToMap);
+      const mergedInspirations = Array.from(mergedMap.values()).map(i => {
+        // Drop helper flag before saving
+        const { persisted, ...rest } = i;
+        return rest;
+      });
+
+      await updateSessionData({ inspirations: mergedInspirations } as any);
       
-      // Also save inspirations to spaces
-      const currentSpaces = (sessionData as any)?.spaces || [];
-      const inspirationsForSpaces = payload
-        .filter(p => p.url)
-        .map(p => ({
-          url: p.url!,
-          tags: p.tags ? [
-            ...(p.tags.styles || []),
-            ...(p.tags.colors || []),
-            ...(p.tags.materials || [])
-          ] : undefined
-        }));
-      
-      if (inspirationsForSpaces.length > 0) {
-        const updatedSpaces = addMultipleInspirationsToSpace(
-          currentSpaces, 
-          undefined, 
-          inspirationsForSpaces
-        );
-        await updateSessionData({ spaces: updatedSpaces } as any);
-        
-        // Save spaces and inspirations to Supabase for persistence across sessions
-        try {
-          const userHash = (sessionData as any)?.userHash;
-          if (userHash) {
-            const { ensureUserProfileExists, getUserProfile, saveUserProfile } = await import('@/lib/supabase-deep-personalization');
-            const profileExists = await ensureUserProfileExists(userHash);
-            if (profileExists) {
-              // Get existing profile to preserve other data
-              const existingProfile = await getUserProfile(userHash);
-              
-              // Prepare inspirations for user_profiles (with tags from gamma model)
-              const inspirationsForProfile = payload.map(p => ({
-                fileId: p.fileId,
-                url: p.url,
-                tags: p.tags, // Tags from gamma model (Gemma3VisionModel)
-                description: p.description, // Description from gamma model
-                addedAt: p.addedAt
-              }));
-              
-              // Update user profile with inspirations (with gamma tags) and spaces metadata
-              const updateData: any = {
-                inspirations: inspirationsForProfile,
-                updated_at: new Date().toISOString()
-              };
-              
-              if (updatedSpaces.length > 0) {
-                updateData.metadata = {
-                  spaces: updatedSpaces,
-                  last_updated: new Date().toISOString()
-                };
-              }
-              
-              const { error } = await supabase
-                .from('user_profiles')
-                .update(updateData)
-                .eq('user_hash', userHash);
-              
-              if (error) {
-                console.warn('[Inspirations] Failed to save inspirations to user profile:', error);
-              } else {
-                console.log('[Inspirations] Inspirations with gamma tags saved to Supabase user_profiles.inspirations');
-                console.log('[Inspirations] Tags structure:', inspirationsForProfile.map(i => ({
-                  hasTags: !!i.tags,
-                  styles: i.tags?.styles?.length || 0,
-                  colors: i.tags?.colors?.length || 0,
-                  materials: i.tags?.materials?.length || 0,
-                  biophilia: i.tags?.biophilia,
-                  description: i.description ? 'present' : 'missing'
-                })));
-              }
+      // Also save inspirations to spaces/local snapshot and Supabase space_images with tags
+      try {
+        const userHash = (sessionData as any)?.userHash;
+        if (userHash) {
+          const spaceId = await getOrCreateSpaceId(userHash, {
+            spaceId: (sessionData as any)?.currentSpaceId,
+            name: (sessionData as any)?.roomName || 'Moja Przestrzeń'
+          });
+
+          // Update local spaces snapshot (flatten tags to string array for local display)
+          const currentSpaces = (sessionData as any)?.spaces || [];
+          const inspirationsForSpacesLocal = mergedInspirations.map(p => ({
+            url: p.url || '',
+            tags: p.tags
+              ? [
+                  ...(p.tags.styles || []),
+                  ...(p.tags.colors || []),
+                  ...(p.tags.materials || [])
+                ]
+              : undefined
+          })).filter(x => x.url);
+          const updatedSpaces = addMultipleInspirationsToSpace(
+            currentSpaces,
+            spaceId,
+            inspirationsForSpacesLocal
+          );
+          await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId } as any);
+
+          // Persist to space_images with full tags object (one-time, no retagging later)
+          if (spaceId) {
+            const imagesForSpace = mergedInspirations
+              .map(p => ({
+                url: p.url || p.imageBase64 || '',
+                type: 'inspiration' as const,
+                tags: p.tags,
+                is_favorite: false
+              }))
+              .filter(img => !!img.url);
+
+            if (imagesForSpace.length > 0) {
+              await saveSpaceImagesMetadata(userHash, spaceId, imagesForSpace);
             }
           }
-        } catch (e) {
-          console.warn('[Inspirations] Failed to save inspirations to Supabase:', e);
-          // Non-critical - inspirations are saved locally
+
+          // Optional: save inspirations snapshot to user_profiles (for cross-session fetch)
+          try {
+            const inspirationsForProfile = mergedInspirations.map(p => ({
+              fileId: p.fileId,
+              url: p.url,
+              tags: p.tags,
+              description: p.description,
+              addedAt: p.addedAt
+            }));
+
+            const { error } = await supabase
+              .from('user_profiles')
+              .update({
+                inspirations: inspirationsForProfile,
+                metadata: {
+                  spaces: updatedSpaces,
+                  last_updated: new Date().toISOString()
+                },
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_hash', userHash);
+
+            if (error) {
+              console.warn('[Inspirations] Failed to save inspirations to user profile:', error);
+            } else {
+              console.log('[Inspirations] Inspirations with gamma tags saved to user_profiles.inspirations');
+            }
+          } catch (e) {
+            console.warn('[Inspirations] Failed to save inspirations to user_profiles (non-critical):', e);
+          }
         }
+      } catch (e) {
+        console.warn('[Inspirations] Failed to save inspirations to space_images:', e);
       }
       
-      router.push("/flow/big-five");
+      router.push(fromDashboard ? "/dashboard" : "/flow/big-five");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleSkip = () => {
-    router.push("/flow/big-five");
+    router.push(fromDashboard ? "/dashboard" : "/flow/big-five");
   };
 
   // User can continue with 1–10 images; tagging happens in background
@@ -428,6 +535,7 @@ export default function InspirationsPage() {
                             src={item.previewUrl}
                             alt="Inspiration"
                             fill
+                            sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
                             className="object-cover"
                           />
                           

@@ -9,12 +9,15 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { ArrowLeft, Heart, Sparkles, Trash2, Download, X } from 'lucide-react';
 import Image from 'next/image';
+import { fetchSpaceImages } from '@/lib/remote-spaces';
+import { supabase } from '@/lib/supabase';
 
 interface SpaceImage {
   id: string;
   url: string;
   type: 'generated' | 'inspiration';
   addedAt: string;
+  isFavorite?: boolean;
   thumbnailUrl?: string;
   tags?: string[];
 }
@@ -41,12 +44,51 @@ export default function SpaceDetailPage() {
   const [filter, setFilter] = useState<'all' | 'generated' | 'inspiration'>('all');
 
   useEffect(() => {
-    // Load space data
+    (async () => {
+      if (!spaceId) return;
+      const userHash = (sessionData as any)?.userHash ||
+        (typeof window !== 'undefined' ? localStorage.getItem('aura_user_hash') || '' : '');
+
+      // Fetch space info
+      try {
+        const { data: spaceRow } = await supabase
+          .from('spaces')
+          .select('*')
+          .eq('id', spaceId)
+          .maybeSingle();
+
+        const images = userHash ? await fetchSpaceImages(userHash, spaceId) : [];
+
+        if (spaceRow) {
+          setSpace({
+            id: spaceRow.id,
+            name: spaceRow.name,
+            type: spaceRow.type || 'personal',
+            images: (images || []).map((img: any) => ({
+              id: img.id,
+              url: img.url,
+              type: img.type,
+              addedAt: img.created_at || img.added_at || img.addedAt || new Date().toISOString(),
+              isFavorite: img.is_favorite ?? img.isFavorite,
+              thumbnailUrl: img.thumbnail_url || img.thumbnailUrl,
+              tags: img.tags
+            })),
+            createdAt: spaceRow.created_at,
+            updatedAt: spaceRow.updated_at
+          });
+          return;
+        }
+      } catch (e) {
+        console.warn('[SpacePage] remote fetch failed, fallback to session/local', e);
+      }
+
+      // Fallback to session data
     const spaces = (sessionData as any)?.spaces || [];
     const foundSpace = spaces.find((s: Space) => s.id === spaceId);
     if (foundSpace) {
       setSpace(foundSpace);
     }
+    })();
   }, [spaceId, sessionData]);
 
   useEffect(() => {

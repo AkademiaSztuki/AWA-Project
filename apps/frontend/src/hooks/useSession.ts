@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { SessionData, FlowStep } from '@/types';
-import { fetchLatestSessionSnapshot } from '@/lib/supabase';
+import { fetchLatestSessionSnapshot, supabase, DISABLE_SESSION_SYNC } from '@/lib/supabase';
+import { uploadSpaceImage, saveSpaceImagesMetadata } from '@/lib/remote-spaces';
 
 const SESSION_STORAGE_KEY = 'aura_session';
 const USER_HASH_STORAGE_KEY = 'aura_user_hash';
@@ -40,6 +41,7 @@ const shouldSanitizeSessionData = (data: SessionData): boolean => {
 };
 
 const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
+  // Base copy with trimmed histories
   const sanitized: SessionData = {
     ...data,
     generations: Array.isArray(data.generations)
@@ -47,6 +49,12 @@ const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
       : [],
   };
 
+  // Always drop heavy blobs from localStorage; they are cached separately (sessionStorage / Supabase)
+  sanitized.roomImage = undefined;
+  sanitized.uploadedImage = undefined;
+  sanitized.selectedImage = null;
+
+  // Trim swipe history
   if (sanitized.tinderData?.swipes && sanitized.tinderData.swipes.length > MAX_TINDER_SWIPES) {
     sanitized.tinderData = {
       ...sanitized.tinderData,
@@ -54,26 +62,35 @@ const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
     };
   }
 
-  if (sanitized.roomImage && isLargeDataUrl(sanitized.roomImage)) {
-    sanitized.roomImage = undefined;
-  }
-
+  // Remove generated images (already persisted remotely)
   if (sanitized.generatedImages) {
     sanitized.generatedImages = undefined;
   }
 
-  if (sanitized.selectedImage) {
-    sanitized.selectedImage = null;
+  // Strip heavy base64 from inspirations but keep tags/descriptions/URLs
+  if (Array.isArray((sanitized as any).inspirations)) {
+    sanitized.inspirations = (sanitized as any).inspirations.map((insp: any) => {
+      const safeUrl = typeof insp.url === 'string' && (insp.url.startsWith('http') || insp.url.startsWith('data:'))
+        ? insp.url
+        : undefined;
+      return {
+        id: insp.id,
+        fileId: insp.fileId,
+        url: safeUrl,
+        tags: insp.tags,
+        description: insp.description,
+        addedAt: insp.addedAt
+      };
+    });
   }
 
+  // Clean spaces; if anything looks heavy, drop images or entire spaces
   if (Array.isArray(sanitized.spaces)) {
-    sanitized.spaces = sanitized.spaces
+    const trimmedSpaces = sanitized.spaces
       .map(space => ({
         ...space,
         images: Array.isArray(space.images)
-          ? space.images
-              .filter(image => !isLargeDataUrl(image.url))
-              .map(image => ({
+          ? space.images.map(image => ({
                 ...image,
                 thumbnailUrl:
                   image.thumbnailUrl && isLargeDataUrl(image.thumbnailUrl)
@@ -81,11 +98,102 @@ const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
                     : image.thumbnailUrl,
               }))
           : [],
-      }))
-      .filter(space => space.images.length > 0);
+      }));
+
+    sanitized.spaces = trimmedSpaces;
   }
 
   return sanitized;
+};
+
+const hasDataUrlSpaces = (spaces?: any[]): boolean =>
+  Array.isArray(spaces) &&
+  spaces.some(space => (space?.images || []).some((img: any) => typeof img?.url === 'string' && img.url.startsWith('data:')));
+
+const migrateLegacySpacesToSupabase = async (spaces: any[], userHash: string): Promise<any[]> => {
+  if (!userHash || !Array.isArray(spaces)) return spaces || [];
+
+  const migrated: any[] = [];
+
+  for (const space of spaces) {
+    const spaceId = space.id || `space_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const spaceName = space.name || 'Moja Przestrzeń';
+    const spaceType = space.type || 'personal';
+
+    // Ensure space exists in Supabase
+    try {
+      await supabase
+        .from('spaces')
+        .upsert({
+          id: spaceId,
+          user_hash: userHash,
+          name: spaceName,
+          type: spaceType,
+          created_at: space.createdAt || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('[useSession] migrate: upsert space failed', e);
+    }
+
+    const images = Array.isArray(space.images) ? space.images : [];
+    const uploadedMeta: Array<{
+      url: string;
+      thumbnail_url?: string;
+      type: 'generated' | 'inspiration';
+      tags?: any;
+      is_favorite?: boolean;
+      source?: string;
+      generation_set_id?: string;
+    }> = [];
+    const newImages: any[] = [];
+
+    for (const img of images) {
+      const imgId = img.id || `img_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      let finalUrl = img.url;
+
+      if (typeof img.url === 'string' && img.url.startsWith('data:')) {
+        const uploaded = await uploadSpaceImage(userHash, spaceId, imgId, img.url);
+        if (uploaded?.publicUrl) {
+          finalUrl = uploaded.publicUrl;
+        }
+      }
+
+      uploadedMeta.push({
+        url: finalUrl,
+        thumbnail_url: img.thumbnailUrl,
+        type: img.type || 'generated',
+        tags: img.tags,
+        is_favorite: img.isFavorite || false
+      });
+
+      newImages.push({
+        id: imgId,
+        url: finalUrl,
+        type: img.type || 'generated',
+        addedAt: img.addedAt || new Date().toISOString(),
+        isFavorite: img.isFavorite || false,
+        thumbnailUrl: img.thumbnailUrl,
+        tags: img.tags
+      });
+    }
+
+    if (uploadedMeta.length > 0) {
+      await saveSpaceImagesMetadata(userHash, spaceId, uploadedMeta);
+    }
+
+    migrated.push({
+      ...space,
+      id: spaceId,
+      name: spaceName,
+      type: spaceType,
+      images: newImages,
+      createdAt: space.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  return migrated;
 };
 
 const isQuotaExceededError = (error: unknown): boolean => {
@@ -150,8 +258,19 @@ const persistSanitizedSessionData = (data: SessionData) => {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(withoutSpaces));
   } catch (error) {
     if (isQuotaExceededError(error)) {
-      console.error('[useSession] LocalStorage nadal pełny – czyszczę dane sesji.', error);
-      localStorage.removeItem(SESSION_STORAGE_KEY);
+      console.error('[useSession] LocalStorage nadal pełny – zapisuję minimalne dane.', error);
+      const minimal: SessionData = {
+        ...createEmptySession(),
+        userHash: data.userHash,
+        currentStep: data.currentStep,
+        consentTimestamp: data.consentTimestamp,
+      };
+      try {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(minimal));
+      } catch (err) {
+        console.error('[useSession] Nie udało się zapisać nawet minimalnych danych sesji – czyszczę.', err);
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      }
     } else {
       console.error('[useSession] Nie udało się zapisać minimalnych danych sesji.', error);
     }
@@ -194,6 +313,7 @@ const createEmptySession = (): SessionData => ({
   userHash: '',
   consentTimestamp: '',
   currentStep: 'landing',
+  currentSpaceId: undefined,
   tinderResults: [],
   visualDNA: {
     dominantTags: [],
@@ -240,35 +360,38 @@ export const useSession = (): UseSessionReturn => {
         localStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
       }
 
-      let mergedSession: Partial<SessionData> | null = null;
+      let mergedLocalSession: Partial<SessionData> | null = null;
       const savedData = localStorage.getItem(SESSION_STORAGE_KEY);
 
       if (savedData) {
         try {
-          mergedSession = JSON.parse(savedData) as SessionData;
+          mergedLocalSession = JSON.parse(savedData) as SessionData;
         } catch (error) {
           console.error('Failed to load session data from localStorage:', error);
         }
       }
 
       const sessionRoomImage = sessionStorage.getItem(ROOM_IMAGE_SESSION_KEY);
-      if (sessionRoomImage && (!mergedSession?.roomImage || mergedSession.roomImage.length < sessionRoomImage.length)) {
-        mergedSession = { ...(mergedSession || {}), roomImage: sessionRoomImage };
+      if (sessionRoomImage && (!mergedLocalSession?.roomImage || mergedLocalSession.roomImage.length < sessionRoomImage.length)) {
+        mergedLocalSession = { ...(mergedLocalSession || {}), roomImage: sessionRoomImage };
       }
 
-      if ((!mergedSession || !mergedSession.roomImage) && userHash) {
+      // Zawsze pobierz najnowszy snapshot z Supabase i połącz z danymi lokalnymi
+      let remoteSession: SessionData | null = null;
+      if (userHash && !DISABLE_SESSION_SYNC) {
         try {
-          const remoteSession = await fetchLatestSessionSnapshot(userHash);
-          if (remoteSession) {
-            mergedSession = {
-              ...(remoteSession as SessionData),
-              ...(mergedSession || {}),
-            };
-          }
+          remoteSession = await fetchLatestSessionSnapshot(userHash);
         } catch (error) {
           console.warn('[useSession] Nie udało się pobrać sesji z Supabase.', error);
         }
       }
+
+      let mergedSession: SessionData = {
+        ...createEmptySession(),
+        ...(remoteSession || {}),
+        ...(mergedLocalSession || {}),
+        userHash,
+      };
 
       // Load inspirations with gamma tags from user_profiles.inspirations
       if (userHash) {
@@ -329,6 +452,23 @@ export const useSession = (): UseSessionReturn => {
           }
         } catch (error) {
           console.warn('[useSession] Nie udało się pobrać inspirations z user_profiles:', error);
+        }
+      }
+
+      // Upewnij się, że najświeższe roomImage z sessionStorage ma priorytet
+      if (sessionRoomImage && (!mergedSession.roomImage || mergedSession.roomImage.length < sessionRoomImage.length)) {
+        mergedSession = { ...mergedSession, roomImage: sessionRoomImage };
+      }
+
+      // Migrate legacy spaces with data URLs to Supabase (one-time per browser)
+      const legacyMigratedFlag = localStorage.getItem('aura_spaces_migrated');
+      if (hasDataUrlSpaces(mergedSession.spaces) && legacyMigratedFlag !== '1') {
+        try {
+          const migratedSpaces = await migrateLegacySpacesToSupabase(mergedSession.spaces || [], userHash);
+          mergedSession = { ...mergedSession, spaces: migratedSpaces };
+          localStorage.setItem('aura_spaces_migrated', '1');
+        } catch (e) {
+          console.warn('[useSession] Legacy spaces migration failed', e);
         }
       }
 

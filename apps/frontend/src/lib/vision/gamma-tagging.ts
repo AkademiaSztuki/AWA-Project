@@ -28,11 +28,16 @@ async function fileToBase64(file: File): Promise<string> {
 
 // Direct API call to existing Modal endpoint
 async function callInspirationAPI(image: string) {
-  const apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+  let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
   
-  // Abort after 20s to avoid endless spinners
+  // Fix for incorrect dev URL in Vercel
+  if (apiBase.includes('-dev')) {
+    apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
+  }
+  
+  // Abort after 90s to let Gemma tagging finish on cold starts / GPU load
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  const timeout = setTimeout(() => controller.abort(), 90000);
   
   const response = await fetch(`${apiBase}/analyze-inspiration`, {
     method: 'POST',
@@ -78,12 +83,12 @@ export async function analyzeInspirationsWithGamma(files: File[]): Promise<Inspi
         console.error('Error analyzing inspiration:', error);
         results.push({
           tags: {
-            styles: ["modern"],
-            colors: ["neutral"],
-            materials: ["wood"],
+            styles: [],
+            colors: [],
+            materials: [],
             biophilia: 1
           },
-          description: "Modern interior design inspiration"
+          description: undefined
         });
       }
     }

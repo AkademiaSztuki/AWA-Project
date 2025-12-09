@@ -44,6 +44,11 @@ import {
   type FivePromptSynthesisResult 
 } from '@/lib/prompt-synthesis';
 import { addGeneratedImageToSpace } from '@/lib/spaces';
+import {
+  getOrCreateSpaceId,
+  uploadSpaceImage,
+  saveSpaceImagesMetadata
+} from '@/lib/remote-spaces';
 
 interface GeneratedImage {
   id: string;
@@ -100,7 +105,7 @@ const MACRO_MODIFICATIONS: ModificationOption[] = [
 
 export default function GeneratePage() {
   const router = useRouter();
-  const { sessionData, updateSessionData } = useSessionData();
+  const { sessionData, updateSessionData, isInitialized: isSessionInitialized } = useSessionData();
   const { generateImages, generatePreviews, upscaleImage, generateFiveImagesParallel, generateSixImagesParallel, isLoading, error, setError, checkHealth, generateLLMComment } = useModalAPI();
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -137,6 +142,7 @@ export default function GeneratePage() {
   const [qualityReport, setQualityReport] = useState<any>(null); // Store quality report for feedback
   const [synthesisResult, setSynthesisResult] = useState<SixPromptSynthesisResult | null>(null); // Store synthesis result for skipped sources info
   const [imageProgress, setImageProgress] = useState<Record<string, number>>({}); // Track progress for each image source
+  const [progressOffsets, setProgressOffsets] = useState<Record<string, number>>({}); // Per-source stagger for loading anims
   
   const [generationHistory, setGenerationHistory] = useState<Array<{
     id: string;
@@ -234,12 +240,17 @@ export default function GeneratePage() {
   }, [abortController]);
 
   useEffect(() => {
+    if (!isSessionInitialized) {
+      console.log('[Generate] Session not initialized yet, delaying auto-generation.');
+      return;
+    }
+
     if (isApiReady && generationCount === 0 && !hasAttemptedGeneration) {
-      console.log('[Generate] Auto-triggering initial generation:', { isApiReady, generationCount, hasAttemptedGeneration, isMatrixMode });
+      console.log('[Generate] Auto-triggering initial generation:', { isApiReady, generationCount, hasAttemptedGeneration, isMatrixMode, isSessionInitialized });
       setHasAttemptedGeneration(true);
       handleInitialGeneration();
     }
-  }, [isApiReady, generationCount, hasAttemptedGeneration]);
+  }, [isApiReady, generationCount, hasAttemptedGeneration, isSessionInitialized]);
 
   // Generate IDA comment when image is selected
   useEffect(() => {
@@ -410,6 +421,24 @@ export default function GeneratePage() {
         source,
         prompt: synthesisResult.results[source]!.prompt
       }));
+
+      // Seed per-source progress so placeholders immediately show activity (start at 2%)
+      setImageProgress(() => {
+        const initialProgress: Record<string, number> = {};
+        prompts.forEach(({ source }) => {
+          initialProgress[source] = 2;
+        });
+        return initialProgress;
+      });
+      // Stagger per-source fallback start times to desync animations
+      setProgressOffsets(() => {
+        const offsets: Record<string, number> = {};
+        prompts.forEach(({ source }, idx) => {
+          // Base stagger 3s per slot + random 0-2s jitter
+          offsets[source] = idx * 3000 + Math.floor(Math.random() * 2000);
+        });
+        return offsets;
+      });
       
       // DEV: Log all prompts for debugging
       console.log("=".repeat(80));
@@ -478,18 +507,31 @@ export default function GeneratePage() {
       // Track progress for each image
       const startTime = Date.now();
       let progressInterval: NodeJS.Timeout | null = null;
+
+      // Smooth, slower fallback progress curve (asymptotic to 60% over ~90s)
+      const calcFallbackProgress = (elapsedMs: number) => {
+        const t = Math.max(0, Math.min(1, elapsedMs / 90000)); // 0..1 over 90s
+        const eased = 1 - Math.pow(1 - t, 4); // ease-out quart
+        return Math.min(60, Math.round(2 + eased * 58)); // start at 2%, max 60%
+      };
       
       const updateProgress = () => {
+        const pendingSources = prompts
+          .map(p => p.source)
+          .filter(src => !matrixImages.some(img => img.source === src));
+        const activeSource = pendingSources[0];
+
         prompts.forEach(({ source }) => {
           // Check if image already exists
           const existingImage = matrixImages.find(img => img.source === source);
           if (!existingImage) {
-            const elapsed = Date.now() - startTime;
-            // Estimate progress: 0-90% over ~30 seconds per image
-            const estimatedProgress = Math.min(90, Math.floor((elapsed / 30000) * 90));
+            const offset = progressOffsets[source] ?? 0;
+            const speedFactor = source === activeSource ? 1.35 : 1; // active slot animates faster
+            const elapsed = Math.max(0, (Date.now() - startTime - offset) * speedFactor);
+            const estimatedProgress = calcFallbackProgress(elapsed);
             setImageProgress(prev => {
               // Only update if not already at 100%
-              if (prev[source] !== 100) {
+              if (prev[source] !== 100 && estimatedProgress > (prev[source] ?? 0)) {
                 return {
                   ...prev,
                   [source]: estimatedProgress
@@ -506,6 +548,14 @@ export default function GeneratePage() {
       
       // Callback to show images as they complete
       const onImageReady = (result: any) => {
+        // If backend sends live progress, reflect it in UI
+        if (result && typeof result.progress === 'number' && !Number.isNaN(result.progress)) {
+          setImageProgress(prev => ({
+            ...prev,
+            [result.source]: Math.min(100, Math.max(0, Math.round(result.progress)))
+          }));
+        }
+
         if (result.success) {
           completedCount++;
           const sourceLabel = GENERATION_SOURCE_LABELS[result.source as GenerationSource];
@@ -764,7 +814,7 @@ export default function GeneratePage() {
         const generatedImagesPayload = newMatrixImages.map(img => ({
           id: img.id,
           url: img.url,
-          base64: img.base64, // Keep base64 for display
+          // base64 intentionally omitted to keep session light
           prompt: img.prompt,
           source: img.source,
           sourceLabel: img.parameters?.sourceLabel,
@@ -774,19 +824,43 @@ export default function GeneratePage() {
           ratings: img.ratings
         }));
         
-        // Update sessionData with generated images
+        // Update sessionData with generated images (local)
         const currentGenerated = (typedSessionData?.generatedImages || []);
         await updateSessionData({ 
           generatedImages: [...currentGenerated, ...generatedImagesPayload]
         } as any);
         
-        // Also save to spaces
-        const currentSpaces = (typedSessionData?.spaces || []);
-        let updatedSpaces = currentSpaces;
+        // Persist to spaces (Supabase)
+        const userHash = (sessionData as any)?.userHash;
+        // Track updated spaces locally; keep defined even if no Supabase write occurs
+        let updatedSpaces: any[] = [];
+        const spaceId = await getOrCreateSpaceId(userHash, {
+          spaceId: (sessionData as any)?.currentSpaceId,
+          name: (sessionData as any)?.roomName || 'Moja Przestrzeń'
+        });
+
+        if (spaceId) {
+          const uploaded: Array<{ url: string; thumbnail_url?: string; type: 'generated' | 'inspiration'; is_favorite?: boolean; source?: string; generation_set_id?: string }> = [];
         for (const img of newMatrixImages) {
-          updatedSpaces = addGeneratedImageToSpace(updatedSpaces, undefined, img.url);
+            const uploadedResult = await uploadSpaceImage(userHash, spaceId, img.id, img.url);
+            const finalUrl = uploadedResult?.publicUrl || img.url;
+            uploaded.push({
+              url: finalUrl,
+              type: 'generated',
+              is_favorite: img.isFavorite || false,
+              source: img.source
+            });
+          }
+          await saveSpaceImagesMetadata(userHash, spaceId, uploaded);
+
+          // Keep local minimal spaces snapshot
+          updatedSpaces = addGeneratedImageToSpace(
+            (typedSessionData?.spaces || []),
+            spaceId,
+            uploaded[0]?.url || newMatrixImages[0].url
+          );
+          await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId } as any);
         }
-        await updateSessionData({ spaces: updatedSpaces } as any);
         
         // Save spaces to Supabase for persistence across sessions
         // This ensures data is available after logout/login
@@ -1155,7 +1229,11 @@ export default function GeneratePage() {
   const getOptimalParameters = getGenerationParameters;
 
   const handleInitialGeneration = async (force = false) => {
-    console.log('[Generate] handleInitialGeneration called', { isApiReady, generationCount, force, isMatrixMode });
+    console.log('[Generate] handleInitialGeneration called', { isApiReady, generationCount, force, isMatrixMode, isSessionInitialized });
+    if (!isSessionInitialized) {
+      console.log('[Generate] Session data not ready yet, skipping initial generation.');
+      return;
+    }
     if (!isApiReady) {
       console.log("API not ready, generation cancelled.");
       return;
@@ -1257,11 +1335,10 @@ export default function GeneratePage() {
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
       
-      // Save generated images to sessionData (like inspirations)
+      // Save generated images to sessionData (lightweight, no base64)
       const generatedImagesPayload = newImages.map(img => ({
         id: img.id,
         url: img.url,
-        base64: img.base64,
         prompt: img.prompt,
         parameters: img.parameters,
         createdAt: new Date(img.createdAt).toISOString(),
@@ -1269,18 +1346,39 @@ export default function GeneratePage() {
         ratings: img.ratings
       }));
       
-      const currentGenerated = ((sessionData as any)?.generatedImages || []);
-      await updateSessionData({ 
-        generatedImages: [...currentGenerated, ...generatedImagesPayload]
-      } as any);
+        // Do not keep base64-heavy generatedImages in session; rely on Supabase
+        // Keep a lightweight record if needed (URLs only)
+        const currentGenerated = ((sessionData as any)?.generatedImages || []).map((g: any) => ({ url: g.url, id: g.id }));
+        const lightweight = generatedImagesPayload.map(g => ({ url: g.url, id: g.id }));
+        await updateSessionData({ generatedImages: [...currentGenerated, ...lightweight] } as any);
       
-      // Save generated images to spaces
-      const currentSpaces = (sessionData as any)?.spaces || [];
-      let updatedSpaces = currentSpaces;
+      // Save generated images to spaces (Supabase)
+      const userHash = (sessionData as any)?.userHash;
+      const spaceId = await getOrCreateSpaceId(userHash, {
+        spaceId: (sessionData as any)?.currentSpaceId,
+        name: (sessionData as any)?.roomName || 'Moja Przestrzeń'
+      });
+
+      if (spaceId) {
+        const uploaded: Array<{ url: string; type: 'generated' | 'inspiration'; is_favorite?: boolean }> = [];
       for (const img of newImages) {
-        updatedSpaces = addGeneratedImageToSpace(updatedSpaces, undefined, img.url);
+          const uploadedResult = await uploadSpaceImage(userHash, spaceId, img.id, img.url);
+          const finalUrl = uploadedResult?.publicUrl || img.url;
+          uploaded.push({
+            url: finalUrl,
+            type: 'generated',
+            is_favorite: img.isFavorite || false
+          });
+        }
+        await saveSpaceImagesMetadata(userHash, spaceId, uploaded);
+
+        const updatedSpaces = addGeneratedImageToSpace(
+          (sessionData as any)?.spaces || [],
+          spaceId,
+          uploaded[0]?.url || newImages[0].url
+        );
+        await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId });
       }
-      await updateSessionData({ spaces: updatedSpaces });
       
       // Complete loading
       setLoadingProgress(100);
@@ -1433,18 +1531,33 @@ export default function GeneratePage() {
         ratings: img.ratings
       }));
       
-      const currentGenerated = ((sessionData as any)?.generatedImages || []);
+      const currentGenerated = ((sessionData as any)?.generatedImages || []).map((g: any) => ({ id: g.id, url: g.url }));
+      const lightweight = generatedImagesPayload.map(g => ({ id: g.id, url: g.url }));
       await updateSessionData({ 
-        generatedImages: [...currentGenerated, ...generatedImagesPayload]
+        generatedImages: [...currentGenerated, ...lightweight]
       } as any);
       
       // Save generated images to spaces
       const currentSpaces = (sessionData as any)?.spaces || [];
       let updatedSpaces = currentSpaces;
+      const activeSpaceId = (sessionData as any)?.currentSpaceId;
+      const activeSpaceName = (sessionData as any)?.roomName;
       for (const img of newImages) {
-        updatedSpaces = addGeneratedImageToSpace(updatedSpaces, undefined, img.url);
+        updatedSpaces = addGeneratedImageToSpace(
+          updatedSpaces,
+          activeSpaceId,
+          img.url,
+          activeSpaceName,
+          undefined,
+          undefined,
+          img.isFavorite || false
+        );
       }
-      await updateSessionData({ spaces: updatedSpaces });
+      const sessionUpdates: any = { spaces: updatedSpaces };
+      if (!activeSpaceId && updatedSpaces.length > 0) {
+        sessionUpdates.currentSpaceId = updatedSpaces[updatedSpaces.length - 1].id;
+      }
+      await updateSessionData(sessionUpdates);
       
       // Complete modification
       setLoadingProgress(100);
@@ -1983,8 +2096,34 @@ export default function GeneratePage() {
                 {Array.from({ length: 6 }).map((_, index) => {
                   const expectedSource = synthesisResult?.displayOrder[index] || null;
                   const image = matrixImages.find(img => img.source === expectedSource);
-                  // Show loading if: generating AND no image yet, OR if we have synthesisResult but no image (initial state)
-                  const isLoading = (isGenerating || (synthesisResult && !image)) && !image;
+                  // Always show loading skeleton when there is no image (unless error)
+                  const slotIsLoading = !image && !error;
+                  const offset = progressOffsets[expectedSource || ''] ?? index * 3000;
+                  const elapsedForFallback = Math.max(0, Date.now() - ((matrixGenerationStartTime || Date.now()) + offset));
+                  const pendingSources = synthesisResult?.displayOrder.filter(src => !matrixImages.some(img => img.source === src)) || [];
+                  const activeSource = pendingSources[0];
+                  const qualityInfo = synthesisResult?.qualityReports?.find(r => r.source === expectedSource);
+                  const statusColor = qualityInfo?.status === 'insufficient'
+                    ? 'text-red-400'
+                    : qualityInfo?.status === 'limited'
+                      ? 'text-amber-400'
+                      : 'text-green-400';
+                  const statusText = qualityInfo?.status === 'insufficient'
+                    ? 'Brak danych'
+                    : qualityInfo?.status === 'limited'
+                      ? 'Niewystarczające dane'
+                      : 'Gotowe';
+                  const fallbackProgress = (() => {
+                    const t = Math.max(0, Math.min(1, elapsedForFallback / 90000));
+                    const eased = 1 - Math.pow(1 - t, 4);
+                    const base = Math.min(60, Math.round(2 + eased * 58));
+                    return expectedSource && activeSource === expectedSource
+                      ? Math.min(60, Math.round(base * 1.2)) // active slot slightly faster
+                      : base;
+                  })();
+                  const progressValue = expectedSource && imageProgress[expectedSource] !== undefined 
+                    ? Math.round(imageProgress[expectedSource])
+                    : fallbackProgress;
                   const sourceLabel = expectedSource ? GENERATION_SOURCE_LABELS[expectedSource]?.pl : `Wizja ${index + 1}`;
                   
                   return (
@@ -1997,7 +2136,7 @@ export default function GeneratePage() {
                     >
                       {/* No GlassCard wrapper - image fills the entire placeholder */}
                       <div className="relative aspect-square w-full rounded-lg overflow-hidden group">
-                        {isLoading ? (
+                        {slotIsLoading ? (
                           /* Loading Skeleton - Futuristic transparent glass style */
                           <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10">
                             {/* Animated gradient shimmer */}
@@ -2084,9 +2223,7 @@ export default function GeneratePage() {
                                   animate={{ opacity: [0.8, 1, 0.8] }}
                                   transition={{ duration: 1.5, repeat: Infinity }}
                                 >
-                                  {imageProgress[expectedSource || ''] !== undefined 
-                                    ? `${Math.round(imageProgress[expectedSource || ''])}%`
-                                    : `${Math.min(95, Math.floor((Date.now() - (matrixGenerationStartTime || Date.now())) / 300))}%`}
+                                  {`${Math.max(2, progressValue)}%`}
                                 </motion.p>
                                 <p className="text-white/70 text-xs mt-1 font-medium">Generowanie...</p>
                               </div>
@@ -2098,6 +2235,30 @@ export default function GeneratePage() {
                                 <p className="text-gold/90 font-semibold text-xs">{sourceLabel}</p>
                               </div>
                             </div>
+
+                            {/* Inline quality info for this source while waiting */}
+                            {qualityInfo && (
+                              <div className="absolute bottom-16 left-2 right-2">
+                                <div className="px-2.5 py-1.5 bg-black/40 backdrop-blur-md rounded-lg border border-white/10 text-[11px] leading-tight text-white/80 space-y-0.5">
+                                  <div className="flex justify-between gap-2">
+                                    <span className="font-semibold text-white/90">Dane: {sourceLabel}</span>
+                                    <span className={`font-semibold ${statusColor}`}>{statusText}</span>
+                                  </div>
+                                  {qualityInfo.confidence !== undefined && qualityInfo.confidence !== null && (
+                                    <div className="flex justify-between gap-2">
+                                      <span>Pewność</span>
+                                      <span className="font-semibold text-white/90">{qualityInfo.confidence}%</span>
+                                    </div>
+                                  )}
+                                  {qualityInfo.dataPoints !== undefined && qualityInfo.dataPoints !== null && (
+                                    <div className="flex justify-between gap-2">
+                                      <span>Punkty danych</span>
+                                      <span className="font-semibold text-white/90">{qualityInfo.dataPoints}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ) : image ? (
                           /* Generated Image - No border, fills entire space */
@@ -2152,12 +2313,8 @@ export default function GeneratePage() {
                             )}
                           </motion.div>
                         ) : (
-                          /* Empty slot (shouldn't happen, but fallback) */
-                          <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10">
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <p className="text-white/40 text-sm">Brak wizji</p>
-                            </div>
-                          </div>
+                          /* Fallback: keep showing loader instead of "Brak wizji" */
+                          <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10" />
                         )}
                       </div>
                     </motion.div>
@@ -2530,7 +2687,13 @@ export default function GeneratePage() {
                   {selectedImage && (
                     <div className="space-y-4">
                       <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
-                        <Image src={selectedImage.url} alt="Generated interior" fill className="object-cover" />
+                        <Image
+                          src={selectedImage.url}
+                          alt="Generated interior"
+                          fill
+                          sizes="100vw"
+                          className="object-cover"
+                        />
 
                         <button
                           onClick={() => handleFavorite(selectedImage.id)}

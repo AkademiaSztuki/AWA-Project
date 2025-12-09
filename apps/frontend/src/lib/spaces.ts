@@ -8,6 +8,7 @@ export interface SpaceImage {
   url: string;
   type: 'generated' | 'inspiration';
   addedAt: string;
+  isFavorite?: boolean;
   thumbnailUrl?: string;
   tags?: string[];
 }
@@ -52,10 +53,12 @@ export function addGeneratedImageToSpace(
   spaces: Space[],
   spaceId: string | undefined,
   imageUrl: string,
+  spaceName?: string,
   thumbnailUrl?: string,
-  tags?: string[]
+  tags?: string[],
+  isFavorite: boolean = false
 ): Space[] {
-  // If no spaceId, use the first space or create one
+  // If no spaceId, try to use the most recently created space
   let targetSpaceId = spaceId;
   let updatedSpaces = [...spaces];
   
@@ -73,8 +76,20 @@ export function addGeneratedImageToSpace(
       updatedSpaces = [defaultSpace];
       targetSpaceId = defaultSpace.id;
     } else {
-      targetSpaceId = spaces[0].id;
+      // Default to the most recently created space
+      targetSpaceId = spaces[spaces.length - 1].id;
     }
+  } else if (!updatedSpaces.some(space => space.id === targetSpaceId)) {
+    // Create a new named space when an explicit id was provided but does not yet exist
+    const newSpace: Space = {
+      id: targetSpaceId,
+      name: spaceName || 'Moja Główna Przestrzeń',
+      type: 'personal',
+      images: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    updatedSpaces = [...updatedSpaces, newSpace];
   }
   
   // Add image to the target space
@@ -85,6 +100,7 @@ export function addGeneratedImageToSpace(
         url: imageUrl,
         type: 'generated',
         addedAt: new Date().toISOString(),
+        isFavorite,
         thumbnailUrl,
         tags
       };

@@ -291,8 +291,8 @@ export const getGenerationParameters = (
   if (mode === 'preview') {
     return {
       steps: 20,  // Szybkie preview - mniej kroków dla szybszego generowania
-      guidance: 3.5,  // Niższe guidance = mniej agresywne zmiany, zachowuje strukturę (okna, drzwi) - kompromis między jakością a zachowaniem struktury
-      strength: 0.35,  // Niskie strength = zachowuje więcej oryginalnej struktury (okna, drzwi, układ) - 0.35 to dobry balans
+      guidance: 3.5,  // Zachowujemy umiarkowane guidance; niższe zapobiega przestawianiu geometrii
+      strength: 0.25,  // Obniżone strength, by mocniej zachować geometrię (okna, drzwi, układ)
       image_size: 512,  // Niższa rozdzielczość dla szybszego generowania (max 512px)
       width: 512,
       height: 512,
@@ -366,11 +366,11 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
     
     // Fix for incorrect dev URL in Vercel
     if (apiBase.includes('-dev')) {
-      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
     }
     
     if (!apiBase) {
@@ -417,11 +417,11 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
 
     // Fix for incorrect dev URL in Vercel
     if (apiBase.includes('-dev')) {
-      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
     }
 
     if (!apiBase) {
@@ -500,11 +500,11 @@ export const useModalAPI = () => {
   const checkHealth = async () => {
     try {
       // Use correct API URL, fallback to default if env var is wrong
-      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
       
       // Fix for incorrect dev URL in Vercel
       if (apiBase.includes('-dev')) {
-        apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+        apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
       }
       
       if (!apiBase) {
@@ -531,11 +531,11 @@ export const useModalAPI = () => {
     setError(null);
     
     try {
-      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
-      
+      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
+
       // Fix for incorrect dev URL in Vercel
       if (apiBase.includes('-dev')) {
-        apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+        apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
       }
       
       const response = await fetch(`${apiBase}/llm-comment`, {
@@ -573,11 +573,11 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
-    
+    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
+
     // Fix for incorrect dev URL in Vercel
     if (apiBase.includes('-dev')) {
-      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
     }
     
     if (!apiBase) {
@@ -635,10 +635,10 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
     
     if (apiBase.includes('-dev')) {
-      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
     }
 
     if (!apiBase) {
@@ -664,15 +664,30 @@ export const useModalAPI = () => {
       // This is slower but ensures only one container is used at a time
       const results: SourceGenerationResult[] = [];
       
+      const cleanInspirationImages = (imgs?: string[]) => {
+        if (!imgs) return undefined;
+        const filtered = imgs
+          .map(img => {
+            if (!img) return null;
+            if (img.startsWith('blob:')) return null;
+            if (img.startsWith('data:')) {
+              const parts = img.split(',');
+              return parts.length > 1 ? parts[1] : null;
+            }
+            return img;
+          })
+          .filter((x): x is string => !!x);
+        return filtered.length > 0 ? filtered : undefined;
+      };
+
       for (const { source, prompt } of request.prompts) {
         const sourceStartTime = Date.now();
         
         try {
           console.log(`[6-Image Matrix] Starting generation for source: ${source}`);
           
-          // NOTE: inspiration_images disabled - they fail to load on backend
-          // InspirationReference source uses tags from Gemma analysis in the prompt instead
-          // This is more reliable than multi-reference image loading
+          // Do NOT send inspiration_images to backend (to avoid VRAM blow-up).
+          // Style/material cues are already baked into the prompt.
           const inspirationImages = undefined;
           
           // Log base_image for debugging
@@ -725,11 +740,7 @@ export const useModalAPI = () => {
             console.warn(`[6-Image Matrix] WARNING: image_size is ${generationRequest.image_size}, expected 512 for preview!`);
           }
           
-          // Only include inspiration_images if explicitly provided (currently disabled)
-          // InspirationReference uses tags in prompt instead of image references
-          if (inspirationImages !== undefined) {
-            generationRequest.inspiration_images = inspirationImages;
-          }
+          // Inspiration images intentionally omitted
 
           // Check if aborted before making request
           if (abortSignal?.aborted) {
@@ -840,12 +851,12 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
     
     // Fix for incorrect dev URL in Vercel
-    if (apiBase.includes('-dev')) {
-      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
-    }
+      if (apiBase.includes('-dev')) {
+        apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
+      }
     
     if (!apiBase) {
       const msg = 'Brak konfiguracji ENDPOINTU generacji (NEXT_PUBLIC_MODAL_API_URL)';
@@ -900,12 +911,12 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
+      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
     
     // Fix for incorrect dev URL in Vercel
-    if (apiBase.includes('-dev')) {
-      apiBase = 'https://akademiasztuki--aura-flux-api-fastapi-app.modal.run';
-    }
+      if (apiBase.includes('-dev')) {
+        apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
+      }
     
     if (!apiBase) {
       const msg = 'Brak konfiguracji ENDPOINTU upscalowania (NEXT_PUBLIC_MODAL_API_URL)';

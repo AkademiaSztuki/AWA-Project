@@ -39,6 +39,89 @@ const STEP_TO_DIALOGUE: Record<WizardStep, string> = {
   sensory_tests: 'wizard_sensory'
 };
 
+// Heuristic extraction of implicit warmth / brightness / complexity from Tinder swipes
+function computeImplicitSemanticsFromSwipes(swipes: Array<{ direction: 'left' | 'right'; tags?: string[]; categories?: any }>) {
+  const liked = swipes.filter((s) => s.direction === 'right');
+  if (liked.length === 0) return {};
+
+  const warmTokens = new Set(['warm', 'cozy', 'earth', 'terracotta', 'gold', 'beige', 'wood', 'oak', 'sunny']);
+  const coolTokens = new Set(['cool', 'ice', 'icy', 'blue', 'silver', 'chrome', 'steel']);
+  const brightTokens = new Set(['bright', 'light', 'daylight', 'sunny', 'airy']);
+  const darkTokens = new Set(['dark', 'moody', 'dim', 'shadow']);
+  const complexTokens = new Set(['maximalist', 'ornate', 'pattern', 'patterned', 'busy', 'layered', 'decorative', 'eclectic', 'detailed']);
+  const simpleTokens = new Set(['minimal', 'minimalist', 'clean', 'simple', 'plain']);
+
+  let warmthScore = 0;
+  let brightnessScore = 0;
+  let complexityScore = 0;
+  let warmthCount = 0;
+  let brightnessCount = 0;
+  let complexityCount = 0;
+
+  const tokensFrom = (item: any) => {
+    const tags = Array.isArray(item?.tags) ? item.tags : [];
+    const categoriesTokens = [
+      item?.categories?.style,
+      ...(item?.categories?.colors || []),
+      ...(item?.categories?.materials || []),
+      ...(item?.categories?.mood || [])
+    ].filter(Boolean);
+    return [...tags, ...categoriesTokens].map((t: any) => t?.toString().toLowerCase()).filter(Boolean);
+  };
+
+  liked.forEach((s) => {
+    const tokens = tokensFrom(s);
+
+    tokens.forEach((t) => {
+      if (warmTokens.has(t)) {
+        warmthScore += 1;
+        warmthCount++;
+      } else if (coolTokens.has(t)) {
+        warmthScore -= 1;
+        warmthCount++;
+      }
+
+      if (brightTokens.has(t)) {
+        brightnessScore += 1;
+        brightnessCount++;
+      } else if (darkTokens.has(t)) {
+        brightnessScore -= 1;
+        brightnessCount++;
+      }
+
+      if (complexTokens.has(t)) {
+        complexityScore += 1;
+        complexityCount++;
+      } else if (simpleTokens.has(t)) {
+        complexityScore -= 1;
+        complexityCount++;
+      }
+    });
+
+    // If API already gives numeric brightness/complexity, include them
+    if (typeof s.categories?.brightness === 'number') {
+      brightnessScore += s.categories.brightness - 0.5;
+      brightnessCount++;
+    }
+    if (typeof s.categories?.complexity === 'number') {
+      complexityScore += s.categories.complexity - 0.5;
+      complexityCount++;
+    }
+  });
+
+  const toPercent01 = (score: number, count: number) => {
+    if (count === 0) return undefined;
+    const normalized = 0.5 + score / (count * 2); // clamp around 0.5
+    return Math.max(0, Math.min(1, normalized));
+  };
+
+  return {
+    warmth: toPercent01(warmthScore, warmthCount),
+    brightness: toPercent01(brightnessScore, brightnessCount),
+    complexity: toPercent01(complexityScore, complexityCount)
+  };
+}
+
 const LIVING_SITUATION_OPTIONS = [
   { id: 'alone', label: { pl: 'Sam/Sama', en: 'Alone' } },
   { id: 'partner', label: { pl: 'Z Partnerem', en: 'With Partner' } },
@@ -64,6 +147,94 @@ const GOAL_OPTIONS = [
   { id: 'beauty', label: { pl: 'Estetyka i piękno', en: 'Aesthetics and beauty' } }
 ];
 
+const getDefaultCountry = (language: 'pl' | 'en') => (language === 'pl' ? 'PL' : 'US');
+const COUNTRY_OPTIONS = [
+  { code: 'PL', label: { pl: 'Polska', en: 'Poland' } },
+  { code: 'DE', label: { pl: 'Niemcy', en: 'Germany' } },
+  { code: 'CZ', label: { pl: 'Czechy', en: 'Czech Republic' } },
+  { code: 'SK', label: { pl: 'Słowacja', en: 'Slovakia' } },
+  { code: 'UA', label: { pl: 'Ukraina', en: 'Ukraine' } },
+  { code: 'GB', label: { pl: 'Wielka Brytania', en: 'United Kingdom' } },
+  { code: 'IE', label: { pl: 'Irlandia', en: 'Ireland' } },
+  { code: 'SE', label: { pl: 'Szwecja', en: 'Sweden' } },
+  { code: 'NO', label: { pl: 'Norwegia', en: 'Norway' } },
+  { code: 'FI', label: { pl: 'Finlandia', en: 'Finland' } },
+  { code: 'DK', label: { pl: 'Dania', en: 'Denmark' } },
+  { code: 'FR', label: { pl: 'Francja', en: 'France' } },
+  { code: 'ES', label: { pl: 'Hiszpania', en: 'Spain' } },
+  { code: 'PT', label: { pl: 'Portugalia', en: 'Portugal' } },
+  { code: 'IT', label: { pl: 'Włochy', en: 'Italy' } },
+  { code: 'NL', label: { pl: 'Holandia', en: 'Netherlands' } },
+  { code: 'BE', label: { pl: 'Belgia', en: 'Belgium' } },
+  { code: 'AT', label: { pl: 'Austria', en: 'Austria' } },
+  { code: 'CH', label: { pl: 'Szwajcaria', en: 'Switzerland' } },
+  { code: 'LT', label: { pl: 'Litwa', en: 'Lithuania' } },
+  { code: 'LV', label: { pl: 'Łotwa', en: 'Latvia' } },
+  { code: 'EE', label: { pl: 'Estonia', en: 'Estonia' } },
+  { code: 'US', label: { pl: 'Stany Zjednoczone', en: 'United States' } },
+  { code: 'CA', label: { pl: 'Kanada', en: 'Canada' } },
+  { code: 'AU', label: { pl: 'Australia', en: 'Australia' } },
+  { code: 'NZ', label: { pl: 'Nowa Zelandia', en: 'New Zealand' } },
+  { code: 'RO', label: { pl: 'Rumunia', en: 'Romania' } },
+  { code: 'HU', label: { pl: 'Węgry', en: 'Hungary' } },
+  { code: 'HR', label: { pl: 'Chorwacja', en: 'Croatia' } },
+  { code: 'SI', label: { pl: 'Słowenia', en: 'Slovenia' } },
+  { code: 'BG', label: { pl: 'Bułgaria', en: 'Bulgaria' } },
+  { code: 'GR', label: { pl: 'Grecja', en: 'Greece' } },
+];
+
+function CountrySelect({
+  value,
+  onChange,
+  language
+}: {
+  value: string;
+  onChange: (code: string) => void;
+  language: 'pl' | 'en';
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = COUNTRY_OPTIONS.find((option) => option.code === value)?.label[language] ?? value;
+
+  return (
+    <div className="relative" tabIndex={0} onBlur={() => setOpen(false)}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full rounded-lg border border-gold/60 bg-gradient-to-r from-gold/55 via-champagne/50 to-gold/35 p-3 text-sm font-modern text-graphite flex items-center justify-between focus:border-gold focus:outline-none backdrop-blur-lg shadow-sm"
+      >
+        <span>{selectedLabel}</span>
+        <span className="text-graphite/70">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute z-40 bottom-full mb-3 max-h-64 w-full overflow-auto rounded-xl border border-white/25 bg-[#c7b07a] shadow-2xl ring-1 ring-gold/35 backdrop-blur-sm">
+          <ul className="py-1 space-y-0.5">
+            {COUNTRY_OPTIONS.map((option) => (
+              <li key={option.code}>
+                <button
+                  type="button"
+                  className={`w-full text-left px-4 py-2 text-sm font-modern rounded-lg transition ${
+                    value === option.code
+                      ? 'bg-gold/80 text-white font-semibold shadow-inner drop-shadow-sm'
+                      : 'text-graphite/90 hover:bg-gold/70 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.55)]'
+                  }`}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onChange(option.code);
+                    setOpen(false);
+                  }}
+                >
+                  {option.label[language]}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const getLivingSituationLabel = (livingSituation?: string, language: 'pl' | 'en' = 'pl') =>
   LIVING_SITUATION_OPTIONS.find(o => o.id === livingSituation)?.label[language];
 
@@ -77,6 +248,7 @@ interface CoreProfileData {
     ageRange: string;
     gender: string;
     education: string;
+    country: string;
   };
   lifestyle?: {
     livingSituation: string;
@@ -161,9 +333,17 @@ export function CoreProfileWizard() {
   const [demographics, setDemographics] = useState({
     ageRange: '',
     gender: '',
-    education: ''
+    education: '',
+    country: getDefaultCountry(language)
   });
-  const canProceedDemographics = Boolean(demographics.ageRange && demographics.gender && demographics.education);
+  const canProceedDemographics = Boolean(demographics.ageRange && demographics.gender && demographics.education && demographics.country);
+
+  useEffect(() => {
+    setDemographics((prev) => ({
+      ...prev,
+      country: prev.country || getDefaultCountry(language)
+    }));
+  }, [language]);
 
   const steps: WizardStep[] = [
     'consent',
@@ -300,8 +480,39 @@ export function CoreProfileWizard() {
     setIsSubmitting(true);
     
     try {
+      const implicitSemantics = computeImplicitSemanticsFromSwipes(profileData.tinderSwipes || []);
+      const implicitScores = {
+        warmth: profileData.semanticDifferential?.warmth ?? sessionData?.visualDNA?.preferences?.warmth,
+        brightness: profileData.semanticDifferential?.brightness ?? sessionData?.visualDNA?.preferences?.brightness,
+        complexity: profileData.semanticDifferential?.complexity ?? sessionData?.visualDNA?.preferences?.complexity
+      };
+      const mergedImplicit = {
+        warmth: implicitSemantics.warmth ?? implicitScores.warmth,
+        brightness: implicitSemantics.brightness ?? implicitScores.brightness,
+        complexity: implicitSemantics.complexity ?? implicitScores.complexity
+      };
+
+      const mergedVisualDNA = {
+        ...(sessionData?.visualDNA || {}),
+        preferences: {
+          ...(sessionData?.visualDNA?.preferences || {}),
+          warmth: mergedImplicit.warmth,
+          brightness: mergedImplicit.brightness,
+          complexity: mergedImplicit.complexity
+        },
+        implicitScores: mergedImplicit
+      };
+
+      const explicitTopMaterials =
+        profileData.colorsAndMaterials?.topMaterials?.length
+          ? profileData.colorsAndMaterials.topMaterials
+          : profileData.sensoryPreferences?.texture
+          ? [profileData.sensoryPreferences.texture]
+          : sessionData?.colorsAndMaterials?.topMaterials || [];
+
       // Save ALL profile data to session
       await updateSessionData({
+        visualDNA: mergedVisualDNA as any,
         // Lifestyle
         lifestyle: profileData.lifestyle,
         
@@ -320,7 +531,10 @@ export function CoreProfileWizard() {
         semanticDifferential: profileData.semanticDifferential,
         
         // Colors & Materials (explicit)
-        colorsAndMaterials: profileData.colorsAndMaterials as any,
+        colorsAndMaterials: {
+          ...(profileData.colorsAndMaterials || {}),
+          topMaterials: explicitTopMaterials
+        } as any,
         
         // Sensory preferences (explicit)
         sensoryPreferences: profileData.sensoryPreferences,
@@ -574,7 +788,7 @@ function ConsentStep({ onAgree, onExit }: { onAgree: () => void; onExit: () => v
 
   return (
     <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
-      <h1 className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-3">
+      <h1 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-3">
         {texts.title}
       </h1>
 
@@ -631,6 +845,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
       age: 'Przedział wiekowy',
       gender: 'Płeć',
       education: 'Wykształcenie',
+      country: 'Kraj zamieszkania',
       back: 'Wstecz',
       continue: 'Kontynuuj'
     },
@@ -640,6 +855,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
       age: 'Age range',
       gender: 'Gender',
       education: 'Education level',
+      country: 'Country of residence',
       back: 'Back',
       continue: 'Continue'
     }
@@ -654,7 +870,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
       transition={{ duration: 0.6 }}
     >
       <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
-        <h2 className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
+        <h2 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
           {texts.title}
         </h2>
         <p className="text-graphite font-modern mb-6 text-sm">
@@ -736,6 +952,17 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-graphite mb-2">
+              {texts.country}
+            </label>
+            <CountrySelect
+              value={data.country}
+              onChange={(code) => onUpdate({ ...data, country: code })}
+              language={language}
+            />
           </div>
         </div>
 

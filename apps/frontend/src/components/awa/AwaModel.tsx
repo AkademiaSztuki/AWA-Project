@@ -4,7 +4,7 @@ import { useGLTF, useAnimations, useEnvironment } from '@react-three/drei';
 import * as THREE from 'three';
 import { FlowStep } from '@/types';
 
-// Shadery dla okrągłych cząsteczek z kolorami z tekstury
+// Shadery dla okrągłych cząsteczek z kolorami z tekstury + miękką maską i interakcją z myszą
 const particleVertexShader = `
   attribute float aSize;
   attribute vec3 aColor;
@@ -12,6 +12,10 @@ const particleVertexShader = `
   attribute vec2 aUv;
   attribute float aAnimOffset; // Offset dla animacji - różny dla każdej cząsteczki
   uniform float uTime; // Czas dla animacji
+  uniform vec3 uMouseWorld;
+  uniform float uMouseRadius;
+  uniform float uMouseStrength;
+  uniform float uSize;
   varying vec3 vColor;
   varying float vOpacity;
   varying vec2 vUv;
@@ -25,32 +29,38 @@ const particleVertexShader = `
     float animSpeed = 0.3 + aAnimOffset * 0.7; // Różna prędkość dla każdej cząsteczki (0.3-1.0)
     float animPhase = aAnimOffset * 6.28318; // Różna faza startowa (0-2π)
     
-    // Wszystkie cząsteczki mają delikatny ruch, ale różny w zależności od animOffset
     float movementIntensity = aAnimOffset * 0.8; // Intensywność ruchu (0-0.8)
-    
-    // Delikatne drżenie i naturalny ruch w różnych kierunkach
     float time1 = uTime * animSpeed + animPhase;
     float time2 = uTime * animSpeed * 0.7 + animPhase * 1.3;
     float time3 = uTime * animSpeed * 0.5 + animPhase * 2.1;
     
-    // Naturalny, żywy ruch - delikatne kołysanie
+    // Delikatne kołysanie
     animPos += vec3(
       sin(time1) * movementIntensity * 0.015,
       cos(time2) * movementIntensity * 0.012,
       sin(time3) * movementIntensity * 0.008
     );
     
-    // Dodatkowe delikatne drżenie dla bardziej żywego efektu
+    // Drżenie
     float jitterAmount = movementIntensity * 0.003;
     animPos += vec3(
       sin(uTime * 5.0 + animPhase) * jitterAmount,
       cos(uTime * 4.3 + animPhase * 1.5) * jitterAmount,
       sin(uTime * 6.1 + animPhase * 2.3) * jitterAmount * 0.7
     );
-    
+
+    // Interakcja z myszą - rozpychanie punktów
+    vec3 toMouse = animPos - uMouseWorld;
+    float dist = length(toMouse);
+    float influence = 1.0 - smoothstep(uMouseRadius * 0.4, uMouseRadius, dist);
+    if (dist > 0.0001) {
+      animPos += normalize(toMouse) * influence * uMouseStrength;
+    }
+
     vec4 mvPosition = modelViewMatrix * vec4(animPos, 1.0);
     float att = clamp(150.0 / -mvPosition.z, 0.5, 8.0);
-    gl_PointSize = aSize * att;
+    float sizeBoost = mix(1.0, 1.25, influence);
+    gl_PointSize = aSize * uSize * sizeBoost * att;
     gl_Position = projectionMatrix * mvPosition;
   }
 `;
@@ -62,51 +72,45 @@ const particleFragmentShader = `
   varying float vOpacity;
   varying vec2 vUv;
   void main() {
-    float d = distance(gl_PointCoord, vec2(0.5));
-    float alpha = 1.0 - smoothstep(0.45, 0.5, d);
+    vec2 pc = gl_PointCoord - vec2(0.5);
+    float d = length(pc);
+    // Bardziej rozmyta, miękka maska (quasi-gaussian), przyjaźniejsza dla bloom
+    float core = exp(-16.0 * d * d);      // mocny środek
+    float fringe = exp(-6.0 * d * d);     // szeroka poświata
+    float alpha = (core * 0.7 + fringe * 0.6) * vOpacity;
+    if (alpha < 0.01) discard;
+
     vec3 baseColor = vColor;
     if (useMap == 1) {
       vec3 texColor = texture2D(mapTex, vUv).rgb;
-      // Ograniczenie kolorów tekstury - wyeliminuj białe i czarne
-      texColor = clamp(texColor, vec3(0.4), vec3(0.85));
-      // Głównie używaj kolorów z tekstury modelu (80% tekstura), z lekkim wpływem palety (20%)
+      texColor = clamp(texColor, vec3(0.4), vec3(0.85)); // ogranicz biel/czerń
       baseColor = mix(vColor, texColor, 0.8);
     }
-    // Sprawdź jasność - jeśli zbyt jasna (biała), zamień na żółty/złoty
     float brightness = dot(baseColor, vec3(0.299, 0.587, 0.114));
-    
-    // Sprawdź czy kolor jest biały (wysoka jasność + niska saturacja)
     float maxChannel = max(max(baseColor.r, baseColor.g), baseColor.b);
     float minChannel = min(min(baseColor.r, baseColor.g), baseColor.b);
     float saturation = (maxChannel - minChannel) / max(maxChannel, 0.001);
     bool isWhite = brightness > 0.65 && saturation < 0.35;
-    bool isLight = maxChannel > 0.75; // Wykryj jasne kolory (wysoki kanał)
-    
-    // Bardzo agresywne wykrywanie i zamiana jasnych/białych kolorów na żółte
-    // Wykrywaj nawet lekko jasne kolory (niższy próg) - szczególnie na rękach i głowie
+    bool isLight = maxChannel > 0.75;
+
     if (brightness > 0.5 || isWhite || isLight || (brightness > 0.55 && saturation < 0.5)) {
-      // Utwórz ciepły żółty/złoty kolor pasujący do otoczenia
-      vec3 goldenYellow = vec3(1.0, 0.84, 0.0); // Złoty - pasuje do #FFD700
-      vec3 warmYellow = vec3(1.0, 0.9, 0.6); // Ciepły żółty - pasuje do #FFE5B4
-      vec3 deepGold = vec3(0.95, 0.75, 0.2); // Głębszy złoty
-      
-      // Im jaśniejsze, tym bardziej złote, ale zawsze żółte
-      float whiteAmount = (brightness - 0.5) / 0.55; // 0.6-0.95 -> 0.0-1.0
+      vec3 goldenYellow = vec3(1.0, 0.84, 0.0);
+      vec3 warmYellow = vec3(1.0, 0.9, 0.6);
+      vec3 deepGold = vec3(0.95, 0.75, 0.2);
+      float whiteAmount = (brightness - 0.5) / 0.55;
       whiteAmount = clamp(whiteAmount, 0.0, 1.0);
       vec3 yellowTint = mix(deepGold, mix(warmYellow, goldenYellow, whiteAmount * 0.5), whiteAmount);
-      
-      // Bardziej agresywna zamiana - 90% żółty kolor
       baseColor = mix(baseColor, yellowTint, 0.9);
     }
-    
-    // Jeśli zbyt ciemna (prawie czarna), użyj koloru z palety
+
     if (brightness < 0.4) {
       baseColor = mix(baseColor, vColor, 0.7);
     }
-    
-    // Finalne clampowanie - wyeliminuj skrajne wartości, ale pozwól na ciepłe żółte
-    baseColor = clamp(baseColor, vec3(0.35), vec3(1.0));
-    gl_FragColor = vec4(baseColor, alpha * vOpacity);
+
+    baseColor = clamp(baseColor, vec3(0.35), vec3(0.95));
+    // Podbicie, ale łagodniejsze (na szerokiej poświacie)
+    baseColor *= mix(0.95, 1.2, fringe);
+    gl_FragColor = vec4(baseColor, alpha);
   }
 `;
 
@@ -146,22 +150,32 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const meshRef = useRef<THREE.Group>(null);
   const [headBone, setHeadBone] = useState<THREE.Bone | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const mouseWorldRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const mouseLocalRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
+  const pointerNdcRef = useRef<THREE.Vector2>(new THREE.Vector2());
+  const mousePlaneRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0));
+  const tempVecRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const pointsRef = useRef<THREE.Points | null>(null);
   const meshDataRef = useRef<MeshVertexData[]>([]);
   const [particlesGeometry, setParticlesGeometry] = useState<THREE.BufferGeometry | null>(null);
   const baseColorMapRef = useRef<THREE.Texture | null>(null);
   // Włączenie cząsteczek – diagnostycznie (duże, widoczne)
-  const particleDensity = 0.10;
-  const particleSize = 0.45 // Zmień tę wartość żeby zwiększyć/zmniejszyć rozmiar pojedynczych cząsteczek
-  const particleScale = 1.00;// SKALA MODELU CZĄSTECZEK - zmień (np. 1.1 = 10% większy, 0.9 = 10% mniejszy) żeby powiększyć/pomniejszyć cały model cząsteczek
+  const particleDensity = 0.20;
+  const particleSize = 0.45; // Zmień tę wartość żeby zwiększyć/zmniejszyć rozmiar pojedynczych cząsteczek
+  const particleScale = 1.001; // SKALA MODELU CZĄSTECZEK - zmień (np. 1.1 = 10% większy, 0.9 = 10% mniejszy) żeby powiększyć/pomniejszyć cały model cząsteczek
   const particleOpacityMin = 0.7; // Minimalna przezroczystość cząsteczek (0-1)
   const particleOpacityMax = 1.0; // Maksymalna przezroczystość cząsteczek (0-1)
   // Offset dla pozycji punktów - możesz zmienić te wartości żeby przesunąć punkty
   const particleOffset: [number, number, number] = [1.4, 0.90, 0];
+  // Dodatkowe parametry interakcji i rozmiaru
+  const particleSizeMultiplier = 2.35;
+  const particleMouseRadius = 0.35;
+  const particleMouseStrength = 0.05;
 
   // Pobierz envMap z preset "sunset" - lepszy dla metalu (więcej kontrastu i refleksów)
   const envMap = useEnvironment({ preset: 'studio' });
-  const { scene: threeScene } = useThree();
+  const { scene: threeScene, camera } = useThree();
 
   // Load Quinn model
   const { scene } = useGLTF('/models/SKM_Quinn.gltf');
@@ -189,7 +203,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
         // Apply metallic materials to meshes (both Mesh and SkinnedMesh)
         if (child.type === 'Mesh' || child.type === 'SkinnedMesh') {
           const mesh = child as THREE.Mesh | THREE.SkinnedMesh;
-          const modelOpacity = 0.3; // PRZEZROCZYSTOŚĆ MODELU 3D - zmień (0-1) aby regulować przezroczystość samego modelu z teksturami
+          const modelOpacity = 0.0; // PRZEZROCZYSTOŚĆ MODELU 3D - zmień (0-1) aby regulować przezroczystość samego modelu z teksturami
           
           if (mesh.material) {
             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
@@ -255,12 +269,43 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
           const positions = geometry.attributes.position.array as Float32Array;
           const uvsAttr = geometry.attributes.uv as THREE.BufferAttribute | undefined;
           const totalVertices = positions.length / 3;
-          const vertexIndices: number[] = [];
+          const meshNameLower = (mesh.name || '').toLowerCase();
+          // Bounds po Y dla biasu górnych partii
+          let minY = Infinity;
+          let maxY = -Infinity;
           for (let i = 0; i < totalVertices; i++) {
-            if (Math.random() <= particleDensity) {
-              vertexIndices.push(i);
-            }
+            const y = positions[i * 3 + 1];
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
           }
+          const spanY = Math.max(maxY - minY, 1e-3);
+          // Selekcja bardziej równomierna: deterministyczny hash + bias, sortowanie po score
+          const targetCount = Math.max(1, Math.floor(totalVertices * particleDensity));
+          const scored: Array<{ idx: number; score: number }> = [];
+          const hash = (n: number) => {
+            // prosty deterministyczny hash float 0-1
+            return Math.abs(Math.sin(n * 12.9898 + 78.233) * 43758.5453) % 1;
+          };
+          for (let i = 0; i < totalVertices; i++) {
+            const i3 = i * 3;
+            const y = positions[i3 + 1];
+            const yNorm = (y - minY) / spanY;
+            let bias = 1.0;
+            if (yNorm > 0.6) bias += 0.6;
+            if (yNorm > 0.8) bias += 0.6;
+            if (meshNameLower.includes('head') || meshNameLower.includes('neck') || meshNameLower.includes('face')) {
+              bias += 1.0;
+            }
+            if (meshNameLower.includes('spine') || meshNameLower.includes('chest') || meshNameLower.includes('upper')) {
+              bias += 0.3;
+            }
+            const h = hash(i);
+            // Niższe score = większa szansa (dzielone przez bias)
+            const score = h / bias;
+            scored.push({ idx: i, score });
+          }
+          scored.sort((a, b) => a.score - b.score);
+          const vertexIndices = scored.slice(0, Math.min(targetCount, scored.length)).map((s) => s.idx);
           if (vertexIndices.length === 0) return;
 
           const basePositions = new Float32Array(vertexIndices.length * 3);
@@ -381,6 +426,10 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
               mapTex: { value: baseColorMapRef.current },
               useMap: { value: baseColorMapRef.current ? 1 : 0 },
               uTime: { value: 0 }, // Czas dla animacji żywego ruchu
+              uMouseWorld: { value: mouseLocalRef.current },
+              uMouseRadius: { value: particleMouseRadius },
+              uMouseStrength: { value: particleMouseStrength },
+              uSize: { value: particleSizeMultiplier },
             },
             transparent: true,
             depthWrite: false,
@@ -419,10 +468,27 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
       const x = (event.clientX / window.innerWidth) * 2 - 1;
       const y = -(event.clientY / window.innerHeight) * 2 + 1;
       setMousePosition({ x, y });
+      if (!camera) return;
+      const pointer = pointerNdcRef.current;
+      pointer.set(x, y);
+      const raycaster = raycasterRef.current;
+      raycaster.setFromCamera(pointer, camera);
+
+      const plane = mousePlaneRef.current;
+      const temp = tempVecRef.current;
+      const targetZ = meshRef.current
+        ? meshRef.current.getWorldPosition(temp).z
+        : 0;
+      plane.set(new THREE.Vector3(0, 0, 1), -targetZ);
+      raycaster.ray.intersectPlane(plane, mouseWorldRef.current);
+      if (meshRef.current && mouseWorldRef.current) {
+        mouseLocalRef.current.copy(mouseWorldRef.current);
+        meshRef.current.worldToLocal(mouseLocalRef.current);
+      }
     };
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+  }, [camera]);
 
   const { actions, mixer } = useAnimations(idleAnimations, scene);
 
@@ -486,8 +552,22 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
     // Aktualizacja czasu dla animacji cząsteczek (żywotność)
     if (pointsRef.current && pointsRef.current.material instanceof THREE.ShaderMaterial) {
       const material = pointsRef.current.material as THREE.ShaderMaterial;
-      if (material.uniforms && material.uniforms.uTime) {
-        material.uniforms.uTime.value = state.clock.elapsedTime;
+      if (material.uniforms) {
+        if (material.uniforms.uTime) {
+          material.uniforms.uTime.value = state.clock.elapsedTime;
+        }
+        if (material.uniforms.uMouseWorld) {
+          material.uniforms.uMouseWorld.value.copy(mouseLocalRef.current);
+        }
+        if (material.uniforms.uMouseRadius) {
+          material.uniforms.uMouseRadius.value = particleMouseRadius;
+        }
+        if (material.uniforms.uMouseStrength) {
+          material.uniforms.uMouseStrength.value = particleMouseStrength;
+        }
+        if (material.uniforms.uSize) {
+          material.uniforms.uSize.value = particleSizeMultiplier;
+        }
       }
     }
 

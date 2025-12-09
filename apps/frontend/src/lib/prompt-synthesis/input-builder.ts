@@ -147,12 +147,16 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
           conscientiousness: sessionData.bigFive.scores.conscientiousness ?? 50,
           extraversion: sessionData.bigFive.scores.extraversion ?? 50,
           agreeableness: sessionData.bigFive.scores.agreeableness ?? 50,
-          neuroticism: sessionData.bigFive.scores.neuroticism ?? 50
+          neuroticism: sessionData.bigFive.scores.neuroticism ?? 50,
+          domains: sessionData.bigFive.scores.domains,
+          facets: sessionData.bigFive.scores.facets
         }
       : undefined,
     inspirations: sessionData.inspirations?.map((item) => ({
       tags: item.tags || {},
-      description: item.description
+      description: item.description,
+      url: item.url || (item as any).image || (item as any).previewUrl,
+      imageBase64: (item as any).imageBase64
     })),
     householdContext: {
       livingSituation: lifestyle?.livingSituation || 'alone',

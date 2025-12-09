@@ -18,7 +18,7 @@ import { useSession, useSessionData } from '@/hooks';
 import { SessionData } from '@/types';
 import { RoomPreferencePayload, RoomActivity } from '@/types/deep-personalization';
 import { COLOR_PALETTE_OPTIONS, getPaletteLabel } from '@/components/setup/paletteOptions';
-import { STYLE_OPTIONS } from '@/lib/questions/style-options';
+import { STYLE_OPTIONS, getStyleLabel } from '@/lib/questions/style-options';
 import { SensoryTestSuite } from '@/components/research/SensoryTests';
 import {
   SEMANTIC_DIFFERENTIAL_DIMENSIONS,
@@ -157,6 +157,8 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     const prevIndex = currentStepIndex - 1;
     if (prevIndex >= 0) {
       setCurrentStep(steps[prevIndex]);
+    } else {
+      router.push('/dashboard');
     }
   };
 
@@ -265,6 +267,35 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         firstChars: roomImageBase64?.substring(0, 50) || 'N/A'
       });
       
+      // Ensure the new space exists and becomes active for future generations
+      const existingSpaces = ((sessionData as any)?.spaces || []) as Array<{
+        id: string;
+        name: string;
+        type: string;
+        images: any[];
+        createdAt: string;
+        updatedAt: string;
+      }>;
+      const targetSpaceId = `space_${householdId || Date.now()}`;
+      const maybeExistingSpace = existingSpaces.find((s) => s.id === targetSpaceId);
+      const spaceName =
+        roomData.name?.trim() ||
+        (language === 'pl' ? 'Nowa przestrzeń' : 'New Space');
+
+      const spacePayload = {
+        id: targetSpaceId,
+        name: spaceName,
+        type: roomData.roomType || 'personal',
+        images: maybeExistingSpace?.images || [],
+        createdAt: maybeExistingSpace?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedSpaces =
+        maybeExistingSpace
+          ? existingSpaces.map((s) => (s.id === targetSpaceId ? spacePayload : s))
+          : [...existingSpaces, spacePayload];
+
       await updateSessionData({
         roomType: roomData.roomType,
         roomName: roomData.name,
@@ -276,7 +307,9 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         roomActivityContext: activityContext,
         roomImage: roomImageBase64, // Use converted base64, not blob URL
         prsCurrent: roomData.prsCurrent,
-        prsTarget: roomData.prsTarget
+        prsTarget: roomData.prsTarget,
+        currentSpaceId: targetSpaceId,
+        spaces: updatedSpaces
       });
       
       // Navigate to generate flow
@@ -1157,6 +1190,7 @@ function PreferenceSourceStep({
 
   const hasProfileData = Boolean(
     sessionData?.colorsAndMaterials?.selectedPalette ||
+      sessionData?.colorsAndMaterials?.selectedStyle ||
       sessionData?.semanticDifferential ||
       (sessionData?.sensoryPreferences &&
         (sessionData.sensoryPreferences.music ||
@@ -1165,11 +1199,17 @@ function PreferenceSourceStep({
   );
 
   const profilePaletteLabel = getPaletteLabel(sessionData?.colorsAndMaterials?.selectedPalette, language);
+  const profileStyleLabel = sessionData?.colorsAndMaterials?.selectedStyle
+    ? getStyleLabel(sessionData.colorsAndMaterials.selectedStyle, language)
+    : undefined;
   const profileSemantic = sessionData?.semanticDifferential;
   const profileSensory = sessionData?.sensoryPreferences;
   const profilePreview = [
     profilePaletteLabel
       ? `${language === 'pl' ? 'Paleta' : 'Palette'}: ${profilePaletteLabel}`
+      : null,
+    profileStyleLabel
+      ? `${language === 'pl' ? 'Styl' : 'Style'}: ${profileStyleLabel}`
       : null,
     profileSemantic
       ? `${language === 'pl' ? 'Ciepło' : 'Warmth'} ${Math.round((profileSemantic.warmth ?? 0) * 100)}%`
@@ -1197,13 +1237,37 @@ function PreferenceSourceStep({
             </h2>
             <p className="text-sm text-silver-dark font-modern">
               {language === 'pl'
-                ? 'To osobny krok: wybierz szybkie użycie profilu lub przejdź do krótkich pytań dla tego pokoju.'
+                ? 'Wybierz szybkie użycie profilu lub przejdź do krótkich pytań dla tego pokoju.'
                 : 'Pick the fast profile reuse or move to a short, room-specific questionnaire.'}
             </p>
           </div>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-6 mb-10">
+          <div
+            className={`glass-panel rounded-2xl p-6 border transition-all ${
+              preferenceSource === 'complete'
+                ? 'border-gold bg-gold/5 shadow-lg shadow-gold/10'
+                : 'border-white/10'
+            }`}
+          >
+            <p className="uppercase text-xs tracking-[0.3em] text-silver-dark mb-2">
+              {language === 'pl' ? 'Dokładniejsze' : 'Complete mode'}
+            </p>
+            <h3 className="text-xl font-nasalization text-graphite mb-4">
+              {language === 'pl' ? 'Odpowiem na pytania' : 'Answer quick room questions'}
+            </h3>
+            <p className="text-sm text-silver-dark font-modern mb-4">
+              {language === 'pl'
+                ? '3 krótkie sekcje zajmą ~2 minuty i dadzą IDA pełny kontekst dla tego pokoju.'
+                : 'Three short sections take ~2 minutes and give IDA a complete, room-specific context.'}
+            </p>
+            <GlassButton variant="secondary" onClick={onSelectQuestions}>
+              {language === 'pl' ? 'Przejdź do pytań' : 'Go to questions'}
+              <ArrowRight size={16} />
+            </GlassButton>
+          </div>
+
           <div
             className={`glass-panel rounded-2xl p-6 border transition-all ${
               preferenceSource === 'profile'
@@ -1246,30 +1310,6 @@ function PreferenceSourceStep({
               disabled={!hasProfileData}
             >
               {language === 'pl' ? 'Zastosuj profil' : 'Apply my profile'}
-              <ArrowRight size={16} />
-            </GlassButton>
-          </div>
-
-          <div
-            className={`glass-panel rounded-2xl p-6 border transition-all ${
-              preferenceSource === 'complete'
-                ? 'border-gold bg-gold/5 shadow-lg shadow-gold/10'
-                : 'border-white/10'
-            }`}
-          >
-            <p className="uppercase text-xs tracking-[0.3em] text-silver-dark mb-2">
-              {language === 'pl' ? 'Dokładniejsze' : 'Complete mode'}
-            </p>
-            <h3 className="text-xl font-nasalization text-graphite mb-4">
-              {language === 'pl' ? 'Odpowiem na pytania' : 'Answer quick room questions'}
-            </h3>
-            <p className="text-sm text-silver-dark font-modern mb-4">
-              {language === 'pl'
-                ? '3 krótkie sekcje zajmą ~2 minuty i dadzą IDA pełny kontekst dla tego pokoju.'
-                : 'Three short sections take ~2 minutes and give IDA a complete, room-specific context.'}
-            </p>
-            <GlassButton variant="secondary" onClick={onSelectQuestions}>
-              {language === 'pl' ? 'Przejdź do pytań' : 'Go to questions'}
               <ArrowRight size={16} />
             </GlassButton>
           </div>

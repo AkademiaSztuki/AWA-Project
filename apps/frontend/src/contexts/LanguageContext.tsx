@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Language, LocalizedText, getLocalizedText } from '@/lib/questions/validated-scales';
 
 interface LanguageContextType {
@@ -11,32 +11,69 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('pl');
+const LANGUAGE_COOKIE = 'app_language';
+const ONE_YEAR_IN_SECONDS = 60 * 60 * 24 * 365;
 
-  // Load language from localStorage on mount
+const isLanguage = (value: unknown): value is Language =>
+  value === 'pl' || value === 'en';
+
+const getCookieLanguage = (): Language | null => {
+  if (typeof document === 'undefined') return null;
+  const cookie = document.cookie
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith(`${LANGUAGE_COOKIE}=`));
+
+  if (!cookie) return null;
+  const value = cookie.split('=')[1];
+  return isLanguage(value) ? value : null;
+};
+
+const persistLanguage = (lang: Language) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(LANGUAGE_COOKIE, lang);
+  document.cookie = `${LANGUAGE_COOKIE}=${lang}; path=/; max-age=${ONE_YEAR_IN_SECONDS}`;
+};
+
+const getStoredLanguage = (): Language | null => {
+  if (typeof window === 'undefined') return null;
+  const stored = localStorage.getItem(LANGUAGE_COOKIE);
+  if (isLanguage(stored)) return stored;
+
+  const cookieLang = getCookieLanguage();
+  if (cookieLang) return cookieLang;
+
+  return null;
+};
+
+interface LanguageProviderProps {
+  children: React.ReactNode;
+  initialLanguage?: Language;
+}
+
+export function LanguageProvider({ children, initialLanguage = 'pl' }: LanguageProviderProps) {
+  const [language, setLanguageState] = useState<Language>(initialLanguage);
+  const initialLanguageRef = useRef<Language>(initialLanguage);
+
   useEffect(() => {
-    const savedLang = localStorage.getItem('app_language') as Language;
-    if (savedLang && (savedLang === 'pl' || savedLang === 'en')) {
-      setLanguageState(savedLang);
-    } else {
-      // Detect browser language
-      const browserLang = navigator.language.toLowerCase();
-      if (browserLang.startsWith('pl')) {
-        setLanguageState('pl');
-      } else {
-        setLanguageState('en');
-      }
-    }
+    const storedLang = getStoredLanguage();
+    // Prefer server-detected language (initialLanguageRef) over stored when they differ
+    const effectiveLang =
+      storedLang && storedLang === initialLanguageRef.current
+        ? storedLang
+        : initialLanguageRef.current;
+
+    setLanguageState(effectiveLang);
+    persistLanguage(effectiveLang);
+    // run only once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Save language to localStorage when it changes
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
-    localStorage.setItem('app_language', lang);
+    persistLanguage(lang);
   };
 
-  // Translation helper function
   const t = (text: LocalizedText): string => {
     return getLocalizedText(text, language);
   };
@@ -48,7 +85,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Hook to use language context
 export function useLanguage() {
   const context = useContext(LanguageContext);
   if (context === undefined) {
@@ -57,7 +93,6 @@ export function useLanguage() {
   return context;
 }
 
-// Language toggle component
 export function LanguageToggle() {
   const { language, setLanguage } = useLanguage();
 

@@ -152,7 +152,7 @@ export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserP
 
     inspirations: sessionData.inspirations || [],
 
-    profileCompletedAt: sessionData.coreProfileCompletedAt
+    profileCompletedAt: sessionData.coreProfileCompletedAt || (sessionData.coreProfileComplete ? new Date().toISOString() : undefined)
   };
 }
 

@@ -13,6 +13,8 @@ import modal
 import os
 import threading
 import time
+import asyncio
+import traceback
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -40,7 +42,8 @@ def decode_base64_image(base64_string: str) -> bytes:
         raise HTTPException(status_code=400, detail=f"Invalid image file: {e}")
 
 # Modal configuration
-app = modal.App("aura-flux-api")
+# NOTE: target app per Modal list: aura-flux-api-renamed
+app = modal.App("aura-flux-api-renamed")
 
 # Model configuration - FLUX.2 Dev 4-bit quantized (fits in 24GB L4)
 MODEL_NAME = "diffusers/FLUX.2-dev-bnb-4bit"
@@ -271,6 +274,17 @@ class Flux2Model:
                 cache_dir=CACHE_DIR,
                 token=self.hf_token,
             ).to(self.device)
+
+            # Memory optimizations to reduce CUDA OOMs
+            try:
+                self.pipe.enable_attention_slicing()
+                self.pipe.enable_vae_slicing()
+                # sequential cpu offload is heavier but safest when memory is very tight
+                # keep it guarded to avoid errors if not supported in this env
+                if hasattr(self.pipe, "enable_sequential_cpu_offload"):
+                    self.pipe.enable_sequential_cpu_offload()
+            except Exception as e:
+                print(f"Memory optimization setup warning: {e}")
             
             print("FLUX.2 Dev 4-bit model loaded successfully!")
         except Exception as e:
@@ -287,8 +301,8 @@ class Flux2Model:
                 raise ValueError("FLUX 2 requires a base image for image-to-image editing!")
             
             # Preview settings: 512x512 (0.26MP - valid per BFL docs, min 64x64)
-            preview_size = 512
-            preview_steps = 30  # FLUX 2: 28 steps causes IndexError (scheduler has 29 sigmas, needs steps < 29)
+            preview_size = max(256, min(request.width or 512, request.height or 512, 512))
+            preview_steps = min(28, request.num_inference_steps or 20)  # keep steps modest for VRAM
             
             # Load and prepare base image
             init_image = Image.open(BytesIO(image_bytes)).convert('RGB').resize((preview_size, preview_size))
@@ -331,6 +345,7 @@ class Flux2Model:
             # Clear CUDA cache before generation to prevent OOM
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
             
             with torch.inference_mode():
                 result = self.pipe(
@@ -346,6 +361,7 @@ class Flux2Model:
             # Clear CUDA cache after generation
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
             
             # Convert images to base64
             images_b64 = []
@@ -393,29 +409,14 @@ class Flux2Model:
             prompt_tokens = len(request.prompt.split())
             print(f"[PROMPT] Token count: {prompt_tokens} (FLUX 2 supports up to 32K tokens)")
             
-            # Load and prepare base image
-            target_size = max(1024, min(request.width, request.height))
+            # Load and prepare base image - keep close to requested size to save VRAM
+            target_size = max(256, min(request.width, request.height, 768))
             init_image = Image.open(BytesIO(image_bytes)).convert('RGB').resize((target_size, target_size))
             print(f"Loaded base image, resized to: {init_image.size}")
             
-            # Prepare image list for FLUX 2 (supports multi-reference)
+            # Prepare image list for FLUX 2 (single base only to reduce VRAM; multi-reference disabled)
             image_list = [init_image]
-            
-            # Add inspiration images if provided (for multi-reference editing)
-            if inspiration_images_bytes:
-                print(f"Adding {len(inspiration_images_bytes)} inspiration images for multi-reference editing")
-                for i, insp_bytes in enumerate(inspiration_images_bytes[:6]):  # FLUX 2 dev supports up to 6 reference images
-                    try:
-                        insp_img = Image.open(BytesIO(insp_bytes)).convert('RGB')
-                        # Resize to match base image aspect ratio approximately
-                        insp_img = insp_img.resize((target_size, target_size))
-                        image_list.append(insp_img)
-                        print(f"Loaded inspiration image {i+1}, size: {insp_img.size}")
-                    except Exception as e:
-                        print(f"Failed to load inspiration image {i+1}: {e}")
-                        # Continue with other images
-                print(f"Total images for multi-reference: {len(image_list)}")
-            
+
             # Set random seed if provided
             if request.seed is not None:
                 torch.manual_seed(request.seed)
@@ -429,12 +430,13 @@ class Flux2Model:
                 if torch.cuda.is_available():
                     torch.cuda.manual_seed(seed)
             
-            # Generate images with FLUX 2
+            # Generate images with FLUX 2 (single-reference only to save VRAM)
             print(f"Running FLUX 2 Dev image-to-image inference with {len(image_list)} reference image(s)...")
             
             # Clear CUDA cache before generation to prevent OOM
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
             
             with torch.inference_mode():
                 result = self.pipe(
@@ -450,6 +452,7 @@ class Flux2Model:
             # Clear CUDA cache after generation
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
             
             # Convert images to base64
             images_b64 = []
@@ -783,7 +786,6 @@ class Gemma3VisionModel:
             return f"{base} {tail}"
         return base
     
-    @modal.method()
     def _color_name_to_hex(self, color_name: str) -> Optional[str]:
         """Convert color name to hex code"""
         color_map = {
@@ -822,6 +824,7 @@ class Gemma3VisionModel:
         }
         return color_map.get(color_name.lower().strip())
     
+    @modal.method()
     def analyze_inspiration(self, image_bytes: bytes) -> dict:
         """Analyze inspiration image and extract design elements using Gemma 3 4B-IT"""
         import time
@@ -840,34 +843,34 @@ class Gemma3VisionModel:
                 image = image.convert('RGB')
                 print(f"Converted image to RGB mode")
             
-            # Prepare messages for Gemma 3 multimodal API
+            # Prepare messages for Gemma 3 multimodal API (English-only, strict format)
             messages = [
                 {
                     "role": "user",
                     "content": [
                         {"type": "image", "image": image},
-                        {"type": "text", "text": """Przeanalizuj to zdjęcie wnętrza i wyciągnij kluczowe elementy designu w formacie gotowym do użycia w prompcie FLUX 2.
+                        {"type": "text", "text": """Analyze this interior photo and extract key design elements for a FLUX 2 prompt.
 
-WYMAGANIA:
-- STYLE: Zwróć 1-3 główne style (scandinavian, modern, industrial, bohemian, minimalist, rustic, contemporary, traditional, mid-century, art-deco, eclectic, maximalist, etc.)
-- KOLORY: WYMAGANE - tylko hex codes #RRGGBB (np. #FFFFFF, #36454F, #F5F5DC, #8B7355). Zwróć 2-4 główne kolory widoczne na zdjęciu w formacie hex. NIE używaj opisów jak "bold colors", "vibrant" - tylko konkretne hex codes.
-- MATERIAŁY: Zwróć 2-4 główne materiały (wood, metal, glass, stone, fabric, leather, concrete, ceramic, velvet, marble, etc.)
-- BIOPHILIA: Liczba 0-3 gdzie 0=brak roślin, 1=minimalne (1-2 małe rośliny), 2=umiarkowane (3-5 roślin), 3=dużo roślin/natury (6+ roślin, zielone ściany, etc.)
-- OPIS: Krótki opis stylu i atmosfery w języku angielskim (max 100 słów) dla AI prompt - opisuj konkretne elementy wizualne, nie ogólne terminy
+REQUIREMENTS (STRICT):
+- STYLE: Return 1-3 main styles. Valid set only: modern, scandinavian, industrial, bohemian, minimalist, rustic, contemporary, traditional, mid-century, art-deco, eclectic, maximalist, japandi, coastal, farmhouse, mediterranean, hygge, zen, vintage, transitional, japanese, gothic, tropical. Use lowercase.
+- COLORS: REQUIRED. Return 2-4 main colors as pure hex codes in #RRGGBB. No words, no adjectives. If you cannot find colors, return: #FFFFFF, #F5F5F5, #36454F, #8B7355.
+- MATERIALS: Return 2-4 main materials. Valid set only: wood, metal, glass, stone, fabric, leather, concrete, ceramic, velvet, marble, rug.
+- BIOPHILIA: Integer 0-3 (0 = no plants, 1 = 1-2 plants, 2 = 3-5 plants, 3 = lush/6+ or green walls).
+- DESCRIPTION: Short English description (max 80 words), specific visual cues (furniture, textures, lighting), no generalities.
 
-Format odpowiedzi (dokładnie w tym formacie):
-STYLE: [główny styl], [drugi styl opcjonalnie], [trzeci styl opcjonalnie]
-KOLORY: [hex code #RRGGBB], [hex code #RRGGBB], [hex code #RRGGBB], [hex code #RRGGBB]
-MATERIAŁY: [materiał 1], [materiał 2], [materiał 3]
-BIOPHILIA: [liczba 0-3]
-OPIS: [krótki opis w języku angielskim, max 100 słów]
+OUTPUT FORMAT (one section per line, exactly):
+STYLE: style1, style2, style3
+COLORS: #RRGGBB, #RRGGBB, #RRGGBB, #RRGGBB
+MATERIALS: material1, material2, material3
+BIOPHILIA: N
+DESCRIPTION: <english description, <= 80 words>
 
-PRZYKŁAD:
+EXAMPLE:
 STYLE: modern, scandinavian
-KOLORY: #FFFFFF, #F5F5DC, #36454F, #8B7355
-MATERIAŁY: wood, fabric, metal
+COLORS: #FFFFFF, #F5F5DC, #36454F, #8B7355
+MATERIALS: wood, fabric, metal
 BIOPHILIA: 2
-OPIS: Modern Scandinavian living room with light wood furniture, white walls, and natural textiles. Minimalist design with clean lines and warm neutral tones. Soft natural lighting creates a cozy, inviting atmosphere."""}
+DESCRIPTION: Modern Scandinavian living room with light wood furniture, white walls, and natural textiles. Minimalist design with clean lines and warm neutral tones. Soft natural lighting creates a cozy, inviting atmosphere."""}
                     ]
                 }
             ]
@@ -914,8 +917,8 @@ OPIS: Modern Scandinavian living room with light wood furniture, white walls, an
                 if line.startswith("STYLE:"):
                     styles_raw = line.replace("STYLE:", "").strip()
                     styles = [s.strip() for s in styles_raw.split(',') if s.strip()]
-                elif line.startswith("KOLORY:"):
-                    colors_raw = line.replace("KOLORY:", "").strip()
+                elif line.startswith("KOLORY:") or line.startswith("COLORS:"):
+                    colors_raw = line.replace("KOLORY:", "").replace("COLORS:", "").strip()
                     colors_raw_list = [c.strip() for c in colors_raw.split(',') if c.strip()]
                     # Convert colors to hex format if needed
                     colors = []
@@ -933,8 +936,8 @@ OPIS: Modern Scandinavian living room with light wood furniture, white walls, an
                     # If no valid hex colors found, use fallback
                     if not colors:
                         colors = ["#808080"]  # Default gray
-                elif line.startswith("MATERIAŁY:"):
-                    materials_raw = line.replace("MATERIAŁY:", "").strip()
+                elif line.startswith("MATERIAŁY:") or line.startswith("MATERIALS:"):
+                    materials_raw = line.replace("MATERIAŁY:", "").replace("MATERIALS:", "").strip()
                     materials = [m.strip() for m in materials_raw.split(',') if m.strip()]
                 elif line.startswith("BIOPHILIA:"):
                     biophilia_raw = line.replace("BIOPHILIA:", "").strip()
@@ -942,8 +945,8 @@ OPIS: Modern Scandinavian living room with light wood furniture, white walls, an
                         biophilia = max(0, min(3, int(biophilia_raw)))
                     except:
                         biophilia = 1
-                elif line.startswith("OPIS:"):
-                    description = line.replace("OPIS:", "").strip()
+                elif line.startswith("OPIS:") or line.startswith("DESCRIPTION:"):
+                    description = line.replace("OPIS:", "").replace("DESCRIPTION:", "").strip()
             
             # Fallback values if parsing failed
             if not styles:
@@ -1324,22 +1327,29 @@ def upscale_image_endpoint(request: UpscaleRequest):
 # FastAPI app for additional endpoints
 web_app = FastAPI(title="Aura FLUX API", version="1.0.0")
 
-# CORS configuration
+# CORS configuration - explicitly list allowed origins to support credentials
+default_allowed_origins = [
+    "http://localhost:3000",
+    "https://awa-project-frontend-fhka.vercel.app",
+    "https://awa-project-frontend-fhka-git-main-pali89s-projects.vercel.app",
+    "https://awa-project-frontend-fhka-jgdebq34v-pali89s-projects.vercel.app",
+]
+
+env_origins = os.environ.get("CORS_ALLOW_ORIGINS")
+allowed_origins = (
+    [o.strip() for o in env_origins.split(",") if o.strip()]
+    if env_origins
+    else default_allowed_origins
+)
+
 web_app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001", 
-        "http://localhost:3002",
-        "http://localhost:3003",
-        "https://aura-design.vercel.app",
-        "https://aura-design-git-main-akademiasztuki.vercel.app",
-        "https://www.project-ida.com",
-        "https://project-ida.com",
-    ],
+    allow_origins=allowed_origins,
+    allow_origin_regex=os.environ.get("CORS_ALLOW_ORIGIN_REGEX", r"https://.*\.vercel\.app"),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 @app.function(
@@ -1637,18 +1647,25 @@ async def llm_comment_options():
 async def analyze_inspiration(request: InspirationAnalysisRequest):
     """Analyze inspiration image and extract design elements using Gemma 3 4B-IT"""
     try:
-        print("Received inspiration analysis request")
+        # Marker to confirm the running build in logs
+        print("Received inspiration analysis request [build=v1.11-direct-remote-renamed]")
         
         # Decode base64 image
         image_bytes = decode_base64_image(request.image)
         print(f"Image decoded, size: {len(image_bytes)} bytes")
         
-        # Analyze inspiration using Gemma 3 4B-IT with timeout
-        import asyncio
-        result = await asyncio.wait_for(
-            gemma3_vision_model.analyze_inspiration.remote.aio(image_bytes),
-            timeout=300.0  # 5 minute timeout (T4 is slower, cold start can take longer)
-        )
+        result = None
+        try:
+            # Direct GPU call on class (same app), avoids lookup issues
+            result = await asyncio.wait_for(
+                gemma3_vision_model.analyze_inspiration.remote.aio(image_bytes),
+                timeout=300.0  # allow cold start on T4
+            )
+            print("Inspiration analyzed via Gemma3VisionModel.remote.aio (GPU)")
+        except Exception as e:
+            print(f"[Inspiration] Remote Gemma call failed (GPU). No CPU fallback: {e}")
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Gemma3VisionModel GPU call failed: {e}")
         
         return InspirationAnalysisResponse(
             styles=result["styles"],

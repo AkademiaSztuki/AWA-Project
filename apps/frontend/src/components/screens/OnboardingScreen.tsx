@@ -9,6 +9,94 @@ import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 
+const getDefaultCountry = (language: 'pl' | 'en') => (language === 'pl' ? 'PL' : 'US');
+const COUNTRY_OPTIONS = [
+  { code: 'PL', label: { pl: 'Polska', en: 'Poland' } },
+  { code: 'DE', label: { pl: 'Niemcy', en: 'Germany' } },
+  { code: 'CZ', label: { pl: 'Czechy', en: 'Czech Republic' } },
+  { code: 'SK', label: { pl: 'Słowacja', en: 'Slovakia' } },
+  { code: 'UA', label: { pl: 'Ukraina', en: 'Ukraine' } },
+  { code: 'GB', label: { pl: 'Wielka Brytania', en: 'United Kingdom' } },
+  { code: 'IE', label: { pl: 'Irlandia', en: 'Ireland' } },
+  { code: 'SE', label: { pl: 'Szwecja', en: 'Sweden' } },
+  { code: 'NO', label: { pl: 'Norwegia', en: 'Norway' } },
+  { code: 'FI', label: { pl: 'Finlandia', en: 'Finland' } },
+  { code: 'DK', label: { pl: 'Dania', en: 'Denmark' } },
+  { code: 'FR', label: { pl: 'Francja', en: 'France' } },
+  { code: 'ES', label: { pl: 'Hiszpania', en: 'Spain' } },
+  { code: 'PT', label: { pl: 'Portugalia', en: 'Portugal' } },
+  { code: 'IT', label: { pl: 'Włochy', en: 'Italy' } },
+  { code: 'NL', label: { pl: 'Holandia', en: 'Netherlands' } },
+  { code: 'BE', label: { pl: 'Belgia', en: 'Belgium' } },
+  { code: 'AT', label: { pl: 'Austria', en: 'Austria' } },
+  { code: 'CH', label: { pl: 'Szwajcaria', en: 'Switzerland' } },
+  { code: 'LT', label: { pl: 'Litwa', en: 'Lithuania' } },
+  { code: 'LV', label: { pl: 'Łotwa', en: 'Latvia' } },
+  { code: 'EE', label: { pl: 'Estonia', en: 'Estonia' } },
+  { code: 'US', label: { pl: 'Stany Zjednoczone', en: 'United States' } },
+  { code: 'CA', label: { pl: 'Kanada', en: 'Canada' } },
+  { code: 'AU', label: { pl: 'Australia', en: 'Australia' } },
+  { code: 'NZ', label: { pl: 'Nowa Zelandia', en: 'New Zealand' } },
+  { code: 'RO', label: { pl: 'Rumunia', en: 'Romania' } },
+  { code: 'HU', label: { pl: 'Węgry', en: 'Hungary' } },
+  { code: 'HR', label: { pl: 'Chorwacja', en: 'Croatia' } },
+  { code: 'SI', label: { pl: 'Słowenia', en: 'Slovenia' } },
+  { code: 'BG', label: { pl: 'Bułgaria', en: 'Bulgaria' } },
+  { code: 'GR', label: { pl: 'Grecja', en: 'Greece' } },
+];
+
+function CountrySelect({
+  value,
+  onChange,
+  language
+}: {
+  value: string;
+  onChange: (code: string) => void;
+  language: 'pl' | 'en';
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = COUNTRY_OPTIONS.find((option) => option.code === value)?.label[language] ?? value;
+
+  return (
+    <div className="relative" tabIndex={0} onBlur={() => setOpen(false)}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full rounded-lg border border-gold/60 bg-gradient-to-r from-gold/55 via-champagne/50 to-gold/35 p-3 text-sm font-modern text-graphite flex items-center justify-between focus:border-gold focus:outline-none backdrop-blur-lg shadow-sm"
+      >
+        <span>{selectedLabel}</span>
+        <span className="text-graphite/70">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute z-40 bottom-full mb-3 max-h-64 w-full overflow-auto rounded-xl border border-white/25 bg-[#c7b07a] shadow-2xl ring-1 ring-gold/35 backdrop-blur-sm">
+          <ul className="py-1 space-y-0.5">
+            {COUNTRY_OPTIONS.map((option) => (
+              <li key={option.code}>
+                <button
+                  type="button"
+                  className={`w-full text-left px-4 py-2 text-sm font-modern rounded-lg transition ${
+                    value === option.code
+                      ? 'bg-gold/80 text-white font-semibold shadow-inner drop-shadow-sm'
+                      : 'text-graphite/90 hover:bg-gold/70 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.55)]'
+                  }`}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onChange(option.code);
+                    setOpen(false);
+                  }}
+                >
+                  {option.label[language]}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const OnboardingScreen: React.FC = () => {
   const router = useRouter();
   const { language, t } = useLanguage();
@@ -16,11 +104,19 @@ const OnboardingScreen: React.FC = () => {
   const [demographics, setDemographics] = useState({
     ageRange: '',
     gender: '',
-    education: ''
+    education: '',
+    country: getDefaultCountry(language)
   });
   const { updateSessionData, sessionData } = useSessionData();
   const pathType = sessionData?.pathType;
   const isFastTrack = pathType === 'fast';
+
+  useEffect(() => {
+    setDemographics((prev) => ({
+      ...prev,
+      country: prev.country || getDefaultCountry(language)
+    }));
+  }, [language]);
 
   useEffect(() => {
     if (!sessionData) return;
@@ -29,7 +125,7 @@ const OnboardingScreen: React.FC = () => {
     }
   }, [pathType, router, sessionData]);
 
-  const canProceedDemographics = demographics.ageRange && demographics.gender && demographics.education;
+  const canProceedDemographics = demographics.ageRange && demographics.gender && demographics.education && demographics.country;
 
   const handleConsentSubmit = () => {
     console.log('[Onboarding] Consent submit clicked');
@@ -135,7 +231,7 @@ const OnboardingScreen: React.FC = () => {
               transition={{ duration: 0.6 }}
             >
               <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
-                <h1 className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-3">
+                <h1 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-3">
                   {texts.title}
                 </h1>
 
@@ -224,6 +320,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
       age: 'Przedział wiekowy',
       gender: 'Płeć',
       education: 'Wykształcenie',
+      country: 'Kraj zamieszkania',
       back: 'Wstecz',
       continue: 'Kontynuuj'
     },
@@ -233,6 +330,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
       age: 'Age range',
       gender: 'Gender',
       education: 'Education level',
+      country: 'Country of residence',
       back: 'Back',
       continue: 'Continue'
     }
@@ -247,7 +345,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
       transition={{ duration: 0.6 }}
     >
       <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
-        <h2 className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
+        <h2 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
           {texts.title}
         </h2>
         <p className="text-graphite font-modern mb-6 text-sm">
@@ -332,6 +430,18 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Country */}
+          <div>
+            <label className="block text-sm font-semibold text-graphite mb-2">
+              {texts.country}
+            </label>
+            <CountrySelect
+              value={data.country}
+              onChange={(code) => onUpdate({ ...data, country: code })}
+              language={language}
+            />
           </div>
         </div>
 

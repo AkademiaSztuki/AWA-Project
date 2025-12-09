@@ -40,12 +40,14 @@ export interface SessionData {
       url: string;
       type: 'generated' | 'inspiration';
       addedAt: string;
+      isFavorite?: boolean;
       thumbnailUrl?: string;
       tags?: string[];
     }>;
     createdAt: string;
     updatedAt: string;
   }>;
+  currentSpaceId?: string;
   // Legacy households data (for backward compatibility)
   households?: Array<{
     id: string;

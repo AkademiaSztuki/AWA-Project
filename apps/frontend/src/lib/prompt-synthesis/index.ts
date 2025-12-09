@@ -3,7 +3,7 @@
 // Exports main synthesizePrompt() function for use throughout app
 
 import { PromptInputs, PromptWeights, calculatePromptWeights } from './scoring';
-import { buildPromptFromWeights, buildFlux2Prompt, validatePromptLength, PromptComponents, ensureHexColor } from './builder';
+import { buildPromptFromWeights, buildFlux2Prompt, validatePromptLength, PromptComponents, ensureHexColor, getBiophiliaDescriptors } from './builder';
 import { refineSyntaxWithLLM } from './refinement';
 import { 
   GenerationSource, 
@@ -490,6 +490,16 @@ export async function synthesizeSixPrompts(
   
   const MAX_INSPIRATION_IMAGES = 6; // FLUX.2 [dev] recommended max
   
+  const cleanInspirationImage = (value: string | undefined) => {
+    if (!value) return null;
+    if (value.startsWith('blob:')) return null;
+    if (value.startsWith('data:')) {
+      const parts = value.split(',');
+      return parts.length > 1 ? parts[1] : null;
+    }
+    return value; // http/https or raw base64
+  };
+
   if (typedSessionData?.inspirations && Array.isArray(typedSessionData.inspirations)) {
     // Debug: log first inspiration to see structure
     console.log('[6-Image Matrix] First inspiration structure:', JSON.stringify(typedSessionData.inspirations[0], null, 2));
@@ -497,12 +507,14 @@ export async function synthesizeSixPrompts(
     // Get images from inspirations - check multiple possible fields
     // Priority: imageBase64 (already base64) > image (base64) > url (need to fetch)
     const allImages = typedSessionData.inspirations
-      .filter((insp: any) => insp.imageBase64 || insp.image || insp.url)
-      .map((insp: any) => insp.imageBase64 || insp.image || insp.url);
+      .map((insp: any) => cleanInspirationImage(insp.imageBase64 || insp.image || insp.url))
+      .filter((img: string | null) => !!img) as string[];
     
     if (allImages.length > 0) {
       inspirationImages = allImages.slice(0, MAX_INSPIRATION_IMAGES);
-      console.log('[6-Image Matrix] Found', allImages.length, 'images from inspirations array, using', inspirationImages.length);
+      console.log('[6-Image Matrix] Found', allImages.length, 'clean images from inspirations array, using', inspirationImages.length);
+    } else {
+      console.warn('[6-Image Matrix] No clean inspiration images found (blob URLs filtered out)');
     }
   }
   
@@ -512,9 +524,8 @@ export async function synthesizeSixPrompts(
     for (const space of typedSessionData.spaces) {
       if (space.inspirations && Array.isArray(space.inspirations)) {
         for (const insp of space.inspirations) {
-          // Check for base64 first, then URL
-          if (insp.imageBase64) allSpaceImages.push(insp.imageBase64);
-          else if (insp.url) allSpaceImages.push(insp.url);
+          const cleaned = cleanInspirationImage(insp.imageBase64 || insp.url);
+          if (cleaned) allSpaceImages.push(cleaned);
         }
       }
     }
@@ -569,15 +580,16 @@ export async function synthesizeSixPrompts(
       // Structure: { tags: { styles, colors, materials, biophilia }, description }
       const extractInspirationTags = (inspirations: PromptInputs['inspirations']) => {
         if (!inspirations || inspirations.length === 0) {
-          return { additionalStyles: [], additionalColors: [], additionalMaterials: [], biophiliaBoost: 0, descriptions: [] };
+          return { additionalStyles: [], additionalColors: [], additionalMaterials: [], biophiliaBoost: 0, hasBiophiliaTags: false, descriptions: [] };
         }
+
         const allStyles = new Set<string>();
         const allColors = new Set<string>();
         const allMaterials = new Set<string>();
         const descriptions: string[] = [];
         let totalBiophilia = 0;
         let validInspirations = 0;
-        
+
         // Updated list of valid styles (includes all new styles)
         const validStyleList = [
           'modern', 'scandinavian', 'industrial', 'minimalist', 'rustic', 'bohemian',
@@ -585,78 +597,58 @@ export async function synthesizeSixPrompts(
           'mediterranean', 'art-deco', 'maximalist', 'eclectic', 'hygge', 'zen', 'vintage', 
           'transitional', 'japanese', 'gothic', 'tropical'
         ];
-        
+
         inspirations.forEach((inspiration, index) => {
-          console.log(`[InspirationReference] Processing inspiration ${index}:`, {
-            hasTags: !!inspiration.tags,
-            tagsType: typeof inspiration.tags,
-            tagsValue: inspiration.tags,
-            hasDescription: !!inspiration.description
+          // Normalize tags to avoid undefined access
+          const tags = (inspiration as any).tags || {};
+          const styles = Array.isArray(tags.styles) ? tags.styles : [];
+          const colors = Array.isArray(tags.colors) ? tags.colors : [];
+          const materials = Array.isArray(tags.materials) ? tags.materials : [];
+          const biophiliaVal = typeof tags.biophilia === 'number' ? tags.biophilia : null;
+
+          // Styles
+          styles.forEach((style: string) => {
+            const validStyle = String(style).toLowerCase().trim();
+            if (validStyleList.includes(validStyle)) {
+              allStyles.add(validStyle);
+            }
           });
-          
-          if (inspiration.tags) {
-            // Process styles
-            if (inspiration.tags.styles && Array.isArray(inspiration.tags.styles)) {
-              inspiration.tags.styles.forEach(style => {
-                // Extract valid style (case-insensitive check)
-                const validStyle = style.toLowerCase().trim();
-                if (validStyleList.includes(validStyle)) {
-                  allStyles.add(validStyle);
-                  console.log(`[InspirationReference] Added style: ${validStyle}`);
-                } else {
-                  console.warn(`[InspirationReference] Style not in valid list: ${style} (normalized: ${validStyle})`);
-                }
-              });
-            } else {
-              console.warn(`[InspirationReference] No styles array in tags:`, inspiration.tags.styles);
-            }
-            
-            // Process colors - accept both hex codes and color names
-            if (inspiration.tags.colors && Array.isArray(inspiration.tags.colors)) {
-              inspiration.tags.colors.forEach(color => {
-                // Accept both hex codes (#FFFFFF) and color names (white, beige, etc.)
-                allColors.add(color);
-                console.log(`[InspirationReference] Added color: ${color}`);
-              });
-            } else {
-              console.warn(`[InspirationReference] No colors array in tags:`, inspiration.tags.colors);
-            }
-            
-            // Process materials
-            if (inspiration.tags.materials && Array.isArray(inspiration.tags.materials)) {
-              inspiration.tags.materials.forEach(material => {
-                allMaterials.add(material);
-                console.log(`[InspirationReference] Added material: ${material}`);
-              });
-            } else {
-              console.warn(`[InspirationReference] No materials array in tags:`, inspiration.tags.materials);
-            }
-            
-            // Process biophilia
-            if (inspiration.tags.biophilia !== undefined && inspiration.tags.biophilia !== null) {
-              totalBiophilia += inspiration.tags.biophilia;
-              validInspirations++;
-              console.log(`[InspirationReference] Added biophilia: ${inspiration.tags.biophilia}`);
-            } else {
-              console.warn(`[InspirationReference] No biophilia value in tags`);
-            }
-          } else {
-            console.warn(`[InspirationReference] Inspiration ${index} has no tags object`);
+
+          // Colors
+          colors.forEach((color: string) => {
+            if (color) allColors.add(String(color));
+          });
+
+          // Materials
+          materials.forEach((mat: string) => {
+            if (mat) allMaterials.add(String(mat));
+          });
+
+          // Biophilia
+          if (biophiliaVal !== null) {
+            totalBiophilia += biophiliaVal;
+            validInspirations++;
           }
-          
-          // Collect description from Gemma analysis if available
+
+          // Descriptions
           if (inspiration.description && inspiration.description.trim()) {
             descriptions.push(inspiration.description.trim());
-            console.log(`[InspirationReference] Added description: ${inspiration.description.substring(0, 50)}...`);
           }
         });
-        
+
+        // Biophilia comes from gamma tags on a 0-3 scale. Normalize to 0-1,
+        // but keep compatibility if values are already 0-1.
+        const avgBiophilia = validInspirations > 0 ? totalBiophilia / validInspirations : 0;
+        const normalizedBiophilia = avgBiophilia > 1 ? avgBiophilia / 3 : avgBiophilia;
+        const biophiliaBoost = Math.max(0, Math.min(1, normalizedBiophilia));
+
         return {
           additionalStyles: Array.from(allStyles),
           additionalColors: Array.from(allColors),
           additionalMaterials: Array.from(allMaterials),
-          biophiliaBoost: validInspirations > 0 ? Math.max(0, Math.min(1, totalBiophilia / validInspirations)) : 0,
-          descriptions: descriptions
+          biophiliaBoost,
+          hasBiophiliaTags: validInspirations > 0,
+          descriptions
         };
       };
       
@@ -699,6 +691,14 @@ export async function synthesizeSixPrompts(
       
       // For InspirationReference, use ONLY tags from inspirations, ignore other sources
       // Build weights ONLY from inspiration tags
+      // Use filtered inputs (source-scoped) for biophilia; fallback to zero
+      const explicitBiophiliaScore = filteredInputs.psychologicalBaseline?.biophiliaScore ?? 0; // 0-3 scale
+      const explicitNatureDensity = Math.min(1, explicitBiophiliaScore / 3);
+      // If inspirations carry biophilia tags, trust them fully; fall back to explicit score only when tags are absent.
+      const blendedNatureDensity = inspirationTags.hasBiophiliaTags
+        ? inspirationTags.biophiliaBoost
+        : explicitNatureDensity;
+
       const inspirationOnlyWeights: PromptWeights = {
         needsCalming: 0,
         needsEnergizing: 0,
@@ -706,19 +706,19 @@ export async function synthesizeSixPrompts(
         needsGrounding: 0,
         dominantStyle: inspirationTags.additionalStyles.length > 0 
           ? inspirationTags.additionalStyles[0] 
-          : 'modern', // Fallback if no style tags
-        styleConfidence: inspirationTags.additionalStyles.length > 0 ? 0.8 : 0.5,
+          : '',
+        styleConfidence: inspirationTags.additionalStyles.length > 0 ? 0.8 : 0.0,
         colorPalette: inspirationTags.additionalColors.length > 0 
           ? inspirationTags.additionalColors.slice(0, 4)
-          : ['#FFFFFF', '#F5F5F5', '#E0E0E0', '#D3D3D3'], // Neutral fallback
+          : [],
         colorTemperature: 0.5, // Neutral
         primaryMaterials: inspirationTags.additionalMaterials.length > 0
           ? inspirationTags.additionalMaterials.slice(0, 3)
-          : ['wood', 'fabric', 'metal'], // Generic fallback
+          : [],
         lightingMood: 'neutral',
         naturalLightImportance: 0.5,
-        natureDensity: inspirationTags.biophiliaBoost,
-        biophilicElements: inspirationTags.biophiliaBoost > 0.5 
+        natureDensity: blendedNatureDensity,
+        biophilicElements: blendedNatureDensity >= 0.17
           ? ['indoor plants', 'natural materials']
           : [],
         primaryActivity: 'relax',
@@ -735,12 +735,25 @@ export async function synthesizeSixPrompts(
           warmthPreference: 0.5,
           socialOpenness: 0.5,
           excitementSeeking: 0.5,
-          tenderMindedness: 0.5
+          tenderMindedness: 0.5,
+          anxietyLevel: 0.5,
+          vulnerabilityLevel: 0.5
         },
         addressPainPoints: [],
-        moodTransformation: null,
-        socialContext: null,
-        activityNeeds: null
+        moodTransformation: undefined,
+        activityNeeds: undefined,
+        designImplications: {
+          eclecticMix: false,
+          minimalistTendency: false,
+          cozyTextures: false,
+          boldColors: false,
+          softTextures: false,
+          organicShapes: false,
+          calmingElements: false,
+          groundingElements: false,
+          enclosedSpaces: false,
+          openPlanPreference: false
+        }
       };
       
       // Build JSON prompt (same format as other sources) with concrete tags from inspirations ONLY
@@ -771,27 +784,22 @@ export async function synthesizeSixPrompts(
       }
       
       if (inspirationTags.additionalColors.length > 0) {
-        // Convert colors to hex if needed (FLUX.2 JSON requires hex codes)
-        // Filter out non-color values (like "Bold colors", "vibrant", "multicolored") and convert valid colors to hex
+        const descriptiveTerms = ['bold colors', 'vibrant', 'multicolored', 'colorful', 'bright', 'muted', 'neutral'];
         const hexColors = inspirationTags.additionalColors
-          .slice(0, 6) // Take more colors initially to have enough after filtering
+          .slice(0, 10)
           .map(color => {
-            // Skip descriptive color terms that aren't actual colors
-            const descriptiveTerms = ['bold colors', 'vibrant', 'multicolored', 'colorful', 'bright', 'muted', 'neutral'];
-            if (descriptiveTerms.includes(color.toLowerCase())) {
-              return null;
-            }
-            // Convert to hex using ensureHexColor
-            return ensureHexColor(color);
+            if (!color) return null;
+            if (descriptiveTerms.includes(color.toLowerCase())) return null;
+            const hex = ensureHexColor(color);
+            if (!hex || hex === '#808080') return null;
+            return hex;
           })
-          .filter((color): color is string => color !== null && color !== '#808080') // Remove nulls and default gray
-          .slice(0, 4); // Take first 4 valid hex colors
+          .filter((color): color is string => !!color)
+          .slice(0, 4);
         
         if (hexColors.length > 0) {
           promptJson.color_palette = hexColors;
           promptJson.color_instruction = `Use color palette from reference images: ${hexColors.slice(0, 3).join(', ')}`;
-        } else {
-          console.warn('[InspirationReference] No valid hex colors found after conversion. Original colors:', inspirationTags.additionalColors);
         }
       }
       
@@ -800,12 +808,16 @@ export async function synthesizeSixPrompts(
         promptJson.material_instruction = `Incorporate materials from reference images: ${inspirationTags.additionalMaterials.slice(0, 2).join(', ')}`;
       }
       
-      if (inspirationTags.biophiliaBoost > 0.1) {
-        const biophiliaLevel = inspirationTags.biophiliaBoost > 0.5 ? 'abundant' : 'moderate';
+      let biophiliaDescriptor: ReturnType<typeof getBiophiliaDescriptors> | null = null;
+      if (blendedNatureDensity > 0.05) {
+        biophiliaDescriptor = getBiophiliaDescriptors(
+          blendedNatureDensity,
+          blendedNatureDensity >= 0.17 ? ['indoor plants', 'natural materials'] : []
+        );
         promptJson.biophilia = {
-          level: biophiliaLevel,
-          description: `${biophiliaLevel} natural elements from reference images`,
-          natural_elements: ['indoor plants', 'natural materials']
+          level: biophiliaDescriptor.tier,
+          description: `${biophiliaDescriptor.description} (from reference images)`,
+          natural_elements: biophiliaDescriptor.naturalElements
         };
       }
       
@@ -818,17 +830,11 @@ export async function synthesizeSixPrompts(
         promptJson.atmosphere = `Create atmosphere matching reference images: ${combinedDescription.substring(0, 150)}`;
       }
       
-      // Fallback if no tags available
-      if (inspirationTags.additionalStyles.length === 0 && 
-          inspirationTags.additionalColors.length === 0 && 
-          inspirationTags.additionalMaterials.length === 0 && 
-          (!inspirationTags.descriptions || inspirationTags.descriptions.length === 0)) {
-        console.warn('[InspirationReference] WARNING: No tags from gamma model found! Using fallback prompt.');
-        console.warn('[InspirationReference] This means inspirations either have no tags or tags are not in expected format.');
-        console.warn('[InspirationReference] Inspirations structure:', JSON.stringify(filteredInputs.inspirations, null, 2));
-        promptJson.reference_usage = "Combine style, colors, and mood from the inspiration images into this room";
-      } else {
-        console.log('[InspirationReference] Successfully built JSON prompt with gamma tags:', {
+      if (inspirationTags.additionalStyles.length > 0 || 
+          inspirationTags.additionalColors.length > 0 || 
+          inspirationTags.additionalMaterials.length > 0 || 
+          (inspirationTags.descriptions && inspirationTags.descriptions.length > 0)) {
+        console.log('[InspirationReference] Built JSON prompt with inspiration tags:', {
           hasStyle: inspirationTags.additionalStyles.length > 0,
           hasColors: inspirationTags.additionalColors.length > 0,
           hasMaterials: inspirationTags.additionalMaterials.length > 0,
@@ -849,7 +855,7 @@ export async function synthesizeSixPrompts(
           colors: inspirationTags.additionalColors.slice(0, 3).join(', ') || '',
           materials: inspirationTags.additionalMaterials.slice(0, 2).join(', ') || '',
           lighting: '',
-          biophilia: inspirationTags.biophiliaBoost > 0.1 ? 'moderate to abundant' : '',
+          biophilia: biophiliaDescriptor ? biophiliaDescriptor.shortPhrase : '',
           functional: '',
           layout: ''
         },
