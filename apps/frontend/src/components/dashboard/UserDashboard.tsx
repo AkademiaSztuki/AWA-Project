@@ -10,7 +10,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { supabase, fetchLatestSessionSnapshot, DISABLE_SESSION_SYNC } from '@/lib/supabase';
 import { getUserHouseholds, saveHousehold, getCompletionStatus } from '@/lib/supabase-deep-personalization';
-import { fetchSpacesWithImages, toggleSpaceImageFavorite } from '@/lib/remote-spaces';
+import { fetchSpacesWithImages, toggleSpaceImageFavorite, updateSpaceName, deleteSpace } from '@/lib/remote-spaces';
 import { 
   Home, 
   Plus, 
@@ -21,7 +21,11 @@ import {
   ChevronRight,
   ArrowLeft,
   User,
-  Eye
+  Eye,
+  Pencil,
+  Trash2,
+  Check,
+  X
 } from 'lucide-react';
 import Image from 'next/image';
 import {
@@ -52,6 +56,14 @@ interface SpaceImage {
   tags?: string[];
 }
 
+function sortImagesDescending(images: SpaceImage[]): SpaceImage[] {
+  return [...(images || [])].sort((a, b) => {
+    const ta = new Date(a.addedAt || 0).getTime();
+    const tb = new Date(b.addedAt || 0).getTime();
+    return tb - ta;
+  });
+}
+
 /**
  * UserDashboard - Main control panel for image spaces
  * 
@@ -71,6 +83,27 @@ export function UserDashboard() {
   const [completionStatus, setCompletionStatus] = useState<CompletionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [actionSpaceId, setActionSpaceId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+
+  const getUserHash = useCallback((): string | undefined => {
+    let userHash = sessionData?.userHash as string | undefined;
+
+    if (!userHash && typeof window !== 'undefined') {
+      userHash = localStorage.getItem('aura_user_hash') || 
+                 sessionStorage.getItem('aura_user_hash') || undefined;
+    }
+
+    return userHash;
+  }, [sessionData?.userHash]);
+
+  const sortSpacesDescending = useCallback((list: Space[]): Space[] => {
+    return [...(list || [])].sort((a, b) => {
+      const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return tb - ta;
+    });
+  }, []);
   
   const extractUrl = useCallback((item: any): string | null => {
     if (!item) return null;
@@ -88,18 +121,24 @@ export function UserDashboard() {
 
   const allGeneratedImages = useMemo(() => {
     const generatedFromSpaces = spaces.flatMap(space =>
-      (space.images || [])
+      sortImagesDescending(space.images || [])
         .filter(img => img.type === 'generated')
         .map(img => ({ ...img }))
     );
 
     const seen = new Set<string>();
-    return generatedFromSpaces.filter((img: any) => {
+    return generatedFromSpaces
+      .filter((img: any) => {
       const url = extractUrl(img);
       if (!url || seen.has(url)) return false;
       seen.add(url);
       return true;
-    });
+      })
+      .sort((a, b) => {
+        const ta = new Date((a as any).addedAt || 0).getTime();
+        const tb = new Date((b as any).addedAt || 0).getTime();
+        return tb - ta;
+      });
   }, [spaces, extractUrl]);
 
   const handleToggleFavorite = useCallback(async (imageId?: string, imageUrl?: string) => {
@@ -192,9 +231,10 @@ export function UserDashboard() {
               updatedAt: s.updated_at || s.updatedAt
             };
           });
-          setSpaces(mapped);
+          const ordered = sortSpacesDescending(mapped);
+          setSpaces(ordered);
           // lightweight cache in session
-          updateSessionData({ spaces: mapped } as any);
+          updateSessionData({ spaces: ordered } as any);
           setIsLoading(false);
           return;
         }
@@ -204,7 +244,7 @@ export function UserDashboard() {
 
       // Fallback: sessionData
       if (sessionData?.spaces && sessionData.spaces.length > 0) {
-        setSpaces(sessionData.spaces);
+        setSpaces(sortSpacesDescending(sessionData.spaces));
         setIsLoading(false);
         return;
       }
@@ -215,7 +255,7 @@ export function UserDashboard() {
         try {
           const parsed = JSON.parse(localSessionData);
           if (parsed.spaces && parsed.spaces.length > 0) {
-            setSpaces(parsed.spaces);
+            setSpaces(sortSpacesDescending(parsed.spaces));
             setIsLoading(false);
             return;
           }
@@ -239,11 +279,7 @@ export function UserDashboard() {
   const handleAddSpace = async () => {
     try {
       // Ensure we have a user hash
-      let userHash = sessionData?.userHash as string | undefined;
-      if (!userHash && typeof window !== 'undefined') {
-        userHash = localStorage.getItem('aura_user_hash') || 
-                   sessionStorage.getItem('aura_user_hash') || undefined;
-      }
+      const userHash = getUserHash();
 
       if (!userHash) {
         console.error('[Dashboard] No user hash found for adding space');
@@ -285,6 +321,73 @@ export function UserDashboard() {
       console.error('[Dashboard] Error in handleAddSpace:', error);
     }
   };
+
+  const handleRenameSpace = useCallback(async (spaceId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+
+    const userHash = getUserHash();
+    if (!userHash) {
+      console.error('[Dashboard] No user hash found for renaming space');
+      return;
+    }
+
+    setActionSpaceId(spaceId);
+    try {
+      const updated = await updateSpaceName(userHash, spaceId, trimmed);
+      const updatedSpaces = sortSpacesDescending(spaces.map(space =>
+        space.id === spaceId
+          ? { ...space, name: trimmed, updatedAt: (updated as any)?.updated_at || space.updatedAt }
+          : space)
+      );
+      setSpaces(updatedSpaces);
+      updateSessionData({ spaces: updatedSpaces } as any);
+    } catch (error) {
+      console.error('[Dashboard] Error in handleRenameSpace:', error);
+    } finally {
+      setActionSpaceId(null);
+    }
+  }, [getUserHash, spaces, updateSessionData]);
+
+  const handleDeleteSpace = useCallback(async (spaceId: string) => {
+    const userHash = getUserHash();
+    if (!userHash) {
+      console.error('[Dashboard] No user hash found for deleting space');
+      return;
+    }
+
+    setActionSpaceId(spaceId);
+    try {
+      const removed = await deleteSpace(userHash, spaceId);
+      if (removed) {
+        const updatedSpaces = sortSpacesDescending(spaces.filter(space => space.id !== spaceId));
+        setSpaces(updatedSpaces);
+        const sessionUpdate: any = { spaces: updatedSpaces };
+        if ((sessionData as any)?.currentSpaceId === spaceId) {
+          sessionUpdate.currentSpaceId = undefined;
+        }
+        updateSessionData(sessionUpdate);
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error in handleDeleteSpace:', error);
+    } finally {
+      setActionSpaceId(null);
+    }
+  }, [getUserHash, sessionData, spaces, updateSessionData]);
+
+  const requestDeleteSpace = useCallback((spaceId: string, spaceName: string) => {
+    setPendingDelete({ id: spaceId, name: spaceName });
+  }, []);
+
+  const confirmDeleteSpace = useCallback(async () => {
+    if (!pendingDelete) return;
+    await handleDeleteSpace(pendingDelete.id);
+    setPendingDelete(null);
+  }, [handleDeleteSpace, pendingDelete]);
+
+  const cancelDeleteSpace = useCallback(() => {
+    setPendingDelete(null);
+  }, []);
 
   const handleOpenSpace = (spaceId: string) => {
     router.push(`/space/${spaceId}`);
@@ -485,6 +588,10 @@ export function UserDashboard() {
               
               return inspirationImages;
             })()}
+            explicitBiophilia={
+              (sessionData as any)?.roomPreferences?.biophiliaScore ??
+              (sessionData as any)?.biophiliaScore
+            }
             onViewAll={() => {
               const spaces = (sessionData as any)?.spaces || [];
               if (spaces.length > 0) {
@@ -501,6 +608,14 @@ export function UserDashboard() {
             generatedImages={allGeneratedImages}
             onToggleFavorite={(imageId, imageUrl) => handleToggleFavorite(imageId, imageUrl)}
           />
+
+          {/* Quick access: add new space near generated images */}
+          {spaces.length > 0 && (
+            <AddSpaceCallout
+              language={language}
+              onAddSpace={handleAddSpace}
+            />
+          )}
 
           {/* Spaces List */}
           {isLoading ? (
@@ -520,33 +635,52 @@ export function UserDashboard() {
                   space={space}
                   index={index}
                   onOpenSpace={() => handleOpenSpace(space.id)}
+                  onRenameSpace={handleRenameSpace}
+                  onDeleteSpace={(id, name) => requestDeleteSpace(id, name)}
+                  isBusy={actionSpaceId === space.id}
                 />
               ))}
-
-              {/* Add Space Button */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: spaces.length * 0.1 + 0.2 }}
-              >
-                <button
-                  onClick={handleAddSpace}
-                  className="w-full glass-panel rounded-2xl p-4 sm:p-6 hover:bg-white/40 transition-all duration-300 group"
-                >
-                  <div className="flex items-center justify-center gap-2 sm:gap-3 text-graphite">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Plus size={20} className="sm:w-6 sm:h-6 text-white" />
-                    </div>
-                    <span className="font-nasalization text-base sm:text-lg lg:text-xl">
-                      {language === 'pl' ? 'Dodaj Nową Przestrzeń' : 'Add New Space'}
-                    </span>
-                  </div>
-                </button>
-              </motion.div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur">
+          <GlassCard className="max-w-md w-full p-6 border border-gold/30 shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                <Trash2 size={18} className="text-white" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-xl font-nasalization text-graphite mb-1">
+                  {language === 'pl' ? 'Usunąć przestrzeń?' : 'Delete this space?'}
+                </h3>
+                <p className="text-sm text-silver-dark font-modern">
+                  {language === 'pl'
+                    ? `„${pendingDelete.name}” oraz wszystkie obrazy zostaną usunięte.`
+                    : `"${pendingDelete.name}" and all images inside will be removed.`}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <GlassButton
+                onClick={cancelDeleteSpace}
+                className="w-full sm:w-auto justify-center bg-white/20 hover:bg-white/30 text-graphite"
+              >
+                {language === 'pl' ? 'Anuluj' : 'Cancel'}
+              </GlassButton>
+              <GlassButton
+                onClick={confirmDeleteSpace}
+                className="w-full sm:w-auto justify-center bg-gradient-to-r from-gold to-champagne text-white hover:brightness-110"
+              >
+                {language === 'pl' ? 'Usuń' : 'Delete'}
+              </GlassButton>
+            </div>
+          </GlassCard>
+        </div>
+      )}
     </div>
   );
 }
@@ -639,14 +773,44 @@ function ProfileItem({ completed, label }: { completed: boolean; label: string }
   );
 }
 
-function SpaceCard({ space, index, onOpenSpace }: {
+function SpaceCard({ space, index, onOpenSpace, onRenameSpace, onDeleteSpace, isBusy }: {
   space: Space;
   index: number;
   onOpenSpace: () => void;
+  onRenameSpace?: (spaceId: string, newName: string) => void;
+  onDeleteSpace?: (spaceId: string, spaceName: string) => void;
+  isBusy?: boolean;
 }) {
   const { language } = useLanguage();
-  const generatedImages = space.images.filter(img => img.type === 'generated');
-  const inspirationImages = space.images.filter(img => img.type === 'inspiration');
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [nameValue, setNameValue] = React.useState(space.name);
+
+  React.useEffect(() => {
+    setNameValue(space.name);
+  }, [space.name]);
+
+  const busy = !!isBusy;
+
+  const submitName = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = nameValue.trim();
+    if (!trimmed || trimmed === space.name) {
+      setIsEditing(false);
+      setNameValue(space.name);
+      return;
+    }
+    onRenameSpace?.(space.id, trimmed);
+    setIsEditing(false);
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setNameValue(space.name);
+  };
+
+  const orderedImages = sortImagesDescending(space.images || []);
+  const generatedImages = orderedImages.filter(img => img.type === 'generated');
+  const inspirationImages = orderedImages.filter(img => img.type === 'inspiration');
   
   // In "Moja Główna Przestrzeń" show only generated images, not inspirations
   // Inspirations should be shown in the separate "Inspiracje" section
@@ -658,7 +822,10 @@ function SpaceCard({ space, index, onOpenSpace }: {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
-      onClick={onOpenSpace}
+      onClick={() => {
+        if (isEditing || busy) return;
+        onOpenSpace();
+      }}
       className="cursor-pointer"
     >
       <GlassCard className="p-4 sm:p-6 lg:p-8 hover:border-gold/50 transition-all duration-300">
@@ -668,16 +835,84 @@ function SpaceCard({ space, index, onOpenSpace }: {
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
               <Home size={20} className="sm:w-6 sm:h-6 text-white" />
             </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-nasalization text-graphite truncate">
-                {space.name}
-              </h2>
-              <p className="text-xs sm:text-sm text-silver-dark font-modern">
-                {generatedImages.length} {language === 'pl' ? 'wyg.' : 'gen.'} • {inspirationImages.length} {language === 'pl' ? 'insp.' : 'insp.'}
-              </p>
+            <div className="min-w-0 flex-1" onClick={(e) => e.stopPropagation()}>
+              {isEditing ? (
+                <form onSubmit={submitName} className="flex items-center gap-2 max-w-xl">
+                  <input
+                    value={nameValue}
+                    onChange={(e) => setNameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelEdit();
+                      }
+                    }}
+                    className="w-full rounded-xl glass-panel bg-white/30 border border-white/20 px-3 py-2 text-graphite font-modern outline-none focus:border-gold focus:ring-0"
+                    placeholder={language === 'pl' ? 'Nazwa przestrzeni' : 'Space name'}
+                    disabled={busy}
+                  />
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="w-9 h-9 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center text-white hover:shadow-lg transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="w-9 h-9 rounded-full glass-panel border border-white/30 flex items-center justify-center text-silver-dark hover:text-graphite transition"
+                  >
+                    <X size={16} />
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <h2 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-nasalization text-graphite truncate">
+                    {space.name}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-silver-dark font-modern">
+                    {generatedImages.length} {language === 'pl' ? 'wyg.' : 'gen.'} • {inspirationImages.length} {language === 'pl' ? 'insp.' : 'insp.'}
+                  </p>
+                </>
+              )}
             </div>
           </div>
-          <ChevronRight size={20} className="sm:w-6 sm:h-6 text-gold flex-shrink-0" />
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditing(true);
+              }}
+              disabled={busy}
+              className={`w-9 h-9 rounded-full glass-panel border flex items-center justify-center transition-colors ${
+                busy
+                  ? 'border-white/15 text-silver-dark opacity-60 cursor-not-allowed'
+                  : 'border-white/25 text-silver-dark hover:text-graphite hover:border-gold/50'
+              }`}
+              aria-label={language === 'pl' ? 'Edytuj nazwę' : 'Edit name'}
+            >
+              <Pencil size={16} />
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteSpace?.(space.id, space.name);
+              }}
+              className={`w-9 h-9 rounded-full glass-panel border flex items-center justify-center transition-colors ${
+                busy
+                  ? 'border-white/15 text-silver-dark opacity-60 cursor-not-allowed'
+                  : 'border-white/25 text-silver-dark hover:text-gold hover:border-gold/50'
+              }`}
+              aria-label={language === 'pl' ? 'Usuń przestrzeń' : 'Delete space'}
+            >
+              <Trash2 size={16} />
+            </button>
+            <ChevronRight size={20} className="sm:w-6 sm:h-6 text-gold flex-shrink-0" />
+          </div>
         </div>
 
         {/* Images Gallery Preview */}
@@ -764,6 +999,44 @@ function EmptyState({ onAddSpace }: { onAddSpace: () => void }) {
           <Plus size={20} className="mr-2" />
           {language === 'pl' ? 'Dodaj Pierwszą Przestrzeń' : 'Add First Space'}
         </GlassButton>
+      </GlassCard>
+    </motion.div>
+  );
+}
+
+function AddSpaceCallout({ onAddSpace, language }: { onAddSpace: () => void; language: 'pl' | 'en' }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="mb-6"
+    >
+      <GlassCard className="p-4 sm:p-5 lg:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+              <Plus size={18} className="text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-lg sm:text-xl font-nasalization text-graphite truncate">
+                {language === 'pl' ? 'Dodaj nową przestrzeń' : 'Add a new space'}
+              </p>
+              <p className="text-sm text-silver-dark font-modern truncate">
+                {language === 'pl'
+                  ? 'Dodaj kolejną przestrzeń w swoim projekcie.'
+                  : 'Add another space to your project.'}
+              </p>
+            </div>
+          </div>
+          <GlassButton
+            onClick={onAddSpace}
+            className="w-full sm:w-auto justify-center px-4 py-2 flex items-center gap-2"
+          >
+            <Plus size={16} />
+            <span>{language === 'pl' ? 'Dodaj przestrzeń' : 'Add space'}</span>
+          </GlassButton>
+        </div>
       </GlassCard>
     </motion.div>
   );

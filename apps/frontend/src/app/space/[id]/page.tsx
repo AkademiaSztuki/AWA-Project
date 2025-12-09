@@ -31,6 +31,13 @@ interface Space {
   updatedAt: string;
 }
 
+const sortImagesDescending = (images: SpaceImage[]): SpaceImage[] =>
+  [...(images || [])].sort((a, b) => {
+    const ta = new Date(a.addedAt || 0).getTime();
+    const tb = new Date(b.addedAt || 0).getTime();
+    return tb - ta;
+  });
+
 export default function SpaceDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -59,12 +66,26 @@ export default function SpaceDetailPage() {
 
         const images = userHash ? await fetchSpaceImages(userHash, spaceId) : [];
 
-        if (spaceRow) {
-          setSpace({
-            id: spaceRow.id,
-            name: spaceRow.name,
-            type: spaceRow.type || 'personal',
-            images: (images || []).map((img: any) => ({
+        // Inspirations from session (global) to display inside the space
+        const sessionInspirations = ((sessionData as any)?.inspirations || []).map((insp: any) => ({
+          id: insp.id || `insp-${insp.url || Math.random()}`,
+          url: insp.url || insp.imageBase64,
+          type: 'inspiration' as const,
+          addedAt: insp.addedAt || new Date().toISOString(),
+          isFavorite: false,
+          thumbnailUrl: insp.thumbnailUrl,
+          tags: insp.tags
+        }));
+
+        const mergedImages = (() => {
+          const byKey = new Map<string, SpaceImage>();
+          const add = (img: SpaceImage) => {
+            if (!img.url) return;
+            const key = `${img.type}:${img.url}`;
+            if (!byKey.has(key)) byKey.set(key, img);
+          };
+          (images || []).forEach((img: any) =>
+            add({
               id: img.id,
               url: img.url,
               type: img.type,
@@ -72,7 +93,18 @@ export default function SpaceDetailPage() {
               isFavorite: img.is_favorite ?? img.isFavorite,
               thumbnailUrl: img.thumbnail_url || img.thumbnailUrl,
               tags: img.tags
-            })),
+            })
+          );
+          sessionInspirations.forEach(add);
+          return sortImagesDescending(Array.from(byKey.values()));
+        })();
+
+        if (spaceRow) {
+          setSpace({
+            id: spaceRow.id,
+            name: spaceRow.name,
+            type: spaceRow.type || 'personal',
+            images: mergedImages,
             createdAt: spaceRow.created_at,
             updatedAt: spaceRow.updated_at
           });
@@ -86,7 +118,28 @@ export default function SpaceDetailPage() {
     const spaces = (sessionData as any)?.spaces || [];
     const foundSpace = spaces.find((s: Space) => s.id === spaceId);
     if (foundSpace) {
-      setSpace(foundSpace);
+      // Merge inspirations from session so they are visible here too
+      const sessionInspirations = ((sessionData as any)?.inspirations || []).map((insp: any) => ({
+        id: insp.id || `insp-${insp.url || Math.random()}`,
+        url: insp.url || insp.imageBase64,
+        type: 'inspiration' as const,
+        addedAt: insp.addedAt || new Date().toISOString(),
+        isFavorite: false,
+        thumbnailUrl: insp.thumbnailUrl,
+        tags: insp.tags
+      }));
+
+      const byKey = new Map<string, SpaceImage>();
+      const add = (img: SpaceImage) => {
+        if (!img.url) return;
+        const key = `${img.type}:${img.url}`;
+        if (!byKey.has(key)) byKey.set(key, img);
+      };
+
+      (foundSpace.images || []).forEach(add);
+      sessionInspirations.forEach(add);
+
+      setSpace({ ...foundSpace, images: sortImagesDescending(Array.from(byKey.values())) });
     }
     })();
   }, [spaceId, sessionData]);

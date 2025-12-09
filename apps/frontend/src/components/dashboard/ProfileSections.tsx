@@ -532,6 +532,7 @@ export function RoomAnalysisSection({ roomAnalysis, roomImage }: { roomAnalysis:
               src={roomImage}
               alt="Room"
               fill
+              sizes="100vw"
               className="object-cover"
             />
           </div>
@@ -597,12 +598,14 @@ export function InspirationsPreviewSection({
   inspirations, 
   onViewAll,
   onAddInspirations,
-  onDeleteInspiration
+  onDeleteInspiration,
+  explicitBiophilia
 }: { 
   inspirations: any[]; 
   onViewAll?: () => void;
   onAddInspirations?: () => void;
   onDeleteInspiration?: (inspiration: any) => void;
+  explicitBiophilia?: number; // 0-3 skala z ankiety/roomPreferences
 }) {
   const { language } = useLanguage();
   const [isExpanded, setIsExpanded] = React.useState(false);
@@ -668,9 +671,28 @@ export function InspirationsPreviewSection({
   const remainingCount = isExpanded ? 0 : Math.max(0, totalWithImages - 4);
 
   // Calculate aggregated biophilia
-  const avgBiophilia = inspirations
-    .filter(i => i.tags?.biophilia !== undefined)
-    .reduce((sum, i) => sum + (i.tags?.biophilia || 0), 0) / inspirations.length;
+  const inspirationBiophiliaAvg = (() => {
+    if (!inspirations || inspirations.length === 0) return NaN;
+    const sum = inspirations.reduce((acc, i) => {
+      const val = typeof i.tags?.biophilia === 'number' && !Number.isNaN(i.tags.biophilia)
+        ? i.tags.biophilia
+        : 0;
+      return acc + val;
+    }, 0);
+    return sum / inspirations.length; // dzielimy przez wszystkie
+  })();
+
+  // Ujednolicenie z pipeline: normalizuj do 0-1, clamp do explicit (0-3)
+  const inspirationNorm = !Number.isNaN(inspirationBiophiliaAvg)
+    ? (inspirationBiophiliaAvg > 1 ? inspirationBiophiliaAvg / 3 : inspirationBiophiliaAvg)
+    : NaN;
+  const explicitNorm = explicitBiophilia !== undefined
+    ? (explicitBiophilia > 1 ? explicitBiophilia / 3 : explicitBiophilia)
+    : undefined;
+  const clampedNorm = !Number.isNaN(inspirationNorm)
+    ? (explicitNorm !== undefined ? Math.min(inspirationNorm, explicitNorm) : inspirationNorm)
+    : NaN;
+  const avgBiophilia = Number.isNaN(clampedNorm) ? NaN : clampedNorm * 3; // prezentacja 0-3
 
   const handleImageError = (idx: number) => {
     setImageErrors(prev => new Set(prev).add(idx));

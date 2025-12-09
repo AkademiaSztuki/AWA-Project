@@ -178,3 +178,42 @@ export async function fetchSpaceImages(
   }
   return data || [];
 }
+
+export async function updateSpaceName(
+  userHash: string,
+  spaceId: string,
+  name: string
+) {
+  if (!userHash || !spaceId || !name.trim()) return null;
+  const trimmed = name.trim();
+  const { data, error } = await supabase
+    .from('spaces')
+    .update({ name: trimmed, updated_at: new Date().toISOString() })
+    .eq('id', spaceId)
+    .eq('user_hash', userHash)
+    .select('*')
+    .maybeSingle();
+
+  if (error) {
+    console.warn('[remote-spaces] updateSpaceName failed', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function deleteSpace(userHash: string, spaceId: string) {
+  if (!userHash || !spaceId) return false;
+  const { error } = await supabase
+    .from('spaces')
+    .delete()
+    .eq('id', spaceId)
+    .eq('user_hash', userHash);
+
+  if (error) {
+    console.warn('[remote-spaces] deleteSpace failed', error);
+    return false;
+  }
+
+  return true;
+}

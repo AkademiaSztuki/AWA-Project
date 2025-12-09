@@ -357,24 +357,24 @@ export default function InspirationsPage() {
           });
 
           // Update local spaces snapshot (flatten tags to string array for local display)
-          const currentSpaces = (sessionData as any)?.spaces || [];
+      const currentSpaces = (sessionData as any)?.spaces || [];
           const inspirationsForSpacesLocal = mergedInspirations.map(p => ({
             url: p.url || '',
             tags: p.tags
               ? [
-                  ...(p.tags.styles || []),
-                  ...(p.tags.colors || []),
-                  ...(p.tags.materials || [])
+            ...(p.tags.styles || []),
+            ...(p.tags.colors || []),
+            ...(p.tags.materials || [])
                 ]
               : undefined
           })).filter(x => x.url);
-          const updatedSpaces = addMultipleInspirationsToSpace(
-            currentSpaces,
+        const updatedSpaces = addMultipleInspirationsToSpace(
+          currentSpaces, 
             spaceId,
             inspirationsForSpacesLocal
-          );
+        );
           await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId } as any);
-
+        
           // Persist to space_images with full tags object (one-time, no retagging later)
           if (spaceId) {
             const imagesForSpace = mergedInspirations
@@ -393,14 +393,14 @@ export default function InspirationsPage() {
 
           // Optional: save inspirations snapshot to user_profiles (for cross-session fetch)
           try {
-            const inspirationsForProfile = mergedInspirations.map(p => ({
-              fileId: p.fileId,
-              url: p.url,
+              const inspirationsForProfile = mergedInspirations.map(p => ({
+                fileId: p.fileId,
+                url: p.url,
               tags: p.tags,
               description: p.description,
-              addedAt: p.addedAt
-            }));
-
+                addedAt: p.addedAt
+              }));
+              
             const { error } = await supabase
               .from('user_profiles')
               .update({
@@ -411,18 +411,18 @@ export default function InspirationsPage() {
                 },
                 updated_at: new Date().toISOString()
               })
-              .eq('user_hash', userHash);
-
-            if (error) {
-              console.warn('[Inspirations] Failed to save inspirations to user profile:', error);
-            } else {
+                .eq('user_hash', userHash);
+              
+              if (error) {
+                console.warn('[Inspirations] Failed to save inspirations to user profile:', error);
+              } else {
               console.log('[Inspirations] Inspirations with gamma tags saved to user_profiles.inspirations');
             }
           } catch (e) {
             console.warn('[Inspirations] Failed to save inspirations to user_profiles (non-critical):', e);
+            }
           }
-        }
-      } catch (e) {
+        } catch (e) {
         console.warn('[Inspirations] Failed to save inspirations to space_images:', e);
       }
       

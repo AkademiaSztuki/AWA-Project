@@ -27,7 +27,6 @@ import {
   Star,
   Palette,
   Home,
-  Lightbulb,
   CheckCircle2,
   Eye,
   ChevronLeft,
@@ -2016,80 +2015,6 @@ export default function GeneratePage() {
                 </p>
               </div>
               
-              {/* Data Quality Info - Always show */}
-              {synthesisResult && synthesisResult.qualityReports && (
-                <GlassCard className={`p-4 mb-6 ${synthesisResult.skippedSources.length > 0 ? 'border-amber-500/30 bg-amber-500/5' : 'border-green-500/30 bg-green-500/5'}`}>
-                  <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-lg ${synthesisResult.skippedSources.length > 0 ? 'bg-amber-500/10' : 'bg-green-500/10'}`}>
-                      {synthesisResult.skippedSources.length > 0 ? (
-                        <Lightbulb size={20} className="text-amber-500" />
-                      ) : (
-                        <CheckCircle2 size={20} className="text-green-500" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-graphite mb-2">
-                        {synthesisResult.skippedSources.length > 0 
-                          ? 'Niektóre źródła zostały pominięte'
-                          : 'Wszystkie źródła danych dostępne'}
-                      </h3>
-                      <p className="text-sm text-silver-dark mb-3">
-                        {synthesisResult.skippedSources.length > 0
-                          ? 'Niektóre wizje nie zostały wygenerowane, ponieważ brakuje wystarczających danych:'
-                          : `Wygenerowano ${synthesisResult.generatedSources.length} wizji z różnych źródeł danych.`}
-                      </p>
-                      
-                      {/* Show all sources with their status */}
-                      <div className="space-y-2">
-                        {synthesisResult.qualityReports.map(report => {
-                          const isSkipped = !report.shouldGenerate;
-                          const statusColor = report.status === 'insufficient' 
-                            ? 'text-red-500' 
-                            : report.status === 'limited' 
-                            ? 'text-amber-500' 
-                            : 'text-green-500';
-                          const statusText = report.status === 'insufficient' 
-                            ? 'Brak danych' 
-                            : report.status === 'limited' 
-                            ? 'Niewystarczające dane' 
-                            : 'Gotowe';
-                          
-                          return (
-                            <div key={report.source} className={`text-sm p-2 rounded ${isSkipped ? 'bg-amber-500/5' : 'bg-green-500/5'}`}>
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="font-medium text-graphite">
-                                  {GENERATION_SOURCE_LABELS[report.source]?.pl || report.source}:
-                                </span>
-                                <span className={`text-xs font-medium ${statusColor}`}>
-                                  {statusText}
-                                </span>
-                                {report.confidence > 0 && (
-                                  <span className="text-xs text-silver-dark">
-                                    (pewność: {report.confidence}%)
-                                  </span>
-                                )}
-                              </div>
-                              {report.warnings.length > 0 && (
-                                <ul className="list-disc list-inside text-silver-dark text-xs ml-4 mt-1">
-                                  {report.warnings.map((warning, idx) => (
-                                    <li key={idx}>{warning}</li>
-                                  ))}
-                                </ul>
-                              )}
-                              {!isSkipped && report.dataPoints > 0 && (
-                                <p className="text-xs text-silver-dark mt-1 ml-4">
-                                  Punkty danych: {report.dataPoints}
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </GlassCard>
-              )}
-              
               {/* Grid 3x2 with Loading Placeholders - 3 columns for better fit */}
               <div className="grid grid-cols-3 gap-3 max-w-5xl mx-auto">
                 {/* Generate 6 slots - show placeholders for missing images */}
@@ -2228,18 +2153,11 @@ export default function GeneratePage() {
                                 <p className="text-white/70 text-xs mt-1 font-medium">Generowanie...</p>
                               </div>
                             </div>
-                            
-                            {/* Source label at bottom with glass effect */}
-                            <div className="absolute bottom-2 left-2 right-2">
-                              <div className="px-2.5 py-1.5 bg-black/50 backdrop-blur-md rounded-lg border border-gold/20">
-                                <p className="text-gold/90 font-semibold text-xs">{sourceLabel}</p>
-                              </div>
-                            </div>
 
                             {/* Inline quality info for this source while waiting */}
                             {qualityInfo && (
-                              <div className="absolute bottom-16 left-2 right-2">
-                                <div className="px-2.5 py-1.5 bg-black/40 backdrop-blur-md rounded-lg border border-white/10 text-[11px] leading-tight text-white/80 space-y-0.5">
+                              <div className="absolute bottom-2 left-2 right-2">
+                                <div className="px-2.5 py-1.5 bg-white/15 backdrop-blur-md rounded-lg border border-white/15 text-[11px] leading-tight text-white/80 space-y-0.5">
                                   <div className="flex justify-between gap-2">
                                     <span className="font-semibold text-white/90">Dane: {sourceLabel}</span>
                                     <span className={`font-semibold ${statusColor}`}>{statusText}</span>
@@ -2259,6 +2177,7 @@ export default function GeneratePage() {
                                 </div>
                               </div>
                             )}
+                            
                           </div>
                         ) : image ? (
                           /* Generated Image - No border, fills entire space */

@@ -70,23 +70,34 @@ export async function analyzeInspirationsWithGamma(files: File[]): Promise<Inspi
       try {
         const base64 = await fileToBase64(file);
         const response = await callInspirationAPI(base64);
+        // Gamma zwraca biophilia 0-3; jeśli brak, ustaw 0 (nie windowaj na 1)
+        const biophilia = typeof response.biophilia === 'number' && !Number.isNaN(response.biophilia)
+          ? response.biophilia
+          : 0;
+        console.log('[Gamma] Tagged inspiration:', {
+          hasBiophilia: typeof response.biophilia === 'number',
+          biophiliaValue: response.biophilia,
+          finalBiophilia: biophilia,
+          stylesCount: response.styles?.length || 0,
+          colorsCount: response.colors?.length || 0
+        });
         results.push({
           tags: {
             styles: response.styles || [],
             colors: response.colors || [],
             materials: response.materials || [],
-            biophilia: response.biophilia || 1
+            biophilia
           },
           description: response.description || "Interior design inspiration"
         });
       } catch (error) {
-        console.error('Error analyzing inspiration:', error);
+        console.error('[Gamma] Error analyzing inspiration:', error);
         results.push({
           tags: {
             styles: [],
             colors: [],
             materials: [],
-            biophilia: 1
+            biophilia: 0 // Błąd = brak danych, nie windowaj na 1
           },
           description: undefined
         });

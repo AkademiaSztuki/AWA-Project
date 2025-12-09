@@ -106,6 +106,36 @@ const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
   return sanitized;
 };
 
+// Lightweight trim: jeśli mamy publiczny URL, usuń base64, ale zostaw tagi/opisy
+const stripInlineBlobs = (data: SessionData): SessionData => {
+  const cloned: SessionData = { ...data };
+
+  if (Array.isArray((cloned as any).inspirations)) {
+    cloned.inspirations = (cloned as any).inspirations.map((insp: any) => {
+      const hasHttp = typeof insp.url === 'string' && insp.url.startsWith('http');
+      return {
+        ...insp,
+        imageBase64: hasHttp ? undefined : insp.imageBase64,
+      };
+    });
+  }
+
+  if (Array.isArray((cloned as any).generatedImages)) {
+    cloned.generatedImages = (cloned as any).generatedImages.map((img: any) => {
+      const url = img.url || img.image_url || img.imageUrl;
+      const hasHttp = typeof url === 'string' && url.startsWith('http');
+      const cleaned = { ...img };
+      if (hasHttp) {
+        cleaned.imageBase64 = undefined;
+        cleaned.base64 = undefined;
+      }
+      return cleaned;
+    });
+  }
+
+  return cloned;
+};
+
 const hasDataUrlSpaces = (spaces?: any[]): boolean =>
   Array.isArray(spaces) &&
   spaces.some(space => (space?.images || []).some((img: any) => typeof img?.url === 'string' && img.url.startsWith('data:')));
@@ -236,10 +266,11 @@ const manageRoomImageCache = (roomImage?: string) => {
 const persistSanitizedSessionData = (data: SessionData) => {
   if (typeof window === 'undefined') return;
 
-  const sanitizedData = sanitizeSessionDataForStorage(data);
+  // Usuń inline base64 tam, gdzie mamy już publiczny URL
+  const cleaned = stripInlineBlobs(sanitizeSessionDataForStorage(data));
 
   try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sanitizedData));
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(cleaned));
     return;
   } catch (error) {
     if (!isQuotaExceededError(error)) {
@@ -250,7 +281,7 @@ const persistSanitizedSessionData = (data: SessionData) => {
   }
 
   const withoutSpaces: SessionData = {
-    ...sanitizedData,
+    ...cleaned,
     spaces: undefined,
   };
 
@@ -282,15 +313,17 @@ const persistSessionData = (data: SessionData) => {
 
   manageRoomImageCache(data.roomImage);
 
+  const cleanedForStorage = stripInlineBlobs(data);
+
   const needsSanitization = shouldSanitizeSessionData(data);
 
   if (!needsSanitization) {
     try {
-      const serialized = JSON.stringify(data);
+      const serialized = JSON.stringify(cleanedForStorage);
 
       if (serialized.length > STORAGE_SIZE_THRESHOLD) {
         console.warn('[useSession] Dane sesji są bardzo duże – stosuję sanitizację przed zapisem.');
-        persistSanitizedSessionData(data);
+        persistSanitizedSessionData(cleanedForStorage);
         return;
       }
 
@@ -306,7 +339,7 @@ const persistSessionData = (data: SessionData) => {
     }
   }
 
-  persistSanitizedSessionData(data);
+  persistSanitizedSessionData(cleanedForStorage);
 };
 
 const createEmptySession = (): SessionData => ({

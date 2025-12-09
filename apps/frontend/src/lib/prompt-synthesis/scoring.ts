@@ -215,12 +215,28 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
   const prsWeights = analyzePRSGap(inputs.prsCurrent, inputs.prsTarget);
   
   // Pre-calculate inspiration biophilia if tags are present (for InspirationReference)
-  const inspirationBiophiliaValues = (inputs.inspirations || [])
-    .map(i => i.tags?.biophilia)
-    .filter((b): b is number => typeof b === 'number' && !Number.isNaN(b));
-  const inspirationBiophilia = inspirationBiophiliaValues.length > 0
-    ? inspirationBiophiliaValues.reduce((a, b) => a + b, 0) / inspirationBiophiliaValues.length
-    : undefined;
+  // Średnia biophilia z inspiracji liczone względem wszystkich inspiracji (brak taga = 0)
+  const inspirationBiophiliaRaw = (() => {
+    const total = (inputs.inspirations || []).length;
+    if (total === 0) return undefined;
+    const sum = (inputs.inspirations || []).reduce((acc, i) => {
+      const val = typeof i.tags?.biophilia === 'number' && !Number.isNaN(i.tags.biophilia)
+        ? i.tags.biophilia
+        : 0;
+      return acc + val;
+    }, 0);
+    return sum / total;
+  })();
+  const inspirationBiophilia = inspirationBiophiliaRaw;
+  const inspirationBiophiliaNormalized =
+    inspirationBiophilia !== undefined
+      ? (inspirationBiophilia > 1 ? inspirationBiophilia / 3 : inspirationBiophilia)
+      : undefined;
+  const explicitBiophiliaNormalized = (() => {
+    const val = inputs.psychologicalBaseline.biophiliaScore;
+    if (val === undefined) return undefined;
+    return val > 1 ? val / 3 : val;
+  })();
 
   // Log PRS values for debugging
   if (sourceType) {
@@ -296,14 +312,9 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
       break;
       
     case GenerationSource.InspirationReference:
-      // InspirationReference: prefer biophilia from inspiration tags if present, fallback to explicit
-      if (inspirationBiophilia !== undefined) {
-        biophiliaScoreToUse = inspirationBiophilia;
-        console.log('[Biophilia] InspirationReference source - using inspiration tags biophilia:', biophiliaScoreToUse);
-      } else {
-        biophiliaScoreToUse = inputs.psychologicalBaseline.biophiliaScore ?? 0;
-        console.log('[Biophilia] InspirationReference source - using explicit biophilia (fallback):', biophiliaScoreToUse);
-      }
+      // InspirationReference: używaj TYLKO biophilii z inspiracji; brak danych = 0 (nie mieszaj z explicit)
+      biophiliaScoreToUse = inspirationBiophilia ?? 0;
+      console.log('[Biophilia] InspirationReference source - using inspiration tags biophilia only:', biophiliaScoreToUse);
       break;
       
     default:
@@ -382,6 +393,11 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     
     // Biophilia (enhanced with inspirations; dampen boosts at high base levels)
     natureDensity: (() => {
+      // InspirationReference: tylko inspiracje; brak danych = 0, bez miksowania z explicit
+      if (sourceType === GenerationSource.InspirationReference) {
+        const candidate = inspirationBiophiliaNormalized ?? 0;
+        return Math.max(0, Math.min(1, candidate));
+      }
       const base = biophiliaWeights.density;
       const boost = inspirationWeights.biophiliaBoost;
       const boostFactor = base < 0.5 ? 0.9 : base < 0.8 ? 0.7 : 0.5;
