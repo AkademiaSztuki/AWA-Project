@@ -35,7 +35,21 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
       console.warn('Error fetching user profile:', error.code, error.message);
       return null;
     }
-    return data as UserProfile | null;
+    
+    if (!data) return null;
+    
+    // Map Supabase snake_case to TypeScript camelCase
+    return {
+      userHash: data.user_hash,
+      aestheticDNA: data.aesthetic_dna,
+      psychologicalBaseline: data.psychological_baseline,
+      lifestyle: data.lifestyle_data,
+      sensoryPreferences: data.sensory_preferences,
+      projectiveResponses: data.projective_responses,
+      personality: data.personality,
+      inspirations: data.inspirations,
+      profileCompletedAt: data.profile_completed_at
+    } as UserProfile;
   } catch (error) {
     // Only log non-PGRST116 errors as warnings
     if (error && typeof error === 'object' && 'code' in error && error.code !== 'PGRST116') {
@@ -45,26 +59,132 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
   }
 }
 
-export async function saveUserProfile(profile: Partial<UserProfile>): Promise<UserProfile | null> {
+/**
+ * Get user_hash from Supabase based on authenticated user ID
+ * This is used to restore user_hash after login
+ */
+export async function getUserHashFromAuth(authUserId: string): Promise<string | null> {
   try {
     const { data, error } = await supabase
       .from('user_profiles')
-      .upsert({
-        user_hash: profile.userHash,
-        aesthetic_dna: profile.aestheticDNA,
-        psychological_baseline: profile.psychologicalBaseline,
-        lifestyle_data: profile.lifestyle,
-        sensory_preferences: profile.sensoryPreferences,
-        projective_responses: profile.projectiveResponses,
-        personality: profile.personality,
-        inspirations: profile.inspirations,
-        profile_completed_at: profile.profileCompletedAt,
-        updated_at: new Date().toISOString()
+      .select('user_hash')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null; // No profile linked yet
+      }
+      console.warn('Error fetching user_hash from auth:', error);
+      return null;
+    }
+    return data?.user_hash || null;
+  } catch (error) {
+    console.warn('Error in getUserHashFromAuth:', error);
+    return null;
+  }
+}
+
+export async function saveUserProfile(profile: Partial<UserProfile>): Promise<UserProfile | null> {
+  try {
+    if (!profile.userHash) {
+      console.warn('saveUserProfile: userHash is required');
+      return null;
+    }
+    
+    // First, get existing profile to preserve auth_user_id
+    const existing = await getUserProfile(profile.userHash);
+    
+    // Build upsert data - only include fields that exist
+    const upsertData: any = {
+      user_hash: profile.userHash,
+      auth_user_id: existing?.auth_user_id || undefined, // Preserve auth_user_id if exists
+      updated_at: new Date().toISOString()
+    };
+    
+    // Only include fields that are defined (to avoid schema errors)
+    if (profile.aestheticDNA !== undefined) upsertData.aesthetic_dna = profile.aestheticDNA;
+    if (profile.psychologicalBaseline !== undefined) upsertData.psychological_baseline = profile.psychologicalBaseline;
+    if (profile.lifestyle !== undefined) upsertData.lifestyle_data = profile.lifestyle;
+    if (profile.sensoryPreferences !== undefined) upsertData.sensory_preferences = profile.sensoryPreferences;
+    if (profile.projectiveResponses !== undefined) upsertData.projective_responses = profile.projectiveResponses;
+    if (profile.inspirations !== undefined) upsertData.inspirations = profile.inspirations;
+    if (profile.profileCompletedAt !== undefined) upsertData.profile_completed_at = profile.profileCompletedAt;
+    
+    // Only include personality if it exists (column may not exist in some schemas)
+    if (profile.personality !== undefined && profile.personality !== null) {
+      upsertData.personality = profile.personality;
+    }
+    
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .upsert(upsertData, {
+        onConflict: 'user_hash' // Update existing profile by user_hash
       })
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If personality column doesn't exist, try again without it
+      if (error.code === 'PGRST204' && error.message?.includes('personality')) {
+        console.warn('⚠️ Personality column not found in Supabase!');
+        console.warn('⚠️ Please run migration: apps/frontend/supabase/migrations/20250131000000_add_personality_inspirations.sql');
+        console.warn('⚠️ Or run SQL from: apps/frontend/ADD_PERSONALITY_COLUMN.sql in Supabase SQL Editor');
+        
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'debug-session',
+            runId: 'sync-check',
+            hypothesisId: 'H8',
+            location: 'supabase-deep-personalization.ts:personality-column-missing',
+            message: 'Personality column missing - migration needed',
+            data: {
+              error: error.message,
+              errorCode: error.code,
+              hasPersonality: !!profile.personality,
+              migrationFile: '20250131000000_add_personality_inspirations.sql'
+            },
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+        // #endregion
+        
+        delete upsertData.personality;
+        const { data: retryData, error: retryError } = await supabase
+          .from('user_profiles')
+          .upsert(upsertData, {
+            onConflict: 'user_hash'
+          })
+          .select()
+          .single();
+        if (retryError) throw retryError;
+        
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'debug-session',
+            runId: 'sync-check',
+            hypothesisId: 'H8',
+            location: 'supabase-deep-personalization.ts:personality-skipped',
+            message: 'Profile saved without personality (column missing)',
+            data: {
+              savedWithoutPersonality: true,
+              hasPersonalityInProfile: !!profile.personality
+            },
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+        // #endregion
+        
+        return retryData as UserProfile;
+      }
+      throw error;
+    }
     return data as UserProfile;
   } catch (error) {
     console.error('Error saving user profile:', error);

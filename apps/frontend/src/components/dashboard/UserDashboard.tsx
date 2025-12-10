@@ -9,8 +9,9 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { supabase, fetchLatestSessionSnapshot, DISABLE_SESSION_SYNC } from '@/lib/supabase';
-import { getUserHouseholds, saveHousehold, getCompletionStatus } from '@/lib/supabase-deep-personalization';
+import { getUserHouseholds, saveHousehold, getCompletionStatus, getUserProfile } from '@/lib/supabase-deep-personalization';
 import { fetchSpacesWithImages, toggleSpaceImageFavorite, updateSpaceName, deleteSpace } from '@/lib/remote-spaces';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, 
   Plus, 
@@ -77,6 +78,7 @@ export function UserDashboard() {
   const router = useRouter();
   const { sessionData, updateSessionData } = useSessionData();
   const { language } = useLanguage();
+  const { user, linkUserHashToAuth } = useAuth();
   
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [remoteSession, setRemoteSession] = useState<any>(null);
@@ -187,6 +189,15 @@ export function UserDashboard() {
 
       console.log('[Dashboard] Loading data for user:', userHash);
       
+      // Link user_hash to auth user if logged in (one-time operation)
+      if (user && userHash) {
+        try {
+          await linkUserHashToAuth(userHash);
+        } catch (e) {
+          console.warn('[Dashboard] Failed to link user_hash to auth:', e);
+        }
+      }
+      
       // Pull freshest session snapshot from Supabase (used for completion flags)
       if (!DISABLE_SESSION_SYNC) {
       try {
@@ -199,6 +210,134 @@ export function UserDashboard() {
         }
       }
 
+      // Load user profile from Supabase (Big Five, explicit preferences, etc.)
+      try {
+        const userProfile = await getUserProfile(userHash);
+        console.log('[Dashboard] getUserProfile result:', {
+          hasProfile: !!userProfile,
+          hasPersonality: !!userProfile?.personality,
+          hasAestheticDNA: !!userProfile?.aestheticDNA,
+          personalityKeys: userProfile?.personality ? Object.keys(userProfile.personality) : [],
+          aestheticDNAKeys: userProfile?.aestheticDNA ? Object.keys(userProfile.aestheticDNA) : []
+        });
+        
+        if (userProfile) {
+          // Map Supabase profile data back to sessionData format
+          const mappedData: any = {};
+          
+          // Big Five / Personality
+          if (userProfile.personality) {
+            mappedData.bigFive = {
+              instrument: userProfile.personality.instrument || 'IPIP-NEO-120',
+              scores: {
+                domains: userProfile.personality.domains || {},
+                facets: userProfile.personality.facets || {}
+              },
+              completedAt: userProfile.personality.completedAt || new Date().toISOString()
+            };
+            console.log('[Dashboard] Mapped Big Five:', {
+              instrument: mappedData.bigFive.instrument,
+              hasScores: !!mappedData.bigFive.scores,
+              hasDomains: !!mappedData.bigFive.scores.domains,
+              domainsKeys: mappedData.bigFive.scores.domains ? Object.keys(mappedData.bigFive.scores.domains) : []
+            });
+          }
+          
+          // Explicit preferences (colors, materials, styles)
+          if (userProfile.aestheticDNA?.explicit) {
+            mappedData.colorsAndMaterials = {
+              selectedPalette: userProfile.aestheticDNA.explicit.selectedPalette,
+              topMaterials: userProfile.aestheticDNA.explicit.topMaterials || []
+            };
+            mappedData.semanticDifferential = {
+              warmth: userProfile.aestheticDNA.explicit.warmthPreference,
+              brightness: userProfile.aestheticDNA.explicit.brightnessPreference,
+              complexity: userProfile.aestheticDNA.explicit.complexityPreference
+            };
+            console.log('[Dashboard] Mapped explicit preferences:', {
+              hasPalette: !!mappedData.colorsAndMaterials.selectedPalette,
+              materialsCount: mappedData.colorsAndMaterials.topMaterials?.length || 0,
+              hasSemantic: !!mappedData.semanticDifferential
+            });
+          }
+          
+          // Implicit preferences (visual DNA) - UKRYTE PREFERENCJE
+          if (userProfile.aestheticDNA?.implicit) {
+            mappedData.visualDNA = {
+              dominantStyle: userProfile.aestheticDNA.implicit.dominantStyles?.[0],
+              preferences: {
+                colors: userProfile.aestheticDNA.implicit.colors || [],
+                materials: userProfile.aestheticDNA.implicit.materials || [],
+                styles: userProfile.aestheticDNA.implicit.dominantStyles || []
+              }
+            };
+            
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: 'debug-session',
+                runId: 'sync-check',
+                hypothesisId: 'H4',
+                location: 'UserDashboard.tsx:loadUserData-implicit',
+                message: 'Loaded implicit preferences from Supabase',
+                data: {
+                  hasImplicit: true,
+                  dominantStyle: mappedData.visualDNA.dominantStyle,
+                  colorsCount: mappedData.visualDNA.preferences.colors?.length || 0,
+                  materialsCount: mappedData.visualDNA.preferences.materials?.length || 0,
+                  stylesCount: mappedData.visualDNA.preferences.styles?.length || 0
+                },
+                timestamp: Date.now()
+              })
+            }).catch(() => {});
+            // #endregion
+            
+            console.log('[Dashboard] Mapped implicit preferences (UKRYTE):', {
+              dominantStyle: mappedData.visualDNA.dominantStyle,
+              colorsCount: mappedData.visualDNA.preferences.colors?.length || 0,
+              materialsCount: mappedData.visualDNA.preferences.materials?.length || 0
+            });
+          } else {
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: 'debug-session',
+                runId: 'sync-check',
+                hypothesisId: 'H4',
+                location: 'UserDashboard.tsx:loadUserData-implicit-missing',
+                message: 'No implicit preferences in Supabase profile',
+                data: {
+                  hasImplicit: false,
+                  hasAestheticDNA: !!userProfile.aestheticDNA
+                },
+                timestamp: Date.now()
+              })
+            }).catch(() => {});
+            // #endregion
+          }
+          
+          // Update sessionData with Supabase data
+          if (Object.keys(mappedData).length > 0) {
+            updateSessionData(mappedData);
+            console.log('[Dashboard] Loaded user profile from Supabase:', {
+              hasBigFive: !!mappedData.bigFive,
+              hasExplicit: !!mappedData.colorsAndMaterials,
+              hasImplicit: !!mappedData.visualDNA
+            });
+          } else {
+            console.warn('[Dashboard] User profile exists but no mappable data found');
+          }
+        } else {
+          console.log('[Dashboard] No user profile found in Supabase for userHash:', userHash);
+        }
+      } catch (e) {
+        console.warn('[Dashboard] Failed to load user profile from Supabase:', e);
+      }
+
       // Completion status (RPC) – may fail on unauthenticated clients
       try {
         const status = await getCompletionStatus(userHash);
@@ -207,7 +346,7 @@ export function UserDashboard() {
         console.warn('[Dashboard] getCompletionStatus failed (likely unauthenticated):', e);
       }
 
-      // Fetch spaces + images from Supabase (primary)
+      // Fetch spaces + images from Supabase (primary) - WYGENEROWANE OBRAZY
       try {
         const remoteSpaces = await fetchSpacesWithImages(userHash, 6, 0);
         if (remoteSpaces && Array.isArray(remoteSpaces)) {
@@ -232,14 +371,78 @@ export function UserDashboard() {
             };
           });
           const ordered = sortSpacesDescending(mapped);
+          
+          const totalGenerated = ordered.reduce((sum, space) => 
+            sum + (space.images?.filter(img => img.type === 'generated').length || 0), 0);
+          const totalInspirations = ordered.reduce((sum, space) => 
+            sum + (space.images?.filter(img => img.type === 'inspiration').length || 0), 0);
+          
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'sync-check',
+              hypothesisId: 'H5',
+              location: 'UserDashboard.tsx:loadUserData-spaces',
+              message: 'Loaded spaces with images from Supabase',
+              data: {
+                spaceCount: ordered.length,
+                totalGenerated,
+                totalInspirations,
+                totalImages: totalGenerated + totalInspirations
+              },
+              timestamp: Date.now()
+            })
+          }).catch(() => {});
+          // #endregion
+          
           setSpaces(ordered);
           // lightweight cache in session
           updateSessionData({ spaces: ordered } as any);
           setIsLoading(false);
           return;
+        } else {
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'sync-check',
+              hypothesisId: 'H5',
+              location: 'UserDashboard.tsx:loadUserData-spaces-empty',
+              message: 'No spaces found in Supabase',
+              data: {
+                remoteSpacesIsArray: Array.isArray(remoteSpaces),
+                remoteSpacesLength: remoteSpaces?.length || 0
+              },
+              timestamp: Date.now()
+            })
+          }).catch(() => {});
+          // #endregion
         }
       } catch (e) {
         console.warn('[Dashboard] fetchSpacesWithImages failed, fallback to local/session', e);
+        
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'debug-session',
+            runId: 'sync-check',
+            hypothesisId: 'H5',
+            location: 'UserDashboard.tsx:loadUserData-spaces-error',
+            message: 'Error fetching spaces from Supabase',
+            data: {
+              error: e instanceof Error ? e.message : String(e)
+            },
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+        // #endregion
       }
 
       // Fallback: sessionData
@@ -1047,6 +1250,7 @@ function AddSpaceCallout({ onAddSpace, language }: { onAddSpace: () => void; lan
 function BigFiveResults({ userHash }: { userHash?: string }) {
   const { language } = useLanguage();
   const router = useRouter();
+  const { sessionData } = useSessionData();
   const [bigFiveData, setBigFiveData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState<boolean>(true);
 
@@ -1056,19 +1260,135 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
       try {
         if (!userHash) { setBigFiveData(null); setLoading(false); return; }
         
-        // First try localStorage (immediate)
+        // Priority 1: Check sessionData (already loaded from Supabase user_profiles)
+        const sessionBigFive = (sessionData as any)?.bigFive;
+        if (sessionBigFive?.scores) {
+          if (mounted) {
+            setBigFiveData(sessionBigFive);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Priority 2: Try localStorage (immediate)
         const localSession = localStorage.getItem('aura_session');
         if (localSession) {
           const parsed = JSON.parse(localSession);
           const bigFive = parsed?.bigFive;
-          if (mounted && bigFive) {
+          if (mounted && bigFive?.scores) {
             setBigFiveData(bigFive);
             setLoading(false);
             return;
           }
         }
         
-        // Fallback to Supabase
+        // Priority 3: Fetch from Supabase user_profiles (primary source)
+        const { getUserProfile } = await import('@/lib/supabase-deep-personalization');
+        const userProfile = await getUserProfile(userHash);
+        if (userProfile?.personality) {
+          // Map personality from user_profiles to bigFive format
+          // IPIP-NEO-120 format only (O/C/E/A/N)
+          const rawDomains = userProfile.personality.domains || {};
+          let domains: Record<string, number> = {};
+          
+          // Check if domains use O/C/E/A/N format (IPIP-NEO-120)
+          if (rawDomains.O !== undefined || rawDomains.C !== undefined || rawDomains.E !== undefined || rawDomains.A !== undefined || rawDomains.N !== undefined) {
+            domains = rawDomains as Record<string, number>;
+          } else {
+            // Map from openness/conscientiousness format to O/C/E/A/N
+            const domainMapping: Record<string, string> = {
+              'openness': 'O',
+              'conscientiousness': 'C',
+              'extraversion': 'E',
+              'agreeableness': 'A',
+              'neuroticism': 'N'
+            };
+            Object.entries(rawDomains).forEach(([key, value]) => {
+              const mappedKey = domainMapping[key.toLowerCase()] || key;
+              if (typeof value === 'number') {
+                domains[mappedKey] = value;
+              }
+            });
+          }
+          
+          // Force IPIP-NEO-120 if we have O/C/E/A/N domains or facets
+          const hasOCEANFormat = domains.O !== undefined || domains.C !== undefined || domains.E !== undefined || domains.A !== undefined || domains.N !== undefined;
+          const hasFacets = userProfile.personality.facets && (
+            userProfile.personality.facets.O || 
+            userProfile.personality.facets.C || 
+            userProfile.personality.facets.E || 
+            userProfile.personality.facets.A || 
+            userProfile.personality.facets.N
+          );
+          const instrument = (hasOCEANFormat || hasFacets) ? 'IPIP-NEO-120' : (userProfile.personality.instrument || 'IPIP-NEO-120');
+          
+          const mappedBigFive = {
+            instrument: instrument,
+            scores: {
+              domains: domains,
+              facets: userProfile.personality.facets || {}
+            },
+            completedAt: userProfile.personality.completedAt
+          };
+          
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'sync-check',
+              hypothesisId: 'H14',
+              location: 'UserDashboard.tsx:BigFiveResults-user_profiles',
+              message: 'Loaded Big Five from user_profiles.personality',
+              data: {
+                hasPersonality: true,
+                originalInstrument: userProfile.personality.instrument,
+                hasOCEANFormat: hasOCEANFormat,
+                hasFacets: !!hasFacets,
+                finalInstrument: mappedBigFive.instrument,
+                rawDomainsKeys: Object.keys(rawDomains),
+                rawDomainsValues: Object.values(rawDomains),
+                mappedDomainsKeys: Object.keys(domains),
+                mappedDomainsValues: Object.values(domains),
+                domainsO: domains.O,
+                domainsC: domains.C,
+                domainsE: domains.E,
+                domainsA: domains.A,
+                domainsN: domains.N
+              },
+              timestamp: Date.now()
+            })
+          }).catch(() => {});
+          // #endregion
+          
+          if (mounted) {
+            setBigFiveData(mappedBigFive);
+            setLoading(false);
+            return;
+          }
+        } else {
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'sync-check',
+              hypothesisId: 'H9',
+              location: 'UserDashboard.tsx:BigFiveResults-user_profiles-missing',
+              message: 'No personality in user_profiles',
+              data: {
+                hasPersonality: false,
+                hasUserProfile: !!userProfile
+              },
+              timestamp: Date.now()
+            })
+          }).catch(() => {});
+          // #endregion
+        }
+        
+        // Priority 4: Fallback to Supabase sessions table (legacy)
         const { data, error } = await supabase
           .from('sessions')
           .select('session_json')
@@ -1078,7 +1398,11 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
           .maybeSingle();
         if (error) throw error;
         const bigFive = (data as any)?.session_json?.bigFive;
-        if (mounted) setBigFiveData(bigFive);
+        if (mounted && bigFive?.scores) {
+          setBigFiveData(bigFive);
+        } else if (mounted) {
+          setBigFiveData(null);
+        }
       } catch (e) {
         console.warn('[Dashboard] Big Five fetch failed', e);
         if (mounted) setBigFiveData(null);
@@ -1087,22 +1411,63 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
       }
     })();
     return () => { mounted = false; };
-  }, [userHash]);
+  }, [userHash, sessionData]);
 
   if (loading) return null;
-  if (!bigFiveData?.scores) return null;
+  
+  // Show empty state with add button if no Big Five
+  if (!bigFiveData?.scores) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="mb-6"
+      >
+        <GlassCard className="p-4 sm:p-6 hover:border-gold/50 transition-all duration-300">
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                <User size={16} className="sm:w-5 sm:h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg lg:text-xl font-nasalization text-graphite truncate">
+                  {language === 'pl' ? 'Profil Osobowości' : 'Personality Profile'}
+                </h3>
+                <p className="text-xs sm:text-sm text-silver-dark font-modern">
+                  {language === 'pl' ? 'Big Five (IPIP-NEO-120)' : 'Big Five (IPIP-NEO-120)'}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push('/flow/big-five?from=dashboard');
+            }}
+            className="w-full py-4 border-2 border-dashed border-gold/30 rounded-lg 
+                     hover:border-gold/60 hover:bg-gold/5 transition-all duration-200
+                     flex items-center justify-center gap-2 text-gold font-modern"
+          >
+            <Plus size={20} />
+            {language === 'pl' ? 'Dodaj test Big Five' : 'Add Big Five Test'}
+          </button>
+        </GlassCard>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="mb-6 cursor-pointer"
-      onClick={() => router.push('/dashboard/personality')}
+      className="mb-6"
     >
       <GlassCard className="p-4 sm:p-6 hover:border-gold/50 transition-all duration-300">
         <div className="flex items-center justify-between mb-4 gap-3">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 cursor-pointer" onClick={() => router.push('/dashboard/personality')}>
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
               <User size={16} className="sm:w-5 sm:h-5 text-white" />
             </div>
@@ -1115,7 +1480,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1 sm:gap-2 text-gold flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 text-gold cursor-pointer flex-shrink-0" onClick={() => router.push('/dashboard/personality')}>
             <Eye size={16} className="sm:w-5 sm:h-5" />
             <ChevronRight size={16} className="sm:w-5 sm:h-5" />
           </div>
@@ -1123,18 +1488,12 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           {(() => {
-            // Handle both IPIP-60 and IPIP-NEO-120 formats
+            // IPIP-NEO-120 format only (O/C/E/A/N)
             const domainsMap: Array<{ domain: string; score: number }> = [];
             
             if (bigFiveData.scores.domains) {
-              // IPIP-NEO-120 format
               Object.entries(bigFiveData.scores.domains).forEach(([key, value]) => {
-                domainsMap.push({ domain: key, score: value as number });
-              });
-            } else {
-              // IPIP-60 format
-              Object.entries(bigFiveData.scores).forEach(([key, value]) => {
-                if (typeof value === 'number') {
+                if (['O', 'C', 'E', 'A', 'N'].includes(key) && typeof value === 'number') {
                   domainsMap.push({ domain: key, score: value });
                 }
               });
@@ -1164,10 +1523,21 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
             ));
           })()}
         </div>
-        <div className="mt-4 text-center">
-          <p className="text-xs sm:text-sm text-silver-dark font-modern">
+        <div className="mt-4 pt-4 border-t border-white/20 flex items-center justify-between">
+          <p className="text-xs sm:text-sm text-silver-dark font-modern cursor-pointer hover:text-gold transition-colors"
+             onClick={() => router.push('/dashboard/personality')}>
             {language === 'pl' ? 'Kliknij aby zobaczyć szczegółową analizę' : 'Click to see detailed analysis'}
           </p>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push('/flow/big-five?from=dashboard');
+            }}
+            className="flex items-center gap-1 text-sm text-gold hover:text-champagne transition-colors font-modern"
+          >
+            <Plus size={16} />
+            {language === 'pl' ? 'Ponów' : 'Retake'}
+          </button>
         </div>
       </GlassCard>
     </motion.div>
@@ -1176,13 +1546,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
 
 function getDomainLabel(domain: string, language: 'pl' | 'en'): string {
   const labels = {
-    // IPIP-60 format
-    openness: { pl: 'Otwartość', en: 'Openness' },
-    conscientiousness: { pl: 'Sumienność', en: 'Conscientiousness' },
-    extraversion: { pl: 'Ekstrawersja', en: 'Extraversion' },
-    agreeableness: { pl: 'Ugodowość', en: 'Agreeableness' },
-    neuroticism: { pl: 'Neurotyczność', en: 'Neuroticism' },
-    // IPIP-NEO-120 format
+    // IPIP-NEO-120 format only
     O: { pl: 'Otwartość', en: 'Openness' },
     C: { pl: 'Sumienność', en: 'Conscientiousness' },
     E: { pl: 'Ekstrawersja', en: 'Extraversion' },

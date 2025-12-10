@@ -27,22 +27,94 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user || null);
       setIsLoading(false);
+
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'pre-fix',
+          hypothesisId: 'H2',
+          location: 'AuthContext.tsx:getSession',
+          message: 'Supabase getSession resolved',
+          data: {
+            sessionExists: !!session,
+            hasUser: !!session?.user,
+            provider: session?.user?.app_metadata?.provider ?? null
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user || null);
+    // Listen for auth changes with debounce to avoid multiple rapid calls
+    let authChangeTimeout: NodeJS.Timeout | null = null;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Debounce rapid auth state changes (e.g., from React StrictMode double renders)
+      if (authChangeTimeout) {
+        clearTimeout(authChangeTimeout);
+      }
+      
+      authChangeTimeout = setTimeout(async () => {
+        setSession(session);
+        setUser(session?.user || null);
+
+        // If user just signed in, restore user_hash from Supabase
+        if (event === 'SIGNED_IN' && session?.user?.id && typeof window !== 'undefined') {
+          try {
+            const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
+            const userHash = await getUserHashFromAuth(session.user.id);
+            if (userHash) {
+              localStorage.setItem('aura_user_hash', userHash);
+              console.log('[AuthContext] Restored user_hash from Supabase:', userHash);
+            }
+          } catch (error) {
+            console.warn('[AuthContext] Failed to restore user_hash:', error);
+          }
+        }
+
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'debug-session',
+            runId: 'pre-fix',
+            hypothesisId: 'H2',
+            location: 'AuthContext.tsx:onAuthStateChange',
+            message: 'Auth state change event',
+            data: {
+              event,
+              sessionExists: !!session,
+              hasUser: !!session?.user,
+              provider: session?.user?.app_metadata?.provider ?? null
+            },
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+        // #endregion
+      }, 100); // 100ms debounce
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (authChangeTimeout) {
+        clearTimeout(authChangeTimeout);
+      }
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const redirectTo = `${window.location.origin}/auth/callback`;
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        flowType: 'pkce',
+        redirectTo,
+        skipBrowserRedirect: true,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
@@ -50,9 +122,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    const url = data?.url ?? null;
+    const hasUrl = !!url;
+    const parsedUrl = hasUrl ? new URL(url) : null;
+    const responseType = parsedUrl?.searchParams.get('response_type') ?? null;
+    const hasCodeChallenge = parsedUrl?.searchParams.has('code_challenge') ?? false;
+
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'fix4',
+        hypothesisId: 'H3',
+        location: 'AuthContext.tsx:signInWithGoogle',
+        message: 'OAuth sign-in call completed',
+        data: {
+          redirectTo,
+          hasError: !!error,
+          errorMessage: error?.message || null,
+          responseType,
+          hasCodeChallenge,
+          hasUrl
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+
     if (error) {
       console.error('Error signing in with Google:', error);
       throw error;
+    }
+
+    if (url) {
+      window.location.assign(url);
     }
   };
 
@@ -90,6 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('user_profiles')
         .upsert({
           user_hash: userHash,
+          auth_user_id: user.id, // CRITICAL: Link to auth user
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'user_hash'
@@ -99,6 +205,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error linking user_hash to auth:', error);
       } else {
         console.log('Successfully linked user_hash to authenticated user');
+        // Save user_hash to localStorage for persistence
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('aura_user_hash', userHash);
+        }
       }
     } catch (error) {
       console.error('Error in linkUserHashToAuth:', error);

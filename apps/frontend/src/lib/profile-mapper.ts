@@ -10,20 +10,40 @@ export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserP
     sessionData.tinderData?.totalImages
   );
 
-  // --- Personality (Big Five) mapping: IPIP-NEO-120 first, IPIP-60 as legacy fallback ---
+    // --- Personality (Big Five) mapping: IPIP-NEO-120 only ---
   let personality: UserProfile['personality'] | undefined;
 
   if (sessionData.bigFive) {
     const raw = sessionData.bigFive;
     const scores: any = raw.scores || {};
 
-    // Prefer explicit instrument flag; otherwise infer from presence of domains/facets
-    let instrument: 'IPIP-60' | 'IPIP-NEO-120';
-    if (raw.instrument === 'IPIP-NEO-120' || scores.domains || scores.facets) {
-      instrument = 'IPIP-NEO-120';
-    } else {
-      instrument = 'IPIP-60';
-    }
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'sync-check',
+        hypothesisId: 'H7',
+        location: 'profile-mapper.ts:bigFive-mapping',
+        message: 'Mapping Big Five to profile',
+        data: {
+          hasBigFive: true,
+          instrument: raw.instrument,
+          hasScores: !!scores,
+          scoresKeys: scores ? Object.keys(scores) : [],
+          hasDomains: !!scores.domains,
+          hasFacets: !!scores.facets,
+          domainsKeys: scores.domains ? Object.keys(scores.domains) : [],
+          facetsKeys: scores.facets ? Object.keys(scores.facets) : []
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+
+    // Always use IPIP-NEO-120 (IPIP-60 removed)
+    const instrument: 'IPIP-NEO-120' = 'IPIP-NEO-120';
 
     // Normalize domain scores into unified structure
     const normalizedDomains: NonNullable<UserProfile['personality']>['domains'] = {};
@@ -44,26 +64,7 @@ export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserP
       if (typeof d.N === 'number') normalizedDomains.N = d.N;
     }
 
-    // Legacy IPIP-60 style fields (keep for backwards compatibility)
-    const legacyMap: Array<{ key: keyof typeof scores; short: 'O' | 'C' | 'E' | 'A' | 'N' }> = [
-      { key: 'openness', short: 'O' },
-      { key: 'conscientiousness', short: 'C' },
-      { key: 'extraversion', short: 'E' },
-      { key: 'agreeableness', short: 'A' },
-      { key: 'neuroticism', short: 'N' }
-    ];
-
-    for (const { key, short } of legacyMap) {
-      const value = scores[key];
-      if (typeof value === 'number') {
-        // Preserve original long-key scores
-        (normalizedDomains as any)[key] = value;
-        // If we don't already have an O/C/E/A/N value, fill it from legacy
-        if (typeof (normalizedDomains as any)[short] !== 'number') {
-          (normalizedDomains as any)[short] = value;
-        }
-      }
-    }
+    // IPIP-60 removed - only IPIP-NEO-120 format (O/C/E/A/N) is supported
 
     // Facets: pass through IPIP-NEO-120 facet structure when available
     const facetsSource = scores.facets as
@@ -99,6 +100,47 @@ export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserP
       // We currently don't persist per-item metadata here – can be added later if needed
       completedAt: raw.completedAt
     };
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'sync-check',
+        hypothesisId: 'H7',
+        location: 'profile-mapper.ts:bigFive-mapped',
+        message: 'Big Five mapped to personality',
+        data: {
+          instrument: personality.instrument,
+          hasDomains: !!personality.domains,
+          domainsKeys: personality.domains ? Object.keys(personality.domains) : [],
+          hasFacets: !!personality.facets,
+          facetsKeys: personality.facets ? Object.keys(personality.facets) : [],
+          completedAt: personality.completedAt
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+  } else {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'sync-check',
+        hypothesisId: 'H7',
+        location: 'profile-mapper.ts:bigFive-missing',
+        message: 'No Big Five in sessionData',
+        data: {
+          hasBigFive: false
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
   }
 
   return {

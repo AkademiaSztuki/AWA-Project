@@ -16,7 +16,8 @@ import {
   Sparkles,
   Leaf,
   Plus,
-  Trash2
+  Trash2,
+  Eye
 } from 'lucide-react';
 import Image from 'next/image';
 import { getPaletteLabel } from '@/components/setup/paletteOptions';
@@ -706,15 +707,15 @@ export function InspirationsPreviewSection({
       className="mb-6"
     >
       <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
-        <div 
-          className="flex items-center justify-between mb-4 cursor-pointer"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+        <div className="flex items-center justify-between mb-4 gap-3">
+          <div 
+            className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
               <Heart size={20} className="text-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="text-xl font-nasalization text-graphite">
                 {t('Inspiracje', 'Inspirations')}
               </h3>
@@ -724,10 +725,24 @@ export function InspirationsPreviewSection({
               </p>
             </div>
           </div>
-          <ChevronRight 
-            size={24} 
-            className={`text-gold transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
-          />
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {onViewAll && (
+              <div 
+                className="flex items-center text-gold cursor-pointer hover:text-champagne transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewAll();
+                }}
+              >
+                <Eye size={20} />
+              </div>
+            )}
+            <ChevronRight 
+              size={24} 
+              className={`text-gold transition-transform duration-200 cursor-pointer ${isExpanded ? 'rotate-90' : ''}`}
+              onClick={() => setIsExpanded(!isExpanded)}
+            />
+          </div>
         </div>
 
         {/* Images Grid */}
@@ -775,12 +790,14 @@ export function InspirationsPreviewSection({
         </motion.div>
 
         {/* Show remaining count or add more button */}
-        <div className="flex items-center justify-between gap-4">
-          {remainingCount > 0 && (
+        <div className="mt-4 pt-4 border-t border-white/20 flex items-center justify-between gap-4">
+          {remainingCount > 0 ? (
             <p className="text-sm text-silver-dark font-modern cursor-pointer hover:text-gold transition-colors"
                onClick={() => setIsExpanded(true)}>
               +{remainingCount} {t('więcej', 'more')}
             </p>
+          ) : (
+            <div></div>
           )}
           
           {onAddInspirations && (

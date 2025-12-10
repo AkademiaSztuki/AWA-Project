@@ -1,6 +1,7 @@
 import { useSession } from './useSession';
 import { SessionData } from '@/types';
 import { saveFullSessionToSupabase, DISABLE_SESSION_SYNC } from '@/lib/supabase';
+import { useProfileSync } from './useProfileSync';
 
 interface UseSessionDataReturn {
   sessionData: SessionData;
@@ -11,6 +12,9 @@ interface UseSessionDataReturn {
 
 export const useSessionData = (): UseSessionDataReturn => {
   const { sessionData, updateSession, isInitialized } = useSession();
+  
+  // Auto-sync profile data (Big Five, explicit preferences) to Supabase
+  useProfileSync();
 
   const updateSessionData = (updates: Partial<SessionData>) => {
     updateSession(updates);

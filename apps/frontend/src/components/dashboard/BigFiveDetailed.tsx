@@ -58,19 +58,61 @@ function RadarChart({ scores }: { scores: BigFiveScores }) {
   const getScore = (key: string): number => {
     // Try IPIP-NEO-120 format first
     if (scores.domains && key in scores.domains) {
-      return scores.domains[key as 'O' | 'C' | 'E' | 'A' | 'N'];
+      const value = scores.domains[key as 'O' | 'C' | 'E' | 'A' | 'N'];
+      
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'sync-check',
+          hypothesisId: 'H18',
+          location: 'BigFiveDetailed.tsx:getScore-domains',
+          message: 'Getting score from domains',
+          data: {
+            key,
+            hasDomains: !!scores.domains,
+            domainsKeys: scores.domains ? Object.keys(scores.domains) : [],
+            domainsValues: scores.domains ? Object.values(scores.domains) : [],
+            keyInDomains: key in (scores.domains || {}),
+            value,
+            valueType: typeof value,
+            willReturn: typeof value === 'number' ? value : 50
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+      
+      if (typeof value === 'number') {
+        return value;
+      }
     }
-    // Fallback to IPIP-60 format
-    const mapping: Record<string, string> = {
-      'O': 'openness',
-      'C': 'conscientiousness',
-      'E': 'extraversion',
-      'A': 'agreeableness',
-      'N': 'neuroticism'
-    };
-    const mappedKey = mapping[key] as 'openness' | 'conscientiousness' | 'extraversion' | 'agreeableness' | 'neuroticism';
-    const value = scores[mappedKey];
-    return typeof value === 'number' ? value : 50;
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'sync-check',
+        hypothesisId: 'H18',
+        location: 'BigFiveDetailed.tsx:getScore-fallback',
+        message: 'Domain not found, using default 50',
+        data: {
+          key,
+          hasDomains: !!scores.domains,
+          domainsKeys: scores.domains ? Object.keys(scores.domains) : [],
+          keyInDomains: key in (scores.domains || {})
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    
+    // IPIP-60 removed - return 50 if domain not found
+    return 50;
   };
 
   // Convert score (0-100) to radius
@@ -86,12 +128,53 @@ function RadarChart({ scores }: { scores: BigFiveScores }) {
   // Create polygon points
   const points = dimensions.map(dim => {
     const score = getScore(dim.key);
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'sync-check',
+        hypothesisId: 'H19',
+        location: 'BigFiveDetailed.tsx:RadarChart-points',
+        message: 'Creating polygon point',
+        data: {
+          key: dim.key,
+          score,
+          angle: dim.angle
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    
     return getPoint(score, dim.angle);
   });
 
   const pathData = points.map((p, i) => 
     `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`
   ).join(' ') + ' Z';
+  
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'debug-session',
+      runId: 'sync-check',
+      hypothesisId: 'H19',
+      location: 'BigFiveDetailed.tsx:RadarChart-pathData',
+      message: 'PathData created',
+      data: {
+        pathData,
+        pointsCount: points.length,
+        scores: dimensions.map(d => ({ key: d.key, score: getScore(d.key) }))
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
 
   // Background rings
   const rings = [20, 40, 60, 80, 100];
@@ -477,6 +560,35 @@ export function BigFiveDetailed({ scores, responses, completedAt }: BigFiveDetai
   const router = useRouter();
 
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
+  
+  // #region agent log
+  React.useEffect(() => {
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'sync-check',
+        hypothesisId: 'H17',
+        location: 'BigFiveDetailed.tsx:component-received',
+        message: 'BigFiveDetailed received scores',
+        data: {
+          hasScores: !!scores,
+          hasDomains: !!scores?.domains,
+          domainsKeys: scores?.domains ? Object.keys(scores.domains) : [],
+          domainsValues: scores?.domains ? Object.values(scores.domains) : [],
+          domainsO: scores?.domains?.O,
+          domainsC: scores?.domains?.C,
+          domainsE: scores?.domains?.E,
+          domainsA: scores?.domains?.A,
+          domainsN: scores?.domains?.N,
+          scoresStringified: JSON.stringify(scores)
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+  }, [scores]);
+  // #endregion
 
   return (
     <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
@@ -545,38 +657,60 @@ export function BigFiveDetailed({ scores, responses, completedAt }: BigFiveDetai
               // Get domains from either format
               const domainMap: Record<string, number> = {};
               if (scores.domains) {
-                // IPIP-NEO-120 format
+                // IPIP-NEO-120 format - use O/C/E/A/N directly
                 Object.entries(scores.domains).forEach(([key, value]) => {
-                  domainMap[key] = value;
-                });
-              } else {
-                // IPIP-60 format - map to NEO keys
-                const mapping: Record<string, string> = {
-                  'openness': 'O',
-                  'conscientiousness': 'C',
-                  'extraversion': 'E',
-                  'agreeableness': 'A',
-                  'neuroticism': 'N'
-                };
-                Object.entries(scores).forEach(([key, value]) => {
-                  if (typeof value === 'number' && mapping[key]) {
-                    domainMap[mapping[key]] = value;
+                  if (typeof value === 'number' && ['O', 'C', 'E', 'A', 'N'].includes(key)) {
+                    domainMap[key] = value;
                   }
                 });
               }
+              // IPIP-60 removed - only IPIP-NEO-120 format (O/C/E/A/N) is supported
               
-              return Object.entries(domainMap).map(([domain, score], index) => {
+              // #region agent log
+              void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: 'debug-session',
+                  runId: 'sync-check',
+                  hypothesisId: 'H15',
+                  location: 'BigFiveDetailed.tsx:domain-mapping',
+                  message: 'Mapping domains for descriptions',
+                  data: {
+                    hasDomains: !!scores.domains,
+                    domainsKeys: scores.domains ? Object.keys(scores.domains) : [],
+                    domainsValues: scores.domains ? Object.values(scores.domains) : [],
+                    domainMapKeys: Object.keys(domainMap),
+                    domainMapValues: Object.values(domainMap),
+                    domainO: domainMap.O,
+                    domainC: domainMap.C,
+                    domainE: domainMap.E,
+                    domainA: domainMap.A,
+                    domainN: domainMap.N
+                  },
+                  timestamp: Date.now()
+                })
+              }).catch(() => {});
+              // #endregion
+              
+              // Ensure we have all 5 domains in correct order (O, C, E, A, N)
+              const orderedDomains = ['O', 'C', 'E', 'A', 'N'].map(key => ({
+                key,
+                score: domainMap[key] || 50 // Fallback to 50 if missing
+              }));
+              
+              return orderedDomains.map(({ key, score }, index) => {
                 // Get facet scores if available
-                const facetScores = scores.facets?.[domain as 'O' | 'C' | 'E' | 'A' | 'N'];
+                const facetScores = scores.facets?.[key as 'O' | 'C' | 'E' | 'A' | 'N'];
                 return (
                   <motion.div
-                    key={domain}
+                    key={key}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.5, delay: index * 0.1 }}
                   >
                     <DomainDescription
-                      domain={domain as 'O' | 'C' | 'E' | 'A' | 'N'}
+                      domain={key as 'O' | 'C' | 'E' | 'A' | 'N'}
                       score={score}
                       facets={facetScores}
                     />

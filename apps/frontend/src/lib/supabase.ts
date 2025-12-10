@@ -8,7 +8,172 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // By default we disable it (value "1"), set NEXT_PUBLIC_DISABLE_SESSION_SYNC=0 to re-enable.
 export const DISABLE_SESSION_SYNC = (process.env.NEXT_PUBLIC_DISABLE_SESSION_SYNC ?? '1') !== '0';
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+// Custom storage adapter that gracefully handles storage errors (e.g., in 3rd-party iframes)
+const safeStorageAdapter = {
+  getItem: (key: string): string | null => {
+    try {
+      if (typeof window === 'undefined') return null;
+      return localStorage.getItem(key);
+    } catch (error) {
+      // Storage access denied (e.g., in 3rd-party context) - return null silently
+      if (error instanceof Error && error.message.includes('storage')) {
+        return null;
+      }
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      if (typeof window === 'undefined') return;
+      localStorage.setItem(key, value);
+    } catch (error) {
+      // Storage access denied - ignore silently
+      if (error instanceof Error && error.message.includes('storage')) {
+        return;
+      }
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      if (typeof window === 'undefined') return;
+      localStorage.removeItem(key);
+    } catch (error) {
+      // Storage access denied - ignore silently
+      if (error instanceof Error && error.message.includes('storage')) {
+        return;
+      }
+    }
+  }
+};
+
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: safeStorageAdapter,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+});
+
+// Global error handler for unhandled storage errors (from Google OAuth iframe)
+// Note: Errors from cross-origin iframes (Google OAuth) cannot be caught by event listeners,
+// so we filter them at the console level with aggressive pattern matching
+// This is initialized lazily to avoid hydration issues
+let errorFilterInitialized = false;
+
+const initializeErrorFilter = () => {
+  if (errorFilterInitialized || typeof window === 'undefined') return;
+  errorFilterInitialized = true;
+
+  // Store original console methods
+  const originalConsoleError = console.error;
+  const originalConsoleWarn = console.warn;
+  const originalConsoleLog = console.log;
+
+  // Filter out storage errors from Google OAuth iframe and browser extensions
+  const shouldSuppressError = (message: string, stack?: string): boolean => {
+    const fullText = `${message} ${stack || ''}`.toLowerCase();
+    
+    const suppressedPatterns = [
+      'access to storage is not allowed',
+      'accountchooser',
+      'signin/oauth',
+      'executing inline script violates.*content security policy',
+      'apps.googleusercontent.com',
+      'accounts.google.com',
+      'googleapis.com',
+      'vm\\d+:', // Virtual Machine (browser extensions)
+      'injectedfunction',
+      'self-xss' // Browser security warning
+    ];
+    
+    return suppressedPatterns.some(pattern => {
+      try {
+        return new RegExp(pattern, 'i').test(fullText);
+      } catch {
+        return fullText.includes(pattern);
+      }
+    });
+  };
+
+  // Override console.error to filter Google OAuth storage errors
+  console.error = (...args: any[]) => {
+    const message = args.map(arg => 
+      typeof arg === 'string' ? arg : 
+      arg?.message || String(arg)
+    ).join(' ');
+    
+    // Try to get stack trace from error object
+    const errorObj = args.find(arg => arg instanceof Error);
+    const stack = errorObj?.stack || '';
+    
+    if (!shouldSuppressError(message, stack)) {
+      originalConsoleError.apply(console, args);
+    }
+    // Silently ignore suppressed errors
+  };
+
+  // Override console.warn for consistency
+  console.warn = (...args: any[]) => {
+    const message = args.map(arg => 
+      typeof arg === 'string' ? arg : 
+      arg?.message || String(arg)
+    ).join(' ');
+    
+    const errorObj = args.find(arg => arg instanceof Error);
+    const stack = errorObj?.stack || '';
+    
+    if (!shouldSuppressError(message, stack)) {
+      originalConsoleWarn.apply(console, args);
+    }
+  };
+
+  // Also filter console.log for CSP violations
+  console.log = (...args: any[]) => {
+    const message = args.map(arg => 
+      typeof arg === 'string' ? arg : 
+      arg?.message || String(arg)
+    ).join(' ');
+    
+    if (!shouldSuppressError(message)) {
+      originalConsoleLog.apply(console, args);
+    }
+  };
+
+  // Also catch errors via event listeners (for same-origin errors)
+  window.addEventListener('error', (event) => {
+    const message = event.error?.message || event.message || '';
+    const stack = event.error?.stack || '';
+    const filename = event.filename || '';
+    
+    // Check if error comes from Google OAuth domain
+    if (filename.includes('google') || filename.includes('accountchooser') || 
+        shouldSuppressError(message, stack)) {
+      event.preventDefault();
+      return false;
+    }
+  }, true);
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const message = event.reason?.message || String(event.reason) || '';
+    const stack = event.reason?.stack || '';
+    
+    if (shouldSuppressError(message, stack)) {
+      event.preventDefault();
+      return false;
+    }
+  });
+};
+
+// Initialize on first import in browser (deferred to avoid hydration issues)
+if (typeof window !== 'undefined') {
+  // Use requestIdleCallback or setTimeout to defer initialization
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(initializeErrorFilter, { timeout: 1000 });
+  } else {
+    setTimeout(initializeErrorFilter, 0);
+  }
+}
 
 // Funkcje pomocnicze do logowania danych badawczych
 export const logBehavioralEvent = async (

@@ -104,6 +104,29 @@ export async function saveSpaceImagesMetadata(
   }>
 ): Promise<boolean> {
   if (!userHash || !spaceId || images.length === 0) return true;
+  
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'debug-session',
+      runId: 'sync-check',
+      hypothesisId: 'H2',
+      location: 'remote-spaces.ts:saveSpaceImagesMetadata',
+      message: 'Saving space images to Supabase',
+      data: {
+        userHash,
+        spaceId,
+        imageCount: images.length,
+        generatedCount: images.filter(img => img.type === 'generated').length,
+        inspirationCount: images.filter(img => img.type === 'inspiration').length
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+  
   try {
     const { error } = await supabase.rpc('add_space_images', {
       p_user_hash: userHash,
@@ -112,11 +135,70 @@ export async function saveSpaceImagesMetadata(
     });
     if (error) {
       console.warn('[remote-spaces] add_space_images failed', error);
+      
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'sync-check',
+          hypothesisId: 'H2',
+          location: 'remote-spaces.ts:saveSpaceImagesMetadata-error',
+          message: 'Failed to save space images',
+          data: {
+            error: error.message,
+            errorCode: error.code
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+      
       return false;
     }
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'sync-check',
+        hypothesisId: 'H2',
+        location: 'remote-spaces.ts:saveSpaceImagesMetadata-success',
+        message: 'Space images saved successfully',
+        data: {
+          success: true,
+          imageCount: images.length
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    
     return true;
   } catch (e) {
     console.warn('[remote-spaces] saveSpaceImagesMetadata error', e);
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'sync-check',
+        hypothesisId: 'H2',
+        location: 'remote-spaces.ts:saveSpaceImagesMetadata-exception',
+        message: 'Exception saving space images',
+        data: {
+          error: e instanceof Error ? e.message : String(e)
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    
     return false;
   }
 }
@@ -145,6 +227,27 @@ export async function fetchSpacesWithImages(
   offset = 0
 ) {
   if (!userHash) return [];
+  
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'debug-session',
+      runId: 'sync-check',
+      hypothesisId: 'H3',
+      location: 'remote-spaces.ts:fetchSpacesWithImages',
+      message: 'Fetching spaces with images from Supabase',
+      data: {
+        userHash,
+        limitPerSpace,
+        offset
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+  
   const { data, error } = await supabase.rpc('get_spaces_with_images', {
     p_user_hash: userHash,
     p_limit_per_space: limitPerSpace,
@@ -152,9 +255,61 @@ export async function fetchSpacesWithImages(
   });
   if (error) {
     console.warn('[remote-spaces] get_spaces_with_images failed', error);
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'sync-check',
+        hypothesisId: 'H3',
+        location: 'remote-spaces.ts:fetchSpacesWithImages-error',
+        message: 'Failed to fetch spaces with images',
+        data: {
+          error: error.message,
+          errorCode: error.code
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    
     return [];
   }
-  return (data as any) || [];
+  
+  const spaces = (data as any) || [];
+  const totalImages = spaces.reduce((sum: number, space: any) => {
+    const images = space.images || [];
+    return sum + images.length;
+  }, 0);
+  const generatedImages = spaces.reduce((sum: number, space: any) => {
+    const images = space.images || [];
+    return sum + images.filter((img: any) => img.type === 'generated').length;
+  }, 0);
+  
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'debug-session',
+      runId: 'sync-check',
+      hypothesisId: 'H3',
+      location: 'remote-spaces.ts:fetchSpacesWithImages-success',
+      message: 'Fetched spaces with images from Supabase',
+      data: {
+        spaceCount: spaces.length,
+        totalImages,
+        generatedImages,
+        inspirationImages: totalImages - generatedImages
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+  
+  return spaces;
 }
 
 export async function fetchSpaceImages(

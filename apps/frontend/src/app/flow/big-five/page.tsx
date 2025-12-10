@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassButton } from "@/components/ui/GlassButton";
@@ -18,7 +18,9 @@ import {
 export default function BigFivePage() {
   const { language } = useLanguage();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { sessionData, updateSessionData } = useSessionData();
+  const fromDashboard = searchParams?.get('from') === 'dashboard';
   
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [responses, setResponses] = useState<Record<string, number>>({});
@@ -122,7 +124,7 @@ export default function BigFivePage() {
 
   const handleSave = async () => {
     if (isLegacyResult) {
-      router.push("/dashboard");
+      router.push(fromDashboard ? "/dashboard" : "/flow/dna");
       return;
     }
 
@@ -138,14 +140,14 @@ export default function BigFivePage() {
         }
       } as any);
       
-      router.push("/dashboard");
+      router.push(fromDashboard ? "/dashboard" : "/flow/dna");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleSkip = () => {
-    router.push("/dashboard");
+    router.push(fromDashboard ? "/dashboard" : "/flow/dna");
   };
 
   const handleLegacyRetake = () => {
@@ -217,8 +219,8 @@ export default function BigFivePage() {
                 {isLegacyResult && (
                   <div className="mb-6 rounded-2xl border border-gold/30 bg-white/40 p-4 text-sm font-modern text-graphite">
                     {t(
-                      "Te wyniki pochodzą ze starszej wersji testu (IPIP-60). Aby odblokować nowy raport, wykonaj aktualny test 120 pytań.",
-                      "These scores come from the retired IPIP-60 test. Take the new 120-item version to unlock the refreshed insights."
+                      "Wykonaj test Big Five (IPIP-NEO-120), aby zobaczyć szczegółową analizę.",
+                      "Take the Big Five test (IPIP-NEO-120) to see detailed analysis."
                     )}
                   </div>
                 )}
