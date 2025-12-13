@@ -743,9 +743,9 @@ export default function GeneratePage() {
           inspiration_images: filteredInspirationImages, // Use filtered inspiration images (no blob URLs)
           style: typedSessionData.visualDNA?.dominantStyle || 'modern',
           parameters: {
-            strength: parameters.strength,
-            steps: parameters.steps,
-            guidance: parameters.guidance,
+            strength: parameters.strength ?? 0.55,
+            steps: parameters.steps ?? 20,
+            guidance: parameters.guidance ?? 2.5,
             image_size: parameters.image_size
           }
         },
