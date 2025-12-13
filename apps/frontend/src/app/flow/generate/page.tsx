@@ -185,7 +185,7 @@ export default function GeneratePage() {
   }, []);
 
   // Track pageViewId in a ref to avoid cleanup on every change
-  const pageViewIdRef = useRef<number | null>(null);
+  const pageViewIdRef = useRef<string | null>(null);
   
   useEffect(() => {
     (async () => {
