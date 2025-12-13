@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { safeLocalStorage } from '@/lib/supabase';
 
 interface AmbientMusicControls {
   volume: number;
@@ -17,7 +18,7 @@ export const useAmbientMusic = (): AmbientMusicControls => {
 
   // Zapisz głośność w localStorage i synchronizuj z audio
   useEffect(() => {
-    const savedVolume = localStorage.getItem('ambient-music-volume');
+    const savedVolume = safeLocalStorage.getItem('ambient-music-volume');
     if (savedVolume) {
       const parsedVolume = parseFloat(savedVolume);
       setVolumeState(parsedVolume);
@@ -57,7 +58,7 @@ export const useAmbientMusic = (): AmbientMusicControls => {
   const setVolume = (newVolume: number) => {
     const clampedVolume = Math.max(0, Math.min(1, newVolume));
     setVolumeState(clampedVolume);
-    localStorage.setItem('ambient-music-volume', clampedVolume.toString());
+    safeLocalStorage.setItem('ambient-music-volume', clampedVolume.toString());
     
     // Użyj funkcji z AmbientMusic komponentu
     if (typeof window !== 'undefined' && (window as any).setAmbientMusicVolume) {

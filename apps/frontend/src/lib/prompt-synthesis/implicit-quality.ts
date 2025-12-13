@@ -206,24 +206,21 @@ function calculateQualityScore(
   biophiliaConsistency: number,
   likeCount: number
 ): number {
-  // Like ratio should be in healthy range (0.1 - 0.9)
-  // Too low (<0.1) or too high (>0.9) suggests non-engagement
-  const likeRatioScore = likeRatio >= 0.1 && likeRatio <= 0.9
-    ? 100
-    : likeRatio < 0.1
-    ? likeRatio * 1000  // Very low = very bad
-    : (1 - likeRatio) * 1000; // Very high = very bad
+  // REMOVED: Like ratio penalty - not reliable with fixed 30 swipes
+  // High/low like ratio can indicate preferences, not non-engagement
+  // We give full score for like ratio (don't penalize extreme ratios)
+  const likeRatioScore = 100;
   
-  // Need minimum likes for quality
-  const likeCountScore = likeCount >= 3
+  // Need minimum likes for quality - but with 30 swipes, even 1 like is valid
+  const likeCountScore = likeCount >= 1
     ? 100
-    : (likeCount / 3) * 100;
+    : 0;
   
-  // Weighted average
+  // Weighted average - focus on actual pattern consistency, not like ratio
   const score = (
-    likeRatioScore * 0.3 +
-    styleConsistency * 100 * 0.3 +
-    colorConsistency * 100 * 0.2 +
+    likeRatioScore * 0.1 +  // Reduced weight - not a good indicator
+    styleConsistency * 100 * 0.4 +  // Increased weight - most important
+    colorConsistency * 100 * 0.3 +  // Increased weight - important
     biophiliaConsistency * 100 * 0.1 +
     likeCountScore * 0.1
   );
@@ -233,30 +230,35 @@ function calculateQualityScore(
 
 /**
  * Checks if implicit data quality is sufficient for generation
+ * 
+ * NOTE: User always does 30 swipes, so like ratio is not a good indicator of engagement.
+ * High like ratio (>90%) might indicate clear preferences, not non-engagement.
+ * Low like ratio (<10%) might indicate very selective taste.
+ * We rely on quality score instead, which measures style/color consistency.
  */
 export function isImplicitQualitySufficient(metrics: ImplicitQualityMetrics): {
   sufficient: boolean;
   reason?: string;
 } {
-  // Minimum requirements
-  if (metrics.likeCount < 3) {
+  // Minimum likes - need at least 1 like to extract any pattern
+  // With 30 swipes, even 1 like gives us data to work with
+  if (metrics.likeCount < 1) {
     return {
       sufficient: false,
-      reason: 'Too few likes (<3) - insufficient data for pattern recognition'
+      reason: 'No likes - insufficient data for pattern recognition'
     };
   }
   
-  if (metrics.likeRatio < 0.1 || metrics.likeRatio > 0.9) {
-    return {
-      sufficient: false,
-      reason: `Unhealthy like ratio (${(metrics.likeRatio * 100).toFixed(0)}%) - suggests non-engagement`
-    };
-  }
+  // REMOVED: Like ratio check - not reliable with fixed 30 swipes
+  // High/low like ratio can indicate preferences, not non-engagement
   
-  if (metrics.qualityScore < 30) {
+  // Quality score threshold - this measures actual pattern consistency
+  // Score <15 might indicate truly random swiping with no patterns
+  // Score >=15 means we can extract some preferences (even if weak)
+  if (metrics.qualityScore < 15) {
     return {
       sufficient: false,
-      reason: `Quality score too low (${metrics.qualityScore}/100) - data too inconsistent`
+      reason: `Quality score too low (${metrics.qualityScore}/100) - no clear patterns detected`
     };
   }
   

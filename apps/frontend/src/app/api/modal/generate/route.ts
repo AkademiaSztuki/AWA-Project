@@ -4,6 +4,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+// Increase timeout for image generation (up to 5 minutes)
+// Vercel Hobby: max 60s, Vercel Pro: max 300s
+export const maxDuration = 300; // 5 minutes
+export const runtime = 'nodejs'; // Use Node.js runtime for longer timeouts
+
 const MODAL_API_URL = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
 
 // Helper to convert image URL to base64
@@ -25,9 +30,35 @@ async function urlToBase64(url: string): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
+  const requestStartTime = Date.now();
+  console.log('[API] ========================================');
+  console.log('[API] /api/modal/generate - ENDPOINT CALLED at', new Date().toISOString());
+  console.log('[API] ========================================');
+  
   try {
-    console.log('[API] /api/modal/generate - Received request');
-    const body = await request.json();
+    console.log('[API] Request method:', request.method);
+    console.log('[API] Request URL:', request.url);
+    console.log('[API] Request headers:', {
+      contentType: request.headers.get('content-type'),
+      contentLength: request.headers.get('content-length'),
+      userAgent: request.headers.get('user-agent')?.substring(0, 50)
+    });
+    
+    // Try to read body as text first to see if it's too large
+    console.log('[API] About to read request body...');
+    const bodyTextStartTime = Date.now();
+    
+    // Read body as text first to check size
+    const bodyText = await request.text();
+    const bodyTextTime = Date.now() - bodyTextStartTime;
+    console.log('[API] Request body read as text in', bodyTextTime, 'ms, size:', bodyText.length, 'bytes');
+    
+    // Now parse as JSON
+    console.log('[API] About to parse JSON from body text...');
+    const parseStartTime = Date.now();
+    const body = JSON.parse(bodyText);
+    const parseTime = Date.now() - parseStartTime;
+    console.log('[API] Request body parsed in', parseTime, 'ms');
     console.log('[API] Request body keys:', Object.keys(body));
     console.log('[API] Has base_image:', !!body.base_image, 'Length:', body.base_image?.length || 0);
     console.log('[API] 🔍 base_image type check:', {
@@ -164,8 +195,8 @@ export async function POST(request: NextRequest) {
       requestBody.guidance = body.guidance_scale;
       requestBody.guidance_scale = body.guidance_scale;
     } else {
-      requestBody.guidance = 4.0;
-      requestBody.guidance_scale = 4.0;
+      requestBody.guidance = 2.5;
+      requestBody.guidance_scale = 2.5;
     }
     
     console.log('[API] Forwarding to Modal API:', `${MODAL_API_URL}/generate`);
@@ -222,17 +253,33 @@ export async function POST(request: NextRequest) {
       console.warn('[API] ⚠ Final check: image_size is', finalCheck.image_size, '- expected 512 for preview');
     }
     
-    const response = await fetch(`${MODAL_API_URL}/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonBody,
-      // Server-side fetch can follow redirects without CORS issues
-      redirect: 'follow',
-    });
+    console.log('[API] About to fetch Modal API:', `${MODAL_API_URL}/generate`);
+    console.log('[API] Request body size:', jsonBody.length, 'bytes');
+    const fetchStartTime = Date.now();
     
-    console.log('[API] Modal API response status:', response.status, response.statusText);
+    // Add timeout - 5 minutes for image generation (300 seconds)
+    const timeoutMs = 5 * 60 * 1000; // 5 minutes
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.error('[API] Request timeout after', timeoutMs, 'ms');
+    }, timeoutMs);
+    
+    try {
+      const response = await fetch(`${MODAL_API_URL}/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonBody,
+        // Server-side fetch can follow redirects without CORS issues
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      const fetchTime = Date.now() - fetchStartTime;
+      console.log('[API] Modal API response received after', fetchTime, 'ms:', response.status, response.statusText);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -243,13 +290,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await response.json();
-    console.log('[API] Modal API response received, images count:', data.images?.length || 0);
-    return NextResponse.json(data);
+      const data = await response.json();
+      console.log('[API] Modal API response parsed, images count:', data.images?.length || 0);
+      return NextResponse.json(data);
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      const fetchTime = Date.now() - fetchStartTime;
+      console.error('[API] Fetch error after', fetchTime, 'ms:', fetchError);
+      console.error('[API] Error details:', {
+        name: fetchError.name,
+        message: fetchError.message,
+        cause: fetchError.cause,
+        isAbortError: fetchError.name === 'AbortError',
+        isTimeout: fetchError.message?.includes('timeout') || fetchError.message?.includes('aborted')
+      });
+      
+      if (fetchError.name === 'AbortError') {
+        return NextResponse.json(
+          { error: 'Request timeout - generation took too long. Please try again.' },
+          { status: 504 }
+        );
+      }
+      
+      throw fetchError; // Re-throw to be caught by outer catch
+    }
   } catch (error) {
-    console.error('Proxy error:', error);
+    console.error('[API] Proxy error:', error);
+    console.error('[API] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Proxy request failed' },
+      { 
+        error: error instanceof Error ? error.message : 'Proxy request failed',
+        details: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     );
   }

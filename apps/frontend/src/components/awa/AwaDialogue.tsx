@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { FlowStep } from '@/types';
 import TextType from "@/components/ui/TextType";
 import GlassSurface from 'src/components/ui/GlassSurface';
@@ -22,13 +22,11 @@ interface AwaDialogueProps {
 const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   landing: {
     pl: [
-      "Witaj. Jestem IDA. Łączę psychologię z architekturą, by stworzyć wnętrze dopasowane do Twojej osobowości.",
-      "Nie będziemy tylko dobierać kolorów. Odkryjemy, co sprawia, że czujesz się dobrze w swojej przestrzeni.",
+      "Witaj. Jestem IDA." ,
       "Jesteś gotowy na tę podróż?"
     ],
     en: [
-      "Hello. I'm IDA. I combine psychology with architecture to create interiors tailored to your personality.",
-      "We won't just pick colors. We'll discover what makes you feel good in your space.",
+      "Hello. I'm IDA. ",
       "Are you ready for this journey?"
     ]
   },
@@ -312,11 +310,32 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     return null;
   }
   
-  // Get dialogues for current language
-  const stepDialogues = DIALOGUE_MAP[currentStep];
-  const dialogues = customMessage 
-    ? [customMessage] 
-    : (stepDialogues?.[language] || stepDialogues?.pl || ["Cześć! Jestem IDA."]);
+  // Get dialogues for current language - use useMemo to ensure it's always up to date
+  const dialogues = useMemo(() => {
+    const stepDialogues = DIALOGUE_MAP[currentStep];
+    
+    if (customMessage) {
+      // If customMessage is provided and we have step dialogues, append customMessage after them
+      // Otherwise, use only customMessage
+      const baseDialogues = stepDialogues?.[language] || stepDialogues?.pl || [];
+      if (baseDialogues.length > 0) {
+        const result = [...baseDialogues, customMessage];
+        console.log('[AwaDialogue] Appending customMessage to base dialogues:', {
+          currentStep,
+          baseDialoguesCount: baseDialogues.length,
+          customMessage,
+          totalDialogues: result.length,
+          dialogues: result
+        });
+        return result;
+      } else {
+        console.log('[AwaDialogue] Using only customMessage:', customMessage);
+        return [customMessage];
+      }
+    } else {
+      return stepDialogues?.[language] || stepDialogues?.pl || ["Cześć! Jestem IDA."];
+    }
+  }, [currentStep, language, customMessage]);
   
   const audioFile = getAudioFile(currentStep, language);
   
@@ -340,19 +359,25 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // console.log('AwaDialogue: useDialogueVoice hook returned:', { voiceVolume, voiceEnabled });
 
   const handleSentenceComplete = () => {
-    // console.log(`Completed sentence ${currentSentenceIndex + 1}/${dialogues.length}`);
+    console.log(`[AwaDialogue] Completed sentence ${currentSentenceIndex + 1}/${dialogues.length}`, {
+      currentSentenceIndex,
+      dialoguesLength: dialogues.length,
+      currentText: dialogues[currentSentenceIndex],
+      nextText: dialogues[currentSentenceIndex + 1]
+    });
     
     if (currentSentenceIndex < dialogues.length - 1) {
       setTimeout(() => {
+        console.log(`[AwaDialogue] Moving to next sentence: ${currentSentenceIndex + 1} -> ${currentSentenceIndex + 2}`);
         setCurrentSentenceIndex(prev => prev + 1);
       }, 800);
     } else {
-      // console.log('All sentences completed');
+      console.log('[AwaDialogue] All sentences completed');
       setIsDone(true);
       
       if (autoHide) {
         setTimeout(() => {
-          // console.log('AwaDialogue: Hiding dialogue after completion');
+          console.log('AwaDialogue: Hiding dialogue after completion');
           setIsVisible(false);
         }, 5000); // Increased from 2000 to 5000ms to give more time to read
       }
@@ -374,6 +399,46 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     setIsVisible(true);
     setShowClickPrompt(false);
   }, [currentStep, language, audioManager]);
+  
+  // Handle customMessage changes - reset dialogue when customMessage appears
+  const prevCustomMessageRef = React.useRef<string | undefined>(undefined);
+  useEffect(() => {
+    console.log('[AwaDialogue] customMessage effect triggered:', {
+      customMessage,
+      prevCustomMessage: prevCustomMessageRef.current,
+      hasStarted,
+      isDone,
+      currentSentenceIndex,
+      dialoguesLength: dialogues.length
+    });
+    
+    // Reset if customMessage changed from undefined/null to a value, OR if it changed to a different value
+    if (customMessage && customMessage !== prevCustomMessageRef.current) {
+      console.log('[AwaDialogue] customMessage changed, resetting dialogue:', {
+        customMessage,
+        prevCustomMessage: prevCustomMessageRef.current,
+        hasStarted,
+        isDone,
+        currentSentenceIndex,
+        dialoguesLength: dialogues.length,
+        allDialogues: dialogues
+      });
+      // Force reset dialogue to show new customMessage (will be appended to base dialogues)
+      setCurrentSentenceIndex(0);
+      setIsDone(false);
+      setIsVisible(true);
+      // Reset audio state
+      setHasStarted(false);
+      setAudioReady(false);
+      // Auto-start the dialogue after reset
+      setTimeout(() => {
+        console.log('[AwaDialogue] Auto-starting dialogue after customMessage reset, dialogues:', dialogues);
+        setHasStarted(true);
+        setAudioReady(true);
+      }, 300);
+    }
+    prevCustomMessageRef.current = customMessage;
+  }, [customMessage, dialogues]);
 
   useEffect(() => {
     if (currentStep === 'landing' && !audioReady) {

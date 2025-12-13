@@ -28,7 +28,7 @@ export function GenerationScreen() {
           modifications: [],
           strength: 0.65,
           steps: 30,
-          guidance: 3.5,
+          guidance: 2.5,
           num_images: 4,
         };
         const result = await generateImages(request as any);

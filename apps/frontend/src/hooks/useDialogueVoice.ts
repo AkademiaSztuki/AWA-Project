@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { safeLocalStorage } from '@/lib/supabase';
 
 interface DialogueVoiceControls {
   volume: number;
@@ -17,8 +18,8 @@ export const useDialogueVoice = (): DialogueVoiceControls => {
 
   // Zapisz głośność w localStorage
   useEffect(() => {
-    const savedVolume = localStorage.getItem('dialogue-voice-volume');
-    const savedEnabled = localStorage.getItem('dialogue-voice-enabled');
+    const savedVolume = safeLocalStorage.getItem('dialogue-voice-volume');
+    const savedEnabled = safeLocalStorage.getItem('dialogue-voice-enabled');
     
     // console.log('useDialogueVoice: Loading from localStorage:', { savedVolume, savedEnabled });
     
@@ -39,7 +40,7 @@ export const useDialogueVoice = (): DialogueVoiceControls => {
     const clampedVolume = Math.max(0, Math.min(1, newVolume));
     // console.log('useDialogueVoice: setVolume called with:', newVolume, 'clamped to:', clampedVolume);
     setVolumeState(clampedVolume);
-    localStorage.setItem('dialogue-voice-volume', clampedVolume.toString());
+    safeLocalStorage.setItem('dialogue-voice-volume', clampedVolume.toString());
     // Synchronizacja audio przeniesiona do useEffect poniżej
   };
 
@@ -47,7 +48,7 @@ export const useDialogueVoice = (): DialogueVoiceControls => {
     const newEnabled = !isEnabled;
     // console.log('useDialogueVoice: toggleEnabled called, new state:', newEnabled);
     setIsEnabled(newEnabled);
-    localStorage.setItem('dialogue-voice-enabled', newEnabled.toString());
+    safeLocalStorage.setItem('dialogue-voice-enabled', newEnabled.toString());
     // Zatrzymaj wszystkie aktualnie odtwarzane dialogi
     const dialogueAudios = document.querySelectorAll('audio[data-type="dialogue"]') as NodeListOf<HTMLAudioElement>;
     // console.log('useDialogueVoice: Found dialogue audios:', dialogueAudios.length);

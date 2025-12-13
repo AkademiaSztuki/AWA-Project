@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { SessionData, FlowStep } from '@/types';
-import { fetchLatestSessionSnapshot, supabase, DISABLE_SESSION_SYNC } from '@/lib/supabase';
+import { fetchLatestSessionSnapshot, supabase, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
 import { uploadSpaceImage, saveSpaceImagesMetadata } from '@/lib/remote-spaces';
 
 const SESSION_STORAGE_KEY = 'aura_session';
@@ -248,18 +248,10 @@ const isQuotaExceededError = (error: unknown): boolean => {
 const manageRoomImageCache = (roomImage?: string) => {
   if (typeof window === 'undefined') return;
 
-  try {
-    if (roomImage) {
-      sessionStorage.setItem(ROOM_IMAGE_SESSION_KEY, roomImage);
-    } else {
-      sessionStorage.removeItem(ROOM_IMAGE_SESSION_KEY);
-    }
-  } catch (error) {
-    if (isQuotaExceededError(error)) {
-      console.warn('[useSession] Przekroczono limit sessionStorage podczas zapisu roomImage.');
-    } else {
-      console.error('[useSession] Nie udało się zarządzać roomImage w sessionStorage.', error);
-    }
+  if (roomImage) {
+    safeSessionStorage.setItem(ROOM_IMAGE_SESSION_KEY, roomImage);
+  } else {
+    safeSessionStorage.removeItem(ROOM_IMAGE_SESSION_KEY);
   }
 };
 
@@ -270,7 +262,7 @@ const persistSanitizedSessionData = (data: SessionData) => {
   const cleaned = stripInlineBlobs(sanitizeSessionDataForStorage(data));
 
   try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(cleaned));
+    safeLocalStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(cleaned));
     return;
   } catch (error) {
     if (!isQuotaExceededError(error)) {
@@ -286,7 +278,7 @@ const persistSanitizedSessionData = (data: SessionData) => {
   };
 
   try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(withoutSpaces));
+    safeLocalStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(withoutSpaces));
   } catch (error) {
     if (isQuotaExceededError(error)) {
       console.error('[useSession] LocalStorage nadal pełny – zapisuję minimalne dane.', error);
@@ -297,10 +289,10 @@ const persistSanitizedSessionData = (data: SessionData) => {
         consentTimestamp: data.consentTimestamp,
       };
       try {
-        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(minimal));
+        safeLocalStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(minimal));
       } catch (err) {
         console.error('[useSession] Nie udało się zapisać nawet minimalnych danych sesji – czyszczę.', err);
-        localStorage.removeItem(SESSION_STORAGE_KEY);
+        safeLocalStorage.removeItem(SESSION_STORAGE_KEY);
       }
     } else {
       console.error('[useSession] Nie udało się zapisać minimalnych danych sesji.', error);
@@ -308,10 +300,68 @@ const persistSanitizedSessionData = (data: SessionData) => {
   }
 };
 
-const persistSessionData = (data: SessionData) => {
-  if (typeof window === 'undefined') return;
+const persistSessionData = (data: SessionData): SessionData => {
+  if (typeof window === 'undefined') return data;
 
   manageRoomImageCache(data.roomImage);
+
+  // Preserve existing Big Five/userHash/colorsAndMaterials/visualDNA from stored snapshot if incoming data lacks them
+  try {
+    const existingRaw = safeLocalStorage.getItem(SESSION_STORAGE_KEY);
+    if (existingRaw) {
+      const existing = JSON.parse(existingRaw) as SessionData;
+      const willPreserveBigFive = !data.bigFive && !!existing.bigFive;
+      const willPreserveUserHash = !data.userHash && !!existing.userHash;
+      
+      // CRITICAL: Check if data.colorsAndMaterials has actual data (not just empty values)
+      const dataHasColorsAndMaterials = !!data.colorsAndMaterials && (
+        (data.colorsAndMaterials.selectedStyle && data.colorsAndMaterials.selectedStyle.length > 0) ||
+        (data.colorsAndMaterials.selectedPalette && data.colorsAndMaterials.selectedPalette.length > 0) ||
+        (data.colorsAndMaterials.topMaterials && data.colorsAndMaterials.topMaterials.length > 0)
+      );
+      const existingHasColorsAndMaterials = !!existing.colorsAndMaterials && (
+        (existing.colorsAndMaterials.selectedStyle && existing.colorsAndMaterials.selectedStyle.length > 0) ||
+        (existing.colorsAndMaterials.selectedPalette && existing.colorsAndMaterials.selectedPalette.length > 0) ||
+        (existing.colorsAndMaterials.topMaterials && existing.colorsAndMaterials.topMaterials.length > 0)
+      );
+      const willPreserveColorsAndMaterials = !dataHasColorsAndMaterials && existingHasColorsAndMaterials;
+      
+      const existingHasVisualDNA = !!existing.visualDNA && (
+        (existing.visualDNA.preferences?.colors && existing.visualDNA.preferences.colors.length > 0) ||
+        (existing.visualDNA.preferences?.materials && existing.visualDNA.preferences.materials.length > 0) ||
+        (existing.visualDNA.preferences?.styles && existing.visualDNA.preferences.styles.length > 0) ||
+        !!existing.visualDNA.dominantStyle
+      );
+      const dataHasVisualDNA = !!data.visualDNA && (
+        (data.visualDNA.preferences?.colors && data.visualDNA.preferences.colors.length > 0) ||
+        (data.visualDNA.preferences?.materials && data.visualDNA.preferences.materials.length > 0) ||
+        (data.visualDNA.preferences?.styles && data.visualDNA.preferences.styles.length > 0) ||
+        !!data.visualDNA.dominantStyle
+      );
+      const willPreserveVisualDNA = !dataHasVisualDNA && existingHasVisualDNA;
+      if (willPreserveBigFive) {
+        data = { ...data, bigFive: existing.bigFive };
+      }
+      if (willPreserveUserHash) {
+        data = { ...data, userHash: existing.userHash };
+      }
+      if (willPreserveColorsAndMaterials) {
+        data = { ...data, colorsAndMaterials: existing.colorsAndMaterials };
+      }
+      if (willPreserveVisualDNA) {
+        data = { ...data, visualDNA: existing.visualDNA };
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:persistSessionData-merge-existing',message:'Merging stored snapshot before persist',data:{willPreserveBigFive,willPreserveUserHash,willPreserveColorsAndMaterials,willPreserveVisualDNA,hasBigFive:!!data.bigFive,completedAt:data.bigFive?.completedAt,userHash:data.userHash,hasColorsAndMaterials:!!data.colorsAndMaterials,explicitStyle:data.colorsAndMaterials?.selectedStyle||null,explicitPalette:data.colorsAndMaterials?.selectedPalette||null,explicitMaterialsCount:data.colorsAndMaterials?.topMaterials?.length||0,existingHasColorsAndMaterials:!!existing.colorsAndMaterials,existingExplicitStyle:existing.colorsAndMaterials?.selectedStyle||null,existingExplicitPalette:existing.colorsAndMaterials?.selectedPalette||null,existingExplicitMaterialsCount:existing.colorsAndMaterials?.topMaterials?.length||0,existingHasVisualDNA,dataHasVisualDNA},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H14'})}).catch(()=>{});
+      // #endregion
+    }
+  } catch (e) {
+    // ignore parse errors
+  }
+
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:persistSessionData',message:'Persisting session data',data:{hasBigFive:!!data.bigFive,completedAt:data.bigFive?.completedAt,hasColorsAndMaterials:!!data.colorsAndMaterials,explicitStyle:data.colorsAndMaterials?.selectedStyle||null,explicitPalette:data.colorsAndMaterials?.selectedPalette||null,explicitMaterialsCount:data.colorsAndMaterials?.topMaterials?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H11'})}).catch(()=>{});
+  // #endregion
 
   const cleanedForStorage = stripInlineBlobs(data);
 
@@ -324,15 +374,15 @@ const persistSessionData = (data: SessionData) => {
       if (serialized.length > STORAGE_SIZE_THRESHOLD) {
         console.warn('[useSession] Dane sesji są bardzo duże – stosuję sanitizację przed zapisem.');
         persistSanitizedSessionData(cleanedForStorage);
-        return;
+        return data;
       }
 
-      localStorage.setItem(SESSION_STORAGE_KEY, serialized);
-      return;
+      safeLocalStorage.setItem(SESSION_STORAGE_KEY, serialized);
+      return data;
     } catch (error) {
       if (!isQuotaExceededError(error)) {
         console.error('[useSession] Nie udało się zapisać danych sesji.', error);
-        return;
+        return data;
       }
 
       console.warn('[useSession] Przekroczono limit localStorage – zapisuję dane odchudzone.');
@@ -340,6 +390,7 @@ const persistSessionData = (data: SessionData) => {
   }
 
   persistSanitizedSessionData(cleanedForStorage);
+  return data;
 };
 
 const createEmptySession = (): SessionData => ({
@@ -387,24 +438,108 @@ export const useSession = (): UseSessionReturn => {
       if (typeof window === 'undefined') return;
 
       // Ensure user hash exists
-      let userHash = localStorage.getItem(USER_HASH_STORAGE_KEY);
+      let userHash = safeLocalStorage.getItem(USER_HASH_STORAGE_KEY);
+      let authUserId: string | undefined;
+
+      // If no userHash in localStorage, try to restore it from Supabase if user is authenticated
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        authUserId = session?.user?.id ?? undefined;
+        if (!userHash && authUserId) {
+          const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
+          const restoredUserHash = await getUserHashFromAuth(authUserId);
+          if (restoredUserHash) {
+            userHash = restoredUserHash;
+            safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:restore-userHash',message:'Restored userHash from Supabase',data:{userHash:userHash,hasAuthUser:!!session?.user,userId:session?.user?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I1'})}).catch(()=>{});
+            // #endregion
+            console.log('[useSession] Restored userHash from Supabase:', userHash);
+          }
+        }
+      } catch (error) {
+        console.warn('[useSession] Failed to restore userHash from Supabase:', error);
+      }
+
+      // If still no userHash, generate a new one
       if (!userHash) {
         userHash = generateUserHash();
-        localStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
+        safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:generate-userHash',message:'Generated new userHash',data:{userHash:userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I2'})}).catch(()=>{});
+        // #endregion
+      }
+
+      // If authenticated, check if there's an existing profile with data linked to auth_user_id
+      // If yes, use that userHash instead of creating a new one
+      if (authUserId && userHash) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user?.id === authUserId) {
+            const { getBestProfileForAuth, getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
+            
+            // First, check if there's a profile with data linked to auth_user_id
+            const bestProfile = await getBestProfileForAuth(authUserId);
+            if (bestProfile && bestProfile.userHash) {
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:best-profile-found',message:'Best profile for auth_user_id found',data:{authUserId,foundUserHash:bestProfile.userHash,hasPersonality:!!bestProfile.personality,hasImplicit:!!bestProfile.aestheticDNA?.implicit,hasExplicit:!!bestProfile.aestheticDNA?.explicit,hasSensory:!!bestProfile.sensoryPreferences,hasBiophilia:bestProfile.psychologicalBaseline?.biophiliaScore!==undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I17'})}).catch(()=>{});
+              // #endregion
+              if (bestProfile.userHash !== userHash) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:switch-to-profile-with-data',message:'Switching to userHash from profile with data',data:{oldUserHash:userHash,newUserHash:bestProfile.userHash,authUserId,hasPersonality:!!bestProfile.personality,hasImplicit:!!bestProfile.aestheticDNA?.implicit,hasExplicit:!!bestProfile.aestheticDNA?.explicit,hasSensory:!!bestProfile.sensoryPreferences,hasBiophilia:bestProfile.psychologicalBaseline?.biophiliaScore!==undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I13'})}).catch(()=>{});
+                // #endregion
+                userHash = bestProfile.userHash;
+                safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
+              }
+            } else {
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:no-best-profile',message:'No profile with data found for auth_user_id',data:{authUserId,currentUserHash:userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I18'})}).catch(()=>{});
+              // #endregion
+              // No profile with data — check if there's any mapping at all
+              const existingHash = await getUserHashFromAuth(authUserId);
+              if (!existingHash) {
+                // No mapping yet — link this userHash to auth_user_id
+                const { error } = await supabase
+                  .from('user_profiles')
+                  .upsert({
+                    user_hash: userHash,
+                    auth_user_id: authUserId,
+                    updated_at: new Date().toISOString()
+                  }, { onConflict: 'user_hash' });
+
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:link-userHash',message:'Linking userHash to auth_user_id',data:{userHash,authUserId,hadExisting:!!existingHash,upsertError:!!error,errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I11'})}).catch(()=>{});
+                // #endregion
+              } else if (existingHash !== userHash) {
+                // Mapping exists but different userHash — use the existing one
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:switch-to-existing-hash',message:'Switching to existing userHash from auth_user_id',data:{oldUserHash:userHash,newUserHash:existingHash,authUserId},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I14'})}).catch(()=>{});
+                // #endregion
+                userHash = existingHash;
+                safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('[useSession] Failed to link userHash to auth_user_id:', error);
+        }
       }
 
       let mergedLocalSession: Partial<SessionData> | null = null;
-      const savedData = localStorage.getItem(SESSION_STORAGE_KEY);
+      const savedData = safeLocalStorage.getItem(SESSION_STORAGE_KEY);
 
       if (savedData) {
         try {
           mergedLocalSession = JSON.parse(savedData) as SessionData;
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:loaded-local-session',message:'Loaded session from localStorage',data:{hasBigFive:!!mergedLocalSession?.bigFive,completedAt:mergedLocalSession?.bigFive?.completedAt,userHash:mergedLocalSession?.userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H12'})}).catch(()=>{});
+          // #endregion
         } catch (error) {
           console.error('Failed to load session data from localStorage:', error);
         }
       }
 
-      const sessionRoomImage = sessionStorage.getItem(ROOM_IMAGE_SESSION_KEY);
+      const sessionRoomImage = safeSessionStorage.getItem(ROOM_IMAGE_SESSION_KEY);
       if (sessionRoomImage && (!mergedLocalSession?.roomImage || mergedLocalSession.roomImage.length < sessionRoomImage.length)) {
         mergedLocalSession = { ...(mergedLocalSession || {}), roomImage: sessionRoomImage };
       }
@@ -426,65 +561,238 @@ export const useSession = (): UseSessionReturn => {
         userHash,
       };
 
-      // Load inspirations with gamma tags from user_profiles.inspirations
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:434',message:'After merging remote/local session snapshot',data:{hasBigFive:!!mergedSession.bigFive,domains:mergedSession.bigFive?.scores?.domains||mergedSession.bigFive?.scores?.domains||null,facetsPresent:!!mergedSession.bigFive?.scores?.facets,facetCounts:mergedSession.bigFive?.scores?.facets?{O:Object.keys(mergedSession.bigFive.scores.facets.O||{}).length,C:Object.keys(mergedSession.bigFive.scores.facets.C||{}).length,E:Object.keys(mergedSession.bigFive.scores.facets.E||{}).length,A:Object.keys(mergedSession.bigFive.scores.facets.A||{}).length,N:Object.keys(mergedSession.bigFive.scores.facets.N||{}).length}:null,completedAt:mergedSession.bigFive?.completedAt,explicitStyle:mergedSession.colorsAndMaterials?.selectedStyle||null,explicitPalette:mergedSession.colorsAndMaterials?.selectedPalette||null,explicitMaterialsCount:mergedSession.colorsAndMaterials?.topMaterials?.length||0,remoteHasColorsAndMaterials:!!remoteSession?.colorsAndMaterials,remoteExplicitStyle:remoteSession?.colorsAndMaterials?.selectedStyle||null,localHasColorsAndMaterials:!!mergedLocalSession?.colorsAndMaterials,localExplicitStyle:mergedLocalSession?.colorsAndMaterials?.selectedStyle||null},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'S1'})}).catch(()=>{});
+      // #endregion
+
+      // Load profile data (Big Five, explicit preferences, biophiliaScore, inspirations) from user_profiles
       if (userHash) {
         try {
           const { getUserProfile } = await import('@/lib/supabase-deep-personalization');
+          const { mapUserProfileToSessionData } = await import('@/lib/profile-mapper');
           const userProfile = await getUserProfile(userHash);
-          if (userProfile?.inspirations && Array.isArray(userProfile.inspirations) && userProfile.inspirations.length > 0) {
-            // Convert user_profiles.inspirations format to SessionData.inspirations format
-            const inspirationsFromProfile = userProfile.inspirations.map((insp: any) => {
-              const result = {
-                id: insp.fileId || `insp_${Date.now()}_${Math.random().toString(36).substring(2)}`,
-                fileId: insp.fileId,
-                url: insp.url,
-                tags: insp.tags, // Tags from gamma model (Gemma3VisionModel)
-                description: insp.description, // Description from gamma model
-                addedAt: insp.addedAt || new Date().toISOString()
+          
+          if (userProfile) {
+            // Check if profile has auth_user_id and try to restore userHash if needed
+            if (userProfile.auth_user_id) {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session && session.user && session.user.id === userProfile.auth_user_id) {
+                  // Profile has auth_user_id matching current session
+                  // If current userHash doesn't match, try to restore the correct one
+                  const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
+                  const restoredUserHash = await getUserHashFromAuth(session.user.id);
+                  if (restoredUserHash && restoredUserHash !== userHash) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:restore-userHash-after-profile-load',message:'Restored userHash after profile load',data:{oldUserHash:userHash,newUserHash:restoredUserHash,authUserId:session.user.id},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I9'})}).catch(()=>{});
+                    // #endregion
+                    userHash = restoredUserHash;
+                    safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
+                    console.log('[useSession] Restored userHash after profile load:', userHash);
+                    // Reload profile with correct userHash
+                    const correctUserProfile = await getUserProfile(userHash);
+                    if (correctUserProfile) {
+                      const correctProfileSessionData = mapUserProfileToSessionData(correctUserProfile);
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:profile-loaded-correct',message:'Loaded profile data with correct userHash',data:{hasBigFive:!!correctProfileSessionData.bigFive,hasImplicit:!!correctProfileSessionData.visualDNA,hasExplicit:!!correctProfileSessionData.colorsAndMaterials,hasSensory:!!correctProfileSessionData.sensoryPreferences,hasBiophilia:correctProfileSessionData.biophiliaScore!==undefined,biophiliaScore:correctProfileSessionData.biophiliaScore,hasLifestyle:!!correctProfileSessionData.lifestyle,profileCompletedAt:correctUserProfile.profileCompletedAt,implicitStyle:correctProfileSessionData.visualDNA?.dominantStyle,implicitColorsCount:correctProfileSessionData.visualDNA?.preferences?.colors?.length||0,implicitMaterialsCount:correctProfileSessionData.visualDNA?.preferences?.materials?.length||0,explicitPalette:correctProfileSessionData.colorsAndMaterials?.selectedPalette,explicitMaterialsCount:correctProfileSessionData.colorsAndMaterials?.topMaterials?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'profile-load',hypothesisId:'P3'})}).catch(()=>{});
+                      // #endregion
+                      // Update mergedSession with correct profile data
+                      mergedSession = {
+                        ...mergedSession,
+                        ...correctProfileSessionData,
+                        userHash
+                      };
+                    }
+                  }
+                }
+              } catch (error) {
+                console.warn('[useSession] Failed to restore userHash after profile load:', error);
+              }
+            }
+            
+            // Map UserProfile to SessionData (Big Five, explicit preferences, biophiliaScore, etc.)
+            const profileSessionData = mapUserProfileToSessionData(userProfile);
+            const { bigFive: profileBigFive, visualDNA: profileVisualDNA, colorsAndMaterials: profileColorsAndMaterials, ...profileRest } = profileSessionData;
+            const profileExplicit = profileColorsAndMaterials;
+            const profileHasExplicit =
+              !!profileExplicit &&
+              (
+                (profileExplicit.selectedPalette && profileExplicit.selectedPalette.length > 0) ||
+                (profileExplicit.selectedStyle && profileExplicit.selectedStyle.length > 0) ||
+                (profileExplicit.topMaterials && profileExplicit.topMaterials.length > 0)
+              );
+            const localExplicit = mergedSession.colorsAndMaterials || { selectedPalette: '', selectedStyle: '', topMaterials: [] as string[] };
+            const localHasExplicit =
+              !!localExplicit &&
+              (
+                (localExplicit.selectedPalette && localExplicit.selectedPalette.length > 0) ||
+                (localExplicit.selectedStyle && localExplicit.selectedStyle.length > 0) ||
+                (localExplicit.topMaterials && localExplicit.topMaterials.length > 0)
+              );
+
+            // Field-wise merge for explicit:
+            // - If lokalne jawne istnieją, daj im priorytet (żeby nie nadpisywać świeżych ustawień profilem z Supabase).
+            // - W przeciwnym razie użyj danych z profilu.
+            // CRITICAL: Don't overwrite with empty string "" - preserve existing non-empty values
+            const mergedExplicit = (() => {
+              // Helper to get non-empty value, preferring local over profile
+              const getNonEmptyStyle = () => {
+                const localStyle = localExplicit.selectedStyle;
+                const profileStyle = profileExplicit?.selectedStyle;
+                // If local has non-empty style, use it
+                if (localStyle && localStyle.length > 0) return localStyle;
+                // If profile has non-empty style, use it
+                if (profileStyle && profileStyle.length > 0) return profileStyle;
+                // If local has style (even if empty), use it (don't overwrite with empty from profile)
+                if (localStyle !== undefined) return localStyle;
+                // If profile has style (even if empty), use it
+                if (profileStyle !== undefined) return profileStyle;
+                // Fallback to empty string
+                return '';
               };
               
-              // DEBUG: Log tags when loading from Supabase
-              console.log('[useSession] Loading inspiration from Supabase:', {
-                id: result.id,
-                hasTags: !!result.tags,
-                tagsType: typeof result.tags,
-                tagsIsObject: result.tags && typeof result.tags === 'object',
-                tagsKeys: result.tags ? Object.keys(result.tags) : [],
-                tagsValue: result.tags,
-                rawInspTags: insp.tags,
-                rawInspTagsType: typeof insp.tags
-              });
+              const getNonEmptyPalette = () => {
+                const localPalette = localExplicit.selectedPalette;
+                const profilePalette = profileExplicit?.selectedPalette;
+                if (localPalette && localPalette.length > 0) return localPalette;
+                if (profilePalette && profilePalette.length > 0) return profilePalette;
+                if (localPalette !== undefined) return localPalette;
+                if (profilePalette !== undefined) return profilePalette;
+                return '';
+              };
               
-              return result;
+              return {
+                selectedPalette: getNonEmptyPalette(),
+                selectedStyle: getNonEmptyStyle(),
+                topMaterials: Array.isArray(localExplicit.topMaterials) && localExplicit.topMaterials.length > 0
+                  ? localExplicit.topMaterials
+                  : (Array.isArray(profileExplicit?.topMaterials) && profileExplicit.topMaterials.length > 0
+                      ? profileExplicit.topMaterials
+                      : [])
+              };
+            })();
+
+            // Field-wise merge for visualDNA (implicit):
+            // - If profile has visualDNA with actual data (colors/materials/styles), use it
+            // - Otherwise, preserve existing visualDNA from mergedSession
+            const mergedVisualDNA = (() => {
+              const profileHasVisualDNA = !!profileVisualDNA && (
+                (profileVisualDNA.preferences?.colors && profileVisualDNA.preferences.colors.length > 0) ||
+                (profileVisualDNA.preferences?.materials && profileVisualDNA.preferences.materials.length > 0) ||
+                (profileVisualDNA.preferences?.styles && profileVisualDNA.preferences.styles.length > 0) ||
+                !!profileVisualDNA.dominantStyle
+              );
+              const localHasVisualDNA = !!mergedSession.visualDNA && (
+                (mergedSession.visualDNA.preferences?.colors && mergedSession.visualDNA.preferences.colors.length > 0) ||
+                (mergedSession.visualDNA.preferences?.materials && mergedSession.visualDNA.preferences.materials.length > 0) ||
+                (mergedSession.visualDNA.preferences?.styles && mergedSession.visualDNA.preferences.styles.length > 0) ||
+                !!mergedSession.visualDNA.dominantStyle
+              );
+              // Prefer profile visualDNA if it has data, otherwise keep local
+              return profileHasVisualDNA ? profileVisualDNA : (localHasVisualDNA ? mergedSession.visualDNA : profileVisualDNA || mergedSession.visualDNA);
+            })();
+            
+            // Merge profile data into session:
+            // - profile data takes precedence, BUT don't overwrite local bigFive if profile has none
+            mergedSession = {
+              ...mergedSession,
+              ...profileRest,
+              ...(profileBigFive ? { bigFive: profileBigFive } : {}),
+              ...(mergedVisualDNA ? { visualDNA: mergedVisualDNA } : {}),
+              colorsAndMaterials: mergedExplicit,
+              userHash
+            };
+
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:after-profile-merge',message:'After merging profile data into session',data:{hasColorsAndMaterials:!!mergedSession.colorsAndMaterials,explicitStyle:mergedSession.colorsAndMaterials?.selectedStyle||null,explicitPalette:mergedSession.colorsAndMaterials?.selectedPalette||null,explicitMaterialsCount:mergedSession.colorsAndMaterials?.topMaterials?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E17'})}).catch(()=>{});
+            // #endregion
+
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:explicit-merge',message:'Deciding explicit merge from profile',data:{profileHasExplicit,profilePalette:profileExplicit?.selectedPalette||null,profileStyle:profileExplicit?.selectedStyle||null,profileMaterialsCount:profileExplicit?.topMaterials?.length||0,keptExisting:!profileHasExplicit,finalPalette:mergedExplicit.selectedPalette,finalStyle:mergedExplicit.selectedStyle,finalMaterialsCount:mergedExplicit.topMaterials?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E13'})}).catch(()=>{});
+            // #endregion
+            
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:profile-loaded',message:'Loaded profile data from Supabase',data:{hasBigFive:!!profileSessionData.bigFive,hasImplicit:!!profileSessionData.visualDNA,hasExplicit:!!profileSessionData.colorsAndMaterials,hasSensory:!!profileSessionData.sensoryPreferences,hasBiophilia:profileSessionData.biophiliaScore!==undefined,biophiliaScore:profileSessionData.biophiliaScore,hasLifestyle:!!profileSessionData.lifestyle,profileCompletedAt:userProfile.profileCompletedAt,implicitStyle:profileSessionData.visualDNA?.dominantStyle,implicitColorsCount:profileSessionData.visualDNA?.preferences?.colors?.length||0,implicitMaterialsCount:profileSessionData.visualDNA?.preferences?.materials?.length||0,explicitPalette:profileSessionData.colorsAndMaterials?.selectedPalette,explicitMaterialsCount:profileSessionData.colorsAndMaterials?.topMaterials?.length||0,hasAuthUserId:!!userProfile.auth_user_id,authUserId:userProfile.auth_user_id||null},timestamp:Date.now(),sessionId:'debug-session',runId:'profile-load',hypothesisId:'P2'})}).catch(()=>{});
+            // #endregion
+            
+            console.log('[useSession] Loaded profile data from user_profiles:', {
+              hasBigFive: !!profileSessionData.bigFive,
+              hasImplicit: !!profileSessionData.visualDNA,
+              hasExplicit: !!profileSessionData.colorsAndMaterials,
+              hasSensory: !!profileSessionData.sensoryPreferences,
+              hasBiophilia: profileSessionData.biophiliaScore !== undefined,
+              biophiliaScore: profileSessionData.biophiliaScore,
+              implicitStyle: profileSessionData.visualDNA?.dominantStyle,
+              implicitColors: profileSessionData.visualDNA?.preferences?.colors,
+              implicitMaterials: profileSessionData.visualDNA?.preferences?.materials,
+              explicitPalette: profileSessionData.colorsAndMaterials?.selectedPalette,
+              explicitMaterials: profileSessionData.colorsAndMaterials?.topMaterials
             });
+            
+            // Load inspirations with gamma tags from user_profiles.inspirations
+            if (userProfile.inspirations && Array.isArray(userProfile.inspirations) && userProfile.inspirations.length > 0) {
+              // Convert user_profiles.inspirations format to SessionData.inspirations format
+              const inspirationsFromProfile = userProfile.inspirations.map((insp: any) => {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:436',message:'Raw inspiration from Supabase before mapping',data:{rawInspTags:insp.tags,rawInspTagsType:typeof insp.tags,rawInspTagsIsObject:insp.tags&&typeof insp.tags==='object',rawInspTagsKeys:insp.tags?Object.keys(insp.tags):[],rawInspTagsValue:JSON.stringify(insp.tags)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
+                
+                const result = {
+                  id: insp.fileId || `insp_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+                  fileId: insp.fileId,
+                  url: insp.url,
+                  tags: insp.tags, // Tags from gamma model (Gemma3VisionModel)
+                  description: insp.description, // Description from gamma model
+                  addedAt: insp.addedAt || new Date().toISOString()
+                };
+                
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:448',message:'Mapped inspiration result',data:{id:result.id,hasTags:!!result.tags,tagsType:typeof result.tags,tagsIsObject:result.tags&&typeof result.tags==='object',tagsKeys:result.tags?Object.keys(result.tags):[],tagsValue:JSON.stringify(result.tags)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
+                
+                // DEBUG: Log tags when loading from Supabase
+                console.log('[useSession] Loading inspiration from Supabase:', {
+                  id: result.id,
+                  hasTags: !!result.tags,
+                  tagsType: typeof result.tags,
+                  tagsIsObject: result.tags && typeof result.tags === 'object',
+                  tagsKeys: result.tags ? Object.keys(result.tags) : [],
+                  tagsValue: result.tags,
+                  rawInspTags: insp.tags,
+                  rawInspTagsType: typeof insp.tags
+                });
+                
+                return result;
+              });
 
-            // Merge inspirations: prefer Supabase (with gamma tags) over localStorage
-            const existingInspirations = mergedSession?.inspirations || [];
-            const hasLocalInspirations = existingInspirations.length > 0;
-            const hasSupabaseInspirations = inspirationsFromProfile.length > 0;
+              // Merge inspirations: prefer Supabase (with gamma tags) over localStorage
+              const existingInspirations = mergedSession?.inspirations || [];
+              const hasLocalInspirations = existingInspirations.length > 0;
+              const hasSupabaseInspirations = inspirationsFromProfile.length > 0;
 
-            if (hasSupabaseInspirations) {
-              // Use Supabase inspirations (with gamma tags) if available
-              mergedSession = {
-                ...(mergedSession || {}),
-                inspirations: inspirationsFromProfile
-              };
-              console.log('[useSession] Loaded inspirations with gamma tags from user_profiles.inspirations:', inspirationsFromProfile.length);
-              console.log('[useSession] Tags structure:', inspirationsFromProfile.map((i: any) => ({
-                hasTags: !!i.tags,
-                styles: i.tags?.styles?.length || 0,
-                colors: i.tags?.colors?.length || 0,
-                materials: i.tags?.materials?.length || 0,
-                biophilia: i.tags?.biophilia,
-                description: i.description ? 'present' : 'missing'
-              })));
-            } else if (hasLocalInspirations) {
-              // Keep local inspirations if no Supabase data
-              console.log('[useSession] Using local inspirations (no Supabase data)');
+              if (hasSupabaseInspirations) {
+                // Use Supabase inspirations (with gamma tags) if available
+                mergedSession = {
+                  ...(mergedSession || {}),
+                  inspirations: inspirationsFromProfile
+                };
+                console.log('[useSession] Loaded inspirations with gamma tags from user_profiles.inspirations:', inspirationsFromProfile.length);
+                console.log('[useSession] Tags structure:', inspirationsFromProfile.map((i: any) => ({
+                  hasTags: !!i.tags,
+                  styles: i.tags?.styles?.length || 0,
+                  colors: i.tags?.colors?.length || 0,
+                  materials: i.tags?.materials?.length || 0,
+                  biophilia: i.tags?.biophilia,
+                  description: i.description ? 'present' : 'missing'
+                })));
+              } else if (hasLocalInspirations) {
+                // Keep local inspirations if no Supabase data
+                console.log('[useSession] Using local inspirations (no Supabase data)');
+              }
             }
           }
         } catch (error) {
-          console.warn('[useSession] Nie udało się pobrać inspirations z user_profiles:', error);
+          console.warn('[useSession] Nie udało się pobrać danych profilu z user_profiles:', error);
         }
       }
 
@@ -494,27 +802,32 @@ export const useSession = (): UseSessionReturn => {
       }
 
       // Migrate legacy spaces with data URLs to Supabase (one-time per browser)
-      const legacyMigratedFlag = localStorage.getItem('aura_spaces_migrated');
+      const legacyMigratedFlag = safeLocalStorage.getItem('aura_spaces_migrated');
       if (hasDataUrlSpaces(mergedSession.spaces) && legacyMigratedFlag !== '1') {
         try {
           const migratedSpaces = await migrateLegacySpacesToSupabase(mergedSession.spaces || [], userHash);
           mergedSession = { ...mergedSession, spaces: migratedSpaces };
-          localStorage.setItem('aura_spaces_migrated', '1');
+          safeLocalStorage.setItem('aura_spaces_migrated', '1');
         } catch (e) {
           console.warn('[useSession] Legacy spaces migration failed', e);
         }
       }
 
+      // CRITICAL: Don't use createEmptySession() as base - it will overwrite data with empty values
+      // Instead, use mergedSession directly and only fill in missing fields
       const finalSession: SessionData = {
-        ...createEmptySession(),
-        ...(mergedSession || {}),
+        ...(mergedSession || createEmptySession()),
         userHash,
       };
 
-      persistSessionData(finalSession);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:final-session',message:'Final session before setState',data:{hasBigFive:!!finalSession.bigFive,completedAt:finalSession.bigFive?.completedAt,userHash:finalSession.userHash,hasColorsAndMaterials:!!finalSession.colorsAndMaterials,explicitStyle:finalSession.colorsAndMaterials?.selectedStyle||null,explicitPalette:finalSession.colorsAndMaterials?.selectedPalette||null,explicitMaterialsCount:finalSession.colorsAndMaterials?.topMaterials?.length||0,mergedHasColorsAndMaterials:!!mergedSession.colorsAndMaterials,mergedExplicitStyle:mergedSession.colorsAndMaterials?.selectedStyle||null},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H13'})}).catch(()=>{});
+      // #endregion
+
+      const persisted = persistSessionData(finalSession);
 
       if (isMounted) {
-        setSessionData(finalSession);
+        setSessionData(persisted);
         setIsInitialized(true);
       }
     };
@@ -529,8 +842,8 @@ export const useSession = (): UseSessionReturn => {
   const updateSession = (updates: Partial<SessionData>) => {
     setSessionData(prev => {
       const newData = { ...prev, ...updates };
-      persistSessionData(newData);
-      return newData;
+      const persisted = persistSessionData(newData);
+      return persisted;
     });
   };
 

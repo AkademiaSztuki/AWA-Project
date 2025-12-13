@@ -6,7 +6,7 @@ import { PRSMoodGridData } from '../questions/validated-scales';
 import { ActivityContext } from '@/types/deep-personalization';
 import { GenerationSource } from './modes';
 import { deriveStyleFromFacets, calculateConfidence, type PersonalityData } from './facet-derivation';
-import { RESEARCH_SOURCES, BIGFIVE_COLOR_MAPPINGS } from './research-mappings';
+import { RESEARCH_SOURCES, BIGFIVE_COLOR_MAPPINGS, BIGFIVE_BIOPHILIA_MAPPINGS } from './research-mappings';
 import { analyzeMoodTransformation, mapSocialContext, analyzeActivityNeeds, type MoodTransformation, type SocialContextRecommendations, type ActivityRecommendations } from './mood-transformation';
 
 // =========================
@@ -282,33 +282,57 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     case GenerationSource.Explicit:
       // Explicit source: use ONLY explicit biophiliaScore from test
       biophiliaScoreToUse = inputs.psychologicalBaseline.biophiliaScore ?? 0;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Explicit-biophilia',message:'Explicit source - using ONLY explicit biophiliaScore',data:{biophiliaScore:biophiliaScoreToUse,inputBiophiliaScore:inputs.psychologicalBaseline.biophiliaScore,ignoredImplicitBiophilia:true},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E11'})}).catch(()=>{});
+      // #endregion
       console.log('[Biophilia] Explicit source - using test biophilia:', biophiliaScoreToUse);
       break;
       
     case GenerationSource.Personality:
-      // Personality source: ZERO biophilia (modes.ts sets biophiliaScore to 0)
-      biophiliaScoreToUse = 0;
-      console.log('[Biophilia] Personality source - zeroed (personality-driven only)');
+      // Personality source: derive biophilia from Big Five personality traits
+      biophiliaScoreToUse = deriveBiophiliaFromPersonality(inputs.personality);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Personality-biophilia','message':'Personality source - using ONLY Big Five for biophilia','data':{'personalityDomains':inputs.personality?{'O':inputs.personality.openness,'C':inputs.personality.conscientiousness,'E':inputs.personality.extraversion,'A':inputs.personality.agreeableness,'N':inputs.personality.neuroticism}:null,'biophiliaScore':biophiliaScoreToUse,'ignoredExplicitBiophilia':true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'B2'})}).catch(()=>{});
+      // #endregion
+      console.log('[Biophilia] Personality source - derived from Big Five:', biophiliaScoreToUse);
       break;
       
     case GenerationSource.Mixed:
     case GenerationSource.MixedFunctional:
-      // Mixed sources: blend implicit and explicit biophilia if both available
+      // Mixed sources: blend ALL biophilia sources (implicit, explicit, personality)
+      // Using MIXED_SOURCE_WEIGHTS: 40% implicit, 30% explicit, 30% personality
       const implicitBiophilia = inputs.psychologicalBaseline.implicitBiophiliaScore;
       const explicitBiophilia = inputs.psychologicalBaseline.biophiliaScore ?? 0;
+      const personalityBiophilia = inputs.personality ? deriveBiophiliaFromPersonality(inputs.personality) : undefined;
+      
+      // Calculate weighted average based on available sources
+      let totalWeight = 0;
+      let weightedSum = 0;
       
       if (implicitBiophilia !== undefined) {
-        // Blend implicit (from Tinder) and explicit (from test) biophilia
-        // For Mixed: 50/50, for MixedFunctional: 40% implicit + 60% explicit
-        const implicitWeight = sourceType === GenerationSource.MixedFunctional ? 0.4 : 0.5;
-        const explicitWeight = sourceType === GenerationSource.MixedFunctional ? 0.6 : 0.5;
-        biophiliaScoreToUse = Math.round(implicitBiophilia * implicitWeight + explicitBiophilia * explicitWeight);
-        console.log('[Biophilia] Mixed source - blending implicit:', implicitBiophilia, '+ explicit:', explicitBiophilia, '→', biophiliaScoreToUse);
-      } else {
-        // No implicit biophilia - use only explicit
-        biophiliaScoreToUse = explicitBiophilia;
-        console.log('[Biophilia] Mixed source - no implicit data, using explicit only:', biophiliaScoreToUse);
+        weightedSum += implicitBiophilia * 0.4;
+        totalWeight += 0.4;
       }
+      
+      weightedSum += explicitBiophilia * 0.3;
+      totalWeight += 0.3;
+      
+      if (personalityBiophilia !== undefined) {
+        weightedSum += personalityBiophilia * 0.3;
+        totalWeight += 0.3;
+      }
+      
+      // Normalize if some sources are missing
+      if (totalWeight > 0) {
+        biophiliaScoreToUse = Math.round(weightedSum / totalWeight);
+      } else {
+        biophiliaScoreToUse = explicitBiophilia; // Fallback to explicit
+      }
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Mixed-biophilia',message:'Mixed source - blending ALL biophilia sources',data:{implicitBiophilia:implicitBiophilia,explicitBiophilia:explicitBiophilia,personalityBiophilia:personalityBiophilia,weights:{implicit:0.4,explicit:0.3,personality:0.3},totalWeight:totalWeight,biophiliaScore:biophiliaScoreToUse},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E12'})}).catch(()=>{});
+      // #endregion
+      console.log('[Biophilia] Mixed source - blending implicit:', implicitBiophilia, '+ explicit:', explicitBiophilia, '+ personality:', personalityBiophilia, '→', biophiliaScoreToUse);
       break;
       
     case GenerationSource.InspirationReference:
@@ -381,11 +405,31 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     styleConfidence: styleWeights.confidence,
     
     // Colors (enhanced with inspirations)
-    colorPalette: [...colorWeights.palette, ...inspirationWeights.additionalColors],
+    // CRITICAL: For Personality source, use ONLY colors from personality (no inspirations)
+    colorPalette: (() => {
+      const isPersonality = sourceType === GenerationSource.Personality || sourceType === 'personality';
+      if (isPersonality) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:384',message:'Personality source - using ONLY personality colors',data:{personalityColors:colorWeights.palette,inspirationColors:inspirationWeights.additionalColors,ignoredInspirations:true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P6'})}).catch(()=>{});
+        // #endregion
+        return colorWeights.palette; // Only personality colors, no inspirations
+      }
+      return [...colorWeights.palette, ...inspirationWeights.additionalColors];
+    })(),
     colorTemperature: colorWeights.temperature,
     
     // Materials (enhanced with inspirations)
-    primaryMaterials: [...styleWeights.materials, ...inspirationWeights.additionalMaterials],
+    // CRITICAL: For Personality source, use ONLY materials from personality (no inspirations)
+    primaryMaterials: (() => {
+      const isPersonality = sourceType === GenerationSource.Personality || sourceType === 'personality';
+      if (isPersonality) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:388',message:'Personality source - using ONLY personality materials',data:{personalityMaterials:styleWeights.materials,inspirationMaterials:inspirationWeights.additionalMaterials,ignoredInspirations:true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P5'})}).catch(()=>{});
+        // #endregion
+        return styleWeights.materials; // Only personality materials, no inspirations
+      }
+      return [...styleWeights.materials, ...inspirationWeights.additionalMaterials];
+    })(),
     
     // Lighting
     lightingMood: lightingWeights.mood,
@@ -415,7 +459,20 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     privateVsShared: personalityWeights.socialPreferences,
     
     // Complexity (enhanced with personality)
-    visualComplexity: (styleWeights.complexity + personalityWeights.visualComplexity) / 2,
+    // CRITICAL: For Personality source, use ONLY personality complexity (styleWeights.complexity also comes from personality)
+    visualComplexity: (() => {
+      const isPersonality = sourceType === GenerationSource.Personality || sourceType === 'personality';
+      if (isPersonality) {
+        // Both styleWeights.complexity and personalityWeights.visualComplexity come from personality
+        // Average them for final complexity
+        const result = (styleWeights.complexity + personalityWeights.visualComplexity) / 2;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:418',message:'Personality source - using ONLY personality complexity',data:{styleComplexity:styleWeights.complexity,personalityComplexity:personalityWeights.visualComplexity,result,fromPersonalityOnly:true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P7'})}).catch(()=>{});
+        // #endregion
+        return result;
+      }
+      return (styleWeights.complexity + personalityWeights.visualComplexity) / 2;
+    })(),
     
     // Personality-driven preferences
     storageNeeds: personalityWeights.storageNeeds,
@@ -641,6 +698,16 @@ function integrateStylePreferences(
   materials: string[];
   complexity: number;
 } {
+  // CRITICAL: Personality source uses ONLY Big Five data, no other sources
+  const isPersonality = sourceType === GenerationSource.Personality || sourceType === 'personality';
+  if (isPersonality && personality) {
+    const personalityStyle = deriveStyleFromPersonality(personality);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:644',message:'Personality source - using ONLY Big Five for style',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},result:personalityStyle,ignoredAestheticDNA:true,ignoredLifestyle:true,ignoredSensory:true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P3'})}).catch(()=>{});
+    // #endregion
+    return personalityStyle;
+  }
+  
   // Normalize implicit styles - extract valid styles from tag soup
   const implicitValidStyles = extractAllValidStyles(aestheticDNA.implicit.dominantStyles);
   const hasImplicitStyles = implicitValidStyles.length > 0;
@@ -699,73 +766,108 @@ function integrateStylePreferences(
       }
     }
     
-    // For Mixed sources, ALWAYS blend with personality or implicit if available
-    // But differentiate Mixed vs MixedFunctional even when blending succeeds
+    // For Mixed sources, ALWAYS blend ALL available sources (implicit, explicit, personality)
+    // Using MIXED_SOURCE_WEIGHTS: 40% implicit, 30% explicit, 30% personality
     
-    if (hasImplicitStyles) {
-      const implicitStyle = implicitValidStyles[0];
-      if (implicitStyle.toLowerCase() !== explicitStyle.toLowerCase()) {
-        // Create different blended styles for Mixed vs MixedFunctional
-        let blendedStyle: string;
+    const implicitStyle = hasImplicitStyles ? implicitValidStyles[0] : null;
+    const personalityStyle = personality ? deriveStyleFromPersonality(personality) : null;
+    const personalityBaseStyle = personalityStyle ? personalityStyle.dominantStyle.split(' ')[0].toLowerCase() : null;
+    
+    // Collect all available styles
+    const availableStyles: Array<{style: string, weight: number, source: string}> = [];
+    if (implicitStyle) {
+      availableStyles.push({ style: implicitStyle, weight: 0.4, source: 'implicit' });
+    }
+    if (explicitStyle) {
+      availableStyles.push({ style: explicitStyle, weight: 0.3, source: 'explicit' });
+    }
+    if (personalityBaseStyle) {
+      availableStyles.push({ style: personalityBaseStyle, weight: 0.3, source: 'personality' });
+    }
+    
+    // If we have multiple sources, blend them
+    if (availableStyles.length >= 2) {
+      // Sort by weight (descending) to determine primary and secondary styles
+      availableStyles.sort((a, b) => b.weight - a.weight);
+      const primary = availableStyles[0];
+      const secondary = availableStyles[1];
+      const tertiary = availableStyles[2];
+      
+      // Create blended style name
+      let blendedStyle: string;
+      if (tertiary && primary.style.toLowerCase() !== secondary.style.toLowerCase() && secondary.style.toLowerCase() !== tertiary.style.toLowerCase()) {
+        // All three are different - blend all
+        blendedStyle = `${primary.style} with ${secondary.style} and ${tertiary.style} influences`;
+      } else if (primary.style.toLowerCase() !== secondary.style.toLowerCase()) {
+        // Two different styles
         if (isMixedFunctional) {
-          // MixedFunctional: emphasize the explicit style more (functional needs explicit preferences)
-          blendedStyle = `${explicitStyle} with ${implicitStyle} accents`;
+          // MixedFunctional: emphasize explicit if available, otherwise primary
+          const explicitIndex = availableStyles.findIndex(s => s.source === 'explicit');
+          if (explicitIndex >= 0 && explicitIndex !== 0) {
+            blendedStyle = `${availableStyles[explicitIndex].style} with ${primary.style} accents`;
         } else {
-          // Mixed: emphasize the implicit style more (aesthetic blend)
-          blendedStyle = `${implicitStyle} with ${explicitStyle} influences`;
-        }
-        
-        console.log('[StylePreferences] Mixed: blending explicit + implicit:', explicitStyle, '+', implicitStyle, '→', blendedStyle);
-        
-        // Differentiate materials for Mixed vs MixedFunctional
-        let blendedMaterials: string[];
-        if (isMixedFunctional) {
-          // MixedFunctional: emphasize explicit materials more (functional needs)
-          blendedMaterials = [
-            ...aestheticDNA.explicit.topMaterials.slice(0, 2),
-            ...aestheticDNA.implicit.materials.slice(0, 1)
-          ];
+            blendedStyle = `${primary.style} with ${secondary.style} accents`;
+      }
         } else {
-          // Mixed: emphasize implicit materials more (aesthetic blend)
-          blendedMaterials = [
-            ...aestheticDNA.implicit.materials.slice(0, 2),
-            ...aestheticDNA.explicit.topMaterials.slice(0, 1)
-          ];
+          // Mixed: emphasize implicit if available, otherwise primary
+          const implicitIndex = availableStyles.findIndex(s => s.source === 'implicit');
+          if (implicitIndex >= 0 && implicitIndex !== 0) {
+            blendedStyle = `${availableStyles[implicitIndex].style} with ${primary.style} influences`;
+          } else {
+            blendedStyle = `${primary.style} with ${secondary.style} influences`;
+          }
         }
-        
+        } else {
+        // Same styles - use primary with modifier
+        blendedStyle = primary.style;
+      }
+      
+      // Blend materials using weights
+      const blendedMaterials: string[] = [];
+      if (implicitStyle && aestheticDNA.implicit.materials.length > 0) {
+        const count = Math.ceil(3 * 0.4); // 40% of 3 = 1.2 → 2
+        blendedMaterials.push(...aestheticDNA.implicit.materials.slice(0, count));
+      }
+      if (explicitStyle && aestheticDNA.explicit.topMaterials.length > 0) {
+        const count = Math.ceil(3 * 0.3); // 30% of 3 = 0.9 → 1
+        blendedMaterials.push(...aestheticDNA.explicit.topMaterials.slice(0, count));
+      }
+      if (personalityStyle && personalityStyle.materials.length > 0) {
+        const count = Math.ceil(3 * 0.3); // 30% of 3 = 0.9 → 1
+        blendedMaterials.push(...personalityStyle.materials.slice(0, count));
+      }
+      // Deduplicate and ensure we have at least 3
+      const finalMaterials = Array.from(new Set(blendedMaterials)).slice(0, 3);
+      
+      // Blend complexity using weighted average
+      let totalComplexityWeight = 0;
+      let weightedComplexitySum = 0;
+      if (implicitStyle) {
+        weightedComplexitySum += aestheticDNA.implicit.complexity * 0.4;
+        totalComplexityWeight += 0.4;
+      }
+      if (explicitStyle) {
+        weightedComplexitySum += aestheticDNA.explicit.complexityPreference * 0.3;
+        totalComplexityWeight += 0.3;
+      }
+      if (personalityStyle) {
+        weightedComplexitySum += personalityStyle.complexity * 0.3;
+        totalComplexityWeight += 0.3;
+        }
+      const blendedComplexity = totalComplexityWeight > 0 ? weightedComplexitySum / totalComplexityWeight : aestheticDNA.explicit.complexityPreference;
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Mixed-style',message:'Mixed source - blending ALL style sources',data:{implicitStyle:implicitStyle,explicitStyle:explicitStyle,personalityStyle:personalityBaseStyle,weights:{implicit:0.4,explicit:0.3,personality:0.3},blendedStyle:blendedStyle,materials:finalMaterials,complexity:blendedComplexity},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E13'})}).catch(()=>{});
+      // #endregion
+      
+      console.log('[StylePreferences] Mixed: blending ALL sources:', availableStyles.map(s => `${s.style} (${s.source}, ${s.weight})`).join(' + '), '→', blendedStyle);
+      
         return {
           dominantStyle: blendedStyle,
-          confidence: 0.75,
-          materials: blendedMaterials,
-          complexity: (aestheticDNA.implicit.complexity + aestheticDNA.explicit.complexityPreference) / 2
+        confidence: 0.75,
+        materials: finalMaterials.length > 0 ? finalMaterials : aestheticDNA.explicit.topMaterials.slice(0, 3),
+        complexity: blendedComplexity
         };
-      }
-    } else if (personality) {
-      // No implicit data - blend explicit with personality
-      const personalityStyle = deriveStyleFromPersonality(personality);
-      const personalityBaseStyle = personalityStyle.dominantStyle.split(' ')[0].toLowerCase();
-      if (personalityBaseStyle !== explicitStyle.toLowerCase()) {
-        // Create different blended styles for Mixed vs MixedFunctional
-        let blendedStyle: string;
-        if (isMixedFunctional) {
-          // MixedFunctional: emphasize explicit style more (functional needs explicit preferences)
-          blendedStyle = `${explicitStyle} with ${personalityBaseStyle} touches`;
-        } else {
-          // Mixed: emphasize personality style more (aesthetic blend)
-          blendedStyle = `${personalityBaseStyle} with ${explicitStyle} touches`;
-        }
-        
-        console.log('[StylePreferences] Mixed: blending explicit + personality:', explicitStyle, '+', personalityStyle.dominantStyle, '→', blendedStyle);
-        return {
-          dominantStyle: blendedStyle,
-          confidence: 0.7,
-          materials: [
-            ...aestheticDNA.explicit.topMaterials.slice(0, 2),
-            ...personalityStyle.materials.slice(0, 1)
-          ],
-          complexity: (aestheticDNA.explicit.complexityPreference + personalityStyle.complexity) / 2
-        };
-      }
     }
     
     // If no blending possible (no implicit, no personality, or same styles)
@@ -813,7 +915,13 @@ function integrateStylePreferences(
   // PRIORITY 1: If we have personality data and NO aesthetic data, derive from personality
   // This is for the Personality source where all aesthetic data is zeroed
   if (!hasImplicitStyles && !hasExplicitStyle && !hasExplicitPalette && personality) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:815',message:'Personality source - deriving style from personality',data:{personalityScores:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},hasFacets:!!personality.facets,facetCount:personality.facets?Object.values(personality.facets).reduce((sum:number,domain:any)=>sum+Object.keys(domain||{}).length,0):0,sourceType},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     const personalityStyle = deriveStyleFromPersonality(personality);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:819',message:'Personality source - derived style result',data:{dominantStyle:personalityStyle.dominantStyle,confidence:personalityStyle.confidence,materials:personalityStyle.materials,complexity:personalityStyle.complexity,researchBasis:personalityStyle.researchBasis},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     // Logging is already done in deriveStyleFromPersonality with research basis
     return personalityStyle;
   }
@@ -1067,13 +1175,19 @@ function deriveStyleFromPersonality(personality: NonNullable<PromptInputs['perso
     }
   });
   
-  return {
+  const result = {
     dominantStyle: derivation.dominantStyle,
     confidence: calculatedConfidence,
     materials: derivation.materials,
     complexity: derivation.complexity,
     researchBasis: researchBasis
   };
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:1076',message:'Deriving style, materials, complexity from personality',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},result},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C3'})}).catch(()=>{});
+  // #endregion
+  
+  return result;
 }
 
 /**
@@ -1153,10 +1267,16 @@ function deriveColorsFromPersonality(personality: NonNullable<PromptInputs['pers
     ? temps.reduce((a, b) => a + b, 0) / temps.length
     : 0.5;
 
-  return {
+  const result = {
     palette: palette.length > 0 ? palette : ['#808080', '#FFFFFF', '#D3D3D3'],
     temperature
   };
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:1162',message:'Deriving colors from personality',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},collectedColorsCount:collectedColors.length,palette:result.palette,temperature:result.temperature,matchedMappingsCount:BIGFIVE_COLOR_MAPPINGS.filter(m=>{const v=getTraitValue(m.trait,m.facet);return v!==null&&evalCondition(v,m.condition);}).length},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C1'})}).catch(()=>{});
+  // #endregion
+  
+  return result;
 }
 
 /**
@@ -1258,12 +1378,24 @@ function integrateColorPreferences(
   palette: string[];
   temperature: number;
 } {
+  // CRITICAL: Personality source uses ONLY Big Five data, no other sources
+  const isPersonality = sourceType === GenerationSource.Personality || sourceType === 'personality';
+  if (isPersonality && personality) {
+    const personalityColors = deriveColorsFromPersonality(personality);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:1284',message:'Personality source - using ONLY Big Five for colors',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},result:personalityColors,ignoredAestheticDNA:true,ignoredRoomVisualDNA:true,ignoredSensory:true,ignoredDominantStyle:true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P4'})}).catch(()=>{});
+    // #endregion
+    return personalityColors;
+  }
+  
   // Check if this is a Mixed source
   const isMixed = sourceType === GenerationSource.Mixed || sourceType === GenerationSource.MixedFunctional ||
                   sourceType === 'mixed' || sourceType === 'mixed_functional';
   const isMixedFunctional = (sourceType === GenerationSource.MixedFunctional || sourceType === 'mixed_functional');
   
   // Color temperature: Weighted average
+  // For Mixed sources: use MIXED_SOURCE_WEIGHTS (40% implicit, 30% explicit, 30% personality)
+  // For other sources: use original weights (40% implicit, 40% explicit, 20% sensory)
   const implicitWarmth = aestheticDNA.implicit.warmth;
   const explicitWarmth = aestheticDNA.explicit.warmthPreference;
   // Handle empty sensory.light - default to neutral (0.5) if empty
@@ -1271,11 +1403,33 @@ function integrateColorPreferences(
     ? (sensory.light.includes('warm') ? 0.7 : sensory.light.includes('cool') ? 0.3 : 0.5)
     : 0.5;
   
-  const temperature = (
+  // Get personality warmth if available (derive from personality colors)
+  const personalityWarmth = (isMixed && personality) ? deriveColorsFromPersonality(personality).temperature : undefined;
+  
+  let temperature: number;
+  if (isMixed && personalityWarmth !== undefined) {
+    // Mixed sources: blend all three (40% implicit, 30% explicit, 30% personality)
+    let totalWeight = 0;
+    let weightedSum = 0;
+    if (implicitWarmth !== undefined) {
+      weightedSum += implicitWarmth * 0.4;
+      totalWeight += 0.4;
+    }
+    if (explicitWarmth !== undefined) {
+      weightedSum += explicitWarmth * 0.3;
+      totalWeight += 0.3;
+    }
+    weightedSum += personalityWarmth * 0.3;
+    totalWeight += 0.3;
+    temperature = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
+  } else {
+    // Other sources: original weights (40% implicit, 40% explicit, 20% sensory)
+    temperature = (
     implicitWarmth * 0.4 +
     explicitWarmth * 0.4 +
     lightInfluence * 0.2
   );
+  }
   
   // Collect all raw colors from available sources
   const rawColors: string[] = [
@@ -1311,53 +1465,62 @@ function integrateColorPreferences(
   // Deduplicate
   const uniqueHexColors = Array.from(new Set(hexColors));
   
-  // For Mixed sources: ALWAYS blend colors from both implicit and explicit styles
-  // Even if we have hex colors, we need to blend them for differentiation
+  // For Mixed sources: ALWAYS blend colors from ALL available sources (implicit, explicit, personality)
+  // Using MIXED_SOURCE_WEIGHTS: 40% implicit, 30% explicit, 30% personality
   if (isMixed && dominantStyle) {
-    // Extract base styles from blended style string
-    const styleParts = dominantStyle.toLowerCase().split(/\s+(?:with|and|\+)\s+/);
-    const primaryStyle = styleParts[0] || dominantStyle.toLowerCase();
-    const secondaryStyle = styleParts[1] || null;
-    
-    // Get colors for primary style
-    const primaryColors = deriveColorsFromStyle(primaryStyle);
-    
-    // If we have a secondary style, blend colors
-    if (secondaryStyle) {
-      const secondaryColors = deriveColorsFromStyle(secondaryStyle);
+    // Collect colors from all available sources
+    const implicitColors = aestheticDNA.implicit.colors.length > 0 
+      ? aestheticDNA.implicit.colors.map(c => normalizeColor(c)).filter(c => c && c.startsWith('#'))
+      : [];
+    const explicitColors = roomVisualDNA.colors.length > 0
+      ? roomVisualDNA.colors.map(c => normalizeColor(c)).filter(c => c && c.startsWith('#'))
+      : [];
+    const personalityColors = personality ? deriveColorsFromPersonality(personality).palette : [];
       
-      // For Mixed: emphasize implicit (primary) colors more
-      // For MixedFunctional: emphasize explicit (secondary) colors more
-      const implicitWeight = isMixedFunctional ? 0.4 : 0.6;
-      const explicitWeight = isMixedFunctional ? 0.6 : 0.4;
-      
-      // Blend palettes: take more from primary for Mixed, more from secondary for MixedFunctional
+    // If we have colors from multiple sources, blend them using weights
+    if ((implicitColors.length > 0 || explicitColors.length > 0 || personalityColors.length > 0)) {
       const blendedPalette: string[] = [];
-      const primaryCount = Math.ceil(4 * implicitWeight);
-      const secondaryCount = 4 - primaryCount;
       
-      blendedPalette.push(...primaryColors.palette.slice(0, primaryCount));
-      blendedPalette.push(...secondaryColors.palette.slice(0, secondaryCount));
+      // Add colors based on weights (40% implicit, 30% explicit, 30% personality)
+      if (implicitColors.length > 0) {
+        const count = Math.ceil(4 * 0.4); // 40% of 4 = 1.6 → 2
+        blendedPalette.push(...implicitColors.slice(0, count));
+      }
+      if (explicitColors.length > 0) {
+        const count = Math.ceil(4 * 0.3); // 30% of 4 = 1.2 → 2
+        blendedPalette.push(...explicitColors.slice(0, count));
+      }
+      if (personalityColors.length > 0) {
+        const count = Math.ceil(4 * 0.3); // 30% of 4 = 1.2 → 2
+        blendedPalette.push(...personalityColors.slice(0, count));
+      }
       
       // Deduplicate and ensure we have 4 colors
       const finalPalette = Array.from(new Set(blendedPalette)).slice(0, 4);
       
-      // If we don't have enough, fill from the other source
+      // If we don't have enough, derive from style
       if (finalPalette.length < 4) {
-        const remaining = isMixedFunctional 
-          ? primaryColors.palette.filter(c => !finalPalette.includes(c))
-          : secondaryColors.palette.filter(c => !finalPalette.includes(c));
-        finalPalette.push(...remaining.slice(0, 4 - finalPalette.length));
+        const styleParts = dominantStyle.toLowerCase().split(/\s+(?:with|and|\+)\s+/);
+        const primaryStyle = styleParts[0] || dominantStyle.toLowerCase();
+        const styleColors = deriveColorsFromStyle(primaryStyle);
+        finalPalette.push(...styleColors.palette.filter(c => !finalPalette.includes(c)).slice(0, 4 - finalPalette.length));
       }
       
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Mixed-colors',message:'Mixed source - blending ALL color sources',data:{implicitColors:implicitColors.length,explicitColors:explicitColors.length,personalityColors:personalityColors.length,weights:{implicit:0.4,explicit:0.3,personality:0.3},blendedPalette:finalPalette,temperature},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E14'})}).catch(()=>{});
+      // #endregion
+      
       return {
-        palette: finalPalette.length > 0 ? finalPalette : primaryColors.palette,
+        palette: finalPalette.length > 0 ? finalPalette : ['#FFFFFF', '#F5F5DC', '#808080', '#2C3E50'],
         temperature
       };
     }
     
-    // Single style - use its colors
-    return { palette: primaryColors.palette, temperature };
+    // Fallback: derive from style
+    const styleParts = dominantStyle.toLowerCase().split(/\s+(?:with|and|\+)\s+/);
+    const primaryStyle = styleParts[0] || dominantStyle.toLowerCase();
+    const styleColors = deriveColorsFromStyle(primaryStyle);
+    return { palette: styleColors.palette, temperature };
   }
   
   // If we have valid hex colors and NOT Mixed source, use them
@@ -1387,6 +1550,107 @@ function integrateColorPreferences(
   } else {
     return { palette: ['#FFFFFF', '#F5F5DC', '#808080', '#2C3E50'], temperature };
   }
+}
+
+/**
+ * Derives biophilia score (0-3) from Big Five personality traits
+ * Based on research linking personality to nature preferences
+ */
+function deriveBiophiliaFromPersonality(personality?: PromptInputs['personality']): number {
+  if (!personality) return 0;
+  
+  // Normalize domain scores to 0-1
+  const normalizedScores = {
+    O: personality.openness / 100,
+    C: personality.conscientiousness / 100,
+    E: personality.extraversion / 100,
+    A: personality.agreeableness / 100,
+    N: personality.neuroticism / 100
+  };
+  
+  // Normalize facet scores if available
+  const normalizedFacets: Record<string, number> = {};
+  if (personality.facets) {
+    for (const [domain, facets] of Object.entries(personality.facets)) {
+      for (const [facetName, value] of Object.entries(facets)) {
+        normalizedFacets[`${domain}_${facetName}`] = value / 100;
+      }
+    }
+  }
+  
+  // Base biophilia score starts at 0
+  let biophiliaScore = 0;
+  const matchedMappings: string[] = [];
+  
+  // Check each mapping condition
+  for (const mapping of BIGFIVE_BIOPHILIA_MAPPINGS) {
+    let matches = true;
+    let value: number | undefined;
+    
+    // Check domain condition
+    const domainKey = mapping.trait.charAt(0).toUpperCase() as keyof typeof normalizedScores;
+    if (mapping.trait === 'openness') {
+      value = normalizedScores.O;
+    } else if (mapping.trait === 'conscientiousness') {
+      value = normalizedScores.C;
+    } else if (mapping.trait === 'extraversion') {
+      value = normalizedScores.E;
+    } else if (mapping.trait === 'agreeableness') {
+      value = normalizedScores.A;
+    } else if (mapping.trait === 'neuroticism') {
+      value = normalizedScores.N;
+    }
+    
+    if (value === undefined) continue;
+    
+    // Check condition (e.g., ">0.6", "<0.4", "0.4-0.6")
+    const condition = mapping.condition;
+    if (condition.startsWith('>')) {
+      const threshold = parseFloat(condition.substring(1));
+      matches = value > threshold;
+    } else if (condition.startsWith('<')) {
+      const threshold = parseFloat(condition.substring(1));
+      matches = value < threshold;
+    } else if (condition.includes('-')) {
+      const [min, max] = condition.split('-').map(parseFloat);
+      matches = value >= min && value <= max;
+    }
+    
+    // If facet is specified, check facet condition
+    if (matches && mapping.facet) {
+      const facetValue = normalizedFacets[mapping.facet];
+      if (facetValue === undefined) {
+        matches = false;
+      } else {
+        // Re-check condition with facet value
+        if (condition.startsWith('>')) {
+          const threshold = parseFloat(condition.substring(1));
+          matches = facetValue > threshold;
+        } else if (condition.startsWith('<')) {
+          const threshold = parseFloat(condition.substring(1));
+          matches = facetValue < threshold;
+        } else if (condition.includes('-')) {
+          const [min, max] = condition.split('-').map(parseFloat);
+          matches = facetValue >= min && value <= max;
+        }
+        value = facetValue;
+      }
+    }
+    
+    if (matches) {
+      biophiliaScore += mapping.biophiliaBoost;
+      matchedMappings.push(`${mapping.trait}${mapping.facet ? `:${mapping.facet}` : ''} (${condition}, value: ${value?.toFixed(2)})`);
+    }
+  }
+  
+  // Clamp to 0-3 scale
+  biophiliaScore = Math.max(0, Math.min(3, biophiliaScore));
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:deriveBiophiliaFromPersonality','message':'Deriving biophilia from personality','data':{'personalityDomains':{'O':personality.openness,'C':personality.conscientiousness,'E':personality.extraversion,'A':personality.agreeableness,'N':personality.neuroticism},'matchedMappingsCount':matchedMappings.length,'matchedMappings':matchedMappings,'biophiliaScore':biophiliaScore},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'B1'})}).catch(()=>{});
+  // #endregion
+  
+  return biophiliaScore;
 }
 
 function calculateBiophiliaIntegration(
@@ -1596,13 +1860,19 @@ function mapBigFiveToPromptWeights(personality: PromptInputs['personality']): {
   const agreeablenessFactor = agreeableness / 100; // 0-1
   const harmonyLevel = (agreeablenessFactor * 0.6) + ((100 - neuroticism) / 100 * 0.4);
 
-  return {
+  const result = {
     visualComplexity: Math.max(0, Math.min(1, visualComplexity)),
     socialPreferences: Math.max(0, Math.min(1, socialPreferences)),
     storageNeeds: Math.max(0, Math.min(1, storageNeeds)),
     lightingPreferences: Math.max(0, Math.min(1, lightingPreferences)),
     harmonyLevel: Math.max(0, Math.min(1, harmonyLevel))
   };
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:1605',message:'Mapping Big Five to prompt weights',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},opennessFactor,conscientiousnessFactor,result},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C2'})}).catch(()=>{});
+  // #endregion
+  
+  return result;
 }
 
 // =========================

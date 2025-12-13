@@ -121,8 +121,7 @@ interface RoomData {
 export function RoomSetup({ householdId }: { householdId: string }) {
   const router = useRouter();
   const { language } = useLanguage();
-  const { sessionData } = useSession();
-  const { updateSessionData } = useSessionData();
+  const { sessionData, updateSessionData } = useSessionData();
   
   const [currentStep, setCurrentStep] = useState<SetupStep>('photo_upload');
   const [roomData, setRoomData] = useState<RoomData>({
@@ -327,14 +326,37 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
-      {/* Dialog IDA na dole - dynamiczny dla każdego kroku */}
-      <div className="fixed bottom-0 left-0 right-0 w-full z-50">
-        <AwaDialogue 
-          currentStep={STEP_TO_DIALOGUE[currentStep]} 
-          fullWidth={true}
-          autoHide={true}
-        />
-      </div>
+      {/* Dialog IDA na dole - dynamiczny dla każdego kroku, pokazuje komentarz IDA jeśli dostępny */}
+      {(() => {
+        // Wybierz komentarz w zależności od języka:
+        // - PL: human_comment (polski) lub comment (angielski) jako fallback
+        // - EN: comment (angielski) lub human_comment (polski) jako fallback
+        const roomAnalysis = (sessionData as any)?.roomAnalysis;
+        const roomComment = language === 'pl' 
+          ? (roomAnalysis?.human_comment || roomAnalysis?.comment)
+          : (roomAnalysis?.comment || roomAnalysis?.human_comment);
+        const commentKey = roomComment ? `comment-${roomComment.substring(0, 20)}` : 'no-comment';
+        console.log('[RoomSetup] Checking for room comment:', {
+          language,
+          hasRoomAnalysis: !!roomAnalysis,
+          hasHumanComment: !!roomAnalysis?.human_comment,
+          hasComment: !!roomAnalysis?.comment,
+          roomComment,
+          commentKey,
+          fullRoomAnalysis: roomAnalysis
+        });
+        return (
+          <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+            <AwaDialogue 
+              key={commentKey}
+              currentStep={STEP_TO_DIALOGUE[currentStep]} 
+              fullWidth={true}
+              autoHide={true}
+              customMessage={roomComment || undefined}
+            />
+          </div>
+        );
+      })()}
 
       <div className="flex-1 p-4 lg:p-8 pb-32">
         <div className="max-w-3xl lg:max-w-none mx-auto">
@@ -626,6 +648,7 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
 export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: any) {
   const { language } = useLanguage();
   const { analyzeRoom, generateLLMComment } = useModalAPI();
+  const { updateSessionData } = useSessionData();
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>(photos || []);
   const [uploadedPhotosBase64, setUploadedPhotosBase64] = useState<string[]>([]); // Store base64 for API
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -674,13 +697,17 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         setIsGeneratingHumanComment(true);
         const response = await generateLLMComment(type, description, 'room_analysis');
         setHumanComment(response.comment);
+        // Update sessionData with human_comment
+        if (roomAnalysis) {
+          updateSessionData({ roomAnalysis: { ...roomAnalysis, human_comment: response.comment } } as any);
+        }
       } catch (error) {
         console.error('Nie udało się wygenerować komentarza IDA (LLM):', error);
       } finally {
         setIsGeneratingHumanComment(false);
       }
     },
-    [generateLLMComment]
+    [generateLLMComment, roomAnalysis, updateSessionData]
   );
 
   const analyzeImage = async (file: File) => {
@@ -700,6 +727,15 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       setRoomAnalysis(analysis);
       setDetectedRoomType(analysis.detected_room_type);
       
+      // Save roomAnalysis to sessionData so it's available for dialogue
+      console.log('[PhotoUploadStep] Saving roomAnalysis to sessionData:', {
+        hasHumanComment: !!analysis.human_comment,
+        humanComment: analysis.human_comment,
+        hasComment: !!analysis.comment,
+        comment: analysis.comment
+      });
+      updateSessionData({ roomAnalysis: analysis } as any);
+      
       // Auto-generate room name from detected type
       if (analysis.detected_room_type && !roomName) {
         setRoomName(generateRoomName(analysis.detected_room_type));
@@ -716,6 +752,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       // Set human Polish comment if available, otherwise request lightweight LLM comment
       if (analysis.human_comment) {
         setHumanComment(analysis.human_comment);
+        // Update sessionData with human_comment
+        updateSessionData({ roomAnalysis: { ...analysis, human_comment: analysis.human_comment } } as any);
       } else if (analysis.room_description) {
         void requestHumanComment(analysis.detected_room_type, analysis.room_description);
       }
@@ -791,18 +829,30 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         // Set pre-computed data instantly
         setDetectedRoomType(metadata.roomType);
         setRoomName(metadata.roomName);
-        setRoomAnalysis({
+        const roomAnalysisData = {
           detected_room_type: metadata.roomType,
           confidence: metadata.confidence,
           room_description: metadata.roomDescription,
           comment: metadata.comment,
+          human_comment: metadata.humanComment,
           suggestions: []
-        });
+        };
+        setRoomAnalysis(roomAnalysisData);
         setLlmComment({
           comment: metadata.comment,
           suggestions: []
         });
         setHumanComment(metadata.humanComment);
+        
+        // Save to sessionData so dialogue can access it
+        console.log('[PhotoUploadStep] Saving example image roomAnalysis to sessionData:', {
+          hasHumanComment: !!metadata.humanComment,
+          humanComment: metadata.humanComment,
+          hasComment: !!metadata.comment,
+          comment: metadata.comment
+        });
+        updateSessionData({ roomAnalysis: roomAnalysisData } as any);
+        
         setPendingAnalysisFile(null);
         setPendingAnalysisLabel(null);
       } else {
@@ -961,36 +1011,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           </div>
         )}
 
-        {/* LLM Comment */}
-        {llmComment && !isAnalyzing && (
-          <div className="mb-6 p-6 glass-panel rounded-2xl">
-            <div className="flex items-start gap-4">
-              <div className="w-8 h-8 bg-gradient-to-r from-gold/20 to-champagne/20 rounded-full flex items-center justify-center flex-shrink-0">
-                <div className="w-4 h-4 bg-gradient-to-r from-gold to-champagne rounded-full"></div>
-              </div>
-              <div className="flex-1">
-                <p className="text-graphite font-modern font-bold text-lg mb-3">
-                  {language === 'pl' ? 'Komentarz IDA:' : 'IDA Comment:'}
-                </p>
-                <p className="text-sm text-graphite font-modern leading-relaxed bg-white/5 p-4 rounded-xl border border-white/10 mb-4">
-                  {llmComment.comment}
-                </p>
-                
-                {/* Human Polish comment from IDA */}
-                {humanComment && (
-                  <>
-                    <p className="text-graphite font-modern font-bold text-lg mb-3">
-                      {language === 'pl' ? 'Komentarz IDA po polsku:' : 'IDA Comment in Polish:'}
-                    </p>
-                    <p className="text-sm text-graphite font-modern leading-relaxed bg-gradient-to-r from-gold/10 to-champagne/10 p-4 rounded-xl border border-gold/20 mb-4">
-                      {humanComment}
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* LLM Comment - ukryte, wyświetlane w dialogu na dole */}
         {isGeneratingHumanComment && !humanComment && (
           <div className="mb-6 p-4 glass-panel rounded-2xl">
             <p className="text-graphite font-modern">

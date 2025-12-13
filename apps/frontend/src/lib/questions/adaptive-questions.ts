@@ -431,14 +431,14 @@ export const FOLLOW_UP_QUESTIONS: Record<string, FollowUpQuestion> = {
 // =========================
 
 export const PAIN_POINTS: PainPoint[] = [
-  { id: 'layout', label: { pl: 'Układ/rozmieszczenie', en: 'Layout/arrangement' }, icon: '📐' },
+  { id: 'layout', label: { pl: 'Układ', en: 'Layout' }, icon: '📐' },
   { id: 'light', label: { pl: 'Oświetlenie', en: 'Lighting' }, icon: '💡' },
   { id: 'color', label: { pl: 'Kolory', en: 'Colors' }, icon: '🎨' },
-  { id: 'clutter', label: { pl: 'Bałagan/chaos', en: 'Clutter/mess' }, icon: '📦' },
+  { id: 'clutter', label: { pl: 'Bałagan', en: 'Clutter' }, icon: '📦' },
   { id: 'storage', label: { pl: 'Brak miejsca', en: 'Lack of storage' }, icon: '🗄️' },
   { id: 'comfort', label: { pl: 'Dyskomfort', en: 'Discomfort' }, icon: '🪑' },
-  { id: 'too_cold', label: { pl: 'Za zimne/bezosobowe', en: 'Too cold/impersonal' }, icon: '❄️' },
-  { id: 'too_busy', label: { pl: 'Za chaotyczne', en: 'Too busy/chaotic' }, icon: '🌀' }
+  { id: 'too_cold', label: { pl: 'Zimno', en: 'Too cold' }, icon: '❄️' },
+  { id: 'too_busy', label: { pl: 'Chaos', en: 'Too busy' }, icon: '🌀' }
 ];
 
 // =========================

@@ -265,6 +265,10 @@ export async function synthesizePrompt(
     verbose = false
   } = options;
   
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:257',message:'Pre-synthesis personality snapshot',data:{mode:options.sourceType,hasPersonality:!!inputs.personality,domains:inputs.personality?{O:inputs.personality.openness,C:inputs.personality.conscientiousness,E:inputs.personality.extraversion,A:inputs.personality.agreeableness,N:inputs.personality.neuroticism}:null,hasFacets:!!inputs.personality?.facets,facetSamples:inputs.personality?.facets?{O:inputs.personality.facets.O?Object.values(inputs.personality.facets.O).slice(0,3):[],C:inputs.personality.facets.C?Object.values(inputs.personality.facets.C).slice(0,3):[],E:inputs.personality.facets.E?Object.values(inputs.personality.facets.E).slice(0,3):[],A:inputs.personality.facets.A?Object.values(inputs.personality.facets.A).slice(0,3):[],N:inputs.personality.facets.N?Object.values(inputs.personality.facets.N).slice(0,3):[]}:null},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P1'})}).catch(()=>{});
+  // #endregion
+
   if (verbose) {
     console.log('[Prompt Synthesis] Starting synthesis pipeline...');
     console.log('[Prompt Synthesis] Room type:', roomType);
@@ -461,16 +465,41 @@ export async function synthesizeSixPrompts(
   
   // Assess quality for all sources using strict quality gates
   const qualityReports = assessAllSourcesQuality(fullInputs, tinderSwipes);
-  const availableSources = getViableSources(qualityReports);
+  let availableSources = getViableSources(qualityReports);
   const allSources = Object.values(GenerationSource);
   const skippedSources = allSources.filter(s => !availableSources.includes(s));
+  
+  // FALLBACK: If no sources are viable, try to use the best available source anyway
+  // This ensures we always generate at least one image, even with limited data
+  if (availableSources.length === 0) {
+    console.warn('[6-Image Matrix] WARNING: No sources passed quality checks, using fallback strategy');
+    
+    // Find the source with the best quality score (even if insufficient)
+    const bestReport = qualityReports.reduce((best, current) => {
+      if (!best) return current;
+      if (current.confidence > best.confidence) return current;
+      if (current.dataPoints > best.dataPoints) return current;
+      return best;
+    }, null as SourceQualityReport | null);
+    
+    if (bestReport) {
+      console.warn(`[6-Image Matrix] Fallback: Using ${bestReport.source} with confidence ${bestReport.confidence}, dataPoints ${bestReport.dataPoints}`);
+      availableSources = [bestReport.source];
+      // Update the report to allow generation
+      bestReport.shouldGenerate = true;
+      bestReport.status = 'limited';
+      bestReport.warnings.push('Using fallback mode - limited data quality');
+    } else {
+      console.error('[6-Image Matrix] ERROR: No sources available even for fallback');
+    }
+  }
   
   if (verbose) {
     console.log('[6-Image Matrix] Quality assessment complete');
     console.log('[6-Image Matrix] Available sources:', availableSources);
     console.log('[6-Image Matrix] Skipped sources:', skippedSources);
     qualityReports.forEach(report => {
-      if (!report.shouldGenerate) {
+      if (!report.shouldGenerate && !availableSources.includes(report.source)) {
         console.log(`[6-Image Matrix] ${report.source} skipped:`, report.warnings.join(', '));
       }
     });
@@ -566,6 +595,21 @@ export async function synthesizeSixPrompts(
       } : null
     });
     
+    // #region agent log - Personality source detailed check
+    if (source === GenerationSource.Personality) {
+      const p = filteredInputs.personality;
+      const hasPersonality = !!p;
+      const domainScores = p ? [p.openness, p.conscientiousness, p.extraversion, p.agreeableness, p.neuroticism] : [];
+      const allDomainsAre50 = domainScores.length === 5 && domainScores.every(v => v === 50);
+      const facetsObj = p?.facets;
+      const facetCount = facetsObj ? Object.values(facetsObj).reduce((sum: number, domainFacets: any) => sum + Object.keys(domainFacets || {}).length, 0) : 0;
+      const hasFacetData = facetCount > 0;
+      const isComplete = hasPersonality && (!allDomainsAre50 || hasFacetData);
+      
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:550',message:'Personality source - detailed data check',data:{hasPersonality,domainScores,allDomainsAre50,hasFacetData,facetCount,isComplete,personalityData:p?{O:p.openness,C:p.conscientiousness,E:p.extraversion,A:p.agreeableness,N:p.neuroticism,hasFacets:!!p.facets}:null},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'B'})}).catch(()=>{});
+    }
+    // #endregion
+    
     // DEBUG: For InspirationReference, also log full inspirations structure
     if (source === GenerationSource.InspirationReference) {
       console.log(`[${source}] Full inspirations structure:`, JSON.stringify(filteredInputs.inspirations, null, 2));
@@ -599,12 +643,20 @@ export async function synthesizeSixPrompts(
         ];
 
         inspirations.forEach((inspiration, index) => {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:601',message:'Processing inspiration in extractInspirationTags',data:{index,hasTags:!!(inspiration as any).tags,tagsType:typeof (inspiration as any).tags,tagsValue:JSON.stringify((inspiration as any).tags),tagsKeys:(inspiration as any).tags?Object.keys((inspiration as any).tags):[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
+          
           // Normalize tags to avoid undefined access
           const tags = (inspiration as any).tags || {};
           const styles = Array.isArray(tags.styles) ? tags.styles : [];
           const colors = Array.isArray(tags.colors) ? tags.colors : [];
           const materials = Array.isArray(tags.materials) ? tags.materials : [];
           const biophiliaVal = typeof tags.biophilia === 'number' ? tags.biophilia : null;
+          
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:608',message:'After normalizing tags in extractInspirationTags',data:{index,stylesCount:styles.length,colorsCount:colors.length,materialsCount:materials.length,biophiliaVal,hasBiophilia:biophiliaVal!==null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
 
           // Styles
           styles.forEach((style: string) => {
@@ -659,6 +711,10 @@ export async function synthesizeSixPrompts(
       console.log('[InspirationReference] Count:', filteredInputs.inspirations?.length || 0);
       console.log('[InspirationReference] Full structure:', JSON.stringify(filteredInputs.inspirations, null, 2));
       
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:659',message:'Inspirations before extraction - full structure',data:{count:filteredInputs.inspirations?.length||0,inspirations:filteredInputs.inspirations?.map((i:any,idx:number)=>({index:idx,hasTags:!!i.tags,tagsType:typeof i.tags,tagsIsObject:i.tags&&typeof i.tags==='object',tagsIsEmptyObject:i.tags&&typeof i.tags==='object'&&Object.keys(i.tags).length===0,tagsKeys:i.tags?Object.keys(i.tags):[],tagsValue:JSON.stringify(i.tags),hasDescription:!!i.description}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      
       if (filteredInputs.inspirations && filteredInputs.inspirations.length > 0) {
         filteredInputs.inspirations.forEach((insp: any, idx: number) => {
           console.log(`[InspirationReference] Inspiration ${idx + 1}:`, {
@@ -679,6 +735,10 @@ export async function synthesizeSixPrompts(
       console.log('[InspirationReference] ========================================');
       
       const inspirationTags = extractInspirationTags(filteredInputs.inspirations);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:682',message:'Extracted inspiration tags result',data:{stylesCount:inspirationTags.additionalStyles.length,colorsCount:inspirationTags.additionalColors.length,materialsCount:inspirationTags.additionalMaterials.length,biophiliaBoost:inspirationTags.biophiliaBoost,hasBiophiliaTags:inspirationTags.hasBiophiliaTags,descriptionsCount:inspirationTags.descriptions.length,extractedTags:inspirationTags},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
       
       // DEBUG: Log extracted tags
       console.log('[InspirationReference] Extracted tags from gamma model:', {

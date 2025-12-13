@@ -494,6 +494,46 @@ export const BIGFIVE_COLOR_MAPPINGS: ColorMapping[] = [
     researchBasis: "whitfield1990"
   },
   {
+    trait: "neuroticism",
+    condition: "0.5-0.6",
+    colors: ["#E8E8E8", "#D3D3D3", "#C0C0C0", "#B0B0B0"], // light gray, gray, silver, dark gray
+    temperature: "neutral",
+    saturation: "low",
+    researchBasis: "whitfield1990"
+  },
+  {
+    trait: "extraversion",
+    condition: "0.4-0.6",
+    colors: ["#D3D3D3", "#C0C0C0", "#A9A9A9", "#808080"], // light gray, silver, dark gray, gray
+    temperature: "neutral",
+    saturation: "low",
+    researchBasis: "whitfield1990"
+  },
+  {
+    trait: "openness",
+    condition: "0.4-0.6",
+    colors: ["#DCDCDC", "#C8C8C8", "#B0B0B0", "#9E9E9E"], // gainsboro, silver, dark gray, gray
+    temperature: "neutral",
+    saturation: "low",
+    researchBasis: "gosling2002"
+  },
+  {
+    trait: "conscientiousness",
+    condition: "0.4-0.6",
+    colors: ["#F5F5F5", "#E8E8E8", "#D3D3D3", "#C0C0C0"], // whitesmoke, light gray, gray, silver
+    temperature: "neutral",
+    saturation: "low",
+    researchBasis: "gosling2002"
+  },
+  {
+    trait: "agreeableness",
+    condition: "0.4-0.6",
+    colors: ["#F0F0F0", "#E0E0E0", "#D0D0D0", "#C0C0C0"], // whitesmoke, light gray, light gray, silver
+    temperature: "neutral",
+    saturation: "low",
+    researchBasis: "graham2017"
+  },
+  {
     trait: "openness",
     facet: "O2_Aesthetics",
     condition: ">0.7",
@@ -570,6 +610,94 @@ export const BIGFIVE_MATERIAL_MAPPINGS: MaterialMapping[] = [
     condition: ">0.6",
     materials: ["soft fabrics", "gentle textures", "organic materials"],
     researchBasis: "graham2017"
+  }
+];
+
+// =========================
+// BIOPHILIA MAPPINGS
+// =========================
+
+export interface BiophiliaMapping {
+  trait: string;
+  facet?: string;
+  condition: string;
+  biophiliaBoost: number;  // 0-1, adds to base biophilia score (0-3 scale)
+  researchBasis: string;
+  description: string;
+}
+
+export const BIGFIVE_BIOPHILIA_MAPPINGS: BiophiliaMapping[] = [
+  {
+    trait: "openness",
+    facet: "O2_Aesthetics",
+    condition: ">0.65",
+    biophiliaBoost: 0.8,  // High aesthetic appreciation → strong biophilia
+    researchBasis: "gosling2002",
+    description: "High Aesthetics facet → appreciation for natural beauty and organic forms"
+  },
+  {
+    trait: "openness",
+    condition: ">0.6",
+    biophiliaBoost: 0.5,  // High openness → moderate biophilia
+    researchBasis: "gosling2002",
+    description: "High Openness → appreciation for diverse natural elements"
+  },
+  {
+    trait: "neuroticism",
+    condition: "<0.4",
+    biophiliaBoost: 0.6,  // Low neuroticism → nature as calming element
+    researchBasis: "graham2017",
+    description: "Low Neuroticism → nature provides grounding and tranquility"
+  },
+  {
+    trait: "neuroticism",
+    condition: ">0.6",
+    biophiliaBoost: 0.7,  // High neuroticism → nature as stress relief
+    researchBasis: "graham2017",
+    description: "High Neuroticism → nature as therapeutic calming element"
+  },
+  {
+    trait: "agreeableness",
+    facet: "A6_TenderMindedness",
+    condition: ">0.6",
+    biophiliaBoost: 0.6,  // Tender-mindedness → care for nature
+    researchBasis: "graham2017",
+    description: "High Tender-Mindedness → nurturing connection with nature"
+  },
+  {
+    trait: "agreeableness",
+    condition: ">0.6",
+    biophiliaBoost: 0.4,  // High agreeableness → moderate biophilia
+    researchBasis: "graham2017",
+    description: "High Agreeableness → harmonious relationship with nature"
+  },
+  {
+    trait: "extraversion",
+    condition: ">0.6",
+    biophiliaBoost: 0.3,  // High extraversion → social spaces with nature
+    researchBasis: "gosling2002",
+    description: "High Extraversion → nature in social, inviting spaces"
+  },
+  {
+    trait: "openness",
+    condition: "0.4-0.6",
+    biophiliaBoost: 0.2,  // Moderate openness → mild biophilia
+    researchBasis: "gosling2002",
+    description: "Moderate Openness → balanced appreciation for natural elements"
+  },
+  {
+    trait: "conscientiousness",
+    condition: ">0.6",
+    biophiliaBoost: 0.2,  // High conscientiousness → organized nature (low boost)
+    researchBasis: "gosling2002",
+    description: "High Conscientiousness → structured, minimal biophilic elements"
+  },
+  {
+    trait: "neuroticism",
+    condition: "0.4-0.6",
+    biophiliaBoost: 0.3,  // Moderate neuroticism → nature for balance
+    researchBasis: "graham2017",
+    description: "Moderate Neuroticism → nature provides emotional balance"
   }
 ];
 

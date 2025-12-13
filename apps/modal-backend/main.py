@@ -105,7 +105,7 @@ class GenerationRequest(BaseModel):
     inspiration_images: Optional[List[str]] = None  # Additional reference images for multi-reference (base64)
     negative_prompt: str = ""  # Not used in FLUX 2, kept for compatibility
     num_images: int = 1
-    guidance_scale: float = 4.0  # FLUX 2 default
+    guidance_scale: float = 2.5  # FLUX 2 default
     num_inference_steps: int = 35  # FLUX 2 recommended: 28-50
     width: int = 512
     height: int = 512

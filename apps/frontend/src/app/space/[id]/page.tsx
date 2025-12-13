@@ -10,7 +10,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { ArrowLeft, Heart, Sparkles, Trash2, Download, X } from 'lucide-react';
 import Image from 'next/image';
 import { fetchSpaceImages } from '@/lib/remote-spaces';
-import { supabase } from '@/lib/supabase';
+import { supabase, safeLocalStorage } from '@/lib/supabase';
 
 interface SpaceImage {
   id: string;
@@ -54,7 +54,7 @@ export default function SpaceDetailPage() {
     (async () => {
       if (!spaceId) return;
       const userHash = (sessionData as any)?.userHash ||
-        (typeof window !== 'undefined' ? localStorage.getItem('aura_user_hash') || '' : '');
+        safeLocalStorage.getItem('aura_user_hash') || '';
 
       // Fetch space info
       try {

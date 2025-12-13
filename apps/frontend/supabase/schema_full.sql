@@ -98,11 +98,12 @@ exception when duplicate_object then null; end $$;
 create table if not exists public.survey_results (
   id bigserial primary key,
   session_id text not null,
-  type text not null check (type in ('satisfaction','clarity')),
+  type text not null check (type in ('satisfaction','clarity','sus')),
   answers jsonb,
   agency_score numeric,
   satisfaction_score numeric,
   clarity_score numeric,
+  sus_score numeric,
   timestamp timestamptz not null default now()
 );
 create index if not exists idx_survey_results_session on public.survey_results(session_id, timestamp desc);

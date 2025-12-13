@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
+import { safeLocalStorage } from '@/lib/supabase';
 
 interface AmbientMusicProps {
   volume?: number; // 0-1, domyślnie 0.3 (30%)
@@ -25,7 +26,7 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     let initialVolume = volume;
     if (typeof window !== 'undefined') {
       try {
-        const savedVolume = localStorage.getItem('ambient-music-volume');
+        const savedVolume = safeLocalStorage.getItem('ambient-music-volume');
         if (savedVolume !== null) {
           const parsed = parseFloat(savedVolume);
           if (!Number.isNaN(parsed)) {

@@ -8,7 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { supabase, fetchLatestSessionSnapshot, DISABLE_SESSION_SYNC } from '@/lib/supabase';
+import { supabase, fetchLatestSessionSnapshot, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
 import { getUserHouseholds, saveHousehold, getCompletionStatus, getUserProfile } from '@/lib/supabase-deep-personalization';
 import { fetchSpacesWithImages, toggleSpaceImageFavorite, updateSpaceName, deleteSpace } from '@/lib/remote-spaces';
 import { useAuth } from '@/contexts/AuthContext';
@@ -91,9 +91,9 @@ export function UserDashboard() {
   const getUserHash = useCallback((): string | undefined => {
     let userHash = sessionData?.userHash as string | undefined;
 
-    if (!userHash && typeof window !== 'undefined') {
-      userHash = localStorage.getItem('aura_user_hash') || 
-                 sessionStorage.getItem('aura_user_hash') || undefined;
+    if (!userHash) {
+      userHash = safeLocalStorage.getItem('aura_user_hash') || 
+                 safeSessionStorage.getItem('aura_user_hash') || undefined;
     }
 
     return userHash;
@@ -175,9 +175,9 @@ export function UserDashboard() {
       // Try to get userHash from multiple sources
       let userHash = sessionData?.userHash;
       
-      if (!userHash && typeof window !== 'undefined') {
-        userHash = localStorage.getItem('aura_user_hash') || 
-                   sessionStorage.getItem('aura_user_hash') || '';
+      if (!userHash) {
+        userHash = safeLocalStorage.getItem('aura_user_hash') || 
+                   safeSessionStorage.getItem('aura_user_hash') || '';
       }
       
       if (!userHash) {
@@ -453,7 +453,7 @@ export function UserDashboard() {
       }
       
       // Fallback: localStorage
-      const localSessionData = localStorage.getItem('aura_session');
+      const localSessionData = safeLocalStorage.getItem('aura_session');
       if (localSessionData) {
         try {
           const parsed = JSON.parse(localSessionData);
@@ -470,7 +470,7 @@ export function UserDashboard() {
     } catch (error) {
       console.error('[Dashboard] Failed to load user data:', error);
       // Only set empty if we don't have localStorage data
-      const localSessionData = localStorage.getItem('aura_session');
+      const localSessionData = safeLocalStorage.getItem('aura_session');
       if (!localSessionData) {
         setSpaces([]);
       }
@@ -644,14 +644,24 @@ export function UserDashboard() {
         </div>
       )}
       
-      {/* Dialog IDA na dole - cała szerokość */}
+      {/* Dialog IDA na dole - cała szerokość - pokazuje komentarz IDA jeśli dostępny */}
+      {(() => {
+        const roomComment = (sessionData as any)?.roomAnalysis?.human_comment;
+        if (roomComment) {
+          console.log('[Dashboard] Room comment found, showing in dialogue:', roomComment);
+          return (
       <div className="w-full">
         <AwaDialogue 
-          currentStep="onboarding" 
+                currentStep="room_analysis" 
           fullWidth={true}
-          autoHide={true}
+                autoHide={false}
+                customMessage={roomComment}
         />
       </div>
+          );
+        }
+        return null;
+      })()}
 
       <div className="flex-1 p-4 lg:p-8 pb-32">
         <div className="max-w-3xl lg:max-w-none mx-auto">
@@ -749,6 +759,36 @@ export function UserDashboard() {
           <BigFiveResults userHash={(sessionData as any)?.userHash} />
 
           {/* Połączone preferencje (ukryte + jawne) */}
+          {(() => {
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: 'debug-session',
+                runId: 'dashboard-render',
+                hypothesisId: 'D2',
+                location: 'UserDashboard.tsx:render-PreferencesOverviewSection',
+                message: 'UserDashboard sessionData before render',
+                data: {
+                  hasVisualDNA: !!(sessionData as any)?.visualDNA,
+                  visualDNAStyle: (sessionData as any)?.visualDNA?.dominantStyle,
+                  visualDNAColors: (sessionData as any)?.visualDNA?.preferences?.colors,
+                  visualDNAMaterials: (sessionData as any)?.visualDNA?.preferences?.materials,
+                  hasColorsAndMaterials: !!sessionData?.colorsAndMaterials,
+                  colorsAndMaterialsPalette: sessionData?.colorsAndMaterials?.selectedPalette,
+                  colorsAndMaterialsMaterials: sessionData?.colorsAndMaterials?.topMaterials,
+                  hasSemanticDifferential: !!sessionData?.semanticDifferential,
+                  semanticWarmth: sessionData?.semanticDifferential?.warmth,
+                  semanticBrightness: sessionData?.semanticDifferential?.brightness,
+                  semanticComplexity: sessionData?.semanticDifferential?.complexity
+                },
+                timestamp: Date.now()
+              })
+            }).catch(() => {});
+            // #endregion
+            return null;
+          })()}
           <PreferencesOverviewSection
             sessionData={sessionData}
             visualDNA={(sessionData as any)?.visualDNA}
@@ -759,11 +799,11 @@ export function UserDashboard() {
             <CoreNeedsSection ladderResults={(sessionData as any)?.ladderResults} />
           )}
 
-          {/* Room Analysis */}
-          <RoomAnalysisSection 
+          {/* Room Analysis - ukryte, komentarz wyświetlany w dialogu na dole */}
+          {/* <RoomAnalysisSection 
             roomAnalysis={(sessionData as any)?.roomAnalysis}
             roomImage={(sessionData as any)?.roomImage}
-          />
+          /> */}
 
           {/* Inspirations Preview */}
           <InspirationsPreviewSection 
@@ -1271,7 +1311,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
         }
         
         // Priority 2: Try localStorage (immediate)
-        const localSession = localStorage.getItem('aura_session');
+        const localSession = safeLocalStorage.getItem('aura_session');
         if (localSession) {
           const parsed = JSON.parse(localSession);
           const bigFive = parsed?.bigFive;
@@ -1531,7 +1571,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              router.push('/flow/big-five?from=dashboard');
+              router.push('/flow/big-five?from=dashboard&retake=true');
             }}
             className="flex items-center gap-1 text-sm text-gold hover:text-champagne transition-colors font-modern"
           >

@@ -285,12 +285,12 @@ export function filterInputsBySource(inputs: PromptInputs, source: GenerationSou
       // ZERO PRS - personality is the only driver
       clone.prsCurrent = { ...NEUTRAL_PRS };
       clone.prsTarget = { ...NEUTRAL_PRS };
-      // ZERO biophiliaScore - personality source should not use user's biophilia preference
-      // (Could derive from Big Five in future, but for now zero it to keep personality pure)
+      // Keep biophiliaScore undefined - scoring.ts will derive it from Big Five personality traits
+      // This ensures Personality source uses ONLY Big Five data for biophilia (not explicit test)
       clone.psychologicalBaseline = { 
         ...clone.psychologicalBaseline, 
         prsIdeal: { ...NEUTRAL_PRS },
-        biophiliaScore: 0  // Zero biophilia for personality source
+        biophiliaScore: undefined  // Will be derived from Big Five in scoring.ts
       };
       // ZERO social
       clone.socialContext = 'solo';

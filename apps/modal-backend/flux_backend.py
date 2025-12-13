@@ -74,7 +74,7 @@ class GenerationRequest(BaseModel):
     modifications: List[str] = []
     strength: float = 0.8
     steps: int = 20
-    guidance: float = 7.0
+    guidance: float = 2.5
     num_images: int = 1
     image_size: int = 1024
 
@@ -127,7 +127,7 @@ class FluxKontextModel:
         self,
         image_bytes: bytes,
         prompt: str,
-        guidance_scale: float = 3.5,
+        guidance_scale: float = 2.5,
         num_inference_steps: int = 20,
         image_size: int = 1024,
         num_images: int = 1,
@@ -217,7 +217,7 @@ class FluxKontextModel:
     def text_to_image(
         self,
         prompt: str,
-        guidance_scale: float = 7.0,
+        guidance_scale: float = 2.5,
         num_inference_steps: int = 20,
         image_size: int = 1024,
         num_images: int = 1

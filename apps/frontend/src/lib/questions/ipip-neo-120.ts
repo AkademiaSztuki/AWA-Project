@@ -126,6 +126,14 @@ export function calculateIPIPNEO120Scores(responses: Record<string, number>): IP
     N: {} as { [key: number]: number },
   };
 
+  // #region agent log
+  const responseCount = Object.keys(responses).length;
+  const responseSample = Object.entries(responses).slice(0, 10).reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {});
+  const allValues = Object.values(responses);
+  const avgResponse = allValues.length > 0 ? allValues.reduce((a, b) => a + b, 0) / allValues.length : 0;
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ipip-neo-120.ts:103',message:'calculateIPIPNEO120Scores - input responses check',data:{responseCount,totalItems:IPIP_120_ITEMS.length,responseSample,avgResponse,hasAllResponses:responseCount===IPIP_120_ITEMS.length},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'G'})}).catch(()=>{});
+  // #endregion
+
   IPIP_120_ITEMS.forEach((item) => {
     const rawScore = responses[item.id] || 3; // Default to neutral (middle value)
     
@@ -156,7 +164,11 @@ export function calculateIPIPNEO120Scores(responses: Record<string, number>): IP
   Object.keys(scores.domains).forEach((domain) => {
     const domainKey = domain as keyof typeof scores.domains;
     const rawScore = scores.domains[domainKey];
-    scores.domains[domainKey] = Math.round(((rawScore - 24) / 96) * 100);
+    const normalized = Math.round(((rawScore - 24) / 96) * 100);
+    scores.domains[domainKey] = normalized;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ipip-neo-120.ts:159',message:'Domain score calculation',data:{domain:domainKey,rawScore,normalized,formula:`((${rawScore} - 24) / 96) * 100`},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'G'})}).catch(()=>{});
+    // #endregion
   });
 
   // Normalize facets to 0-100 scale

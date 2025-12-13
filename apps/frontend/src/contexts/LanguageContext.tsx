@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Language, LocalizedText, getLocalizedText } from '@/lib/questions/validated-scales';
+import { safeLocalStorage } from '@/lib/supabase';
 
 interface LanguageContextType {
   language: Language;
@@ -31,13 +32,13 @@ const getCookieLanguage = (): Language | null => {
 
 const persistLanguage = (lang: Language) => {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(LANGUAGE_COOKIE, lang);
+  safeLocalStorage.setItem(LANGUAGE_COOKIE, lang);
   document.cookie = `${LANGUAGE_COOKIE}=${lang}; path=/; max-age=${ONE_YEAR_IN_SECONDS}`;
 };
 
 const getStoredLanguage = (): Language | null => {
   if (typeof window === 'undefined') return null;
-  const stored = localStorage.getItem(LANGUAGE_COOKIE);
+  const stored = safeLocalStorage.getItem(LANGUAGE_COOKIE);
   if (isLanguage(stored)) return stored;
 
   const cookieLang = getCookieLanguage();

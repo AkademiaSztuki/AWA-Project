@@ -451,7 +451,8 @@ export function SensoryTestSuite({
 
   const canComplete = (nextResults: typeof results, nextBiophilia?: number) => {
     const paletteReady = !hasPalette || Boolean(selectedPalette);
-    const styleReady = !hasStyle || Boolean(selectedStyle);
+    // CRITICAL: Check style from nextResults first, then fallback to selectedStyle prop
+    const styleReady = !hasStyle || Boolean(nextResults.style || selectedStyle);
     const sensoryReady = Boolean(nextResults.music && nextResults.texture && nextResults.light);
     const natureReady = Boolean(nextResults.natureMetaphor);
     const biophiliaReady = typeof (nextBiophilia ?? biophiliaScore) === 'number';
@@ -466,6 +467,9 @@ export function SensoryTestSuite({
       !finalResults.light ||
       !finalResults.natureMetaphor
     ) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:triggerComplete-incomplete',message:'Cannot complete - missing data',data:{hasBiophilia:finalBiophilia!==undefined,hasMusic:!!finalResults.music,hasTexture:!!finalResults.texture,hasLight:!!finalResults.light,hasNature:!!finalResults.natureMetaphor},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E3'})}).catch(()=>{});
+      // #endregion
       return;
     }
     const payload = {
@@ -474,8 +478,15 @@ export function SensoryTestSuite({
       light: finalResults.light,
       natureMetaphor: finalResults.natureMetaphor,
       biophiliaScore: finalBiophilia,
-      ...(selectedStyle && { style: selectedStyle })
+      // CRITICAL: Use style from finalResults first, then fallback to selectedStyle prop
+      ...(finalResults.style && { style: finalResults.style }),
+      ...(!finalResults.style && selectedStyle && { style: selectedStyle }),
+      // CRITICAL: Add palette to payload (same logic as style)
+      ...(selectedPalette && { palette: selectedPalette })
     };
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:triggerComplete',message:'SensoryTests complete - calling onComplete',data:{payload:payload,payloadKeys:Object.keys(payload),biophiliaScore:finalBiophilia,hasStyle:!!selectedStyle,selectedStyle:selectedStyle||null,payloadStyle:payload.style||null,hasPalette:!!selectedPalette,selectedPalette:selectedPalette||null,payloadPalette:payload.palette||null,finalResultsStyle:finalResults.style||null,finalResultsKeys:Object.keys(finalResults)},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E4'})}).catch(()=>{});
+    // #endregion
     setTimeout(() => onComplete(payload), 300);
   };
 
@@ -491,15 +502,24 @@ export function SensoryTestSuite({
 
     if (testType === 'style') {
       onStyleSelect?.(value as string);
+      // CRITICAL: Update results with selected style immediately
+      const newResults = { ...results, style: value as string };
+      setResults(newResults);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:handleSelect-style',message:'Style selected in SensoryTests',data:{selectedStyle:value,newResultsStyle:newResults.style,canComplete:canComplete(newResults,biophiliaScore),hasBiophilia:biophiliaScore!==undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E18'})}).catch(()=>{});
+      // #endregion
       goToNext(testType);
-      if (canComplete(results)) {
-        triggerComplete(results, biophiliaScore);
+      if (canComplete(newResults, biophiliaScore)) {
+        triggerComplete(newResults, biophiliaScore);
       }
       return;
     }
 
     if (testType === 'biophilia') {
       const score = typeof value === 'number' ? value : Number(value);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:handleSelect-biophilia',message:'Biophilia score set in SensoryTests',data:{score:score,valueType:typeof value,canComplete:canComplete(results,score)},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E2'})}).catch(()=>{});
+      // #endregion
       setBiophiliaScore(score);
       if (canComplete(results, score)) {
         triggerComplete(results, score);

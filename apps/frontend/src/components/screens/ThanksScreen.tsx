@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import React from 'react';
 import { GlassCard } from '../ui/GlassCard';
 import GlassSurface from '../ui/GlassSurface';
 import { useSessionData } from '@/hooks/useSessionData';
@@ -8,18 +8,6 @@ import { AwaDialogue } from '@/components/awa';
 
 export function ThanksScreen() {
   const { sessionData, exportSessionData } = useSessionData();
-  const [sessionDuration, setSessionDuration] = useState<number>(0);
-
-  useEffect(() => {
-    if (sessionData?.consentTimestamp) {
-      const start = new Date(sessionData.consentTimestamp).getTime();
-      const end = sessionData?.surveyData?.sessionCompleted
-        ? Number(sessionData.surveyData.sessionCompleted)
-        : Date.now();
-      const duration = (end - start) / 1000 / 60; // minuty
-      setSessionDuration(Math.max(0, Math.round(duration)));
-    }
-  }, [sessionData]);
 
   const handleDownloadData = () => {
     const dataStr = exportSessionData();
@@ -31,16 +19,6 @@ export function ThanksScreen() {
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
-  };
-
-  const stats = {
-    imagesLiked: (sessionData as any)?.tinderData?.swipes?.filter((s: any) => s.direction === 'right').length || 0,
-    totalImages: (sessionData as any)?.tinderData?.totalImages || 0,
-    dnaAccuracy: (sessionData as any)?.visualDNA?.accuracyScore || (sessionData as any)?.dnaAccuracyScore || 0,
-    ladderSteps: (sessionData as any)?.ladderResults?.path?.length || 0,
-    agencyScore: sessionData?.surveyData?.agencyScore || 0,
-    satisfactionScore: sessionData?.surveyData?.satisfactionScore || 0,
-    clarityScore: sessionData?.surveyData?.clarityScore || 0,
   };
 
   return (
@@ -57,56 +35,6 @@ export function ThanksScreen() {
               Twój udział w badaniu nad współpracą człowieka z AI jest nieoceniony 
               dla rozwoju naukowego w dziedzinie projektowania wnętrz.
             </p>
-
-            {/* Statystyki sesji */}
-            <div className="mb-8">
-              <h3 className="text-xl font-semibold mb-6 text-center font-exo2">Podsumowanie Twojej Sesji</h3>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6">
-                <div className="bg-gold/10 p-4 rounded-lg text-center">
-                  <div className="font-semibold font-exo2 text-sm mb-1">Czas sesji</div>
-                  <div className="font-modern text-lg font-bold">{sessionDuration} min</div>
-                </div>
-
-                <div className="bg-silver/10 p-4 rounded-lg text-center">
-                  <div className="font-semibold font-exo2 text-sm mb-1">Polubione obrazy</div>
-                  <div className="font-modern text-lg font-bold">{stats.imagesLiked}/{stats.totalImages}</div>
-                </div>
-
-                <div className="bg-champagne/10 p-4 rounded-lg text-center">
-                  <div className="font-semibold font-exo2 text-sm mb-1">Trafność DNA</div>
-                  <div className="font-modern text-lg font-bold">{stats.dnaAccuracy}/7</div>
-                </div>
-
-                <div className="bg-platinum/10 p-4 rounded-lg text-center">
-                  <div className="font-semibold font-exo2 text-sm mb-1">Kroki potrzeb</div>
-                  <div className="font-modern text-lg font-bold">{stats.ladderSteps}</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div className="text-center p-4 bg-gold/5 rounded-lg border border-gold/20">
-                  <div className="font-semibold font-exo2 text-sm mb-2">Sprawczość</div>
-                  <div className="text-2xl font-bold text-gold font-exo2">
-                    {stats.agencyScore.toFixed(1)}/7
-                  </div>
-                </div>
-
-                <div className="text-center p-4 bg-silver/5 rounded-lg border border-silver/20">
-                  <div className="font-semibold font-exo2 text-sm mb-2">Satysfakcja</div>
-                  <div className="text-2xl font-bold text-gray-600 font-exo2">
-                    {stats.satisfactionScore.toFixed(1)}/7
-                  </div>
-                </div>
-
-                <div className="text-center p-4 bg-champagne/5 rounded-lg border border-champagne/20">
-                  <div className="font-semibold font-exo2 text-sm mb-2">Jasność</div>
-                  <div className="text-2xl font-bold text-gold font-exo2">
-                    {stats.clarityScore.toFixed(1)}/7
-                  </div>
-                </div>
-              </div>
-            </div>
 
             {/* Informacja o badaniu */}
             <div className="text-sm text-gray-500 mb-8 font-modern">

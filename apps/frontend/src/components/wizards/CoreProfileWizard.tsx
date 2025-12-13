@@ -692,7 +692,31 @@ export function CoreProfileWizard() {
                           }
                         }))
                       }
-                      onComplete={(results) => {
+                      onComplete={async (results) => {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory',message:'Saving explicit preferences to profile',data:{resultsKeys:Object.keys(results),biophiliaScore:results.biophiliaScore,music:results.music,texture:results.texture,light:results.light,natureMetaphor:results.natureMetaphor,hasStyle:!!results.style,resultsStyle:results.style||null,resultsStyleType:typeof results.style,resultsStyleIsEmpty:results.style==='',hasPalette:!!results.palette,resultsPalette:results.palette||null,profileDataStyle:profileData.colorsAndMaterials?.selectedStyle||null,profileDataStyleType:typeof profileData.colorsAndMaterials?.selectedStyle,sessionDataStyle:sessionData.colorsAndMaterials?.selectedStyle||null,sessionDataStyleType:typeof sessionData.colorsAndMaterials?.selectedStyle},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E5'})}).catch(()=>{});
+                        // #endregion
+                        const currentStyle = profileData.colorsAndMaterials?.selectedStyle;
+                        const finalStyle =
+                          results.style ||
+                          sessionData.colorsAndMaterials?.selectedStyle ||
+                          currentStyle ||
+                          '';
+                        const finalPalette =
+                          (results as any).palette ||
+                          sessionData.colorsAndMaterials?.selectedPalette ||
+                          profileData.colorsAndMaterials?.selectedPalette ||
+                          '';
+                        const finalMaterials =
+                          (results as any).topMaterials ||
+                          sessionData.colorsAndMaterials?.topMaterials ||
+                          profileData.colorsAndMaterials?.topMaterials ||
+                          [];
+
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory-explicit',message:'Resolved explicit before persist',data:{finalStyle,finalPalette,materialsCount:finalMaterials.length},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E16'})}).catch(()=>{});
+                        // #endregion
+
                         updateProfile({
                           sensoryPreferences: {
                             music: results.music,
@@ -701,13 +725,32 @@ export function CoreProfileWizard() {
                           },
                           natureMetaphor: results.natureMetaphor,
                           biophiliaScore: results.biophiliaScore,
-                          ...(results.style && {
-                            colorsAndMaterials: {
-                              ...profileData.colorsAndMaterials,
-                              selectedStyle: results.style
-                            }
-                          })
+                          colorsAndMaterials: {
+                            ...(profileData.colorsAndMaterials || {}),
+                            selectedStyle: finalStyle,
+                            selectedPalette: finalPalette,
+                            topMaterials: finalMaterials
+                          }
                         });
+                        // CRITICAL: Save biophiliaScore to sessionData immediately to prevent sync issues
+                        // CRITICAL: Use finalStyle, finalPalette, finalMaterials directly, not from profileData
+                        await updateSessionData({
+                          biophiliaScore: results.biophiliaScore,
+                          sensoryPreferences: {
+                            music: results.music,
+                            texture: results.texture,
+                            light: results.light
+                          },
+                          natureMetaphor: results.natureMetaphor,
+                          colorsAndMaterials: {
+                            selectedStyle: finalStyle,
+                            selectedPalette: finalPalette,
+                            topMaterials: finalMaterials
+                          }
+                        });
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory-updateSessionData',message:'Immediately saving biophiliaScore to sessionData',data:{biophiliaScore:results.biophiliaScore,sessionDataUpdated:true},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E15'})}).catch(()=>{});
+                        // #endregion
                         handleNext();
                       }}
                     />

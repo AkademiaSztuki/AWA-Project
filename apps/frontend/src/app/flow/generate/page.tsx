@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
-import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startGenerationJob, endGenerationJob, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent } from '@/lib/supabase';
+import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startGenerationJob, endGenerationJob, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage } from '@/lib/supabase';
 import { supabase } from '@/lib/supabase';
 import { assessAllSourcesQuality, getViableSources, type DataStatus } from '@/lib/prompt-synthesis/data-quality';
 import { calculateImplicitQuality } from '@/lib/prompt-synthesis/implicit-quality';
@@ -84,7 +84,7 @@ const MICRO_MODIFICATIONS: ModificationOption[] = [
   { id: 'natural_materials', label: 'Naturalne materiały', icon: null, category: 'micro' },
   { id: 'more_plants', label: 'Więcej roślin', icon: null, category: 'micro' },
   { id: 'less_plants', label: 'Mniej roślin', icon: null, category: 'micro' },
-  { id: 'textured_walls', label: 'Teksturowane ściany', icon: null, category: 'micro' },
+  { id: 'textured_walls', label: 'Ściany z fakturą', icon: null, category: 'micro' },
   { id: 'add_decorations', label: 'Dodaj dekoracje', icon: null, category: 'micro' },
   { id: 'change_flooring', label: 'Zmień podłogę', icon: null, category: 'micro' },
 ];
@@ -283,8 +283,8 @@ export default function GeneratePage() {
     
     // Try to get roomImage from sessionStorage if not in sessionData (Supabase might be disconnected)
     let roomImage = typedSessionData?.roomImage;
-    if (!roomImage && typeof window !== 'undefined') {
-      const sessionRoomImage = sessionStorage.getItem('aura_session_room_image');
+    if (!roomImage) {
+      const sessionRoomImage = safeSessionStorage.getItem('aura_session_room_image');
       if (sessionRoomImage) {
         console.log("[6-Image Matrix] Found roomImage in sessionStorage, restoring to sessionData");
         roomImage = sessionRoomImage;
@@ -296,7 +296,8 @@ export default function GeneratePage() {
     if (!roomImage) {
       console.error("[6-Image Matrix] Missing roomImage in session data and sessionStorage");
       console.error("[6-Image Matrix] Session data keys:", Object.keys(typedSessionData || {}));
-      console.error("[6-Image Matrix] sessionStorage roomImage:", typeof window !== 'undefined' ? sessionStorage.getItem('aura_session_room_image')?.substring(0, 50) : 'N/A');
+      const storedRoomImage = safeSessionStorage.getItem('aura_session_room_image');
+      console.error("[6-Image Matrix] sessionStorage roomImage:", storedRoomImage?.substring(0, 50) || 'N/A');
       setError("Nie można rozpocząć generowania - brak zdjęcia pokoju w sesji. Proszę wrócić do kroku uploadu zdjęcia.");
       return;
     }
@@ -383,8 +384,40 @@ export default function GeneratePage() {
       const { buildPromptInputsFromSession } = await import('@/lib/prompt-synthesis/input-builder');
       const inputs = buildPromptInputsFromSession(typedSessionData);
       const tinderSwipes = typedSessionData.tinderData?.swipes || [];
+      
+      // DEBUG: Log what data we have
+      console.log("[6-Image Matrix] DEBUG - Session data summary:", {
+        hasTinderSwipes: tinderSwipes.length > 0,
+        tinderSwipesCount: tinderSwipes.length,
+        hasImplicitStyles: inputs.aestheticDNA.implicit.dominantStyles.length > 0,
+        implicitStyles: inputs.aestheticDNA.implicit.dominantStyles,
+        hasExplicitStyle: !!inputs.aestheticDNA.explicit.selectedStyle,
+        explicitStyle: inputs.aestheticDNA.explicit.selectedStyle,
+        hasExplicitPalette: !!inputs.aestheticDNA.explicit.selectedPalette,
+        explicitPalette: inputs.aestheticDNA.explicit.selectedPalette,
+        hasPersonality: !!inputs.personality,
+        hasInspirations: !!(inputs.inspirations && inputs.inspirations.length > 0),
+        inspirationsCount: inputs.inspirations?.length || 0,
+        hasBiophiliaScore: inputs.psychologicalBaseline.biophiliaScore !== undefined,
+        biophiliaScore: inputs.psychologicalBaseline.biophiliaScore
+      });
+      
       const qualityReports = assessAllSourcesQuality(inputs, tinderSwipes);
       setQualityReport(qualityReports);
+      
+      // DEBUG: Log quality reports with full details
+      console.log("[6-Image Matrix] DEBUG - Quality reports:");
+      qualityReports.forEach(r => {
+        console.log(`[6-Image Matrix] ${r.source}:`, {
+          shouldGenerate: r.shouldGenerate,
+          status: r.status,
+          dataPoints: r.dataPoints,
+          confidence: r.confidence,
+          warnings: r.warnings,
+          warningsCount: r.warnings.length,
+          warningsDetails: r.warnings.join(' | ')
+        });
+      });
       
       // Step 2: Synthesize 6 prompts from different data sources
       console.log("[6-Image Matrix] Step 2: Synthesizing prompts...");
@@ -407,7 +440,12 @@ export default function GeneratePage() {
       });
       
       if (synthesisResult.generatedSources.length === 0) {
-        setError("Brak wystarczających danych do wygenerowania obrazów. Uzupełnij profil.");
+        // DEBUG: Log why all sources were skipped
+        console.error("[6-Image Matrix] ERROR - All sources skipped! Quality reports:", qualityReports);
+        const errorDetails = qualityReports
+          .map(r => `${r.source}: ${r.warnings.join(', ')}`)
+          .join('; ');
+        setError(`Brak wystarczających danych do wygenerowania obrazów. Szczegóły: ${errorDetails}`);
         return;
       }
       
@@ -1093,10 +1131,10 @@ export default function GeneratePage() {
       // Add to generation history
       const historyNode = {
         id: upscaled.id,
-        image: upscaled.url,
-        prompt: upscaled.prompt,
+        type: 'initial' as const, // Upscale is treated as initial type
+        label: 'Upscalowane',
         timestamp: Date.now(),
-        modificationType: 'upscale' as const
+        imageUrl: upscaled.url,
       };
       setGenerationHistory(prev => {
         const exists = prev.find(h => h.id === historyNode.id);
@@ -1992,7 +2030,7 @@ export default function GeneratePage() {
                 <GlassButton onClick={() => { 
                   setRegenerateCount(prev => prev + 1);
                   void handleInitialGeneration(true); 
-                }} className="mt-4">
+                }} className="mt-4 whitespace-normal break-words">
                   Spróbuj ponownie
                 </GlassButton>
               </div>
@@ -2157,7 +2195,7 @@ export default function GeneratePage() {
                             {/* Inline quality info for this source while waiting */}
                             {qualityInfo && (
                               <div className="absolute bottom-2 left-2 right-2">
-                                <div className="px-2.5 py-1.5 bg-white/15 backdrop-blur-md rounded-lg border border-white/15 text-[11px] leading-tight text-white/80 space-y-0.5">
+                                <div className="px-2.5 py-1.5 bg-white/15 backdrop-blur-md rounded-lg border border-white/15 text-[11px] leading-tight text-white/80 space-y-0.5 max-h-[120px] overflow-y-auto">
                                   <div className="flex justify-between gap-2">
                                     <span className="font-semibold text-white/90">Dane: {sourceLabel}</span>
                                     <span className={`font-semibold ${statusColor}`}>{statusText}</span>
@@ -2172,6 +2210,17 @@ export default function GeneratePage() {
                                     <div className="flex justify-between gap-2">
                                       <span>Punkty danych</span>
                                       <span className="font-semibold text-white/90">{qualityInfo.dataPoints}</span>
+                                    </div>
+                                  )}
+                                  {qualityInfo.warnings && qualityInfo.warnings.length > 0 && qualityInfo.status !== 'sufficient' && (
+                                    <div className="mt-1 pt-1 border-t border-white/10">
+                                      <div className="text-[10px] text-white/70 space-y-0.5">
+                                        {qualityInfo.warnings.map((warning, idx) => (
+                                          <div key={idx} className="leading-relaxed">
+                                            {warning}
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
                                   )}
                                 </div>
@@ -2281,7 +2330,7 @@ export default function GeneratePage() {
                       }
                     }}
                     disabled={!selectedImage || isUpscaling}
-                    className="px-8 py-3 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-8 py-3 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal break-words"
                   >
                     {isUpscaling ? (
                       <>
@@ -2351,7 +2400,7 @@ export default function GeneratePage() {
                         <GlassButton
                           onClick={() => handleUpscale(selectedImage)}
                           disabled={isUpscaling}
-                          className="px-6 py-2 flex items-center gap-2 bg-gold/90 hover:bg-gold text-white"
+                          className="px-6 py-2 flex items-center gap-2 bg-gold/90 hover:bg-gold text-white whitespace-normal break-words"
                         >
                           {isUpscaling ? (
                             <>
@@ -2382,41 +2431,35 @@ export default function GeneratePage() {
                     )}
                   </div>
                   
-                  {/* Source Reveal */}
+                  {/* Quick Interior Question */}
                   <AnimatePresence>
-                    {showSourceReveal && selectedImage.source && (
+                    {showSourceReveal && selectedImage && !hasAnsweredInteriorQuestion && (
                       <motion.div
                         initial={{ opacity: 0, y: 20, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         transition={{ duration: 0.5, ease: "easeOut" }}
                       >
                         <GlassCard variant="highlighted" className="p-5">
-                          <div className="flex items-start gap-4">
-                            <div className="p-2 bg-gold/10 rounded-lg">
-                              <Eye size={24} className="text-gold" />
+                          <div className="space-y-4">
+                            <h3 className="font-semibold text-graphite text-lg text-center mb-3">
+                              Czy to moje wnętrze?
+                            </h3>
+                            
+                            <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
+                              <span>To nie moje wnętrze (1)</span>
+                              <span>To moje wnętrze (5)</span>
                             </div>
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-graphite text-lg mb-1">
-                                To wnętrze zostało stworzone na podstawie:
-                              </h3>
-                              <p className="text-xl font-bold bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
-                                {GENERATION_SOURCE_LABELS[selectedImage.source]?.pl || selectedImage.source}
-                              </p>
-                              <p className="text-sm text-silver-dark">
-                                {selectedImage.source === GenerationSource.Implicit && 
-                                  "Twoje intuicyjne wybory z eksploracji obrazów (Tinder + Inspiracje) - to co naprawdę przyciąga Twoją uwagę."}
-                                {selectedImage.source === GenerationSource.Explicit && 
-                                  "Twoje świadome deklaracje preferencji - kolory, materiały i style które samodzielnie wybrałeś."}
-                                {selectedImage.source === GenerationSource.Personality && 
-                                  "Twój profil osobowości Big Five - jak Twoja osobowość przekłada się na preferencje estetyczne."}
-                                {selectedImage.source === GenerationSource.Mixed && 
-                                  "Połączenie wszystkich danych estetycznych - behawioralnych, deklarowanych i osobowościowych."}
-                                {selectedImage.source === GenerationSource.MixedFunctional && 
-                                  "Pełny mix + funkcjonalność - uwzględnia też jak używasz przestrzeni i jakie masz potrzeby."}
-                                {selectedImage.source === GenerationSource.InspirationReference && 
-                                  "Multi-reference z polubionych inspiracji - style, kolory i nastrój z obrazów które Ci się spodobały."}
-                              </p>
-                            </div>
+
+                            <GlassSlider
+                              min={1}
+                              max={5}
+                              value={(selectedImage.ratings as any).is_my_interior || 3}
+                              onChange={(value) => {
+                                handleImageRating(selectedImage.id, 'is_my_interior', value);
+                                setHasAnsweredInteriorQuestion(true);
+                              }}
+                              className="mb-2"
+                            />
                           </div>
                         </GlassCard>
                       </motion.div>
@@ -2424,50 +2467,6 @@ export default function GeneratePage() {
                   </AnimatePresence>
                 </div>
               </GlassCard>
-              
-              {/* Other Images - Mini Grid */}
-              {showSourceReveal && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                >
-                  <GlassCard className="p-4">
-                    <h3 className="text-sm font-medium text-silver-dark mb-3">
-                      Inne wygenerowane wizje (kliknij aby zobaczyć)
-                    </h3>
-                    <div className="flex gap-3 overflow-x-auto pb-2">
-                      {matrixImages
-                        .filter(img => img.id !== selectedImage.id)
-                        .map((img) => (
-                          <motion.div
-                            key={img.id}
-                            className="flex-shrink-0 cursor-pointer"
-                            whileHover={{ scale: 1.05 }}
-                            onClick={() => {
-                              setSelectedImage(img);
-                              setIdaComment(null);
-                            }}
-                          >
-                            <div className="w-24 h-18 relative rounded-lg overflow-hidden border border-white/30 hover:border-gold/50 transition-all">
-                              <Image
-                                src={img.url}
-                                alt={`Wizja ${GENERATION_SOURCE_LABELS[img.source!]?.pl || ''}`}
-                                fill
-                                className="object-cover"
-                              />
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                <span className="text-[10px] text-white/90 text-center px-1 font-medium">
-                                  {GENERATION_SOURCE_LABELS[img.source!]?.pl?.split(' ')[0] || ''}
-                                </span>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                    </div>
-                  </GlassCard>
-                </motion.div>
-              )}
               
               {/* Modifications and History - Show after upscale */}
               {upscaledImage && !isUpscaling && (
@@ -2479,19 +2478,19 @@ export default function GeneratePage() {
                     transition={{ delay: 0.3 }}
                     className="flex justify-center space-x-3"
                   >
-                    <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="flex-1">
-                      <Settings size={16} className="mr-2" />
-                      {showModifications ? 'Ukryj opcje' : 'Modyfikuj'}
+                    <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                      <Settings size={16} className="mr-2 flex-shrink-0" />
+                      <span className="truncate">{showModifications ? 'Ukryj opcje' : 'Modyfikuj'}</span>
                     </GlassButton>
 
-                    <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="flex-1">
-                      <Home size={16} className="mr-2" />
-                      Usuń meble
+                    <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                      <Home size={16} className="mr-2 flex-shrink-0" />
+                      <span className="truncate">Usuń meble</span>
                     </GlassButton>
 
-                    <GlassButton onClick={handleQualityImprovement} variant="secondary" className="flex-1">
-                      <RefreshCw size={16} className="mr-2" />
-                      Popraw Jakość
+                    <GlassButton onClick={handleQualityImprovement} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                      <RefreshCw size={16} className="mr-2 flex-shrink-0" />
+                      <span className="truncate">Popraw Jakość</span>
                     </GlassButton>
                   </motion.div>
 
@@ -2521,10 +2520,10 @@ export default function GeneratePage() {
                                     onClick={() => handleModification(mod)}
                                     variant="secondary"
                                     size="sm"
-                                    className="justify-start text-sm h-12 px-4"
+                                    className="justify-start text-xs sm:text-sm h-12 px-3 overflow-hidden"
                                     disabled={isLoading}
                                   >
-                                    {mod.label}
+                                    <span className="line-clamp-2 text-center w-full">{mod.label}</span>
                                   </GlassButton>
                                 ))}
                               </div>
@@ -2538,17 +2537,17 @@ export default function GeneratePage() {
                               <p className="text-sm text-silver-dark mb-4">
                                 Zmiana całego stylu mebli i aranżacji
                               </p>
-                              <div className="grid grid-cols-2 gap-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {MACRO_MODIFICATIONS.map((mod) => (
                                   <GlassButton
                                     key={mod.id}
                                     onClick={() => handleModification(mod)}
                                     variant="secondary"
                                     size="sm"
-                                    className="justify-start text-sm h-12 px-4"
+                                    className="justify-start text-xs sm:text-sm h-12 px-3 overflow-hidden"
                                     disabled={isLoading}
                                   >
-                                    {mod.label}
+                                    <span className="line-clamp-2 text-center w-full">{mod.label}</span>
                                   </GlassButton>
                                 ))}
                               </div>
@@ -2588,7 +2587,7 @@ export default function GeneratePage() {
                 >
                   <GlassButton
                     onClick={handleContinue}
-                    className="px-8 py-3 flex items-center gap-2"
+                    className="px-8 py-3 flex items-center gap-2 whitespace-normal break-words"
                   >
                     <span>Kontynuuj</span>
                     <ArrowRight size={18} />
@@ -2767,19 +2766,19 @@ export default function GeneratePage() {
                             transition={{ duration: 0.5, delay: 0.2 }}
                             className="flex space-x-3"
                           >
-                            <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="flex-1">
-                              <Settings size={16} className="mr-2" />
-                              {showModifications ? 'Ukryj opcje' : 'Modyfikuj'}
+                            <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                              <Settings size={16} className="mr-2 flex-shrink-0" />
+                              <span className="truncate">{showModifications ? 'Ukryj opcje' : 'Modyfikuj'}</span>
                             </GlassButton>
 
-                            <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="flex-1">
-                              <Home size={16} className="mr-2" />
-                              Usuń meble
+                            <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                              <Home size={16} className="mr-2 flex-shrink-0" />
+                              <span className="truncate">Usuń meble</span>
                             </GlassButton>
 
-                            <GlassButton onClick={handleQualityImprovement} variant="secondary" className="flex-1">
-                              <RefreshCw size={16} className="mr-2" />
-                              Popraw Jakość
+                            <GlassButton onClick={handleQualityImprovement} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                              <RefreshCw size={16} className="mr-2 flex-shrink-0" />
+                              <span className="truncate">Popraw Jakość</span>
                             </GlassButton>
 
                             <GlassButton 
@@ -2800,10 +2799,10 @@ export default function GeneratePage() {
                                 }
                               }} 
                               variant="secondary" 
-                              className="flex-1"
+                              className="flex-1 h-12 text-xs sm:text-sm"
                             >
-                              <Home size={16} className="mr-2" />
-                              Oryginalny
+                              <Home size={16} className="mr-2 flex-shrink-0" />
+                              <span className="truncate">Oryginalny</span>
                             </GlassButton>
                           </motion.div>
                         )}
@@ -2885,7 +2884,7 @@ export default function GeneratePage() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.4 }}
                       >
-                        <GlassButton onClick={handleContinue} className="px-8 py-4 font-semibold">
+                        <GlassButton onClick={handleContinue} className="px-8 py-4 font-semibold whitespace-normal break-words">
                           <span className="flex items-center space-x-2">
                             <span>Przejdź do Ankiety</span>
                             <ArrowRight size={20} />

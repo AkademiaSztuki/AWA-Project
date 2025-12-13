@@ -66,9 +66,11 @@ export interface SessionData {
     agencyScore?: number;
     satisfactionScore?: number;
     clarityScore?: number;
+    susScore?: number; // SUS score (0-100)
     agencyAnswers?: Record<string, number>;
     satisfactionAnswers?: Record<string, number>;
     clarityAnswers?: Record<string, number>;
+    susAnswers?: Record<string, number>; // SUS answers (sus_1 to sus_10)
     survey1Completed?: number;
     survey2Completed?: number;
     sessionCompleted?: number;

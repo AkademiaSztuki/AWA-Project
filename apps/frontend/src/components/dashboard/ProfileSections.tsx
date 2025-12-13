@@ -22,6 +22,7 @@ import {
 import Image from 'next/image';
 import { getPaletteLabel } from '@/components/setup/paletteOptions';
 import { getStyleLabel } from '@/lib/questions/style-options';
+import { translateMaterial, translateColor } from '@/lib/translations/material-translations';
 
 // Visual DNA Section
 export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
@@ -98,7 +99,7 @@ export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
                   key={idx}
                   className="px-3 py-1 rounded-full text-xs font-modern bg-white/20 text-graphite"
                 >
-                  {color}
+                  {translateColor(color, language)}
                 </span>
               ))}
             </div>
@@ -117,7 +118,7 @@ export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
                   key={idx}
                   className="px-3 py-1 rounded-full text-xs font-modern bg-white/20 text-graphite"
                 >
-                  {material}
+                  {translateMaterial(material, language)}
                 </span>
               ))}
             </div>
@@ -138,6 +139,40 @@ export function PreferencesOverviewSection({
 }) {
   const { language } = useLanguage();
 
+  // #region agent log
+  React.useEffect(() => {
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'dashboard-render',
+        hypothesisId: 'D1',
+        location: 'ProfileSections.tsx:PreferencesOverviewSection',
+        message: 'PreferencesOverviewSection render data',
+        data: {
+          hasVisualDNA: !!visualDNA,
+          visualDNAStyle: visualDNA?.dominantStyle,
+          visualDNAColors: visualDNA?.preferences?.colors,
+          visualDNAMaterials: visualDNA?.preferences?.materials,
+          hasColorsAndMaterials: !!sessionData?.colorsAndMaterials,
+          colorsAndMaterialsStyle: sessionData?.colorsAndMaterials?.selectedStyle,
+          colorsAndMaterialsStyleType: typeof sessionData?.colorsAndMaterials?.selectedStyle,
+          colorsAndMaterialsStyleIsEmpty: sessionData?.colorsAndMaterials?.selectedStyle === '',
+          colorsAndMaterialsPalette: sessionData?.colorsAndMaterials?.selectedPalette,
+          colorsAndMaterialsMaterials: sessionData?.colorsAndMaterials?.topMaterials,
+          hasSemanticDifferential: !!sessionData?.semanticDifferential,
+          semanticWarmth: sessionData?.semanticDifferential?.warmth,
+          semanticBrightness: sessionData?.semanticDifferential?.brightness,
+          semanticComplexity: sessionData?.semanticDifferential?.complexity,
+          hasSensoryPreferences: !!sessionData?.sensoryPreferences
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+  }, [visualDNA, sessionData]);
+  // #endregion
+
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
 
   const colorsAndMaterials = sessionData?.colorsAndMaterials;
@@ -152,7 +187,8 @@ export function PreferencesOverviewSection({
   const implicitBrightness = visualDNA?.preferences?.brightness ?? visualDNA?.implicitScores?.brightness;
   const implicitComplexity = visualDNA?.preferences?.complexity ?? visualDNA?.implicitScores?.complexity;
 
-  const explicitStyleLabel = colorsAndMaterials?.selectedStyle
+  // CRITICAL: Check if selectedStyle exists and is not empty string
+  const explicitStyleLabel = colorsAndMaterials?.selectedStyle && colorsAndMaterials.selectedStyle.length > 0
     ? getStyleLabel(colorsAndMaterials.selectedStyle, language)
     : undefined;
   const explicitPaletteLabel = colorsAndMaterials?.selectedPalette
@@ -191,18 +227,28 @@ export function PreferencesOverviewSection({
     );
   };
 
-  const renderChips = (values?: string[]) => {
+  const renderChips = (values?: string[], category?: 'material' | 'color' | 'other', skipTranslation = false) => {
     if (!values || values.length === 0) return <span className="text-silver-dark text-sm font-modern">—</span>;
     return (
       <div className="flex gap-2 flex-wrap">
-        {values.slice(0, 6).map((item, idx) => (
-          <span
-            key={`${item}-${idx}`}
-            className="px-3 py-1 rounded-full text-xs font-modern bg-white/15 text-graphite border border-white/10"
-          >
-            {item}
-          </span>
-        ))}
+        {values.slice(0, 6).map((item, idx) => {
+          let translatedItem = item;
+          if (!skipTranslation) {
+            if (category === 'material') {
+              translatedItem = translateMaterial(item, language);
+            } else if (category === 'color') {
+              translatedItem = translateColor(item, language);
+            }
+          }
+          return (
+            <span
+              key={`${item}-${idx}`}
+              className="px-3 py-1 rounded-full text-xs font-modern bg-white/15 text-graphite border border-white/10"
+            >
+              {translatedItem}
+            </span>
+          );
+        })}
       </div>
     );
   };
@@ -217,14 +263,14 @@ export function PreferencesOverviewSection({
     {
       id: 'palette',
       label: t('Paleta', 'Palette'),
-      implicitList: implicitPalette,
+      implicitList: implicitPalette || [],
       explicitList: explicitPaletteLabel ? [explicitPaletteLabel] : []
     },
     {
       id: 'materials',
       label: t('Materiały', 'Materials'),
-      implicitList: implicitMaterials,
-      explicitList: explicitMaterials
+      implicitList: implicitMaterials || [],
+      explicitList: explicitMaterials || []
     },
     {
       id: 'warmth',
@@ -283,19 +329,23 @@ export function PreferencesOverviewSection({
             {rows.map((row) => (
               <div key={row.id} className="grid grid-cols-3 gap-3 px-4 py-3 items-center">
                 <span className="text-sm font-modern text-silver-dark">{row.label}</span>
-                <div>
+                <div className="min-h-[24px] flex items-center">
                   {row.type === 'bar'
                     ? renderBar(row.implicitValue as number | undefined)
-                    : row.implicitList
-                    ? renderChips(row.implicitList as string[])
-                    : renderChips(row.implicitValue ? [row.implicitValue as string] : [])}
+                    : row.implicitList && Array.isArray(row.implicitList) && row.implicitList.length > 0
+                    ? renderChips(row.implicitList as string[], row.id === 'materials' ? 'material' : row.id === 'palette' ? 'color' : 'other')
+                    : row.implicitValue && String(row.implicitValue).trim()
+                    ? renderChips([String(row.implicitValue)])
+                    : <span className="text-silver-dark text-sm font-modern">—</span>}
                 </div>
-                <div>
+                <div className="min-h-[24px] flex items-center">
                   {row.type === 'bar'
                     ? renderBar(row.explicitValue as number | undefined)
-                    : row.explicitList
-                    ? renderChips(row.explicitList as string[])
-                    : renderChips(row.explicitValue ? [row.explicitValue as string] : [])}
+                    : row.explicitList && Array.isArray(row.explicitList) && row.explicitList.length > 0
+                    ? renderChips(row.explicitList as string[], row.id === 'materials' ? 'material' : row.id === 'palette' ? 'color' : 'other', (row as any).explicitIsTranslated)
+                    : row.explicitValue && String(row.explicitValue).trim()
+                    ? renderChips([String(row.explicitValue)])
+                    : <span className="text-silver-dark text-sm font-modern">—</span>}
                 </div>
               </div>
             ))}
@@ -359,12 +409,12 @@ export function ExplicitPreferencesSection({ sessionData }: { sessionData: any }
               <div className="flex gap-2 flex-wrap">
                 {colorsAndMaterials?.selectedStyle && (
                   <span className="px-3 py-1 rounded-full text-xs font-modern bg-white/20 text-graphite">
-                    {colorsAndMaterials.selectedStyle}
+                    {getStyleLabel(colorsAndMaterials.selectedStyle, language)}
                   </span>
                 )}
                 {colorsAndMaterials?.selectedPalette && (
                   <span className="px-3 py-1 rounded-full text-xs font-modern bg-white/20 text-graphite">
-                    {colorsAndMaterials.selectedPalette}
+                    {getPaletteLabel(colorsAndMaterials.selectedPalette, language) || colorsAndMaterials.selectedPalette}
                   </span>
                 )}
               </div>
@@ -383,7 +433,7 @@ export function ExplicitPreferencesSection({ sessionData }: { sessionData: any }
                     key={idx}
                     className="px-3 py-1 rounded-full text-xs font-modern bg-white/20 text-graphite"
                   >
-                    {material}
+                    {translateMaterial(material, language)}
                   </span>
                 ))}
               </div>
@@ -566,17 +616,7 @@ export function RoomAnalysisSection({ roomAnalysis, roomImage }: { roomAnalysis:
           </div>
         )}
 
-        {/* IDA Comment */}
-        {roomAnalysis.human_comment && (
-          <div className="mt-4 pt-4 border-t border-white/20">
-            <p className="text-xs text-silver-dark font-modern mb-1">
-              {t('Komentarz IDA', 'IDA Comment')}
-            </p>
-            <p className="text-sm text-graphite font-modern italic">
-              "{roomAnalysis.human_comment}"
-            </p>
-          </div>
-        )}
+        {/* IDA Comment - moved to dialogue at bottom */}
       </GlassCard>
     </motion.div>
   );

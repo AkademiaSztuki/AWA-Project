@@ -258,6 +258,11 @@ export default function InspirationsPage() {
     try {
       // Ensure every item has base64 (data URL) for downstream generation
       const itemsWithBase64 = await Promise.all(items.map(ensureBase64));
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:260',message:'Items with base64 before creating payload',data:{itemsCount:itemsWithBase64.length,items:itemsWithBase64.map(i=>({id:i.id,hasTags:!!i.tags,tagsType:typeof i.tags,tagsKeys:i.tags?Object.keys(i.tags):[],hasDescription:!!i.description}))},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      
       setItems(itemsWithBase64);
 
       // Upload files to Supabase Storage (background tolerate failures)
@@ -330,13 +335,35 @@ export default function InspirationsPage() {
 
       // Merge with existing inspirations to avoid overwriting when adding from dashboard
       const existingInspirations = (sessionData as any)?.inspirations || [];
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:332',message:'Before merge - existing and payload',data:{existingCount:existingInspirations.length,existing:existingInspirations.map((i:any)=>({id:i.id,hasTags:!!i.tags,tagsKeys:i.tags?Object.keys(i.tags):[]})),payloadCount:payload.length,payload:payload.map((i:any)=>({id:i.id,hasTags:!!i.tags,tagsKeys:i.tags?Object.keys(i.tags):[]}))},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      
       const mergedMap = new Map<string, any>();
       const addToMap = (item: any) => {
         const key = item.id || item.url;
         if (!key) return;
         const prev = mergedMap.get(key) || {};
-        mergedMap.set(key, { ...prev, ...item });
+        // CRITICAL FIX: Preserve tags from new items, don't let empty tags overwrite existing tags
+        // If new item has tags, use them; otherwise keep previous tags if they exist
+        const mergedItem = { ...prev, ...item };
+        if (item.tags && Object.keys(item.tags).length > 0) {
+          // New item has tags - use them
+          mergedItem.tags = item.tags;
+        } else if (prev.tags && Object.keys(prev.tags).length > 0 && (!item.tags || Object.keys(item.tags).length === 0)) {
+          // New item has no tags but previous had tags - preserve previous tags
+          mergedItem.tags = prev.tags;
+        }
+        // Same for description
+        if (item.description) {
+          mergedItem.description = item.description;
+        } else if (prev.description && !item.description) {
+          mergedItem.description = prev.description;
+        }
+        mergedMap.set(key, mergedItem);
       };
+      // Add existing first, then payload (payload will overwrite with tags if present)
       existingInspirations.forEach(addToMap);
       payload.forEach(addToMap);
       const mergedInspirations = Array.from(mergedMap.values()).map(i => {
@@ -344,6 +371,10 @@ export default function InspirationsPage() {
         const { persisted, ...rest } = i;
         return rest;
       });
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:360',message:'After merge - merged inspirations',data:{mergedCount:mergedInspirations.length,merged:mergedInspirations.map((i:any)=>({id:i.id,hasTags:!!i.tags,tagsKeys:i.tags?Object.keys(i.tags):[],tagsValue:JSON.stringify(i.tags)}))},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
 
       await updateSessionData({ inspirations: mergedInspirations } as any);
       
@@ -370,7 +401,7 @@ export default function InspirationsPage() {
           })).filter(x => x.url);
         const updatedSpaces = addMultipleInspirationsToSpace(
           currentSpaces, 
-            spaceId,
+            spaceId || undefined,
             inspirationsForSpacesLocal
         );
           await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId } as any);
@@ -401,6 +432,10 @@ export default function InspirationsPage() {
                 addedAt: p.addedAt
               }));
               
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:396',message:'Before saving to Supabase - tags structure',data:{inspirationsCount:inspirationsForProfile.length,inspirations:inspirationsForProfile.map(i=>({id:i.fileId,hasTags:!!i.tags,tagsType:typeof i.tags,tagsKeys:i.tags?Object.keys(i.tags):[],tagsValue:i.tags,hasDescription:!!i.description}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+              // #endregion
+              
             const { error } = await supabase
               .from('user_profiles')
               .update({
@@ -413,6 +448,10 @@ export default function InspirationsPage() {
               })
                 .eq('user_hash', userHash);
               
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:416',message:'After Supabase update - check error',data:{error:error?error.message:null,success:!error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+              // #endregion
+              
               if (error) {
                 console.warn('[Inspirations] Failed to save inspirations to user profile:', error);
               } else {
@@ -421,6 +460,110 @@ export default function InspirationsPage() {
           } catch (e) {
             console.warn('[Inspirations] Failed to save inspirations to user_profiles (non-critical):', e);
             }
+          }
+          
+          // BACKGROUND: Tag untagged items after saving (non-blocking)
+          // This runs in background - user doesn't need to wait
+          const untaggedItems = itemsWithBase64.filter(i => 
+            i.file && (!i.tags || (typeof i.tags === 'object' && Object.keys(i.tags).length === 0))
+          );
+          
+          if (untaggedItems.length > 0) {
+            console.log(`[Inspirations] Starting background tagging for ${untaggedItems.length} untagged items (non-blocking)...`);
+            // Tag in background - don't block user, fire and forget
+            (async () => {
+              try {
+                const taggedResults: Array<{ id: string; fileId?: string; url?: string; tags: any; description?: string }> = [];
+                
+                // Tag each item sequentially (Gamma API processes one at a time)
+                for (const item of untaggedItems) {
+                  try {
+                    const [analysis] = await analyzeInspirationsWithGamma([item.file!]);
+                    
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:460',message:'Background tagging completed for item',data:{itemId:item.id,hasTags:!!analysis.tags,tagsKeys:analysis.tags?Object.keys(analysis.tags):[],hasDescription:!!analysis.description},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
+                    
+                    // Find corresponding item in mergedInspirations to get fileId and url
+                    // Use closure to access mergedInspirations from outer scope
+                    const mergedItem = mergedInspirations.find((m: any) => m.id === item.id || m.url === item.previewUrl);
+                    
+                    taggedResults.push({
+                      id: item.id,
+                      fileId: mergedItem?.fileId,
+                      url: mergedItem?.url || item.previewUrl,
+                      tags: analysis.tags,
+                      description: analysis.description
+                    });
+                    
+                    // Update local state immediately (for UI feedback if user is still on page)
+                    setItems(prev => prev.map(i => 
+                      i.id === item.id 
+                        ? { ...i, tags: analysis.tags, description: analysis.description }
+                        : i
+                    ));
+                    
+                    // Update sessionData immediately so tags are available for next generation
+                    const currentInspirations = (sessionData as any)?.inspirations || [];
+                    const updatedInspirations = currentInspirations.map((insp: any) => 
+                      insp.id === item.id 
+                        ? { ...insp, tags: analysis.tags, description: analysis.description }
+                        : insp
+                    );
+                    await updateSessionData({ inspirations: updatedInspirations } as any);
+                  } catch (error) {
+                    console.error(`[Inspirations] Background tagging failed for ${item.id}:`, error);
+                  }
+                }
+                
+                // After all items are tagged, update Supabase with complete list
+                if (taggedResults.length > 0 && userHash) {
+                  // Reload current inspirations from session to get latest state
+                  const currentInspirations = (sessionData as any)?.inspirations || [];
+                  
+                  // Merge tagged results with current inspirations
+                  const updatedInspirations = currentInspirations.map((insp: any) => {
+                    const tagged = taggedResults.find(t => t.id === insp.id);
+                    if (tagged && tagged.tags && Object.keys(tagged.tags).length > 0) {
+                      return { 
+                        ...insp, 
+                        tags: tagged.tags, 
+                        description: tagged.description || insp.description 
+                      };
+                    }
+                    return insp;
+                  });
+                  
+                  const inspirationsForProfile = updatedInspirations.map((p: any) => ({
+                    fileId: p.fileId,
+                    url: p.url,
+                    tags: p.tags,
+                    description: p.description,
+                    addedAt: p.addedAt
+                  }));
+                  
+                  // #region agent log
+                  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:495',message:'Updating Supabase with background tags',data:{taggedCount:taggedResults.length,inspirationsCount:inspirationsForProfile.length,hasTags:inspirationsForProfile.map((i:any)=>({id:i.fileId,hasTags:!!i.tags,tagsKeys:i.tags?Object.keys(i.tags):[]}))},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+                  // #endregion
+                  
+                  const { error: updateError } = await supabase
+                    .from('user_profiles')
+                    .update({
+                      inspirations: inspirationsForProfile,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('user_hash', userHash);
+                  
+                  if (updateError) {
+                    console.warn('[Inspirations] Failed to update Supabase with background tags:', updateError);
+                  } else {
+                    console.log(`[Inspirations] ✓ Background tags saved to Supabase successfully (${taggedResults.length} items tagged)`);
+                  }
+                }
+              } catch (error) {
+                console.error('[Inspirations] Background tagging process failed:', error);
+              }
+            })(); // Fire and forget - don't await
           }
         } catch (e) {
         console.warn('[Inspirations] Failed to save inspirations to space_images:', e);

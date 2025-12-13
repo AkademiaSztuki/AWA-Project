@@ -68,12 +68,22 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
                   : 'border-white/20 hover:border-gold/50'
               }`}
             >
-              <div className="relative w-full h-full">
-                <img
-                  src={node.imageUrl}
-                  alt={node.label}
-                  className="w-full h-full object-cover"
-                />
+              <div className="relative w-full h-full bg-white/5">
+                {node.imageUrl ? (
+                  <img
+                    src={node.imageUrl}
+                    alt={node.label}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.error('Failed to load image:', node.imageUrl);
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-white/10">
+                    <span className="text-xs text-silver-dark">Brak obrazu</span>
+                  </div>
+                )}
                 
                 {/* Type badge */}
                 <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-r ${getTypeColor(node.type)} p-1 flex items-center justify-center gap-1`}>

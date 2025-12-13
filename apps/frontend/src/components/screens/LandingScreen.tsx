@@ -12,16 +12,31 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLayout } from '@/contexts/LayoutContext';
+import { LoginModal } from '@/components/auth/LoginModal';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
   const { language } = useLanguage();
   const { checkHealth } = useModalAPI();
   const { updateSessionData } = useSessionData();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { setHeaderVisible } = useLayout();
   const [showAuraSection, setShowAuraSection] = useState(false);
   const [isPrewarming, setIsPrewarming] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingPath, setPendingPath] = useState<'fast' | 'full' | null>(null);
+
+  // Store function references in refs to prevent effect re-runs when they change
+  const updateSessionDataRef = React.useRef(updateSessionData);
+  const routerRef = React.useRef(router);
+  const checkHealthRef = React.useRef(checkHealth);
+
+  // Keep refs up to date
+  React.useEffect(() => {
+    updateSessionDataRef.current = updateSessionData;
+    routerRef.current = router;
+    checkHealthRef.current = checkHealth;
+  }, [updateSessionData, router, checkHealth]);
 
   useEffect(() => {
     // Hide header initially
@@ -68,6 +83,55 @@ const LandingScreen: React.FC = () => {
     }, 1500);
   };
 
+  // Watch for auth state changes - if user logs in while modal is open, continue
+  useEffect(() => {
+    if (user && showLoginModal && pendingPath) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'auth-check',
+          hypothesisId: 'L5',
+          location: 'LandingScreen.tsx:useEffect-auth-change',
+          message: 'User authenticated while modal open - auto-continuing',
+          data: {
+            pendingPath
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+
+      setShowLoginModal(false);
+      
+      // Small delay to ensure auth state is updated
+      const pathToContinue = pendingPath;
+      const timeoutId = setTimeout(async () => {
+        if (pathToContinue === 'fast') {
+          setIsPrewarming(true);
+          checkHealthRef.current().catch(() => {});
+          await updateSessionDataRef.current({ pathType: 'fast', currentStep: 'onboarding' });
+          console.log('[Landing] Fast track selected after login');
+          routerRef.current.push('/flow/onboarding');
+        } else {
+          setIsPrewarming(true);
+          checkHealthRef.current().catch(() => {});
+          await updateSessionDataRef.current({ pathType: 'full' });
+          console.log('[Landing] Full experience selected after login');
+          routerRef.current.push('/setup/profile');
+        }
+        setPendingPath(null);
+      }, 500);
+
+      // Cleanup: clear timeout if effect re-runs before timeout completes
+      return () => {
+        clearTimeout(timeoutId);
+      };
+    }
+  }, [user, showLoginModal, pendingPath]); // Only include state dependencies - function refs stored in refs to prevent unnecessary re-runs
+
   return (
     <div className="min-h-screen flex relative">
 
@@ -106,6 +170,55 @@ const LandingScreen: React.FC = () => {
                 className="text-left w-full"
                 onClick={async () => {
                   stopAllDialogueAudio();
+                  
+                  // #region agent log
+                  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      sessionId: 'debug-session',
+                      runId: 'auth-check',
+                      hypothesisId: 'L1',
+                      location: 'LandingScreen.tsx:fast-track-click',
+                      message: 'Fast track clicked',
+                      data: {
+                        isAuthenticated: !!user,
+                        authLoading
+                      },
+                      timestamp: Date.now()
+                    })
+                  }).catch(() => {});
+                  // #endregion
+
+                  // Wait for auth to finish loading
+                  if (authLoading) {
+                    return;
+                  }
+
+                  // Check if user is authenticated
+                  if (!user) {
+                    // #region agent log
+                    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        sessionId: 'debug-session',
+                        runId: 'auth-check',
+                        hypothesisId: 'L2',
+                        location: 'LandingScreen.tsx:fast-track-click',
+                        message: 'User not authenticated - showing login modal',
+                        data: {},
+                        timestamp: Date.now()
+                      })
+                    }).catch(() => {});
+                    // #endregion
+
+                    setPendingPath('fast');
+                    setShowLoginModal(true);
+                    return;
+                  }
+
+                  // User is authenticated, proceed
                   setIsPrewarming(true);
                   checkHealth().catch(() => {});
                   
@@ -114,19 +227,19 @@ const LandingScreen: React.FC = () => {
                   router.push('/flow/onboarding');
                 }}
               >
-                <GlassCard className="p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-2xl">
+                <GlassCard className="p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-2xl flex flex-col">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center flex-shrink-0">
                       <Zap size={28} className="text-graphite" />
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                         {language === 'pl' ? 'Szybka Ścieżka' : 'Fast Track'}
                       </h3>
-                      <p className="text-xs text-silver-dark font-modern">3-5 min • 10 {language === 'pl' ? 'generacji' : 'generations'}</p>
+                      <p className="text-xs text-silver-dark font-modern">3-5 min • 5 {language === 'pl' ? 'generacji' : 'generations'}</p>
                     </div>
                   </div>
-                  <p className="text-sm text-graphite font-modern">
+                  <p className="text-sm text-graphite font-modern leading-relaxed flex-1">
                     {language === 'pl' 
                       ? 'Prześlij zdjęcie i generuj od razu!' 
                       : 'Upload photo and generate right away!'}
@@ -143,6 +256,55 @@ const LandingScreen: React.FC = () => {
                 className="text-left w-full"
                 onClick={async () => {
                   stopAllDialogueAudio();
+                  
+                  // #region agent log
+                  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      sessionId: 'debug-session',
+                      runId: 'auth-check',
+                      hypothesisId: 'L3',
+                      location: 'LandingScreen.tsx:full-experience-click',
+                      message: 'Full experience clicked',
+                      data: {
+                        isAuthenticated: !!user,
+                        authLoading
+                      },
+                      timestamp: Date.now()
+                    })
+                  }).catch(() => {});
+                  // #endregion
+
+                  // Wait for auth to finish loading
+                  if (authLoading) {
+                    return;
+                  }
+
+                  // Check if user is authenticated
+                  if (!user) {
+                    // #region agent log
+                    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        sessionId: 'debug-session',
+                        runId: 'auth-check',
+                        hypothesisId: 'L4',
+                        location: 'LandingScreen.tsx:full-experience-click',
+                        message: 'User not authenticated - showing login modal',
+                        data: {},
+                        timestamp: Date.now()
+                      })
+                    }).catch(() => {});
+                    // #endregion
+
+                    setPendingPath('full');
+                    setShowLoginModal(true);
+                    return;
+                  }
+
+                  // User is authenticated, proceed
                   setIsPrewarming(true);
                   checkHealth().catch(() => {});
                   await updateSessionData({ pathType: 'full' });
@@ -151,23 +313,23 @@ const LandingScreen: React.FC = () => {
               >
                 <GlassCard 
                   variant="highlighted"
-                  className="p-6 lg:p-8 h-full hover:border-gold/50 transition-all group relative overflow-hidden rounded-3xl"
+                  className="p-6 lg:p-8 h-full hover:border-gold/50 transition-all group relative overflow-hidden flex flex-col"
                 >
-                  <div className="absolute top-3 right-3 bg-gradient-to-r from-gold to-champagne text-white px-3 py-1 rounded-full text-xs font-bold">
+                  <div className="absolute top-3 right-3 bg-gradient-to-r from-gold to-champagne text-white px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap z-10">
                     ✨ {language === 'pl' ? 'Polecane' : 'Recommended'}
                   </div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
+                  <div className="flex items-center gap-3 mb-4 pr-20">
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
                       <Heart size={28} className="text-white" fill="currentColor" />
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-gold-700 transition-colors">
                         {language === 'pl' ? 'Pełne Doświadczenie' : 'Full Experience'}
                       </h3>
-                      <p className="text-xs text-silver-dark font-modern">15-20 min • Unlimited</p>
+                      <p className="text-xs text-silver-dark font-modern">20-30 min • {language === 'pl' ? 'Nieograniczone' : 'Unlimited'}</p>
                     </div>
                   </div>
-                  <p className="text-sm text-graphite font-modern">
+                  <p className="text-sm text-graphite font-modern leading-relaxed flex-1">
                     {language === 'pl' 
                       ? 'Poznaj siebie głęboko, stwórz wnętrze które jest TWOJE' 
                       : 'Deep dive, create interior that is truly YOURS'}
@@ -178,6 +340,41 @@ const LandingScreen: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => {
+          setShowLoginModal(false);
+          setPendingPath(null);
+        }}
+        onSuccess={async () => {
+          setShowLoginModal(false);
+          
+          if (pendingPath) {
+            // Small delay to ensure auth state is updated
+            setTimeout(async () => {
+              if (pendingPath === 'fast') {
+                setIsPrewarming(true);
+                checkHealth().catch(() => {});
+                await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
+                console.log('[Landing] Fast track selected after login');
+                router.push('/flow/onboarding');
+              } else {
+                setIsPrewarming(true);
+                checkHealth().catch(() => {});
+                await updateSessionData({ pathType: 'full' });
+                console.log('[Landing] Full experience selected after login');
+                router.push('/setup/profile');
+              }
+              setPendingPath(null);
+            }, 500);
+          }
+        }}
+        message={language === 'pl' 
+          ? 'Aby kontynuować, musisz się zalogować.' 
+          : 'Please sign in to continue.'}
+      />
     </div>
   );
 };

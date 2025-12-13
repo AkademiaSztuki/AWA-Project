@@ -31,6 +31,9 @@ export function BiophiliaTest({ onSelect, className = '', frameless = false }: B
 
   const handleSelect = (option: BiophiliaOption) => {
     setSelectedId(option.id);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BiophiliaTest.tsx:handleSelect',message:'User selected biophilia option',data:{optionId:option.id,score:option.score,label:option.label},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E1'})}).catch(()=>{});
+    // #endregion
     onSelect(option.score, option.id);
   };
 

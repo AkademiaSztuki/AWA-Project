@@ -291,8 +291,8 @@ export const getGenerationParameters = (
   if (mode === 'preview') {
     return {
       steps: 20,  // Szybkie preview - mniej kroków dla szybszego generowania
-      guidance: 3.5,  // Zachowujemy umiarkowane guidance; niższe zapobiega przestawianiu geometrii
-      strength: 0.25,  // Obniżone strength, by mocniej zachować geometrię (okna, drzwi, układ)
+      guidance: 2.5,  // Zachowujemy umiarkowane guidance; niższe zapobiega przestawianiu geometrii
+      strength: 0.55,  // Obniżone strength, by mocniej zachować geometrię (okna, drzwi, układ)
       image_size: 512,  // Niższa rozdzielczość dla szybszego generowania (max 512px)
       width: 512,
       height: 512,
@@ -303,7 +303,7 @@ export const getGenerationParameters = (
   if (mode === 'upscale') {
     return {
       steps: 35,
-      guidance: 4.5,
+      guidance: 2.5,
       image_size: 1536,  // Up to 2MP per BFL docs
       width: 1536,
       height: 1536,
@@ -314,7 +314,7 @@ export const getGenerationParameters = (
   if (mode === 'full') {
     return {
       steps: 35,
-      guidance: 4.5,
+      guidance: 2.5,
       image_size: 1024,
       width: 1024,
       height: 1024,
@@ -329,7 +329,7 @@ export const getGenerationParameters = (
     initial: {
       strength: 0.6,
       steps: 25,
-      guidance: 4.5,
+      guidance: 2.5,
       num_images: 1,
       image_size: 1024,
       width: 1024,
@@ -338,7 +338,7 @@ export const getGenerationParameters = (
     micro: {
       strength: 0.25 * qualityAdjustment,
       steps: 18,
-      guidance: 3.5,
+      guidance: 2.5,
       num_images: 1,
       image_size: 1024,
       width: 1024,
@@ -347,7 +347,7 @@ export const getGenerationParameters = (
     macro: {
       strength: 0.75,
       steps: 28,
-      guidance: 5.5,
+      guidance: 2.5,
       num_images: 1,
       image_size: 1024,
       width: 1024,
@@ -767,43 +767,84 @@ export const useModalAPI = () => {
             'full JSON has image_size': jsonBody.includes('"image_size"')
           });
           
-          const response = await fetch('/api/modal/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: jsonBody,
-            signal: abortSignal, // Pass abort signal to fetch
-          });
+          console.log(`[6-Image Matrix] About to fetch /api/modal/generate for ${source}...`);
+          console.log(`[6-Image Matrix] Request body size:`, jsonBody.length, 'bytes');
+          const fetchStartTime = Date.now();
           
-          console.log(`[6-Image Matrix] Response status for ${source}:`, response.status, response.statusText);
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          // Create a timeout controller for client-side timeout (10 minutes for image generation)
+          const clientTimeoutMs = 10 * 60 * 1000; // 10 minutes
+          const clientController = new AbortController();
+          const clientTimeoutId = setTimeout(() => {
+            clientController.abort();
+            console.error(`[6-Image Matrix] Client-side timeout after ${clientTimeoutMs}ms for ${source}`);
+          }, clientTimeoutMs);
+          
+          // Combine abort signals
+          const combinedController = new AbortController();
+          if (abortSignal) {
+            abortSignal.addEventListener('abort', () => combinedController.abort());
           }
+          clientController.signal.addEventListener('abort', () => combinedController.abort());
+          
+          try {
+            const response = await fetch('/api/modal/generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: jsonBody,
+              signal: combinedController.signal,
+            });
+            
+            clearTimeout(clientTimeoutId);
+            const fetchTime = Date.now() - fetchStartTime;
+            console.log(`[6-Image Matrix] Response received for ${source} after ${fetchTime}ms:`, response.status, response.statusText);
+          
+            if (!response.ok) {
+              console.error(`[6-Image Matrix] Response not OK for ${source}:`, response.status, response.statusText);
+              const errorText = await response.text();
+              throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
 
-          const result: GenerationResponse = await response.json();
-          const processingTime = Date.now() - sourceStartTime;
+            const result: GenerationResponse = await response.json();
+            const processingTime = Date.now() - sourceStartTime;
 
-          console.log(`[6-Image Matrix] Source ${source} completed in ${processingTime}ms`);
+            console.log(`[6-Image Matrix] Source ${source} completed in ${processingTime}ms`);
 
-          const successResult: SourceGenerationResult = {
-            source,
-            image: result.images[0],
-            prompt,
-            processing_time: processingTime,
-            success: true
-          };
+            const successResult: SourceGenerationResult = {
+              source,
+              image: result.images[0],
+              prompt,
+              processing_time: processingTime,
+              success: true
+            };
 
-          // Call callback to show image immediately
-          if (onImageReady) {
-            onImageReady(successResult);
+            // Call callback to show image immediately
+            if (onImageReady) {
+              onImageReady(successResult);
+            }
+
+            results.push(successResult);
+          } catch (fetchErr: any) {
+            clearTimeout(clientTimeoutId);
+            const fetchTime = Date.now() - fetchStartTime;
+            console.error(`[6-Image Matrix] Fetch error for ${source} after ${fetchTime}ms:`, fetchErr);
+            
+            if (fetchErr.name === 'AbortError') {
+              throw new Error(`Request timeout after ${fetchTime}ms - generation took too long`);
+            }
+            throw fetchErr;
           }
-
-          results.push(successResult);
 
         } catch (err: any) {
           const processingTime = Date.now() - sourceStartTime;
-          console.error(`[6-Image Matrix] Source ${source} failed:`, err);
+          console.error(`[6-Image Matrix] Source ${source} failed after ${processingTime}ms:`, err);
+          console.error(`[6-Image Matrix] Error details:`, {
+            name: err.name,
+            message: err.message,
+            stack: err.stack?.substring(0, 500),
+            isAbortError: err.name === 'AbortError',
+            isNetworkError: err.message?.includes('fetch') || err.message?.includes('network'),
+            isTimeout: err.message?.includes('timeout')
+          });
           
           results.push({
             source,

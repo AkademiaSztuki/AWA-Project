@@ -1,11 +1,13 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { LoginModal } from '@/components/auth/LoginModal';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { 
@@ -23,6 +25,33 @@ export default function PathSelectionScreen() {
   const router = useRouter();
   const { language } = useLanguage();
   const { updateSessionData } = useSessionData();
+  const { user, isLoading: authLoading } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingPath, setPendingPath] = useState<'fast' | 'full' | null>(null);
+
+  // #region agent log
+  React.useEffect(() => {
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'auth-check',
+        hypothesisId: 'A0',
+        location: 'PathSelectionScreen.tsx:component-render',
+        message: 'PathSelectionScreen rendered',
+        data: {
+          hasUser: !!user,
+          userId: user?.id || null,
+          authLoading,
+          showLoginModal,
+          pendingPath
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+  }, [user, authLoading, showLoginModal, pendingPath]);
+  // #endregion
 
   const pathTexts = {
     pl: {
@@ -100,6 +129,95 @@ export default function PathSelectionScreen() {
   const handlePathSelection = async (pathType: 'fast' | 'full') => {
     stopAllDialogueAudio();
 
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'auth-check',
+        hypothesisId: 'A1',
+        location: 'PathSelectionScreen.tsx:handlePathSelection',
+        message: 'Path selection attempted',
+        data: {
+          pathType,
+          isAuthenticated: !!user,
+          authLoading,
+          userObject: user ? { id: user.id, email: user.email } : null
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+
+    // Wait for auth to finish loading
+    if (authLoading) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'auth-check',
+          hypothesisId: 'A1a',
+          location: 'PathSelectionScreen.tsx:handlePathSelection',
+          message: 'Auth still loading - waiting',
+          data: {
+            pathType
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+      return; // Wait for auth to finish
+    }
+
+    // Check if user is authenticated
+    if (!user) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'auth-check',
+          hypothesisId: 'A2',
+          location: 'PathSelectionScreen.tsx:handlePathSelection',
+          message: 'User not authenticated - showing login modal',
+          data: {
+            pathType
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+
+      // Store the selected path and show login modal
+      setPendingPath(pathType);
+      setShowLoginModal(true);
+      return;
+    }
+
+    // User is authenticated, proceed with path selection
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'auth-check',
+        hypothesisId: 'A3',
+        location: 'PathSelectionScreen.tsx:handlePathSelection',
+        message: 'User authenticated - proceeding with path selection',
+        data: {
+          pathType,
+          userId: user?.id
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+
     if (pathType === 'fast') {
       await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
       console.log('[PathSelection] Fast track selected');
@@ -110,6 +228,110 @@ export default function PathSelectionScreen() {
       router.push('/setup/profile');
     }
   };
+
+  // Handle successful login - continue with pending path
+  const handleLoginSuccess = async () => {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'auth-check',
+        hypothesisId: 'A4',
+        location: 'PathSelectionScreen.tsx:handleLoginSuccess',
+        message: 'Login successful - continuing with pending path',
+        data: {
+          pendingPath
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+
+    setShowLoginModal(false);
+    
+    if (pendingPath) {
+      // Small delay to ensure auth state is updated
+      setTimeout(async () => {
+        if (pendingPath === 'fast') {
+          await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
+          console.log('[PathSelection] Fast track selected after login');
+          router.push('/flow/onboarding');
+        } else {
+          await updateSessionData({ pathType: 'full' });
+          console.log('[PathSelection] Full experience selected after login');
+          router.push('/setup/profile');
+        }
+        setPendingPath(null);
+      }, 500);
+    }
+  };
+
+  // Watch for auth state changes - if user logs in while modal is open, continue
+  useEffect(() => {
+    if (user && showLoginModal && pendingPath) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'auth-check',
+          hypothesisId: 'A5',
+          location: 'PathSelectionScreen.tsx:useEffect-auth-change',
+          message: 'User authenticated while modal open - auto-continuing',
+          data: {
+            pendingPath
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+
+      setShowLoginModal(false);
+      
+      // Small delay to ensure auth state is updated
+      const pathToContinue = pendingPath;
+      setTimeout(async () => {
+        if (pathToContinue === 'fast') {
+          await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
+          console.log('[PathSelection] Fast track selected after login');
+          router.push('/flow/onboarding');
+        } else {
+          await updateSessionData({ pathType: 'full' });
+          console.log('[PathSelection] Full experience selected after login');
+          router.push('/setup/profile');
+        }
+        setPendingPath(null);
+      }, 500);
+    }
+  }, [user, showLoginModal, pendingPath, updateSessionData, router]);
+
+  // #region agent log
+  // Log render
+  React.useEffect(() => {
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'auth-check',
+        hypothesisId: 'A0',
+        location: 'PathSelectionScreen.tsx:render',
+        message: 'PathSelectionScreen rendering',
+        data: {
+          hasUser: !!user,
+          userId: user?.id || null,
+          authLoading,
+          showLoginModal,
+          pendingPath
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+  }, []);
+  // #endregion
 
   return (
     <div className="min-h-screen flex relative">
@@ -153,7 +375,7 @@ export default function PathSelectionScreen() {
                       <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                         {texts.fastTrack}
                       </h3>
-                      <p className="text-xs text-silver-dark font-modern">3-5 min • 10 {language === 'pl' ? 'generacji' : 'generations'}</p>
+                      <p className="text-xs text-silver-dark font-modern">3-5 min • 5 {language === 'pl' ? 'generacji' : 'generations'}</p>
                     </div>
                   </div>
                   <p className="text-sm text-graphite font-modern">
@@ -186,7 +408,7 @@ export default function PathSelectionScreen() {
                       <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                         {texts.fullExp}
                       </h3>
-                      <p className="text-xs text-silver-dark font-modern">15-20 min • {language === 'pl' ? 'Nieograniczone' : 'Unlimited'}</p>
+                      <p className="text-xs text-silver-dark font-modern">20-30 min • {language === 'pl' ? 'Nieograniczone' : 'Unlimited'}</p>
                     </div>
                   </div>
                   <p className="text-sm text-graphite font-modern">
@@ -207,6 +429,19 @@ export default function PathSelectionScreen() {
           autoHide={true}
         />
       </div>
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => {
+          setShowLoginModal(false);
+          setPendingPath(null);
+        }}
+        onSuccess={handleLoginSuccess}
+        message={language === 'pl' 
+          ? 'Aby kontynuować, musisz się zalogować.' 
+          : 'Please sign in to continue.'}
+      />
     </div>
   );
 }

@@ -39,8 +39,9 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
     if (!data) return null;
     
     // Map Supabase snake_case to TypeScript camelCase
-    return {
+    const profile = {
       userHash: data.user_hash,
+      auth_user_id: data.auth_user_id, // CRITICAL: Map auth_user_id from Supabase
       aestheticDNA: data.aesthetic_dna,
       psychologicalBaseline: data.psychological_baseline,
       lifestyle: data.lifestyle_data,
@@ -50,6 +51,77 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
       inspirations: data.inspirations,
       profileCompletedAt: data.profile_completed_at
     } as UserProfile;
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'explicit-check',
+        hypothesisId: 'E20',
+        location: 'supabase-deep-personalization.ts:getUserProfile-explicit',
+        message: 'Loading explicit preferences from Supabase',
+        data: {
+          userHash: profile.userHash,
+          hasAestheticDNA: !!profile.aestheticDNA,
+          hasExplicit: !!profile.aestheticDNA?.explicit,
+          explicitSelectedStyle: profile.aestheticDNA?.explicit?.selectedStyle,
+          explicitSelectedStyleType: typeof profile.aestheticDNA?.explicit?.selectedStyle,
+          explicitSelectedStyleIsEmpty: profile.aestheticDNA?.explicit?.selectedStyle === '',
+          explicitSelectedStyleIsNull: profile.aestheticDNA?.explicit?.selectedStyle === null,
+          explicitSelectedStyleIsUndefined: profile.aestheticDNA?.explicit?.selectedStyle === undefined,
+          explicitSelectedPalette: profile.aestheticDNA?.explicit?.selectedPalette,
+          explicitTopMaterials: profile.aestheticDNA?.explicit?.topMaterials || [],
+          rawAestheticDNA: data.aesthetic_dna,
+          rawExplicit: data.aesthetic_dna?.explicit
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'incognito-fix',
+        hypothesisId: 'I12',
+        location: 'supabase-deep-personalization.ts:getUserProfile-auth_user_id',
+        message: 'Mapped auth_user_id from Supabase',
+        data: {
+          userHash: profile.userHash,
+          auth_user_id: profile.auth_user_id,
+          hasAuthUserId: !!profile.auth_user_id,
+          rawAuthUserId: data.auth_user_id
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'explicit-check',
+        hypothesisId: 'E8',
+        location: 'supabase-deep-personalization.ts:getUserProfile-biophilia',
+        message: 'Loading biophiliaScore from Supabase',
+        data: {
+          biophiliaScore: profile.psychologicalBaseline?.biophiliaScore,
+          prsIdeal: profile.psychologicalBaseline?.prsIdeal,
+          hasPsychologicalBaseline: !!profile.psychologicalBaseline,
+          userHash: profile.userHash
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    return profile;
   } catch (error) {
     // Only log non-PGRST116 errors as warnings
     if (error && typeof error === 'object' && 'code' in error && error.code !== 'PGRST116') {
@@ -60,11 +132,205 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
 }
 
 /**
+ * Get user profile with data from Supabase based on authenticated user ID
+ * This is used to restore user_hash after login when profile has data
+ */
+export async function getUserProfileFromAuth(authUserId: string): Promise<UserProfile | null> {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null; // No profile linked yet
+      }
+      console.warn('Error fetching user profile from auth:', error);
+      return null;
+    }
+    
+    if (!data) return null;
+    
+    // Map Supabase snake_case to TypeScript camelCase
+    const profile = {
+      userHash: data.user_hash,
+      auth_user_id: data.auth_user_id,
+      aestheticDNA: data.aesthetic_dna,
+      psychologicalBaseline: data.psychological_baseline,
+      lifestyle: data.lifestyle_data,
+      sensoryPreferences: data.sensory_preferences,
+      projectiveResponses: data.projective_responses,
+      personality: data.personality,
+      inspirations: data.inspirations,
+      profileCompletedAt: data.profile_completed_at
+    } as UserProfile;
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'incognito-fix',
+        hypothesisId: 'I15',
+        location: 'supabase-deep-personalization.ts:getUserProfileFromAuth',
+        message: 'Found user profile from auth_user_id',
+        data: {
+          userHash: profile.userHash,
+          auth_user_id: profile.auth_user_id,
+          hasPersonality: !!profile.personality,
+          hasImplicit: !!profile.aestheticDNA?.implicit,
+          hasExplicit: !!profile.aestheticDNA?.explicit,
+          hasSensory: !!profile.sensoryPreferences,
+          hasBiophilia: profile.psychologicalBaseline?.biophiliaScore !== undefined,
+          profileCompletedAt: profile.profileCompletedAt
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    
+    return profile;
+  } catch (error) {
+    console.warn('Error in getUserProfileFromAuth:', error);
+    return null;
+  }
+}
+
+/**
+ * Get the best (non-empty) profile for an authenticated user.
+ * Prefers profiles that have any data (personality, aestheticDNA implicit/explicit, sensory, biophilia).
+ * If none have data, returns the most recently updated profile for that auth_user_id.
+ */
+export async function getBestProfileForAuth(authUserId: string): Promise<UserProfile | null> {
+  try {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'incognito-fix',
+        hypothesisId: 'I15',
+        location: 'supabase-deep-personalization.ts:getBestProfileForAuth',
+        message: 'getBestProfileForAuth called',
+        data: { authUserId },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('auth_user_id', authUserId)
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      console.warn('Error fetching best profile from auth:', error);
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'incognito-fix',
+          hypothesisId: 'I15e',
+          location: 'supabase-deep-personalization.ts:getBestProfileForAuth',
+          message: 'Error fetching best profile from auth',
+          data: { authUserId, errorCode: error.code, errorMessage: error.message },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+      return null;
+    }
+
+    if (!data || data.length === 0) return null;
+
+    // Pick first profile that has any meaningful data
+    const hasData = (row: any) =>
+      !!row.personality ||
+      !!row.aesthetic_dna?.implicit ||
+      !!row.aesthetic_dna?.explicit ||
+      !!row.sensory_preferences ||
+      row.psychological_baseline?.biophiliaScore !== undefined;
+
+    const candidate = data.find(hasData) || data[0];
+
+    const profile = {
+      userHash: candidate.user_hash,
+      auth_user_id: candidate.auth_user_id,
+      aestheticDNA: candidate.aesthetic_dna,
+      psychologicalBaseline: candidate.psychological_baseline,
+      lifestyle: candidate.lifestyle_data,
+      sensoryPreferences: candidate.sensory_preferences,
+      projectiveResponses: candidate.projective_responses,
+      personality: candidate.personality,
+      inspirations: candidate.inspirations,
+      profileCompletedAt: candidate.profile_completed_at
+    } as UserProfile;
+
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'incognito-fix',
+        hypothesisId: 'I16',
+        location: 'supabase-deep-personalization.ts:getBestProfileForAuth',
+        message: 'Selected best profile for auth_user_id',
+        data: {
+          authUserId,
+          userHash: profile.userHash,
+          hasPersonality: !!profile.personality,
+          hasImplicit: !!profile.aestheticDNA?.implicit,
+          hasExplicit: !!profile.aestheticDNA?.explicit,
+          hasSensory: !!profile.sensoryPreferences,
+          hasBiophilia: profile.psychologicalBaseline?.biophiliaScore !== undefined,
+          profileCompletedAt: profile.profileCompletedAt,
+          candidateCount: data.length
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+
+    return profile;
+  } catch (error) {
+    console.warn('Error in getBestProfileForAuth:', error);
+    return null;
+  }
+}
+
+/**
  * Get user_hash from Supabase based on authenticated user ID
  * This is used to restore user_hash after login
  */
 export async function getUserHashFromAuth(authUserId: string): Promise<string | null> {
   try {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'incognito-fix',
+        hypothesisId: 'I4',
+        location: 'supabase-deep-personalization.ts:getUserHashFromAuth',
+        message: 'getUserHashFromAuth called',
+        data: {
+          authUserId
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+
     const { data, error } = await supabase
       .from('user_profiles')
       .select('user_hash')
@@ -73,14 +339,90 @@ export async function getUserHashFromAuth(authUserId: string): Promise<string | 
 
     if (error) {
       if (error.code === 'PGRST116') {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'debug-session',
+            runId: 'incognito-fix',
+            hypothesisId: 'I5',
+            location: 'supabase-deep-personalization.ts:getUserHashFromAuth',
+            message: 'No profile linked yet (PGRST116)',
+            data: {
+              authUserId,
+              errorCode: error.code
+            },
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+        // #endregion
         return null; // No profile linked yet
       }
       console.warn('Error fetching user_hash from auth:', error);
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'incognito-fix',
+          hypothesisId: 'I6',
+          location: 'supabase-deep-personalization.ts:getUserHashFromAuth',
+          message: 'Error fetching user_hash from auth',
+          data: {
+            authUserId,
+            errorCode: error.code,
+            errorMessage: error.message
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
       return null;
     }
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'incognito-fix',
+        hypothesisId: 'I7',
+        location: 'supabase-deep-personalization.ts:getUserHashFromAuth',
+        message: 'getUserHashFromAuth result',
+        data: {
+          authUserId,
+          foundUserHash: data?.user_hash || null,
+          hasData: !!data
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    
     return data?.user_hash || null;
   } catch (error) {
     console.warn('Error in getUserHashFromAuth:', error);
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'incognito-fix',
+        hypothesisId: 'I8',
+        location: 'supabase-deep-personalization.ts:getUserHashFromAuth',
+        message: 'Exception in getUserHashFromAuth',
+        data: {
+          authUserId,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
     return null;
   }
 }
@@ -95,16 +437,112 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
     // First, get existing profile to preserve auth_user_id
     const existing = await getUserProfile(profile.userHash);
     
+    // Get authenticated user ID if available
+    let authUserId: string | undefined = existing?.auth_user_id;
+    if (!authUserId) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          authUserId = session.user.id;
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'incognito-fix',
+              hypothesisId: 'I3',
+              location: 'supabase-deep-personalization.ts:saveUserProfile-authUserId',
+              message: 'Setting auth_user_id in user_profiles',
+              data: {
+                userHash: profile.userHash,
+                authUserId: authUserId,
+                hadExistingAuthUserId: !!existing?.auth_user_id
+              },
+              timestamp: Date.now()
+            })
+          }).catch(() => {});
+          // #endregion
+        }
+      } catch (error) {
+        console.warn('[saveUserProfile] Failed to get auth user ID:', error);
+      }
+    }
+    
     // Build upsert data - only include fields that exist
     const upsertData: any = {
       user_hash: profile.userHash,
-      auth_user_id: existing?.auth_user_id || undefined, // Preserve auth_user_id if exists
+      auth_user_id: authUserId || undefined, // Set auth_user_id if available
       updated_at: new Date().toISOString()
     };
     
     // Only include fields that are defined (to avoid schema errors)
-    if (profile.aestheticDNA !== undefined) upsertData.aesthetic_dna = profile.aestheticDNA;
-    if (profile.psychologicalBaseline !== undefined) upsertData.psychological_baseline = profile.psychologicalBaseline;
+    if (profile.aestheticDNA !== undefined) {
+      // CRITICAL: Don't overwrite selectedStyle with empty string ""
+      // If selectedStyle is undefined, keep existing value in Supabase
+      const aestheticDNA = { ...profile.aestheticDNA };
+      if (aestheticDNA.explicit) {
+        // If selectedStyle is empty string "", don't include it (keep existing value)
+        if (aestheticDNA.explicit.selectedStyle === '') {
+          delete aestheticDNA.explicit.selectedStyle;
+        }
+      }
+      upsertData.aesthetic_dna = aestheticDNA;
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'explicit-check',
+          hypothesisId: 'E14',
+          location: 'supabase-deep-personalization.ts:saveUserProfile-aestheticDNA',
+          message: 'Saving aestheticDNA to Supabase',
+          data: {
+            userHash: profile.userHash,
+            hasImplicit: !!profile.aestheticDNA?.implicit,
+            hasExplicit: !!profile.aestheticDNA?.explicit,
+            explicitSelectedStyle: profile.aestheticDNA?.explicit?.selectedStyle || null,
+            explicitSelectedStyleType: typeof profile.aestheticDNA?.explicit?.selectedStyle,
+            explicitSelectedStyleIsEmpty: profile.aestheticDNA?.explicit?.selectedStyle === '',
+            explicitSelectedStyleIsNull: profile.aestheticDNA?.explicit?.selectedStyle === null,
+            explicitSelectedStyleIsUndefined: profile.aestheticDNA?.explicit?.selectedStyle === undefined,
+            explicitSelectedPalette: profile.aestheticDNA?.explicit?.selectedPalette || null,
+            explicitTopMaterials: profile.aestheticDNA?.explicit?.topMaterials || [],
+            explicitTopMaterialsCount: profile.aestheticDNA?.explicit?.topMaterials?.length || 0,
+            explicitWarmth: profile.aestheticDNA?.explicit?.warmthPreference,
+            explicitBrightness: profile.aestheticDNA?.explicit?.brightnessPreference,
+            explicitComplexity: profile.aestheticDNA?.explicit?.complexityPreference,
+            rawAestheticDNA: profile.aestheticDNA,
+            rawExplicit: profile.aestheticDNA?.explicit
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+    }
+    if (profile.psychologicalBaseline !== undefined) {
+      upsertData.psychological_baseline = profile.psychologicalBaseline;
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'explicit-check',
+          hypothesisId: 'E7',
+          location: 'supabase-deep-personalization.ts:saveUserProfile-biophilia',
+          message: 'Saving biophiliaScore to Supabase',
+          data: {
+            biophiliaScore: profile.psychologicalBaseline?.biophiliaScore,
+            prsIdeal: profile.psychologicalBaseline?.prsIdeal,
+            userHash: profile.userHash
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+    }
     if (profile.lifestyle !== undefined) upsertData.lifestyle_data = profile.lifestyle;
     if (profile.sensoryPreferences !== undefined) upsertData.sensory_preferences = profile.sensoryPreferences;
     if (profile.projectiveResponses !== undefined) upsertData.projective_responses = profile.projectiveResponses;

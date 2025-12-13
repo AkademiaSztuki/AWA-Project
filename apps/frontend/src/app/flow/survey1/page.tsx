@@ -9,48 +9,181 @@ import { useSessionData } from '@/hooks/useSessionData';
 import { supabase } from '@/lib/supabase';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { AwaDialogue } from '@/components/awa';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { LocalizedText } from '@/lib/questions/validated-scales';
 
-const SATISFACTION_QUESTIONS = [
+// System Usability Scale (SUS) - 10 pytań
+// Pytania nieparzyste (1,3,5,7,9) są pozytywne
+// Pytania parzyste (2,4,6,8,10) są negatywne
+const SUS_QUESTIONS: Array<{
+  key: string;
+  question: LocalizedText;
+  isPositive: boolean;
+}> = [
   {
-    key: 'agency_control',
-    question: 'Czułem/am, że to ja kontrolowałem/am wynik końcowy.',
-    category: 'Agency'
+    key: 'sus_1',
+    question: {
+      pl: 'Myślę, że chciałbym/chciałabym używać tego systemu często.',
+      en: 'I think that I would like to use this system frequently.'
+    },
+    isPositive: true
   },
   {
-    key: 'agency_decisions',
-    question: 'Wizualizacje odzwierciedlały moje decyzje.',
-    category: 'Agency'
+    key: 'sus_2',
+    question: {
+      pl: 'Uznałem/am ten system za niepotrzebnie skomplikowany.',
+      en: 'I found the system unnecessarily complex.'
+    },
+    isPositive: false
   },
   {
-    key: 'agency_influence',
-    question: 'Miałem/am realny wpływ na proces projektowania.',
-    category: 'Agency'
+    key: 'sus_3',
+    question: {
+      pl: 'Uznałem/am ten system za łatwy w użyciu.',
+      en: 'I thought the system was easy to use.'
+    },
+    isPositive: true
   },
   {
-    key: 'satisfaction_ease',
-    question: 'Korzystanie z narzędzia było łatwe i intuicyjne.',
-    category: 'Satisfaction'
+    key: 'sus_4',
+    question: {
+      pl: 'Myślę, że potrzebowałbym/abym wsparcia technicznego, aby używać tego systemu.',
+      en: 'I think that I would need the support of a technical person to be able to use this system.'
+    },
+    isPositive: false
   },
   {
-    key: 'satisfaction_enjoyable',
-    question: 'Proces był przyjemny i angażujący.',
-    category: 'Satisfaction'
+    key: 'sus_5',
+    question: {
+      pl: 'Uznałem/am, że różne funkcje w tym systemie były dobrze zintegrowane.',
+      en: 'I found the various functions in this system were well integrated.'
+    },
+    isPositive: true
   },
   {
-    key: 'satisfaction_useful',
-    question: 'Narzędzie było przydatne do odkrywania moich preferencji.',
-    category: 'Satisfaction'
+    key: 'sus_6',
+    question: {
+      pl: 'Uznałem/am, że w tym systemie było zbyt dużo niespójności.',
+      en: 'I thought there was too much inconsistency in this system.'
+    },
+    isPositive: false
   },
   {
-    key: 'satisfaction_recommend',
-    question: 'Poleciłbym/ałbym to narzędzie innym osobom.',
-    category: 'Satisfaction'
+    key: 'sus_7',
+    question: {
+      pl: 'Wyobrażam sobie, że większość ludzi nauczyłaby się używać tego systemu bardzo szybko.',
+      en: 'I would imagine that most people would learn to use this system very quickly.'
+    },
+    isPositive: true
+  },
+  {
+    key: 'sus_8',
+    question: {
+      pl: 'Uznałem/am ten system za bardzo uciążliwy w użyciu.',
+      en: 'I found the system very cumbersome to use.'
+    },
+    isPositive: false
+  },
+  {
+    key: 'sus_9',
+    question: {
+      pl: 'Czułem/am się bardzo pewnie używając tego systemu.',
+      en: 'I felt very confident using the system.'
+    },
+    isPositive: true
+  },
+  {
+    key: 'sus_10',
+    question: {
+      pl: 'Musiałem/am się nauczyć wielu rzeczy, zanim mogłem/am zacząć korzystać z tego systemu.',
+      en: 'I needed to learn a lot of things before I could get going with this system.'
+    },
+    isPositive: false
   }
 ];
 
+const SUS_TEXTS = {
+  title: {
+    pl: 'System Usability Scale (SUS)',
+    en: 'System Usability Scale (SUS)'
+  } as LocalizedText,
+  description: {
+    pl: 'Oceń użyteczność systemu na skali 1-5. Pytania dotyczą Twojego doświadczenia z aplikacją.',
+    en: 'Rate the system usability on a scale of 1-5. Questions relate to your experience with the application.'
+  } as LocalizedText,
+  scaleLabels: {
+    stronglyDisagree: {
+      pl: 'Zdecydowanie nie (1)',
+      en: 'Strongly disagree (1)'
+    } as LocalizedText,
+    neither: {
+      pl: 'Ani tak, ani nie (3)',
+      en: 'Neither (3)'
+    } as LocalizedText,
+    stronglyAgree: {
+      pl: 'Zdecydowanie tak (5)',
+      en: 'Strongly agree (5)'
+    } as LocalizedText
+  },
+  buttons: {
+    back: {
+      pl: '← Powrót',
+      en: '← Back'
+    } as LocalizedText,
+    next: {
+      pl: 'Przejdź do drugiej części →',
+      en: 'Continue to next part →'
+    } as LocalizedText
+  },
+  ariaLabels: {
+    back: {
+      pl: 'Powrót',
+      en: 'Back'
+    } as LocalizedText,
+    next: {
+      pl: 'Przejdź do drugiej części',
+      en: 'Continue to next part'
+    } as LocalizedText
+  }
+};
+
+/**
+ * Oblicza wynik SUS (0-100) na podstawie odpowiedzi
+ * Dla pytań pozytywnych: score = answer - 1
+ * Dla pytań negatywnych: score = 5 - answer
+ * Suma wszystkich * 2.5 = wynik SUS
+ * 
+ * UWAGA: Funkcja zakłada, że wszystkie odpowiedzi są wypełnione (1-5)
+ */
+function calculateSUSScore(answers: Record<string, number>): number {
+  let totalScore = 0;
+
+  SUS_QUESTIONS.forEach((q) => {
+    const answer = answers[q.key];
+    
+    // Walidacja - powinno być między 1-5
+    if (answer < 1 || answer > 5) {
+      console.warn(`Invalid answer for ${q.key}: ${answer}`);
+      return;
+    }
+
+    if (q.isPositive) {
+      // Pytania pozytywne (nieparzyste): score = answer - 1
+      totalScore += answer - 1;
+    } else {
+      // Pytania negatywne (parzyste): score = 5 - answer
+      totalScore += 5 - answer;
+    }
+  });
+
+  // Pomnóż przez 2.5, aby uzyskać wynik 0-100
+  return Math.round(totalScore * 2.5 * 10) / 10; // Zaokrąglenie do 1 miejsca po przecinku
+}
+
 export default function Survey1Page() {
   const router = useRouter();
-  const { updateSessionData } = useSessionData();
+  const { updateSessionData, sessionData } = useSessionData();
+  const { t, language } = useLanguage();
   const [answers, setAnswers] = useState<Record<string, number>>({});
 
   const handleAnswerChange = (key: string, value: number) => {
@@ -58,33 +191,15 @@ export default function Survey1Page() {
   };
 
   const handleContinue = async () => {
-    // Oblicz średnie dla kategorii
-    const agencyQuestions = SATISFACTION_QUESTIONS.filter(q => q.category === 'Agency');
-    const satisfactionQuestions = SATISFACTION_QUESTIONS.filter(q => q.category === 'Satisfaction');
-
-    const agencyScore = agencyQuestions.reduce((sum, q) => sum + (answers[q.key] || 4), 0) / agencyQuestions.length;
-    const satisfactionScore = satisfactionQuestions.reduce((sum, q) => sum + (answers[q.key] || 4), 0) / satisfactionQuestions.length;
-
-    // Podziel odpowiedzi na kategorie
-    const agencyAnswers: Record<string, number> = {};
-    const satisfactionAnswers: Record<string, number> = {};
-    
-    Object.entries(answers).forEach(([key, value]) => {
-      const question = SATISFACTION_QUESTIONS.find(q => q.key === key);
-      if (question?.category === 'Agency') {
-        agencyAnswers[key] = value;
-      } else if (question?.category === 'Satisfaction') {
-        satisfactionAnswers[key] = value;
-      }
-    });
+    // Oblicz wynik SUS (0-100)
+    const susScore = calculateSUSScore(answers);
 
     stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
+    
     updateSessionData({
       surveyData: {
-        agencyScore,
-        satisfactionScore,
-        agencyAnswers,
-        satisfactionAnswers,
+        susScore,
+        susAnswers: answers,
         survey1Completed: Date.now()
       }
     });
@@ -93,22 +208,22 @@ export default function Survey1Page() {
     try {
       await supabase.from('survey_results').insert([
         {
-          session_id: (window as any)?.sessionStorage?.getItem('aura_user_hash') || '',
-          type: 'satisfaction',
-          answers: { agencyAnswers, satisfactionAnswers },
-          agency_score: agencyScore,
-          satisfaction_score: satisfactionScore,
+          session_id: sessionData?.userHash || '',
+          type: 'sus',
+          answers: answers,
+          sus_score: susScore,
           timestamp: new Date().toISOString(),
         }
       ]);
     } catch (e) {
+      console.error('Error saving SUS survey:', e);
       // ignore
     }
 
     router.push('/flow/survey2');
   };
 
-  const allAnswered = SATISFACTION_QUESTIONS.every(q => answers[q.key] !== undefined);
+  const allAnswered = SUS_QUESTIONS.every(q => answers[q.key] !== undefined);
 
   return (
     <div className="min-h-screen flex flex-col w-full">
@@ -117,25 +232,28 @@ export default function Survey1Page() {
 
         <div className="w-full max-w-4xl mx-auto">
         <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto py-6">
-            <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Twoje Doświadczenia</h1>
+            <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">{t(SUS_TEXTS.title)}</h1>
             <p className="text-base md:text-lg text-gray-700 font-modern mb-6 leading-relaxed">
-              Oceń swoje doświadczenia z aplikacją na skali 1-7
+              {t(SUS_TEXTS.description)}
             </p>
 
             <div className="space-y-6 mb-8">
-              {SATISFACTION_QUESTIONS.map((question, index) => (
+              {SUS_QUESTIONS.map((question, index) => (
                 <div key={question.key} className="border-b border-gray-200/50 pb-4 last:border-b-0">
-                  <p className="text-base md:text-lg text-gray-800 font-modern leading-relaxed mb-3">{question.question}</p>
+                  <p className="text-base md:text-lg text-gray-800 font-modern leading-relaxed mb-3">
+                    {index + 1}. {t(question.question)}
+                  </p>
 
                   <div className="flex items-center justify-between text-xs md:text-sm text-gray-500 mb-3 font-modern">
-                    <span>Zdecydowanie nie (1)</span>
-                    <span>Zdecydowanie tak (7)</span>
+                    <span>{t(SUS_TEXTS.scaleLabels.stronglyDisagree)}</span>
+                    <span>{t(SUS_TEXTS.scaleLabels.neither)}</span>
+                    <span>{t(SUS_TEXTS.scaleLabels.stronglyAgree)}</span>
                   </div>
 
                   <GlassSlider
                     min={1}
-                    max={7}
-                    value={answers[question.key] || 4}
+                    max={5}
+                    value={answers[question.key] || 3}
                     onChange={(value) => handleAnswerChange(question.key, value)}
                     className="mb-2"
                   />
@@ -150,10 +268,10 @@ export default function Survey1Page() {
                 borderRadius={32}
                 className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
                 onClick={() => router.push('/flow/generate')}
-                aria-label="Powrót"
+                aria-label={t(SUS_TEXTS.ariaLabels.back)}
                 style={{ opacity: 1 }}
               >
-                ← Powrót
+                {t(SUS_TEXTS.buttons.back)}
               </GlassSurface>
               <GlassSurface
                 width={260}
@@ -161,10 +279,10 @@ export default function Survey1Page() {
                 borderRadius={32}
                 className={`cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base md:text-base font-exo2 font-bold text-white rounded-2xl text-nowrap ${!allAnswered ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                 onClick={handleContinue}
-                aria-label="Przejdź do drugiej części"
+                aria-label={t(SUS_TEXTS.ariaLabels.next)}
                 style={{ opacity: 1 }}
               >
-                Przejdź do drugiej części →
+                {t(SUS_TEXTS.buttons.next)}
               </GlassSurface>
             </div>
         </GlassCard>

@@ -50,6 +50,9 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
   
   // Biophilia score - check roomPreferences first, then top-level, default to 1
   const biophiliaScore = roomPrefs?.biophiliaScore ?? sessionData.biophiliaScore ?? 1;
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:biophilia-source',message:'Determining biophiliaScore source for PromptInputs',data:{roomPrefsBiophilia:roomPrefs?.biophiliaScore,sessionDataBiophilia:sessionData.biophiliaScore,finalBiophiliaScore:biophiliaScore,hasRoomPrefs:!!roomPrefs},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E9'})}).catch(()=>{});
+  // #endregion
   
   // Calculate implicit biophilia from Tinder swipes (avgBiophilia from liked images)
   // This will be used for Implicit source instead of global biophiliaScore
@@ -105,6 +108,11 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
   }
   console.log('  - tinderData swipes:', (sessionData as any).tinderData?.swipes?.length || 0);
 
+  // #region agent log
+  // Log final PromptInputs psychologicalBaseline
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:PromptInputs-psychologicalBaseline',message:'Final PromptInputs psychologicalBaseline',data:{biophiliaScore:biophiliaScore,implicitBiophiliaScore:implicitBiophiliaScore,prsIdeal:sessionData.prsIdeal||defaultPRS},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E10'})}).catch(()=>{});
+  // #endregion
+
   return {
     aestheticDNA: {
       implicit: {
@@ -141,17 +149,25 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
       light: sensoryPreferences?.light || 'warm_bright',
       natureMetaphor: natureMetaphor
     },
-    personality: sessionData.bigFive?.scores
-      ? {
-          openness: sessionData.bigFive.scores.openness ?? 50,
-          conscientiousness: sessionData.bigFive.scores.conscientiousness ?? 50,
-          extraversion: sessionData.bigFive.scores.extraversion ?? 50,
-          agreeableness: sessionData.bigFive.scores.agreeableness ?? 50,
-          neuroticism: sessionData.bigFive.scores.neuroticism ?? 50,
-          domains: sessionData.bigFive.scores.domains,
-          facets: sessionData.bigFive.scores.facets
-        }
-      : undefined,
+    personality: (() => {
+      if (!sessionData.bigFive?.scores) return undefined;
+      const scores = sessionData.bigFive.scores as any;
+      const personality = {
+        // CRITICAL FIX: Read from scores.domains (O/C/E/A/N) instead of scores.openness/etc
+        // The IPIP-NEO-120 structure uses domains: {O, C, E, A, N}, not {openness, conscientiousness, ...}
+        openness: scores.domains?.O ?? scores.openness ?? 50,
+        conscientiousness: scores.domains?.C ?? scores.conscientiousness ?? 50,
+        extraversion: scores.domains?.E ?? scores.extraversion ?? 50,
+        agreeableness: scores.domains?.A ?? scores.agreeableness ?? 50,
+        neuroticism: scores.domains?.N ?? scores.neuroticism ?? 50,
+        domains: scores.domains,
+        facets: scores.facets
+      };
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:144',message:'Building personality from sessionData.bigFive.scores',data:{hasScores:!!scores,hasDomains:!!scores.domains,domainsFromDomains:scores.domains?{O:scores.domains.O,C:scores.domains.C,E:scores.domains.E,A:scores.domains.A,N:scores.domains.N}:null,domainsFromLegacy:scores.openness?{O:scores.openness,C:scores.conscientiousness,E:scores.extraversion,A:scores.agreeableness,N:scores.neuroticism}:null,resultPersonality:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism}},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P2'})}).catch(()=>{});
+      // #endregion
+      return personality;
+    })(),
     inspirations: sessionData.inspirations?.map((item) => ({
       tags: item.tags || {},
       description: item.description,

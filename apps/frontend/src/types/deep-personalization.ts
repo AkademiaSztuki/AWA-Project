@@ -9,6 +9,7 @@ import { PRSMoodGridData } from '@/lib/questions/validated-scales';
 
 export interface UserProfile {
   userHash: string;
+  auth_user_id?: string; // Supabase auth user ID (for linking userHash to authenticated account)
   
   aestheticDNA: {
     implicit: {

@@ -145,6 +145,8 @@ function calculateMappingScore(
   let matchedConditions = 0;
   let totalConditions = 0;
   let weightedScore = 0;
+  let usesFacets = false;
+  let usesDomains = false;
   
   // Check each condition
   for (const [key, condition] of Object.entries(conditions)) {
@@ -154,6 +156,13 @@ function calculateMappingScore(
     if (value === null) {
       // Condition references unavailable data - skip or penalize
       continue;
+    }
+    
+    // Track if this mapping uses facets or domains
+    if (key.length > 1 && (key[1] === '1' || key[1] === '2' || key[1] === '3' || key[1] === '4' || key[1] === '5' || key[1] === '6')) {
+      usesFacets = true;
+    } else if (['O', 'C', 'E', 'A', 'N'].includes(key)) {
+      usesDomains = true;
     }
     
     if (evaluateCondition(value, condition)) {
@@ -166,6 +175,24 @@ function calculateMappingScore(
   
   if (totalConditions === 0) {
     // No conditions = default mapping, lower confidence
+    // CRITICAL FIX: If all domains are neutral, penalize default mapping even more
+    const allDomainsNeutral = 
+      Math.abs((personality.openness / 100) - 0.5) < 0.05 &&
+      Math.abs((personality.conscientiousness / 100) - 0.5) < 0.05 &&
+      Math.abs((personality.extraversion / 100) - 0.5) < 0.05 &&
+      Math.abs((personality.agreeableness / 100) - 0.5) < 0.05 &&
+      Math.abs((personality.neuroticism / 100) - 0.5) < 0.05;
+    const hasFacets = !!personality.facets && Object.keys(personality.facets).length > 0;
+    
+    if (allDomainsNeutral && hasFacets) {
+      // Penalize default mapping heavily when we have facet data
+      // This ensures facet-based mappings win over default
+      const defaultScore = 0.3; // Lower than penalized transitional (0.42) and boosted japandi (0.48)
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'facet-derivation.ts:188',message:'Penalizing default mapping (modern_classic) - all domains neutral but has facets',data:{mappingId:mapping.id,style:mapping.style,defaultScore,allDomainsNeutral,hasFacets},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
+      return defaultScore;
+    }
     return 0.5;
   }
   
@@ -176,7 +203,93 @@ function calculateMappingScore(
   const avgWeighted = totalConditions > 0 ? weightedScore / totalConditions : 0;
   
   // Combined score
-  return (baseScore * 0.6) + (avgWeighted * 0.4);
+  let finalScore = (baseScore * 0.6) + (avgWeighted * 0.4);
+  
+  // CRITICAL FIX: If all domains are 50 (neutral), prefer mappings that use facets
+  // This prevents "transitional" from always winning when domains are neutral
+  const allDomainsNeutral = 
+    Math.abs((personality.openness / 100) - 0.5) < 0.05 &&
+    Math.abs((personality.conscientiousness / 100) - 0.5) < 0.05 &&
+    Math.abs((personality.extraversion / 100) - 0.5) < 0.05 &&
+    Math.abs((personality.agreeableness / 100) - 0.5) < 0.05 &&
+    Math.abs((personality.neuroticism / 100) - 0.5) < 0.05;
+  
+  const hasFacets = !!personality.facets && Object.keys(personality.facets).length > 0;
+  
+  if (allDomainsNeutral && hasFacets) {
+    // Penalize mappings that only use domains (like transitional_balance)
+    if (usesDomains && !usesFacets) {
+      const originalScore = finalScore;
+      finalScore *= 0.7; // Reduce score by 30% for domain-only mappings
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'facet-derivation.ts:207',message:'Penalizing domain-only mapping (all domains neutral)',data:{mappingId:mapping.id,style:mapping.style,originalScore,penalizedScore:finalScore,usesDomains,usesFacets},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
+    }
+    // Boost mappings that use facets - with diversity bonus
+    if (usesFacets) {
+      const originalScore = finalScore;
+      
+      // DIVERSITY BONUS: Calculate how many different facets are used and how extreme they are
+      const facetKeys = Object.keys(conditions).filter(key => {
+        const facetMatch = key.match(/^([OCEAN])([1-6])_/);
+        return facetMatch !== null;
+      });
+      
+      // Count unique facets used
+      const uniqueFacets = new Set(facetKeys.map(key => {
+        const match = key.match(/^([OCEAN])([1-6])_/);
+        return match ? `${match[1]}${match[2]}` : null;
+      }).filter(Boolean));
+      
+      // Count unique DOMAINS used in facets (O, C, E, A, N)
+      const uniqueDomains = new Set(facetKeys.map(key => {
+        const match = key.match(/^([OCEAN])([1-6])_/);
+        return match ? match[1] : null;
+      }).filter(Boolean));
+      
+      // Calculate extremity bonus: how extreme are the facet values used?
+      let extremitySum = 0;
+      let extremityCount = 0;
+      facetKeys.forEach(key => {
+        const value = getValue(personality, key);
+        if (value !== null) {
+          const extremity = Math.abs(value - 0.5) * 2; // 0-1, where 1 = most extreme
+          extremitySum += extremity;
+          extremityCount++;
+        }
+      });
+      const avgExtremity = extremityCount > 0 ? extremitySum / extremityCount : 0;
+      
+      // Base boost: 20% for using facets
+      let boostMultiplier = 1.2;
+      
+      // Diversity bonus: +5% per unique facet (max +30% for 6+ facets)
+      const diversityBonus = Math.min(0.3, uniqueFacets.size * 0.05);
+      boostMultiplier += diversityBonus;
+      
+      // Cross-domain bonus: +15% if using facets from 3+ different domains (O, C, E, A, N)
+      // This encourages using diverse personality aspects, not just one domain
+      if (uniqueDomains.size >= 3) {
+        boostMultiplier += 0.15;
+      } else if (uniqueDomains.size === 2) {
+        boostMultiplier += 0.08; // Smaller bonus for 2 domains
+      }
+      
+      // Extremity bonus: +10% if average extremity > 0.4 (using extreme facet values)
+      if (avgExtremity > 0.4) {
+        boostMultiplier += 0.1;
+      }
+      
+      finalScore *= boostMultiplier;
+      finalScore = Math.min(1.0, finalScore); // Cap at 1.0
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'facet-derivation.ts:215',message:'Boosting facet-based mapping with diversity bonus',data:{mappingId:mapping.id,style:mapping.style,originalScore,boostedScore:finalScore,usesDomains,usesFacets,uniqueFacetsCount:uniqueFacets.size,uniqueDomainsCount:uniqueDomains.size,uniqueDomains:Array.from(uniqueDomains),avgExtremity,boostMultiplier},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
+    }
+  }
+  
+  return finalScore;
 }
 
 /**
@@ -194,12 +307,42 @@ export function deriveStyleFromFacets(
   // Sort by score (highest first)
   mappingScores.sort((a, b) => b.score - a.score);
   
+  // #region agent log - Log top 5 mappings for debugging
+  const topMappings = mappingScores.slice(0, 5).map(m => {
+    // Calculate which conditions matched for this mapping
+    const matchedConditions: string[] = [];
+    const failedConditions: string[] = [];
+    for (const [key, condition] of Object.entries(m.mapping.conditions)) {
+      const value = getValue(personality, key);
+      if (value !== null) {
+        if (evaluateCondition(value, condition)) {
+          matchedConditions.push(`${key}:${condition} (value: ${value.toFixed(2)})`);
+        } else {
+          failedConditions.push(`${key}:${condition} (value: ${value.toFixed(2)})`);
+        }
+      }
+    }
+    return {
+      id: m.mapping.id,
+      style: m.mapping.style,
+      score: m.score,
+      conditions: m.mapping.conditions,
+      matchedConditions,
+      failedConditions
+    };
+  });
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'facet-derivation.ts:195',message:'Top 5 style mappings scores with condition details',data:{personalityScores:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},normalizedScores:{O:(personality.openness/100).toFixed(2),C:(personality.conscientiousness/100).toFixed(2),E:(personality.extraversion/100).toFixed(2),A:(personality.agreeableness/100).toFixed(2),N:(personality.neuroticism/100).toFixed(2)},topMappings},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'E'})}).catch(()=>{});
+  // #endregion
+  
   // Get best match
   const bestMatch = mappingScores[0];
   
   if (!bestMatch || bestMatch.score < 0.3) {
     // No good match - use default
     const defaultMapping = BIGFIVE_STYLE_MAPPINGS.find(m => m.id === 'modern_classic')!;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'facet-derivation.ts:200',message:'FALLBACK: Using default modern_classic style - no good personality match',data:{bestMatchScore:bestMatch?.score||0,hasBestMatch:!!bestMatch,personalityScores:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},hasFacets:!!personality.facets,facetCount:personality.facets?Object.values(personality.facets).reduce((sum:number,domain:any)=>sum+Object.keys(domain||{}).length,0):0,allMappingsScores:mappingScores.slice(0,3).map(m=>({id:m.mapping.id,score:m.score}))},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     return {
       dominantStyle: defaultMapping.style,
       confidence: 0.5,

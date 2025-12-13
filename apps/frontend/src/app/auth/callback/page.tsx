@@ -2,7 +2,7 @@
 
 import React, { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase, safeSessionStorage } from '@/lib/supabase';
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -13,10 +13,10 @@ function AuthCallbackContent() {
     
     // Guard: prevent multiple executions (React StrictMode in dev)
     const callbackKey = `auth_callback_${window.location.hash}`;
-    if (sessionStorage.getItem(callbackKey)) {
+    if (safeSessionStorage.getItem(callbackKey)) {
       return; // Already processed
     }
-    sessionStorage.setItem(callbackKey, 'processing');
+    safeSessionStorage.setItem(callbackKey, 'processing');
 
     (async () => {
       try {
@@ -122,13 +122,13 @@ function AuthCallbackContent() {
           // #endregion
 
           if (setSessionError) {
-            sessionStorage.removeItem(callbackKey); // Allow retry on error
+            safeSessionStorage.removeItem(callbackKey); // Allow retry on error
             const err = encodeURIComponent(setSessionError.message || 'auth_error');
             router.replace(`/dashboard?auth=error&msg=${err}`);
             return;
           }
 
-          sessionStorage.setItem(callbackKey, 'completed');
+          safeSessionStorage.setItem(callbackKey, 'completed');
           const next = params.get('next') || '/dashboard';
           router.replace(next);
           return;
@@ -187,7 +187,7 @@ function AuthCallbackContent() {
         const { error } = exchangeResult;
 
         if (error) {
-          sessionStorage.removeItem(callbackKey); // Allow retry on error
+          safeSessionStorage.removeItem(callbackKey); // Allow retry on error
           console.error('Supabase OAuth exchange error:', error);
           const err = encodeURIComponent(error.message || 'auth_error');
           router.replace(`/dashboard?auth=error&msg=${err}`);
@@ -195,12 +195,12 @@ function AuthCallbackContent() {
         }
 
         // If we got here via magic link (type=recovery or type=signup), still go dashboard
-        sessionStorage.setItem(callbackKey, 'completed');
+        safeSessionStorage.setItem(callbackKey, 'completed');
         const next = params.get('next') || '/dashboard';
         router.replace(next);
       } catch (e) {
         if (!isMounted) return;
-        sessionStorage.removeItem(callbackKey); // Allow retry on error
+        safeSessionStorage.removeItem(callbackKey); // Allow retry on error
         console.error('Auth callback exception:', e);
         const err = e instanceof Error ? e.message : 'unknown';
         router.replace(`/dashboard?auth=error&msg=${encodeURIComponent(err)}`);

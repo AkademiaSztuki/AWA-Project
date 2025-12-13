@@ -8,6 +8,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getUserProfile } from '@/lib/supabase-deep-personalization';
+import { safeLocalStorage } from '@/lib/supabase';
 
 export default function PersonalityDetailPage() {
   const { sessionData } = useSessionData();
@@ -170,7 +171,7 @@ export default function PersonalityDetailPage() {
         }
         
         // Priority 3: Try localStorage
-        const localSession = localStorage.getItem('aura_session');
+        const localSession = safeLocalStorage.getItem('aura_session');
         if (localSession) {
           const parsed = JSON.parse(localSession);
           const bigFive = parsed?.bigFive;

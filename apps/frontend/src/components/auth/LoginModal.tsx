@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -22,6 +23,12 @@ export function LoginModal({ isOpen, onClose, onSuccess, message }: LoginModalPr
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState('');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
@@ -55,11 +62,11 @@ export function LoginModal({ isOpen, onClose, onSuccess, message }: LoginModalPr
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
+  const modalContent = (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -194,5 +201,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, message }: LoginModalPr
       </div>
     </AnimatePresence>
   );
+
+  return createPortal(modalContent, document.body);
 }
 

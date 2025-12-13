@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
             const userHash = await getUserHashFromAuth(session.user.id);
             if (userHash) {
-              localStorage.setItem('aura_user_hash', userHash);
+              safeLocalStorage.setItem('aura_user_hash', userHash);
               console.log('[AuthContext] Restored user_hash from Supabase:', userHash);
             }
           } catch (error) {
@@ -175,12 +175,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut();
     // Clear local session
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('aura_session');
-      localStorage.removeItem('aura_user_hash');
-      sessionStorage.removeItem('aura_session');
-      sessionStorage.removeItem('aura_user_hash');
-    }
+    safeLocalStorage.removeItem('aura_session');
+    safeLocalStorage.removeItem('aura_user_hash');
+    safeSessionStorage.removeItem('aura_session');
+    safeSessionStorage.removeItem('aura_user_hash');
   };
 
   const linkUserHashToAuth = async (userHash: string) => {
@@ -206,9 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         console.log('Successfully linked user_hash to authenticated user');
         // Save user_hash to localStorage for persistence
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('aura_user_hash', userHash);
-        }
+        safeLocalStorage.setItem('aura_user_hash', userHash);
       }
     } catch (error) {
       console.error('Error in linkUserHashToAuth:', error);
