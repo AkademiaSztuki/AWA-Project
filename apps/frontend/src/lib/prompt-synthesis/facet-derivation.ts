@@ -471,7 +471,7 @@ export function calculateConfidence(personality: PersonalityData): number {
     let consistencyScores: number[] = [];
     
     // Check each domain
-    const domainMap: Record<string, { domain: keyof PersonalityData['facets'], index: number }> = {
+    const domainMap: Record<string, { domain: 'O' | 'C' | 'E' | 'A' | 'N', index: number }> = {
       'O': { domain: 'O', index: 0 },
       'C': { domain: 'C', index: 1 },
       'E': { domain: 'E', index: 2 },
@@ -559,13 +559,13 @@ export function calculateInternalConsistency(personality: PersonalityData): numb
     personality.neuroticism / 100
   ];
   
-  const domainMap: Record<string, { domain: keyof PersonalityData['facets'], index: number }> = {
-    'O': { domain: 'O', index: 0 },
-    'C': { domain: 'C', index: 1 },
-    'E': { domain: 'E', index: 2 },
-    'A': { domain: 'A', index: 3 },
-    'N': { domain: 'N', index: 4 }
-  };
+    const domainMap: Record<string, { domain: 'O' | 'C' | 'E' | 'A' | 'N', index: number }> = {
+      'O': { domain: 'O', index: 0 },
+      'C': { domain: 'C', index: 1 },
+      'E': { domain: 'E', index: 2 },
+      'A': { domain: 'A', index: 3 },
+      'N': { domain: 'N', index: 4 }
+    };
   
   const consistencyScores: number[] = [];
   

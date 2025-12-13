@@ -169,10 +169,10 @@ export function assessSourceQuality(
     
     // Require at least 2 explicit answers (style, palette, materials, or sensory preferences)
     // biophiliaScore is optional and doesn't count toward minimum
-    const hasMinimumData = answerCount >= 2 || 
-      inputs.aestheticDNA.explicit.selectedStyle || 
+    const hasMinimumData = Boolean(answerCount >= 2 || 
+      (inputs.aestheticDNA.explicit as any).selectedStyle || 
       inputs.aestheticDNA.explicit.selectedPalette ||
-      inputs.aestheticDNA.explicit.topMaterials.length > 0;
+      inputs.aestheticDNA.explicit.topMaterials.length > 0);
     
     if (!hasMinimumData) {
       warnings.push('Insufficient explicit data - need at least style, palette, materials, or sensory preferences');
@@ -424,7 +424,7 @@ export function assessSourceQuality(
     const hasFunctionalData = 
       (inputs.activities && inputs.activities.length > 0) ||
       (inputs.painPoints && inputs.painPoints.length > 0) ||
-      inputs.primaryActivity;
+      (inputs as any).primaryActivity;
     
     // Use mixed report's status and confidence/dataPoints as baseline
     let finalStatus = mixedReport.status;
@@ -441,7 +441,7 @@ export function assessSourceQuality(
       if (!inputs.painPoints || inputs.painPoints.length === 0) {
         missingFunctional.push('punktów bólu (co przeszkadza)');
       }
-      if (!inputs.primaryActivity) {
+      if (!(inputs as any).primaryActivity) {
         missingFunctional.push('głównej aktywności');
       }
       if (missingFunctional.length > 0) {

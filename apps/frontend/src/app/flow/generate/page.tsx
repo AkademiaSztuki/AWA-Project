@@ -1339,7 +1339,8 @@ export default function GeneratePage() {
         base_image: typedSessionData.roomImage,
         style: typedSessionData.visualDNA?.dominantStyle || 'modern',
         modifications: [],
-        ...parameters
+        ...parameters,
+        strength: parameters.strength ?? 0.6
       });
       
       // Generation completed
@@ -1522,7 +1523,8 @@ export default function GeneratePage() {
         base_image: baseImageSource,
         style: isMacro ? modification.id : (selectedImage.parameters?.style || 'modern'),
         modifications: isMacro ? [modification.label] : [],
-        ...parameters
+        ...parameters,
+        strength: parameters.strength ?? (isMacro ? 0.75 : 0.25)
       });
 
       if (!response || !response.images) {
@@ -1678,7 +1680,8 @@ export default function GeneratePage() {
         base_image: selectedImage.base64,
         style: 'empty',
         modifications: ['remove_furniture'],
-        ...getOptimalParameters('micro', generationCount)
+        ...getOptimalParameters('micro', generationCount),
+        strength: getOptimalParameters('micro', generationCount).strength ?? 0.25
       });
 
       if (!response || !response.images) {
@@ -1759,7 +1762,8 @@ export default function GeneratePage() {
         base_image: selectedImage.base64,
         style: currentStyle,
         modifications: ['quality_improvement'],
-        ...getOptimalParameters('micro', generationCount)
+        ...getOptimalParameters('micro', generationCount),
+        strength: getOptimalParameters('micro', generationCount).strength ?? 0.25
       });
 
       if (!response || !response.images) {
@@ -2570,7 +2574,6 @@ export default function GeneratePage() {
                         history={generationHistory}
                         currentIndex={currentHistoryIndex}
                         onNodeClick={handleHistoryNodeClick}
-                        onNavigate={setCurrentHistoryIndex}
                       />
                     </motion.div>
                   )}

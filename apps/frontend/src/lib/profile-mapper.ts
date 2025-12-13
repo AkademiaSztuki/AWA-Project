@@ -210,9 +210,9 @@ export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserP
         dominantStyles: implicitData.dominantStyles,
         colors: implicitData.colors,
         materials: implicitData.materials,
-        complexity: sessionData.visualDNA?.implicitScores?.complexity || 0.5, // Use visualDNA scores if available
-        warmth: sessionData.visualDNA?.implicitScores?.warmth || 0.5, // Use visualDNA scores if available
-        brightness: sessionData.visualDNA?.implicitScores?.brightness || 0.5, // Use visualDNA scores if available
+        complexity: (sessionData.visualDNA as any)?.implicitScores?.complexity || 0.5, // Use visualDNA scores if available
+        warmth: (sessionData.visualDNA as any)?.implicitScores?.warmth || 0.5, // Use visualDNA scores if available
+        brightness: (sessionData.visualDNA as any)?.implicitScores?.brightness || 0.5, // Use visualDNA scores if available
         swipePatterns: [] // TODO: add pattern analysis
       },
       explicit: {
@@ -254,7 +254,7 @@ export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserP
         warmthPreference: sessionData.semanticDifferential?.warmth || 0.5,
         brightnessPreference: sessionData.semanticDifferential?.brightness || 0.5,
         complexityPreference: sessionData.semanticDifferential?.complexity || 0.5
-      }
+      } as any
     },
 
     psychologicalBaseline: {
@@ -326,7 +326,8 @@ export function mapUserProfileToSessionData(userProfile: UserProfile): Partial<S
         preferences: {
           colors: implicit.colors || [],
           materials: implicit.materials || [],
-          styles: implicit.dominantStyles || []
+          styles: implicit.dominantStyles || [],
+          lighting: []
         },
         accuracyScore: implicit.complexity || 0.5, // Use complexity as accuracy score fallback
         implicitScores: {
@@ -334,7 +335,7 @@ export function mapUserProfileToSessionData(userProfile: UserProfile): Partial<S
           brightness: implicit.brightness || 0.5,
           complexity: implicit.complexity || 0.5
         }
-      };
+      } as any;
     }
   }
 
@@ -344,9 +345,9 @@ export function mapUserProfileToSessionData(userProfile: UserProfile): Partial<S
     sessionUpdates.colorsAndMaterials = {
       selectedPalette: explicit.selectedPalette || '',
       topMaterials: explicit.topMaterials || [],
-      // CRITICAL: Only map selectedStyle if it's a non-empty string
-      // If it's empty string '', null, or undefined, don't overwrite existing value in sessionData
-      ...(explicit.selectedStyle && explicit.selectedStyle.length > 0 ? { selectedStyle: explicit.selectedStyle } : {})
+      // CRITICAL: Only map selectedStyle if it's a non-empty string    
+      // If it's empty string '', null, or undefined, don't overwrite existing value in sessionData                                                    
+      ...((explicit as any).selectedStyle && (explicit as any).selectedStyle.length > 0 ? { selectedStyle: (explicit as any).selectedStyle } : {})
     };
     sessionUpdates.semanticDifferential = {
       warmth: explicit.warmthPreference ?? 0.5,
@@ -362,8 +363,8 @@ export function mapUserProfileToSessionData(userProfile: UserProfile): Partial<S
       music: userProfile.sensoryPreferences.music || '',
       texture: userProfile.sensoryPreferences.texture || '',
       light: userProfile.sensoryPreferences.light || '',
-      natureMetaphor: userProfile.sensoryPreferences.natureMetaphor || ''
-    };
+      natureMetaphor: (userProfile.sensoryPreferences as any).natureMetaphor || ''
+    } as any;
   }
 
   // Map biophiliaScore
@@ -425,8 +426,8 @@ export function mapUserProfileToSessionData(userProfile: UserProfile): Partial<S
         explicitStyleIsNull: sessionUpdates.colorsAndMaterials?.selectedStyle === null,
         explicitStyleIsUndefined: sessionUpdates.colorsAndMaterials?.selectedStyle === undefined,
         explicitMaterialsCount: sessionUpdates.colorsAndMaterials?.topMaterials?.length || 0,
-        profileExplicitSelectedStyle: userProfile.aestheticDNA?.explicit?.selectedStyle,
-        profileExplicitSelectedStyleType: typeof userProfile.aestheticDNA?.explicit?.selectedStyle
+        profileExplicitSelectedStyle: (userProfile.aestheticDNA?.explicit as any)?.selectedStyle,
+        profileExplicitSelectedStyleType: typeof (userProfile.aestheticDNA?.explicit as any)?.selectedStyle
       },
       timestamp: Date.now()
     })

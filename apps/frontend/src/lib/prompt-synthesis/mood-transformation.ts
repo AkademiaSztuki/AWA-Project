@@ -316,7 +316,7 @@ export function mapSocialContext(
     furnitureScale: hasKids ? 'generous' : 'standard',
     durabilityPriority: hasKids ? 'high' : 'medium',
     privacyElements: !hasGuests,
-    socialElements: hasGuests || hasPartner
+    socialElements: Boolean(hasGuests || hasPartner)
   };
 }
 
@@ -374,9 +374,9 @@ export function analyzeActivityNeeds(
     .map(a => a.type);
   
   return {
-    priorityActivities: [...new Set([...problematicActivities, ...frequentActivities])],
+    priorityActivities: Array.from(new Set([...problematicActivities, ...frequentActivities])),
     needsImprovement: problematicActivities.length > 0,
-    specificNeeds: [...new Set(specificNeeds)]
+    specificNeeds: Array.from(new Set(specificNeeds))
   };
 }
 

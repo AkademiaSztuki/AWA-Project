@@ -482,9 +482,9 @@ export function CoreProfileWizard() {
     try {
       const implicitSemantics = computeImplicitSemanticsFromSwipes(profileData.tinderSwipes || []);
       const implicitScores = {
-        warmth: profileData.semanticDifferential?.warmth ?? sessionData?.visualDNA?.preferences?.warmth,
-        brightness: profileData.semanticDifferential?.brightness ?? sessionData?.visualDNA?.preferences?.brightness,
-        complexity: profileData.semanticDifferential?.complexity ?? sessionData?.visualDNA?.preferences?.complexity
+        warmth: profileData.semanticDifferential?.warmth ?? undefined,
+        brightness: profileData.semanticDifferential?.brightness ?? undefined,
+        complexity: profileData.semanticDifferential?.complexity ?? undefined
       };
       const mergedImplicit = {
         warmth: implicitSemantics.warmth ?? implicitScores.warmth,
@@ -517,7 +517,7 @@ export function CoreProfileWizard() {
         lifestyle: profileData.lifestyle,
         
         // Big Five (if collected here)
-        bigFive: profileData.bigFive,
+        bigFive: profileData.bigFive as any,
         
         // Inspirations (if collected here)
         inspirations: profileData.inspirations,
@@ -694,7 +694,8 @@ export function CoreProfileWizard() {
                       }
                       onComplete={async (results) => {
                         // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory',message:'Saving explicit preferences to profile',data:{resultsKeys:Object.keys(results),biophiliaScore:results.biophiliaScore,music:results.music,texture:results.texture,light:results.light,natureMetaphor:results.natureMetaphor,hasStyle:!!results.style,resultsStyle:results.style||null,resultsStyleType:typeof results.style,resultsStyleIsEmpty:results.style==='',hasPalette:!!results.palette,resultsPalette:results.palette||null,profileDataStyle:profileData.colorsAndMaterials?.selectedStyle||null,profileDataStyleType:typeof profileData.colorsAndMaterials?.selectedStyle,sessionDataStyle:sessionData.colorsAndMaterials?.selectedStyle||null,sessionDataStyleType:typeof sessionData.colorsAndMaterials?.selectedStyle},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E5'})}).catch(()=>{});
+                        const resultsAny = results as any;
+                        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory',message:'Saving explicit preferences to profile',data:{resultsKeys:Object.keys(results),biophiliaScore:results.biophiliaScore,music:results.music,texture:results.texture,light:results.light,natureMetaphor:results.natureMetaphor,hasStyle:!!resultsAny.style,resultsStyle:resultsAny.style||null,resultsStyleType:typeof resultsAny.style,resultsStyleIsEmpty:resultsAny.style==='',hasPalette:!!resultsAny.palette,resultsPalette:resultsAny.palette||null,profileDataStyle:profileData.colorsAndMaterials?.selectedStyle||null,profileDataStyleType:typeof profileData.colorsAndMaterials?.selectedStyle,sessionDataStyle:sessionData.colorsAndMaterials?.selectedStyle||null,sessionDataStyleType:typeof sessionData.colorsAndMaterials?.selectedStyle},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E5'})}).catch(()=>{});
                         // #endregion
                         const currentStyle = profileData.colorsAndMaterials?.selectedStyle;
                         const finalStyle =

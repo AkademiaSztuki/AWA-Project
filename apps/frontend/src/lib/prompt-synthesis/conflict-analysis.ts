@@ -66,7 +66,7 @@ export function analyzeSourceConflict(inputs: PromptInputs): SourceConflictAnaly
   
   // STYLE CONFLICT
   let styleConflict = false;
-  let styleSeverity: ConflictSeverity = 'none';
+  let styleSeverity: ConflictSeverity | undefined = undefined;
   if (implicit.style && explicit.style) {
     const styleDistance = calculateStyleDistance(implicit.style, explicit.style);
     if (styleDistance > 0) {
@@ -82,7 +82,7 @@ export function analyzeSourceConflict(inputs: PromptInputs): SourceConflictAnaly
   
   // BIOPHILIA CONFLICT
   let biophiliaConflict = false;
-  let biophiliaSeverity: ConflictSeverity = 'none';
+  let biophiliaSeverity: ConflictSeverity | undefined = undefined;
   const biophiliaDiff = Math.abs(implicit.biophilia - explicit.biophilia);
   if (biophiliaDiff >= 2) {
     biophiliaConflict = true;
@@ -115,12 +115,12 @@ export function analyzeSourceConflict(inputs: PromptInputs): SourceConflictAnaly
   const primaryConflictType: ConflictType = conflicts.length > 0 
     ? conflicts[0].type 
     : 'none';
-  const maxSeverity = conflicts.length > 0
+  const maxSeverity: ConflictSeverity = conflicts.length > 0
     ? conflicts.reduce((max, c) => 
         c.severity === 'major' ? 'major' : 
         c.severity === 'moderate' ? (max === 'major' ? 'major' : 'moderate') : 
         max, 'minor' as ConflictSeverity)
-    : 'none';
+    : 'minor';
   
   // Generate recommendations
   const recommendation = hasConflict

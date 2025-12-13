@@ -66,11 +66,11 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
           userHash: profile.userHash,
           hasAestheticDNA: !!profile.aestheticDNA,
           hasExplicit: !!profile.aestheticDNA?.explicit,
-          explicitSelectedStyle: profile.aestheticDNA?.explicit?.selectedStyle,
-          explicitSelectedStyleType: typeof profile.aestheticDNA?.explicit?.selectedStyle,
-          explicitSelectedStyleIsEmpty: profile.aestheticDNA?.explicit?.selectedStyle === '',
-          explicitSelectedStyleIsNull: profile.aestheticDNA?.explicit?.selectedStyle === null,
-          explicitSelectedStyleIsUndefined: profile.aestheticDNA?.explicit?.selectedStyle === undefined,
+          explicitSelectedStyle: (profile.aestheticDNA?.explicit as any)?.selectedStyle,
+          explicitSelectedStyleType: typeof (profile.aestheticDNA?.explicit as any)?.selectedStyle,
+          explicitSelectedStyleIsEmpty: (profile.aestheticDNA?.explicit as any)?.selectedStyle === '',
+          explicitSelectedStyleIsNull: (profile.aestheticDNA?.explicit as any)?.selectedStyle === null,
+          explicitSelectedStyleIsUndefined: (profile.aestheticDNA?.explicit as any)?.selectedStyle === undefined,
           explicitSelectedPalette: profile.aestheticDNA?.explicit?.selectedPalette,
           explicitTopMaterials: profile.aestheticDNA?.explicit?.topMaterials || [],
           rawAestheticDNA: data.aesthetic_dna,
@@ -483,8 +483,8 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
       const aestheticDNA = { ...profile.aestheticDNA };
       if (aestheticDNA.explicit) {
         // If selectedStyle is empty string "", don't include it (keep existing value)
-        if (aestheticDNA.explicit.selectedStyle === '') {
-          delete aestheticDNA.explicit.selectedStyle;
+        if ((aestheticDNA.explicit as any).selectedStyle === '') {
+          delete (aestheticDNA.explicit as any).selectedStyle;
         }
       }
       upsertData.aesthetic_dna = aestheticDNA;
@@ -502,11 +502,11 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
             userHash: profile.userHash,
             hasImplicit: !!profile.aestheticDNA?.implicit,
             hasExplicit: !!profile.aestheticDNA?.explicit,
-            explicitSelectedStyle: profile.aestheticDNA?.explicit?.selectedStyle || null,
-            explicitSelectedStyleType: typeof profile.aestheticDNA?.explicit?.selectedStyle,
-            explicitSelectedStyleIsEmpty: profile.aestheticDNA?.explicit?.selectedStyle === '',
-            explicitSelectedStyleIsNull: profile.aestheticDNA?.explicit?.selectedStyle === null,
-            explicitSelectedStyleIsUndefined: profile.aestheticDNA?.explicit?.selectedStyle === undefined,
+            explicitSelectedStyle: (profile.aestheticDNA?.explicit as any)?.selectedStyle || null,
+            explicitSelectedStyleType: typeof (profile.aestheticDNA?.explicit as any)?.selectedStyle,
+            explicitSelectedStyleIsEmpty: (profile.aestheticDNA?.explicit as any)?.selectedStyle === '',
+            explicitSelectedStyleIsNull: (profile.aestheticDNA?.explicit as any)?.selectedStyle === null,
+            explicitSelectedStyleIsUndefined: (profile.aestheticDNA?.explicit as any)?.selectedStyle === undefined,
             explicitSelectedPalette: profile.aestheticDNA?.explicit?.selectedPalette || null,
             explicitTopMaterials: profile.aestheticDNA?.explicit?.topMaterials || [],
             explicitTopMaterialsCount: profile.aestheticDNA?.explicit?.topMaterials?.length || 0,
