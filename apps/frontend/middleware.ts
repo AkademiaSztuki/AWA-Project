@@ -5,6 +5,13 @@ import type { Language } from './src/lib/questions/validated-scales';
 const LANGUAGE_COOKIE = 'app_language';
 const ONE_YEAR_IN_SECONDS = 60 * 60 * 24 * 365;
 
+// Lista publicznych ścieżek (dostępne bez logowania)
+// Wszystkie inne ścieżki będą chronione (w tym /flow/* i /setup/*)
+const PUBLIC_PATHS = [
+  '/', // Landing page
+  '/auth/callback', // Auth callback
+];
+
 const isLanguage = (value: string | undefined | null): value is Language =>
   value === 'pl' || value === 'en';
 
@@ -26,7 +33,31 @@ const resolveLanguage = (request: NextRequest): Language => {
   return 'en';
 };
 
-export function middleware(request: NextRequest) {
+const isPublicPath = (pathname: string): boolean => {
+  // Sprawdź dokładne dopasowanie
+  if (PUBLIC_PATHS.includes(pathname)) return true;
+  
+  // Sprawdź czy zaczyna się od publicznej ścieżki
+  return PUBLIC_PATHS.some(publicPath => pathname.startsWith(publicPath + '/'));
+};
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  
+  // Sprawdź autoryzację - wszystkie ścieżki oprócz publicznych są chronione
+  // Note: Supabase używa localStorage, nie cookies, więc szczegółowe sprawdzenie
+  // odbywa się w GlobalProtectedRoute po stronie klienta. Middleware tylko przekierowuje
+  // niezalogowanych użytkowników na stronę główną, gdzie GlobalProtectedRoute pokaże modal.
+  if (!isPublicPath(pathname)) {
+    // Przekieruj na stronę główną z parametrem - GlobalProtectedRoute sprawdzi autoryzację
+    const url = request.nextUrl.clone();
+    url.pathname = '/';
+    url.searchParams.set('redirect', pathname);
+    url.searchParams.set('auth', 'required');
+    return NextResponse.redirect(url);
+  }
+
+  // Obsługa języka
   const resolvedLanguage = resolveLanguage(request);
   const current = request.cookies.get(LANGUAGE_COOKIE)?.value;
 

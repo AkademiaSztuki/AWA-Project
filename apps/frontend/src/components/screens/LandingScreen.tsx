@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { GlassCard, GlassButton } from '@/components/ui';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { Zap, Heart, Palette, Home, Sparkles } from 'lucide-react';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
@@ -16,6 +16,7 @@ import { LoginModal } from '@/components/auth/LoginModal';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { language } = useLanguage();
   const { checkHealth } = useModalAPI();
   const { updateSessionData } = useSessionData();
@@ -25,6 +26,7 @@ const LandingScreen: React.FC = () => {
   const [isPrewarming, setIsPrewarming] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [pendingPath, setPendingPath] = useState<'fast' | 'full' | null>(null);
+  const [redirectPath, setRedirectPath] = useState<string | null>(null);
 
   // Store function references in refs to prevent effect re-runs when they change
   const updateSessionDataRef = React.useRef(updateSessionData);
@@ -43,6 +45,23 @@ const LandingScreen: React.FC = () => {
     setHeaderVisible(false);
     return () => setHeaderVisible(true);
   }, [setHeaderVisible]);
+
+  // Check for auth redirect from middleware
+  useEffect(() => {
+    const authRequired = searchParams.get('auth') === 'required';
+    const redirect = searchParams.get('redirect');
+    
+    if (authRequired && redirect) {
+      setRedirectPath(redirect);
+      // If user is already logged in, redirect immediately
+      if (!authLoading && user) {
+        router.push(redirect);
+      } else if (!authLoading && !user) {
+        // Show login modal
+        setShowLoginModal(true);
+      }
+    }
+  }, [searchParams, authLoading, user, router]);
 
   const landingTexts = {
     pl: {
@@ -350,6 +369,15 @@ const LandingScreen: React.FC = () => {
         }}
         onSuccess={async () => {
           setShowLoginModal(false);
+          
+          // If there's a redirect path from middleware, use it
+          if (redirectPath) {
+            setTimeout(() => {
+              router.push(redirectPath);
+              setRedirectPath(null);
+            }, 500);
+            return;
+          }
           
           if (pendingPath) {
             // Small delay to ensure auth state is updated

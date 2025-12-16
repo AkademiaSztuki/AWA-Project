@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { useSessionData } from '@/hooks/useSessionData';
@@ -23,6 +23,7 @@ import {
  */
 export default function PathSelectionScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { language } = useLanguage();
   const { updateSessionData } = useSessionData();
   const { user, isLoading: authLoading } = useAuth();
@@ -192,8 +193,17 @@ export default function PathSelectionScreen() {
       }).catch(() => {});
       // #endregion
 
-      // Store the selected path and show login modal
+      // Store the selected path and determine destination
       setPendingPath(pathType);
+      
+      // Determine destination path based on selection
+      const destinationPath = pathType === 'fast' ? '/flow/onboarding' : '/setup/profile';
+      
+      // Update URL with redirect parameter so ProtectedRoute knows where to go after login
+      // Use router to update URL so searchParams updates properly
+      router.push(`${window.location.pathname}?redirect=${encodeURIComponent(destinationPath)}&auth=required`);
+      
+      // Show login modal - this will handle the redirect after login
       setShowLoginModal(true);
       return;
     }
@@ -242,7 +252,8 @@ export default function PathSelectionScreen() {
         location: 'PathSelectionScreen.tsx:handleLoginSuccess',
         message: 'Login successful - continuing with pending path',
         data: {
-          pendingPath
+          pendingPath,
+          redirectFromUrl: searchParams.get('redirect')
         },
         timestamp: Date.now()
       })
@@ -251,8 +262,27 @@ export default function PathSelectionScreen() {
 
     setShowLoginModal(false);
     
-    if (pendingPath) {
-      // Small delay to ensure auth state is updated
+    // Check if redirect is in URL (set by handlePathSelection or middleware)
+    // Also check window.location.search in case searchParams hasn't updated yet
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirectPath = urlParams.get('redirect') || searchParams.get('redirect');
+    
+    if (redirectPath) {
+      // Use redirect from URL (set when path was selected)
+      setTimeout(async () => {
+        // Determine pathType from redirect path
+        const pathType = redirectPath.includes('/flow/onboarding') ? 'fast' : 'full';
+        if (pathType === 'fast') {
+          await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
+        } else {
+          await updateSessionData({ pathType: 'full' });
+        }
+        console.log('[PathSelection] Redirecting to:', redirectPath);
+        router.push(redirectPath);
+        setPendingPath(null);
+      }, 500);
+    } else if (pendingPath) {
+      // Fallback to pendingPath if no redirect in URL
       setTimeout(async () => {
         if (pendingPath === 'fast') {
           await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
