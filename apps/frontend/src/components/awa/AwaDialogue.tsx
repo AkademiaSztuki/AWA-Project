@@ -8,6 +8,7 @@ import { useAudioManager } from '@/hooks/useAudioManager';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { useLanguage } from '@/contexts/LanguageContext';
 import DialogueAudioPlayer from '../ui/DialogueAudioPlayer';
+import { ArrowRight } from 'lucide-react';
 
 interface AwaDialogueProps {
   currentStep: FlowStep | string; // Allow string for new custom steps
@@ -22,23 +23,27 @@ interface AwaDialogueProps {
 const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   landing: {
     pl: [
-      "Witaj. Jestem IDA." ,
-      "Jesteś gotowy na tę podróż?"
+      "Cześć, jestem IDA - Interior Design Assistant.",
+      "Przeprowadzę Cię przez cały proces tworzenia spersonalizowanych wizualizacji wnętrz.",
+      "Dzięki, że testujesz tę aplikację! To pierwsza wersja testowa doktoratu Jakuba.",
+      "Bardzo proszę o feedback - jeśli coś jest niejasne lub znajdziesz błąd, daj znać. Każda uwaga jest bardzo cenna!"
     ],
     en: [
-      "Hello. I'm IDA. ",
-      "Are you ready for this journey?"
+      "Hi, I'm IDA - Interior Design Assistant.",
+      "I'll guide you through the entire process of creating personalized interior visualizations.",
+      "Thanks for testing this app! This is the first test version of Jakub's PhD dissertation.",
+      "Please share your feedback - if anything is unclear or you find a bug, let me know. Every comment is very valuable!"
     ]
   },
   path_selection: {
     pl: [
+      "Wybierz 'Pełne Doświadczenie', aby stworzyć dokładny profil swoich preferencji - to potrwa około 25 minut, ale da lepsze rezultaty.",
       "Wybierz 'Szybką Ścieżkę', jeśli chcesz od razu przejść do generowania. To zajmie tylko 3-5 minut.",
-      "Wybierz 'Pełne Doświadczenie', aby stworzyć dokładny profil swoich preferencji - to potrwa około 15 minut, ale da lepsze rezultaty.",
       "Kliknij jedną z kart, aby kontynuować."
     ],
     en: [
+      "Choose 'Full Experience' to create a detailed profile of your preferences - it takes about 25 minutes but yields better results.",
       "Choose 'Fast Track' if you want to jump straight to generation. It will only take 3-5 minutes.",
-      "Choose 'Full Experience' to create a detailed profile of your preferences - it takes about 15 minutes but yields better results.",
       "Click one of the cards to continue."
     ]
   },
@@ -76,14 +81,12 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   },
   tinder: {
     pl: [
-      "Czas na ocenę wizualną. Pokażę Ci serię zdjęć wnętrz.",
-      "Przesuwaj w prawo (lub kliknij serce) te, które Ci się podobają. W lewo (lub krzyżyk) te, które Ci nie odpowiadają.",
+      "Pokażę Ci serię zdjęć wnętrz. Przesuwaj w prawo te, które Ci się podobają, w lewo te, które nie.",
       "Działaj intuicyjnie - to pozwoli mi zrozumieć Twój gust."
     ],
     en: [
-      "Time for visual assessment. I'll show you a series of interior photos.",
-      "Swipe right (or click heart) for those you like. Left (or cross) for those you don't.",
-      "Act intuitively - this will let me understand your taste."
+      "I'll show you a series of interior photos. Swipe right for those you like, left for those you don't.",
+      "Act intuitively - this will help me understand your taste."
     ]
   },
   wizard_semantic: {
@@ -98,12 +101,12 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   },
   wizard_sensory: {
     pl: [
-      "Ostatni etap profilowania. Określ swoje preferencje sensoryczne.",
-      "Wybierz ulubioną muzykę, tekstury i rodzaj oświetlenia na panelu po prawej stronie."
+      "Czas na preferencje sensoryczne.",
+      "Przejrzyj wszystkie kategorie na panelu po prawej i wybierz to, co do Ciebie pasuje."
     ],
     en: [
-      "Final profiling step. Define your sensory preferences.",
-      "Select your favorite music, textures, and type of lighting on the panel to the right."
+      "Time for sensory preferences.",
+      "Browse all categories on the panel to the right and select what suits you."
     ]
   },
 
@@ -122,12 +125,12 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   // --- Room Setup ---
   upload: {
     pl: [
-      "Teraz zajmiemy się konkretnym pokojem. Zrób lub wgraj zdjęcie pomieszczenia.",
-      "Upewnij się, że zdjęcie jest wyraźne i obejmuje większość pokoju, aby analiza była dokładna."
+      "Teraz zajmiemy się konkretnym pokojem.",
+      "Wgraj zdjęcie pomieszczenia - najlepiej wyraźne, pokazujące większość pokoju."
     ],
     en: [
-      "Now let's focus on the specific room. Take or upload a photo of the space.",
-      "Make sure the photo is clear and covers most of the room for accurate analysis."
+      "Now let's focus on a specific room.",
+      "Upload a photo of the space - preferably clear, showing most of the room."
     ]
   },
   room_analysis: {
@@ -142,11 +145,11 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   },
   room_preference_source: {
     pl: [
-      "Możemy użyć Twojego ogólnego profilu, który przed chwilą stworzyliśmy, albo wypełnić krótką ankietę specyficzną dla tego pokoju.",
+      "Możemy użyć Twojego ogólnego profilu, albo wypełnić krótką ankietę specyficzną dla tego pokoju.",
       "Wybierz opcję, która bardziej Ci odpowiada."
     ],
     en: [
-      "We can use your general profile we just created, or fill out a short survey specific to this room.",
+      "We can use your general profile, or fill out a short survey specific to this room.",
       "Choose the option that suits you better."
     ]
   },
@@ -183,11 +186,11 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   room_pain_points: {
     pl: [
       "Co Ci przeszkadza w obecnym wnętrzu?",
-      "Zaznacz wszystkie elementy, które chcesz zmienić lub poprawić, np. słabe oświetlenie czy brak miejsca."
+      "Zaznacz wszystkie elementy, które chcesz zmienić lub poprawić"
     ],
     en: [
       "What bothers you about the current interior?",
-      "Select all elements you want to change or improve, e.g., poor lighting or lack of space."
+      "Select all elements you want to change or improve, e.g."
     ]
   },
   room_prs_target: {
@@ -245,33 +248,11 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   thanks: {
     pl: [
       "Dziękuję za udział w badaniu!",
-      "Twoje odpowiedzi zostały zapisane. Możesz teraz zamknąć aplikację."
+      "Twoje odpowiedzi zostały zapisane."
     ],
     en: [
       "Thank you for participating in the study!",
-      "Your answers have been saved. You can now close the application."
-    ]
-  },
-  
-  // Legacy/Fallback support
-  dna: {
-    pl: [
-      "Analizuję Twoje wybory...",
-      "Przejdź do kolejnego kroku."
-    ],
-    en: [
-      "Analyzing your choices...",
-      "Proceed to the next step."
-    ]
-  },
-  ladder: {
-    pl: [
-      "Odpowiedz na kilka pytań o swoje wartości.",
-      "To pomoże mi lepiej zrozumieć Twoje głębokie potrzeby."
-    ],
-    en: [
-      "Answer a few questions about your values.",
-      "This will help me better understand your deep needs."
+      "Your answers have been saved."
     ]
   }
 };
@@ -284,8 +265,7 @@ const getAudioFile = (step: string, lang: 'pl' | 'en'): string => {
     'style_selection',
     'upload', 'room_analysis', 'room_preference_source', 'room_prs_current',
     'room_usage', 'room_activities', 'room_pain_points', 'room_prs_target', 'room_summary',
-    'generation', 'survey_satisfaction', 'survey_clarity', 'thanks',
-    'dna', 'ladder'
+    'generation', 'survey_satisfaction', 'survey_clarity', 'thanks'
   ];
   
   if (audioSteps.includes(step)) {
@@ -459,6 +439,15 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     setAudioReady(true);
   };
 
+  const handleSkip = () => {
+    console.log('User skipped dialogue');
+    setIsDone(true);
+    setIsVisible(false);
+    if (onDialogueEnd) {
+      onDialogueEnd();
+    }
+  };
+
   useEffect(() => {
     // Auto-start for non-landing steps
     if (currentStep !== 'landing' && !hasStarted && !audioReady) {
@@ -516,14 +505,29 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // });
   
   return (
-    <div className={`z-50 flex flex-col items-center justify-start w-full text-center pointer-events-none ${
+    <div className={`z-50 flex flex-col items-center justify-start w-full text-center pointer-events-none relative ${
       fullWidth ? 'fixed bottom-0 left-0 right-0' : ''
     } ${
       isLanding 
         ? 'min-h-[380px] p-8 pointer-events-auto' // Landing needs interaction for audio start if needed, though main start is handled in separate block
         : 'min-h-[260px] p-6 pb-8'
     }`}>
+      {isLanding && audioReady && hasStarted && (
+        <button
+          onClick={handleSkip}
+          className="absolute top-40 right-8 flex flex-col items-end gap-1 pointer-events-auto group transition-opacity duration-300 hover:opacity-80"
+          aria-label={language === 'pl' ? 'Pomiń dialog' : 'Skip dialogue'}
+        >
+          <span className="text-white/40 text-sm font-nasalization font-medium tracking-wide">
+            {language === 'pl' ? 'Pomiń' : 'Skip'}
+          </span>
+          <div className="flex items-center gap-1 text-white/30 group-hover:text-white/50 transition-colors duration-300">
+            <ArrowRight size={16} className="translate-x-0 group-hover:translate-x-1 transition-transform duration-300" />
+          </div>
+        </button>
+      )}
       <TextType
+        key={`${currentStep}-${currentSentenceIndex}`}
         as="div"
         initialDelay={isLanding ? 300 : 0}
         className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center ${

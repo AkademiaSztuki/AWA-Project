@@ -53,16 +53,29 @@ const TextType = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentTextIndex, setCurrentTextIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(!startOnVisible);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const containerRef = useRef<HTMLElement>(null);
+  const prevTextRef = useRef<string | string[]>(text);
 
   const textArray = useMemo(() => (Array.isArray(text) ? text : [text]), [text]);
   const currentFullText = textArray[currentTextIndex] || "";
 
   // Resetuj stan gdy zmienia się tekst wejściowy (np. z zewnątrz)
   useEffect(() => {
-    setCurrentIndex(0);
-    setIsDeleting(false);
-    setCurrentTextIndex(0);
+    const textChanged = JSON.stringify(text) !== JSON.stringify(prevTextRef.current);
+    if (textChanged) {
+      // Natychmiast ukryj tekst podczas przejścia
+      setIsTransitioning(true);
+      setCurrentIndex(0);
+      setIsDeleting(false);
+      setCurrentTextIndex(0);
+      // Krótkie opóźnienie przed rozpoczęciem nowej animacji
+      const timer = setTimeout(() => {
+        setIsTransitioning(false);
+      }, 50);
+      prevTextRef.current = text;
+      return () => clearTimeout(timer);
+    }
   }, [JSON.stringify(text)]);
 
   const getRandomSpeed = () => {
@@ -90,7 +103,7 @@ const TextType = ({
   }, [startOnVisible]);
 
   useEffect(() => {
-    if (!isVisible) return;
+    if (!isVisible || isTransitioning) return;
 
     let timeout: NodeJS.Timeout;
 
@@ -154,7 +167,8 @@ const TextType = ({
     initialDelay,
     currentFullText,
     onSentenceComplete,
-    variableSpeed
+    variableSpeed,
+    isTransitioning
   ]);
 
   const textColor = textColors.length > 0 
@@ -182,7 +196,8 @@ const TextType = ({
         // even if "invisible" to user, it must be "visible" to layout engine.
         // Although opacity: 0 usually preserves layout, some browsers/engines might quirk on spaces.
         const isSpace = char === ' ';
-        const isActuallyVisible = isVisibleChar || isSpace;
+        // Podczas przejścia ukryj wszystkie znaki natychmiast
+        const isActuallyVisible = !isTransitioning && (isVisibleChar || isSpace);
         
         const isCursorPosition = index === currentIndex; // Kursor jest PRZED tym znakiem (lub na jego miejscu)
 
@@ -191,12 +206,13 @@ const TextType = ({
             <span 
                 style={{ 
                     opacity: isActuallyVisible ? 1 : 0,
-                    position: 'relative' 
+                    position: 'relative',
+                    transition: isTransitioning ? 'opacity 0.05s' : 'none'
                 }}
             >
                 {char}
                 
-                {isCursorPosition && showCursor && !hideCursorWhileTyping && (
+                {isCursorPosition && showCursor && !hideCursorWhileTyping && !isTransitioning && (
                    <span 
                         style={{
                             position: 'absolute',
@@ -217,7 +233,7 @@ const TextType = ({
       })}
       
       {/* Kursor na samym końcu tekstu (po ostatnim znaku) */}
-      {currentIndex === currentFullText.length && showCursor && (
+      {currentIndex === currentFullText.length && showCursor && !isTransitioning && (
          <span style={{ position: 'relative', display: 'inline-block', width: 0 }}>
              <span 
                 style={{

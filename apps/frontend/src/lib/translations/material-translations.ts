@@ -142,3 +142,4 @@ export function translateColor(color: string, language: 'pl' | 'en' = 'pl'): str
   return color.charAt(0).toUpperCase() + color.slice(1).toLowerCase();
 }
 
+
