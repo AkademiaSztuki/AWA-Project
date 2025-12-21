@@ -11,6 +11,7 @@ import { useSessionData } from "@/hooks/useSessionData";
 import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
 import { saveUserProfile } from "@/lib/supabase-deep-personalization";
 import { mapSessionToUserProfile } from "@/lib/profile-mapper";
+import { RadarChart, DomainDescription } from '@/components/dashboard/BigFiveDetailed';
 import { 
   Brain, 
   ArrowRight, 
@@ -304,6 +305,7 @@ export default function BigFivePage() {
     if (autoSavedRef.current) return;
     if (!resultsShownRef.current) return; // Don't auto-save if results aren't shown yet
 
+    // CRITICAL: Mark as auto-saving to prevent main useEffect from resetting
     autoSavedRef.current = true;
 
     const runAutoSave = async () => {
@@ -429,10 +431,24 @@ export default function BigFivePage() {
     
     const domainEntries = getDomainEntries(scores);
 
+    // Prepare domain data for DomainDescription components
+    const domainMap: Record<string, number> = {};
+    if (scores.domains) {
+      Object.entries(scores.domains).forEach(([key, value]) => {
+        if (typeof value === 'number' && ['O', 'C', 'E', 'A', 'N'].includes(key)) {
+          domainMap[key] = value;
+        }
+      });
+    }
+    const orderedDomains = ['O', 'C', 'E', 'A', 'N'].map(key => ({
+      key: key as 'O' | 'C' | 'E' | 'A' | 'N',
+      score: domainMap[key] || 50
+    }));
+
     return (
       <div className="flex flex-col w-full">
         <div className="flex-1 flex justify-center items-start">
-          <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
+          <div className="w-full max-w-6xl mx-auto space-y-6">
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -456,7 +472,7 @@ export default function BigFivePage() {
                     <Brain size={40} className="text-white" />
                   </motion.div>
                   
-                  <h1 className="text-3xl md:text-4xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-4">
+                  <h1 className="text-3xl md:text-4xl font-nasalization text-graphite mb-4">
                     {t("Twój Profil Osobowości", "Your Personality Profile")}
                   </h1>
                   <p className="text-lg text-graphite font-modern max-w-2xl mx-auto">
@@ -485,35 +501,53 @@ export default function BigFivePage() {
                     )}
                   </div>
                 ) : (
-                  <div className="space-y-6 mb-8">
-                    {domainEntries.map(([domain, score], index) => (
-                      <motion.div
-                        key={domain}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.5, delay: index * 0.1 }}
-                        className="glass-panel rounded-xl p-6"
-                      >
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-xl font-nasalization text-graphite">
-                            {IPIP_DOMAIN_LABELS[domain][language]}
-                          </h3>
-                          <span className="text-2xl font-bold text-gold">{score}%</span>
+                  <>
+                    {/* Radar Chart Section */}
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.5, delay: 0.1 }}
+                      className="mb-8"
+                    >
+                      <GlassCard className="p-8 bg-white/10 backdrop-blur-xl border border-white/20">
+                        <h2 className="text-2xl font-nasalization text-graphite mb-6 text-center">
+                          {t('Profil Osobowości', 'Personality Profile')}
+                        </h2>
+                        <RadarChart scores={scores} />
+                        <div className="mt-6 text-center text-sm text-silver-dark font-modern">
+                          {t(
+                            'Wykres pokazuje Twoje wyniki w pięciu głównych wymiarach osobowości',
+                            'Chart shows your scores in the five main personality dimensions'
+                          )}
                         </div>
-                        
-                        <div className="w-full bg-white/20 rounded-full h-3 mb-2">
-                          <div 
-                            className="bg-gradient-to-r from-gold to-champagne h-3 rounded-full transition-all duration-1000"
-                            style={{ width: `${score}%` }}
-                          />
-                        </div>
-                        
-                        <p className="text-sm text-silver-dark font-modern">
-                          {getScoreDescription(domain, score, language)}
-                        </p>
-                      </motion.div>
-                    ))}
-                  </div>
+                      </GlassCard>
+                    </motion.div>
+
+                    {/* Detailed Descriptions */}
+                    <div className="space-y-6 mb-8">
+                      <h2 className="text-2xl font-nasalization text-graphite mb-4">
+                        {t('Szczegółowe Opisy Wymiarów', 'Detailed Dimension Descriptions')}
+                      </h2>
+
+                      {orderedDomains.map(({ key, score }, index) => {
+                        const facetScores = scores.facets?.[key];
+                        return (
+                          <motion.div
+                            key={key}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.5, delay: index * 0.1 }}
+                          >
+                            <DomainDescription
+                              domain={key}
+                              score={score}
+                              facets={facetScores}
+                            />
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
 
                 {/* Actions */}

@@ -118,7 +118,7 @@ export default function PhotoUploadPage() {
       console.log('Calling analyzeRoom API...');
       const apiStart = Date.now();
       
-      // Analyze room using MiniCPM-o-2.6 (now includes comment generation)
+      // Analyze room using Google Gemini 2.0 Flash (replaced Gemma 3)
       const analysis = await analyzeRoom({ image: base64, metadata: { source: 'flow-photo-upload' } });
       
       console.log(`API call completed in ${Date.now() - apiStart}ms`);
@@ -133,9 +133,9 @@ export default function PhotoUploadPage() {
       setDetectedRoomType(analysis.detected_room_type);
       setRoomType(analysis.detected_room_type);
       
-      // MiniCPM-o-2.6 now includes both English and Polish comments
+      // Gemini 2.0 Flash generates Polish comments
       if (analysis.comment) {
-        console.log('Setting LLM comment from MiniCPM-o-2.6 (English):', analysis.comment);
+        console.log('Setting LLM comment from Gemini:', analysis.comment);
         setLlmComment({
           comment: analysis.comment,
           suggestions: analysis.suggestions || []
@@ -376,18 +376,6 @@ export default function PhotoUploadPage() {
             </div>
           )}
 
-          {/* LLM Comment */}
-          {isGeneratingComment && (
-            <div className="mb-6 p-6 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl">
-              <div className="flex items-center gap-4">
-                <div className="w-6 h-6 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
-                <div>
-                  <p className="text-white/90 font-exo2 font-semibold text-lg">IDA analizuje i przygotowuje komentarz...</p>
-                  <p className="text-white/60 text-sm font-modern">To może potrwać chwilę</p>
-                </div>
-              </div>
-            </div>
-          )}
 
           {llmComment && !isGeneratingComment && (
             <div className="mb-6 p-6 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl">

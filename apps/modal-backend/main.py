@@ -598,6 +598,9 @@ class Flux2Model:
                 torch.cuda.synchronize()
             raise e
 
+# HIDDEN: Gemma 3 kept in code but not used - replaced by Gemini 2.5 Flash-Lite
+# The frontend now uses /api/google/analyze-inspiration instead of this Modal endpoint
+# This class remains in code for potential future use but is not called automatically
 # Gemma 3 4B-IT Model - MULTIMODAL MODEL WITH EXCELLENT POLISH SUPPORT
 @app.cls(
     image=image,

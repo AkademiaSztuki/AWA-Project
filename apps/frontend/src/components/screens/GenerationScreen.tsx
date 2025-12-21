@@ -11,7 +11,7 @@ import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 export function GenerationScreen() {
   const router = useRouter();
   const { sessionData, updateSessionData } = useSessionData();
-  const { generateImages, isLoading } = useModalAPI();
+  const { generateSixImagesParallelWithGoogle, isLoading } = useModalAPI();
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [ratings, setRatings] = useState<Record<string, any>>({});
@@ -20,19 +20,23 @@ export function GenerationScreen() {
     // Automatyczne generowanie na podstawie zebranych danych
     const generateInitialImages = async () => {
       const coreNeed = sessionData?.ladderResults?.coreNeed;
-      if (sessionData?.visualDNA && coreNeed) {
+      if (sessionData?.visualDNA && coreNeed && sessionData.roomImage) {
         const prompt = buildPrompt(sessionData.visualDNA, coreNeed);
-        const request = {
-          prompt,
-          style: 'default',
-          modifications: [],
-          strength: 0.65,
-          steps: 30,
-          guidance: 2.5,
-          num_images: 4,
-        };
-        const result = await generateImages(request as any);
-        setGeneratedImages(result?.images || []);
+        const response = await generateSixImagesParallelWithGoogle({
+          prompts: [{ source: 'implicit' as any, prompt }],
+          base_image: sessionData.roomImage,
+          style: sessionData.visualDNA.dominantStyle || 'modern',
+          parameters: {
+            strength: 0.65,
+            steps: 30,
+            guidance: 2.5,
+            image_size: 512,
+          },
+        });
+        
+        if (response?.results) {
+          setGeneratedImages(response.results.map(r => r.image).filter(Boolean));
+        }
       }
     };
 

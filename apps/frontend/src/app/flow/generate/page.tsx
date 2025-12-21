@@ -10,7 +10,8 @@ import { assessAllSourcesQuality, getViableSources, type DataStatus } from '@/li
 import { calculateImplicitQuality } from '@/lib/prompt-synthesis/implicit-quality';
 import { analyzeSourceConflict } from '@/lib/prompt-synthesis/conflict-analysis';
 import { countExplicitAnswers, getRegenerationInterpretation, type GenerationFeedback, type RegenerationEvent } from '@/lib/feedback/generation-feedback';
-import { useModalAPI, getGenerationParameters } from '@/hooks/useModalAPI';
+import { useModalAPI } from '@/hooks/useModalAPI';
+import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassSlider } from '@/components/ui/GlassSlider';
@@ -67,6 +68,7 @@ interface GeneratedImage {
   source?: GenerationSource;       // Which data source generated this
   displayIndex?: number;           // Position in blind display (0-4)
   isBlindSelected?: boolean;       // Was this selected in blind comparison?
+  provider?: 'modal' | 'google';   // Which provider generated this (Modal/FLUX or Google)
 }
 
 interface ModificationOption {
@@ -105,7 +107,8 @@ const MACRO_MODIFICATIONS: ModificationOption[] = [
 export default function GeneratePage() {
   const router = useRouter();
   const { sessionData, updateSessionData, isInitialized: isSessionInitialized } = useSessionData();
-  const { generateImages, generatePreviews, upscaleImage, generateFiveImagesParallel, generateSixImagesParallel, isLoading, error, setError, checkHealth, generateLLMComment } = useModalAPI();
+  const { generateSixImagesParallelWithGoogle, upscaleImageWithGoogle, isLoading, error, setError } = useGoogleAI();
+  const { generateLLMComment } = useModalAPI(); 
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
@@ -156,29 +159,16 @@ export default function GeneratePage() {
 
   useEffect(() => {
     const waitForApi = async () => {
-      console.log("Rozpoczynam sprawdzanie gotowości API...");
+      console.log("Rozpoczynam przygotowywanie środowiska AI...");
       setLoadingStage(1);
-      setLoadingProgress(5);
+      setLoadingProgress(10);
       
-      for (let i = 0; i < 30; i++) {
-        const progress = Math.min(30, 5 + (i * 1.5));
-        setLoadingProgress(progress);
-        setEstimatedTime(Math.max(5, 150 - (i * 5)));
-        
-        const isReady = await checkHealth();
-        console.log(`[Health Check ${i + 1}] API gotowe: ${isReady}`);
-        if (isReady) {
-          setIsApiReady(true);
-          setLoadingProgress(30);
-          setStatusMessage("Krok 2/3: API gotowe. Przygotowuję dane...");
-          setLoadingStage(2);
-          setEstimatedTime(undefined);
-          return;
-        }
-        await new Promise(resolve => setTimeout(resolve, 5000));
-      }
-      setStatusMessage("Środowisko AI nie odpowiada. Spróbuj odświeżyć stronę.");
-      setError("Nie udało się połączyć z serwerem generującym obrazy. Proszę odświeżyć stronę.");
+      // Since we use Google Nano Banana (Vertex AI), there is no "cold start" wait time like in Modal
+      setIsApiReady(true);
+      setLoadingProgress(30);
+      setStatusMessage("Krok 2/3: Środowisko AI gotowe. Przygotowuję dane...");
+      setLoadingStage(2);
+      setEstimatedTime(undefined);
     };
     
     waitForApi();
@@ -261,9 +251,109 @@ export default function GeneratePage() {
   const buildInitialPrompt = () => buildOptimizedFluxPrompt(sessionData as any);
 
   /**
+   * Helper function to remove furniture from room image using Google Nano Banana
+   * This creates an empty architectural shell (walls, windows, doors, ceiling, floor only)
+   * Returns the processed image base64 string
+   */
+  const removeFurnitureFromImage = async (imageBase64: string): Promise<string> => {
+    console.log('[Furniture Removal] Starting automatic furniture removal from room image...');
+    
+    // Direct text prompt for Nano Banana removal - more explicit and direct
+    // Improved to better fill empty spaces after removal
+    const removeFurniturePrompt = `EMPTY ARCHITECTURAL SHELL: Remove ALL furniture and objects, then seamlessly fill the empty spaces.
+
+PRESERVE EXACTLY (DO NOT CHANGE):
+- Walls - keep exactly the same material, color, and texture
+- Windows - keep glass panes visible, remove all curtains, blinds, frames, and window treatments
+- Doors - keep exactly the same
+- Ceiling - keep exactly the same material and color
+- Floor - keep exactly the same material, color, and texture
+- Camera perspective and framing - DO NOT CHANGE
+
+REMOVE COMPLETELY (MUST DISAPPEAR):
+- ALL furniture: sofas, chairs, tables, cabinets, shelves, beds, desks, etc.
+- ALL rugs and carpets
+- ALL curtains, blinds, window treatments, and window frames
+- ALL decorations: pictures, vases, sculptures, wall art, etc.
+- ALL lighting fixtures: lamps, chandeliers, ceiling lights, etc.
+- ALL plants and greenery
+- ALL textiles: cushions, throws, blankets, curtains, etc.
+- ALL electronics and appliances
+- ALL personal items and objects
+- ALL mirrors (except if built into architecture)
+- Everything else that is not part of the permanent architectural structure
+
+FILLING INSTRUCTIONS (CRITICAL):
+- After removing objects, seamlessly fill the empty spaces with the SAME wall/floor/ceiling material that was behind them
+- Extend wall surfaces naturally where furniture was removed
+- Extend floor surfaces naturally where rugs/furniture was removed
+- Maintain consistent lighting and shadows on the empty surfaces
+- Do NOT leave holes, black areas, or distorted surfaces
+- The result should look like a naturally empty room, not like objects were cut out
+
+RESULT: A completely empty, bare room with only architectural structure visible. All removed areas must be seamlessly filled with appropriate wall/floor/ceiling surfaces. DO NOT add any new furniture, decorations, or objects.`;
+
+    try {
+      // Clean base64 - remove data URI prefix if present
+      let cleanBase64 = imageBase64;
+      if (cleanBase64.includes(',')) {
+        cleanBase64 = cleanBase64.split(',')[1];
+      }
+
+      // Use Google API for furniture removal
+      // Google Gemini 2.5 Flash Image only supports temperature in generation_config
+      // The prompt and system instruction control the behavior, not strength/steps/guidance
+      // These parameters are kept for type compatibility but not actually used by Google API
+      const baseParams = getGenerationParameters('micro', generationCount);
+      const response = await generateSixImagesParallelWithGoogle({
+        prompts: [{ source: 'implicit' as GenerationSource, prompt: removeFurniturePrompt }],
+        base_image: cleanBase64,
+        style: 'empty',
+        parameters: {
+          strength: baseParams.strength || 0.5, // Not used by Google, kept for type compatibility
+          steps: baseParams.steps || 25, // Not used by Google, kept for type compatibility
+          guidance: baseParams.guidance || 2.5, // Not used by Google, kept for type compatibility
+          image_size: baseParams.image_size,
+          width: baseParams.width,
+          height: baseParams.height
+        }
+      });
+
+      if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
+        throw new Error("Failed to remove furniture from image");
+      }
+
+      const processedImage = response.results[0].image;
+      console.log('[Furniture Removal] Successfully removed furniture from room image');
+      
+      return processedImage;
+    } catch (error) {
+      console.error('[Furniture Removal] Error removing furniture:', error);
+      // Return original image if removal fails
+      console.warn('[Furniture Removal] Falling back to original image');
+      return imageBase64;
+    }
+  };
+
+  /**
    * Generates 6 images using different data sources for blind comparison.
    * This is the new 6-image matrix generation flow with multi-reference support.
    */
+  // Helper to get image dimensions from base64
+  const getImageDimensions = (base64: string): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve) => {
+      const img = new globalThis.Image();
+      img.onload = () => {
+        resolve({ width: img.width, height: img.height });
+      };
+      img.onerror = () => {
+        console.warn("[6-Image Matrix] Failed to load image for dimensions, using fallback 1024x1024");
+        resolve({ width: 1024, height: 1024 });
+      };
+      img.src = base64.startsWith('data:') ? base64 : `data:image/jpeg;base64,${base64}`;
+    });
+  };
+
   const handleMatrixGeneration = async () => {
     console.log("[6-Image Matrix] handleMatrixGeneration called", { isApiReady, isGenerating });
     if (!isApiReady) {
@@ -309,6 +399,57 @@ export default function GeneratePage() {
       source: typedSessionData?.roomImage ? 'sessionData' : 'sessionStorage'
     });
     
+    // Step 0: Use pre-processed empty room image if available, otherwise use original
+    // User can optionally remove furniture in room setup - if they did, use that version
+    let processedRoomImage = roomImage;
+    const roomImageEmpty = typedSessionData?.roomImageEmpty;
+    
+    // CRITICAL: Also check sessionStorage directly as fallback
+    let roomImageEmptyFromStorage: string | null = null;
+    let storageReadError: string | null = null;
+    let allStorageKeys: string[] = [];
+    if (typeof window !== 'undefined') {
+      try {
+        // #region agent log - check all sessionStorage keys
+        allStorageKeys = Object.keys(sessionStorage);
+        const hasKey = sessionStorage.getItem('aura_session_room_image_empty') !== null;
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:room-image-selection:storage-check',message:'Checking sessionStorage before read',data:{allStorageKeysCount:allStorageKeys.length,allStorageKeys:allStorageKeys.filter(k=>k.includes('room')||k.includes('image')),hasKey,key:'aura_session_room_image_empty'},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
+        
+        roomImageEmptyFromStorage = sessionStorage.getItem('aura_session_room_image_empty');
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:room-image-selection:storage-read',message:'Read roomImageEmpty from sessionStorage',data:{hasRoomImageEmptyFromStorage:!!roomImageEmptyFromStorage,roomImageEmptyFromStorageLength:roomImageEmptyFromStorage?.length||0,key:'aura_session_room_image_empty',firstChars:roomImageEmptyFromStorage?.substring(0,50)||'null'},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
+      } catch (e) {
+        storageReadError = String(e);
+        console.warn('[generate] Failed to read roomImageEmpty from sessionStorage', e);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:room-image-selection:storage-read-error',message:'Failed to read roomImageEmpty from sessionStorage',data:{error:storageReadError,allStorageKeysCount:allStorageKeys.length,allStorageKeys:allStorageKeys.filter(k=>k.includes('room')||k.includes('image'))},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
+      }
+    }
+    
+    // Use roomImageEmpty from sessionData if available, otherwise try sessionStorage
+    const finalRoomImageEmpty = roomImageEmpty || roomImageEmptyFromStorage || null;
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:room-image-selection',message:'Checking which room image to use',data:{hasRoomImageEmpty:!!roomImageEmpty,roomImageEmptyLength:roomImageEmpty?.length||0,hasRoomImageEmptyFromStorage:!!roomImageEmptyFromStorage,roomImageEmptyFromStorageLength:roomImageEmptyFromStorage?.length||0,hasFinalRoomImageEmpty:!!finalRoomImageEmpty,finalRoomImageEmptyLength:finalRoomImageEmpty?.length||0,roomImageLength:roomImage?.length||0,willUseEmpty:!!finalRoomImageEmpty,source:finalRoomImageEmpty?(roomImageEmpty===finalRoomImageEmpty?'sessionData':'sessionStorage'):'none',storageReadError},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    
+    if (finalRoomImageEmpty) {
+      console.log("[6-Image Matrix] Using pre-processed empty room image (furniture removed by user)");
+      // Remove data URI prefix if present (roomImageEmpty might have it)
+      processedRoomImage = finalRoomImageEmpty.includes(',') ? finalRoomImageEmpty.split(',')[1] : finalRoomImageEmpty;
+    } else {
+      console.log("[6-Image Matrix] Using original room image (furniture not removed)");
+      // Remove data URI prefix if present
+      processedRoomImage = roomImage.includes(',') ? roomImage.split(',')[1] : roomImage;
+    }
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:processedRoomImage-set',message:'processedRoomImage set after selection',data:{hasProcessedRoomImage:!!processedRoomImage,processedRoomImageLength:processedRoomImage?.length||0,hasFinalRoomImageEmpty:!!finalRoomImageEmpty,finalRoomImageEmptyLength:finalRoomImageEmpty?.length||0,hasRoomImage:!!roomImage,roomImageLength:roomImage?.length||0,isUsingEmpty:!!finalRoomImageEmpty,processedRoomImageFirstChars:processedRoomImage?.substring(0,50)||'null'},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    
     // Create new AbortController for this generation
     const controller = new AbortController();
     setAbortController(controller);
@@ -323,7 +464,7 @@ export default function GeneratePage() {
     const generationStartTime = Date.now();
     setMatrixGenerationStartTime(generationStartTime);
     setLastGenerationTime(generationStartTime);
-    setStatusMessage("Przygotowuję 6 różnych wizji dla Twojego wnętrza...");
+    setStatusMessage("Przygotowuję 6 różnych wizji dla Twojego wnętrza (Google Nano Banana)...");
     setLoadingStage(2);
     setLoadingProgress(30);
     setEstimatedTime(150);
@@ -514,10 +655,37 @@ export default function GeneratePage() {
         }))
       });
       
-      // Use preview mode for faster initial generation (512x512, 20 steps)
-      const parameters = getGenerationParameters('preview', generationCount);
-      console.log('[6-Image Matrix] Preview parameters:', { 
-        image_size: parameters.image_size, 
+      // Use preview mode for faster initial generation (now upgraded to 1024px proportional)
+      const baseParams = getGenerationParameters('preview', generationCount);
+      
+      // Calculate proportional dimensions based on processed (empty) input image
+      let finalWidth = 1024;
+      let finalHeight = 1024;
+      try {
+        const dims = await getImageDimensions(processedRoomImage);
+        const ratio = dims.width / dims.height;
+        if (dims.width >= dims.height) {
+          finalWidth = 1024;
+          finalHeight = Math.round(1024 / ratio);
+        } else {
+          finalHeight = 1024;
+          finalWidth = Math.round(1024 * ratio);
+        }
+        console.log(`[6-Image Matrix] Calculated proportional dimensions: ${finalWidth}x${finalHeight} (Ratio: ${ratio.toFixed(2)})`);
+      } catch (e) {
+        console.warn("[6-Image Matrix] Failed to calculate image dimensions, using 1024x1024 fallback", e);
+      }
+
+      const parameters = {
+        ...baseParams,
+        image_size: 1024,
+        width: finalWidth,
+        height: finalHeight
+      };
+
+      console.log('[6-Image Matrix] Initial generation parameters:', { 
+        width: parameters.width,
+        height: parameters.height,
         steps: parameters.steps, 
         guidance: parameters.guidance,
         strength: parameters.strength 
@@ -613,7 +781,8 @@ export default function GeneratePage() {
             createdAt: Date.now(),
             source: result.source,
             displayIndex: displayIndex >= 0 ? displayIndex : completedCount - 1,
-            isBlindSelected: false
+            isBlindSelected: false,
+            provider: 'google' // Now always using Google
           };
           
           // Mark as 100% complete
@@ -650,24 +819,47 @@ export default function GeneratePage() {
         }
       };
       
-      // Use the restored roomImage from above
-      const baseImageForGeneration = roomImage || typedSessionData.roomImage;
+      // Use the processed room image (with furniture removed) for generation
+      // This ensures generated images don't stick too closely to existing furniture layout
+      // processedRoomImage is already cleaned (no data URI prefix) from the selection above
+      const baseImageForGeneration = processedRoomImage;
       
-      // Ensure roomImage is in correct format (base64 without data URI prefix)
+      // Ensure processedRoomImage is in correct format (base64 without data URI prefix)
+      // It should already be clean, but double-check
       let baseImage = baseImageForGeneration;
       if (baseImage) {
-        // Remove data URI prefix if present
+        // Remove data URI prefix if present (shouldn't be, but just in case)
         if (baseImage.includes(',')) {
           baseImage = baseImage.split(',')[1];
         }
-        console.log("[6-Image Matrix] Using roomImage (cleaned):", {
+        
+        // #region agent log - verify baseImage matches expected
+        const isUsingEmpty = !!finalRoomImageEmpty;
+        const isSameAsOriginal = baseImageForGeneration === roomImage;
+        const baseImageFirstChars = baseImage?.substring(0, 50) || 'null';
+        const roomImageFirstChars = roomImage?.substring(0, 50) || 'null';
+        const finalRoomImageEmptyFirstChars = finalRoomImageEmpty?.substring(0, 50) || 'null';
+        const baseImageMatchesEmpty = finalRoomImageEmpty ? baseImage === finalRoomImageEmpty.split(',')[1] || baseImage === finalRoomImageEmpty : false;
+        const baseImageMatchesOriginal = baseImage === (roomImage.includes(',') ? roomImage.split(',')[1] : roomImage);
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:base-image-verification',message:'Verifying baseImage before API call',data:{hasBaseImage:!!baseImage,baseImageLength:baseImage?.length||0,isUsingEmpty,isSameAsOriginal,baseImageMatchesEmpty,baseImageMatchesOriginal,baseImageFirstChars,roomImageFirstChars,finalRoomImageEmptyFirstChars,processedRoomImageLength:processedRoomImage?.length||0,roomImageLength:roomImage?.length||0,finalRoomImageEmptyLength:finalRoomImageEmpty?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
+        
+        console.log("[6-Image Matrix] Using processed room image (furniture removed, cleaned):", {
           hasImage: !!baseImage,
           length: baseImage?.length || 0,
           startsWith: baseImage?.substring(0, 50) || 'N/A',
-          isBase64: baseImage && !baseImage.startsWith('http') && !baseImage.startsWith('blob:')
+          isBase64: baseImage && !baseImage.startsWith('http') && !baseImage.startsWith('blob:'),
+          isProcessed: !!finalRoomImageEmpty || baseImageForGeneration !== roomImage,
+          isUsingEmpty,
+          baseImageMatchesEmpty,
+          baseImageMatchesOriginal
         });
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:base-image-final',message:'Final base image being sent to generation',data:{hasBaseImage:!!baseImage,baseImageLength:baseImage?.length||0,isProcessed:!!finalRoomImageEmpty,isSameAsOriginal:baseImageForGeneration===roomImage,hasRoomImageEmpty:!!finalRoomImageEmpty,isUsingEmpty,baseImageMatchesEmpty,baseImageMatchesOriginal},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
       } else {
-        console.error("[6-Image Matrix] ERROR: roomImage is missing or empty after restoration!");
+        console.error("[6-Image Matrix] ERROR: processedRoomImage is missing or empty!");
         setError("Brak zdjęcia pokoju w sesji. Proszę wrócić do kroku uploadu zdjęcia.");
         setIsGenerating(false);
         return;
@@ -736,24 +928,109 @@ export default function GeneratePage() {
       });
       console.log("=".repeat(80));
       
-      const generationResponse = await generateSixImagesParallel(
+      // Generate same 6 prompts with Google/Nano Banana
+      const googleGenerationResponse = await generateSixImagesParallelWithGoogle(
         {
           prompts,
-          base_image: baseImage,  // Use cleaned base64
-          inspiration_images: filteredInspirationImages, // Use filtered inspiration images (no blob URLs)
+          base_image: baseImage,
+          inspiration_images: filteredInspirationImages,
           style: typedSessionData.visualDNA?.dominantStyle || 'modern',
           parameters: {
+            ...parameters,
             strength: parameters.strength ?? 0.55,
-            steps: parameters.steps ?? 20,
-            guidance: parameters.guidance ?? 2.5,
-            image_size: parameters.image_size
           }
         },
-        onImageReady,
+        (result) => {
+          // Mark as Google provider and adjust display index
+          const displayIndex = synthesisResult.displayOrder.indexOf(result.source);
+          const googleResult = {
+            ...result,
+            provider: 'google',
+            displayIndex: displayIndex >= 0 ? displayIndex : undefined
+          };
+          
+          // Update the onImageReady callback to handle Google images
+          if (result.success) {
+            completedCount++;
+            const sourceLabel = GENERATION_SOURCE_LABELS[result.source as GenerationSource];
+            const newImage: GeneratedImage = {
+              id: `matrix-google-${generationCount}-${result.source}`,
+              url: `data:image/png;base64,${result.image}`,
+              base64: result.image,
+              prompt: result.prompt,
+              parameters: {
+                ...parameters,
+                source: result.source,
+                sourceLabel: sourceLabel,
+                processingTime: result.processing_time
+              },
+              ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+              isFavorite: false,
+              createdAt: Date.now(),
+              source: result.source,
+              displayIndex: googleResult.displayIndex,
+              isBlindSelected: false,
+              provider: 'google'
+            };
+            
+            setImageProgress(prev => ({
+              ...prev,
+              [`google-${result.source}`]: 100
+            }));
+            
+            setMatrixImages(prev => {
+              const filtered = prev.filter(img => !(img.source === result.source && img.provider === 'google'));
+              const updated = [...filtered, newImage].sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0));
+              console.log(`[6-Image Matrix] Progressive update (Google): ${updated.length} images (added ${result.source})`);
+              return updated;
+            });
+            
+            setGeneratedImages(prev => {
+              const filtered = prev.filter(img => !(img.source === result.source && img.provider === 'google'));
+              return [...filtered, newImage].sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0));
+            });
+            
+            // Add all matrix images to generation history so user can switch between them
+            const historyNode = {
+              id: newImage.id,
+              type: 'initial' as const,
+              label: sourceLabel?.pl || result.source,
+              timestamp: Date.now(),
+              imageUrl: newImage.url,
+            };
+            setGenerationHistory(prev => {
+              // Avoid duplicates
+              const exists = prev.find(h => h.id === historyNode.id);
+              if (exists) return prev;
+              const newHistory = [...prev, historyNode];
+              return newHistory;
+            });
+            
+            const totalExpected = prompts.length;
+            const progressPercent = 55 + (completedCount / totalExpected) * 30;
+            setLoadingProgress(progressPercent);
+            setStatusMessage(`Wygenerowano ${completedCount}/${totalExpected} wizji...`);
+          }
+        },
         controller.signal
       );
+
+      console.log("[12-Image Matrix] Google generation returned:", {
+        successful_count: googleGenerationResponse?.successful_count,
+        failed_count: googleGenerationResponse?.failed_count,
+        results_count: googleGenerationResponse?.results?.length || 0
+      });
+
+      // Process Google results
+      const googleResults = googleGenerationResponse.results.map(r => Object.assign({}, r, { provider: 'google' as const }));
+      const generationResponse = {
+        results: googleResults as any[],
+        total_processing_time: googleGenerationResponse.total_processing_time,
+        successful_count: googleGenerationResponse.successful_count,
+        failed_count: googleGenerationResponse.failed_count
+      };
       
-      console.log("[6-Image Matrix] generateSixImagesParallel returned:", {
+      console.log("[6-Image Matrix] Google generation response:", {
         successful_count: generationResponse?.successful_count,
         failed_count: generationResponse?.failed_count,
         results_count: generationResponse?.results?.length || 0
@@ -783,10 +1060,15 @@ export default function GeneratePage() {
         .filter(r => r.success)
         .map((result, idx) => {
           const displayIndex = displayOrder.indexOf(result.source);
-          const sourceLabel = GENERATION_SOURCE_LABELS[result.source];
+          const sourceLabel = GENERATION_SOURCE_LABELS[result.source as GenerationSource];
+          const provider = (result as any).provider || 'google';
+          const baseId = provider === 'google' ? `matrix-google-${generationCount}-${result.source}` : `matrix-${generationCount}-${result.source}`;
+          const finalDisplayIndex = provider === 'google' 
+            ? (displayIndex >= 0 ? displayIndex + 6 : idx + 6)
+            : (displayIndex >= 0 ? displayIndex : idx);
           
           return {
-            id: `matrix-${generationCount}-${result.source}`,
+            id: baseId,
             url: `data:image/png;base64,${result.image}`,
             base64: result.image,
             prompt: result.prompt,
@@ -800,8 +1082,9 @@ export default function GeneratePage() {
             isFavorite: false,
             createdAt: Date.now(),
             source: result.source,
-            displayIndex: displayIndex >= 0 ? displayIndex : idx,
-            isBlindSelected: false
+            displayIndex: finalDisplayIndex,
+            isBlindSelected: false,
+            provider: provider as 'modal' | 'google'
           };
         });
       
@@ -1009,17 +1292,26 @@ export default function GeneratePage() {
       const seed = image.parameters?.seed || image.parameters?.generation_info?.seed || 42;
       const targetSize = 1024; // Full resolution
       
-      // Get inspiration images if available
-      const typedSessionData = sessionData as any;
-      const inspirationImages = synthesisResult?.inspirationImages;
+      // Check if image is from Google or Modal
+      const isGoogleImage = image.provider === 'google';
       
-      // Upscale the image
-      const upscaledBase64 = await upscaleImage(
-        image.base64,
+      // Get inspiration images if available (only for Modal)
+      const typedSessionData = sessionData as any;
+      const inspirationImages = isGoogleImage ? undefined : synthesisResult?.inspirationImages;
+      
+      // Clean image base64 (remove data: prefix if present)
+      let imageBase64 = image.base64;
+      if (imageBase64.includes(',')) {
+        imageBase64 = imageBase64.split(',')[1];
+      }
+      
+      // Upscale the image using Google Nano Banana Pro (FORCED)
+      console.log('[Upscale] Using Google Nano Banana Pro (forced)');
+      const upscaledBase64 = await upscaleImageWithGoogle(
+        imageBase64,
         seed,
         prompt,
-        targetSize,
-        inspirationImages
+        targetSize
       );
       
       // Create upscaled image object
@@ -1028,6 +1320,7 @@ export default function GeneratePage() {
         id: `${image.id}-upscaled`,
         url: `data:image/png;base64,${upscaledBase64}`,
         base64: upscaledBase64,
+        provider: 'google' as const, // Force provider to google
         parameters: {
           ...image.parameters,
           mode: 'upscale',
@@ -1063,93 +1356,8 @@ export default function GeneratePage() {
       isBlindSelected: img.id === image.id
     })));
     
-    // Start upscaling the selected image automatically
-    setIsUpscaling(true);
-    setError(null);
-    
-    try {
-      console.log('[Upscale] Starting upscale for selected image...');
-      
-      // Get upscale parameters
-      const upscaleParams = getGenerationParameters('upscale');
-      
-      // DO NOT pass inspiration images during upscaling - style is already baked into the generated image
-      // Passing 6 inspiration images at 1536x1536 causes CUDA OOM (7 total images = 1 base + 6 inspiration)
-      // The prompt already contains style/material cues from the inspiration analysis
-      const inspirationImages = undefined;
-      
-      // Get seed from image parameters
-      const seed = image.parameters?.seed || image.parameters?.generation_info?.seed || 42;
-      const targetSize = upscaleParams.image_size || 1536; // Use upscale size (1536 for upscale mode)
-      
-      console.log('[Upscale] Starting upscale for selected image with params:', {
-        target_size: targetSize,
-        seed,
-        has_inspiration_images: !!inspirationImages,
-        image_id: image.id
-      });
-      
-      // Use the dedicated upscale endpoint (not generate - this upscales the existing image)
-      // Clean image base64 (remove data: prefix if present)
-      let imageBase64 = image.base64;
-      if (imageBase64.includes(',')) {
-        imageBase64 = imageBase64.split(',')[1];
-      }
-      
-      const upscaledBase64 = await upscaleImage(
-        imageBase64,
-        seed,
-        image.prompt,
-        targetSize,
-        inspirationImages
-      );
-      
-      // Create upscaled image object
-      const upscaled: GeneratedImage = {
-        ...image,
-        id: `${image.id}-upscaled`,
-        url: `data:image/png;base64,${upscaledBase64}`,
-        base64: upscaledBase64,
-        parameters: {
-          ...image.parameters,
-          mode: 'upscale',
-          target_size: upscaleParams.image_size,
-          steps: upscaleParams.steps
-        }
-      };
-      
-      setUpscaledImage(upscaled);
-      setSelectedImage(upscaled); // Update selected image to upscaled version
-      
-      // Add upscaled image to generatedImages and history
-      setGeneratedImages(prev => {
-        const exists = prev.find(img => img.id === upscaled.id);
-        if (exists) return prev;
-        return [...prev, upscaled];
-      });
-      
-      // Add to generation history
-      const historyNode = {
-        id: upscaled.id,
-        type: 'initial' as const, // Upscale is treated as initial type
-        label: 'Upscalowane',
-        timestamp: Date.now(),
-        imageUrl: upscaled.url,
-      };
-      setGenerationHistory(prev => {
-        const exists = prev.find(h => h.id === historyNode.id);
-        if (exists) return prev;
-        return [...prev, historyNode];
-      });
-      
-      console.log('[Upscale] Image upscaled successfully and added to history');
-    } catch (err: any) {
-      console.error('[Upscale] Error upscaling image:', err);
-      setError(err.message || 'Nie udało się upscalować obrazu.');
-      // Continue with original image if upscale fails
-    } finally {
-      setIsUpscaling(false);
-    }
+    // Skip automatic upscaling - we now generate in high quality from the start
+    console.log('[6-Image Matrix] Skipping upscaling step - using original high-quality generation');
     
     // Collect full feedback with quality metrics
     try {
@@ -1301,6 +1509,25 @@ export default function GeneratePage() {
       return;
     }
 
+    // Use processed room image (with furniture removed) if available, otherwise process it
+    let processedRoomImage = typedSessionData.roomImage;
+    if (!typedSessionData.roomImageEmpty) {
+      console.log("[Legacy Generation] No empty room image found, processing original image to remove furniture...");
+      setStatusMessage("Przygotowuję puste pomieszczenie (usuwam meble)...");
+      try {
+        const emptyRoomBase64 = await removeFurnitureFromImage(typedSessionData.roomImage);
+        await updateSessionData({ roomImageEmpty: emptyRoomBase64 } as any);
+        processedRoomImage = emptyRoomBase64;
+        console.log("[Legacy Generation] Successfully processed room image - furniture removed");
+      } catch (error) {
+        console.error("[Legacy Generation] Failed to remove furniture, using original image:", error);
+        processedRoomImage = typedSessionData.roomImage;
+      }
+    } else {
+      console.log("[Legacy Generation] Using pre-processed empty room image");
+      processedRoomImage = typedSessionData.roomImageEmpty;
+    }
+
     setStatusMessage("Krok 3/3: Wysyłanie zadania do AI. To może potrwać kilka minut...");
     setLoadingStage(2);
     setLoadingProgress(35);
@@ -1314,8 +1541,8 @@ export default function GeneratePage() {
       height: 512,
     };
     
-    console.log("FLUX Kontext Structured Prompt:", prompt);
-    console.log("FLUX Kontext Parameters:", parameters);
+    console.log("Google Nano Banana Structured Prompt:", prompt);
+    console.log("Google Nano Banana Parameters:", parameters);
 
     try {
       const projectId = await getOrCreateProjectId((sessionData as any).userHash);
@@ -1325,7 +1552,7 @@ export default function GeneratePage() {
           type: 'initial',
           prompt,
           parameters,
-          has_base_image: Boolean(typedSessionData.roomImage),
+          has_base_image: Boolean(processedRoomImage),
         });
       }
       
@@ -1334,13 +1561,16 @@ export default function GeneratePage() {
       setStatusMessage("Generowanie w toku...");
       setEstimatedTime(45);
       
-      const response = await generateImages({
-        prompt,
-        base_image: typedSessionData.roomImage,
+      // Use Google Nano Banana for initial generation with processed (empty) room image
+      console.log("[Generation] Using Google Nano Banana for initial generation (with furniture removed)");
+      const response = await generateSixImagesParallelWithGoogle({
+        prompts: [{ source: 'implicit' as GenerationSource, prompt }],
+        base_image: processedRoomImage,
         style: typedSessionData.visualDNA?.dominantStyle || 'modern',
-        modifications: [],
-        ...parameters,
-        strength: parameters.strength ?? 0.6
+        parameters: {
+          ...parameters,
+          strength: parameters.strength ?? 0.6
+        }
       });
       
       // Generation completed
@@ -1349,18 +1579,24 @@ export default function GeneratePage() {
       setStatusMessage("Finalizuję obrazy...");
       setEstimatedTime(10);
 
-      if (!response || !response.images) {
+      if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
         console.error("Otrzymano pustą odpowiedź z API po generowaniu.");
         setError("Nie udało się wygenerować obrazów. Otrzymano pustą odpowiedź z serwera.");
         return;
       }
 
-      const newImages: GeneratedImage[] = response.images.map((base64: string, index: number) => ({
+      const newImages: GeneratedImage[] = response.results.map((result: any, index: number) => ({
         id: `gen-${generationCount}-${index}`,
-        url: `data:image/png;base64,${base64}`,
-        base64,
+        url: `data:image/png;base64,${result.image}`,
+        base64: result.image,
         prompt,
-        parameters: { ...response.parameters, modificationType: 'initial' },
+        provider: 'google' as const,
+        parameters: { 
+          style: typedSessionData.visualDNA?.dominantStyle || 'modern',
+          modificationType: 'initial',
+          iterationCount: generationCount,
+          usedOriginal: true
+        },
         ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
         isFavorite: false,
         createdAt: Date.now(),
@@ -1518,28 +1754,41 @@ export default function GeneratePage() {
           modification_label: modification.label,
         });
       }
-      const response = await generateImages({
-        prompt: modificationPrompt,
+      // #region prompt debug
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:start',message:'Starting modification with Google API',data:{modificationLabel:modification.label,isMacro,modificationPrompt,hasBaseImage:!!baseImageSource,baseImageLength:baseImageSource?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+      // #endregion
+
+      // Use Google API for modifications (instead of Modal/FLUX)
+      const response = await generateSixImagesParallelWithGoogle({
+        prompts: [{ source: 'implicit' as GenerationSource, prompt: modificationPrompt }],
         base_image: baseImageSource,
         style: isMacro ? modification.id : (selectedImage.parameters?.style || 'modern'),
-        modifications: isMacro ? [modification.label] : [],
-        ...parameters,
-        strength: parameters.strength ?? (isMacro ? 0.75 : 0.25)
+        parameters: {
+          ...parameters,
+          strength: parameters.strength ?? (isMacro ? 0.75 : 0.25)
+        }
       });
 
-      if (!response || !response.images) {
+      // #region prompt debug
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:response',message:'Modification response received',data:{hasResponse:!!response,hasImages:!!response?.results,imagesCount:response?.results?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+      // #endregion
+
+      if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
         console.error("Otrzymano pustą odpowiedź z API po modyfikacji.");
         setError("Nie udało się zmodyfikować obrazu. Otrzymano pustą odpowiedź z serwera.");
         return;
       }
 
-      const newImages: GeneratedImage[] = response.images.map((base64: string, index: number) => ({
-        id: `mod-${generationCount}-${index}`,
-        url: `data:image/png;base64,${base64}`,
-        base64,
+      // Convert Google API response format to GeneratedImage format
+      // generateSixImagesParallelWithGoogle returns results array, we use first result
+      const result = response.results[0];
+      const newImages: GeneratedImage[] = [{
+        id: `mod-${generationCount}-0`,
+        url: `data:image/png;base64,${result.image}`,
+        base64: result.image,
         prompt: modificationPrompt,
+        provider: 'google' as const,
         parameters: { 
-          ...response.parameters, 
           modificationType: isMacro ? 'macro' : 'micro',
           modifications: [modification.label],
           iterationCount: generationCount,
@@ -1548,7 +1797,7 @@ export default function GeneratePage() {
         ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
         isFavorite: false,
         createdAt: Date.now(),
-      }));
+      }];
 
       setGeneratedImages((prev) => [...prev, ...newImages]);
       setSelectedImage(newImages[0]);
@@ -1672,30 +1921,59 @@ export default function GeneratePage() {
   const handleRemoveFurniture = async () => {
     if (!selectedImage) return;
     
-    const removeFurniturePrompt = "Remove ALL furniture and accessories from the room. Keep only walls, doors, windows, ceiling, stairs, and floor. Empty room with no furniture, no decorations, no rugs, no plants, no lighting fixtures. Clean empty space.";
+    // JSON prompt for Nano Banana removal
+    const removeFurniturePrompt = JSON.stringify({
+      instruction: "EMPTY ARCHITECTURAL SHELL: Remove ALL furniture, rugs, curtains, and decorations. Keep only the structural elements of the room.",
+      preserve: [
+        "walls - EXACTLY the same",
+        "windows - EXACTLY the same",
+        "doors - EXACTLY the same",
+        "ceiling - EXACTLY the same",
+        "floor - EXACTLY the same",
+        "camera perspective and framing - DO NOT CHANGE"
+      ],
+      remove: [
+        "ALL furniture and seating",
+        "ALL rugs and carpets",
+        "ALL curtains and window treatments",
+        "ALL decorations and accessories",
+        "ALL lighting fixtures"
+      ],
+      style: "Clean empty room",
+      redesign_process: "STEP 1: Keep room structure 100% unchanged. STEP 2: Erase everything else to create an empty space."
+    });
     
+    // Set loading state for removal
+    setLoadingStage(2);
+    setLoadingProgress(30);
+    setStatusMessage("Usuwam meble (Google Nano Banana)...");
+    setEstimatedTime(25);
+
     try {
-      const response = await generateImages({
-        prompt: removeFurniturePrompt,
+      // Use Google API for furniture removal
+      const response = await generateSixImagesParallelWithGoogle({
+        prompts: [{ source: 'implicit' as GenerationSource, prompt: removeFurniturePrompt }],
         base_image: selectedImage.base64,
         style: 'empty',
-        modifications: ['remove_furniture'],
-        ...getOptimalParameters('micro', generationCount),
-        strength: getOptimalParameters('micro', generationCount).strength ?? 0.25
+        parameters: {
+          ...getOptimalParameters('micro', generationCount),
+          strength: 0.3 // Slightly higher strength for better removal
+        }
       });
 
-      if (!response || !response.images) {
+      if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
         setError("Nie udało się usunąć mebli.");
         return;
       }
 
+      const result = response.results[0];
       const newImage: GeneratedImage = {
         id: `remove-${Date.now()}`,
-        url: `data:image/png;base64,${response.images[0]}`,
-        base64: response.images[0],
+        url: `data:image/png;base64,${result.image}`,
+        base64: result.image,
         prompt: removeFurniturePrompt,
+        provider: 'google' as const,
         parameters: { 
-          ...response.parameters, 
           modificationType: 'remove_furniture',
           modifications: ['remove_furniture'],
           iterationCount: generationCount,
@@ -1743,6 +2021,10 @@ export default function GeneratePage() {
           },
         ],
       } as any);
+
+      // Complete removal
+      setLoadingProgress(100);
+      setStatusMessage("Meble zostały usunięte!");
     } catch (err) {
       console.error('Remove furniture failed:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas usuwania mebli.');
@@ -1754,30 +2036,51 @@ export default function GeneratePage() {
     
     const currentStyle = selectedImage.parameters?.style || 'modern';
     
-    const qualityPrompt = `Improve this ${currentStyle} interior: enhance sharpness, remove artifacts, improve lighting quality, add realistic shadows, enhance material textures, perfect composition, professional photography, crisp details, natural lighting, high resolution quality`;
+    // JSON prompt for Nano Banana quality improvement
+    const qualityPrompt = JSON.stringify({
+      instruction: `ENHANCE QUALITY: Sharpen textures, improve lighting, and refine materials while keeping everything exactly the same.`,
+      preserve: [
+        "ALL elements - position, shape, and color must remain identical",
+        "Camera perspective - DO NOT CHANGE",
+        "Furniture placement - DO NOT CHANGE",
+        "Architecture - DO NOT CHANGE"
+      ],
+      style: `${currentStyle} - Enhanced`,
+      photography: "Professional architectural photography, high resolution, 8k, sharp focus, perfect exposure",
+      redesign_process: "Keep the image exactly as it is, but improve its technical quality, sharpness, and lighting."
+    });
     
+    // Set loading state for improvement
+    setLoadingStage(2);
+    setLoadingProgress(30);
+    setStatusMessage("Poprawiam jakość (Google Nano Banana)...");
+    setEstimatedTime(25);
+
     try {
-      const response = await generateImages({
-        prompt: qualityPrompt,
+      // Use Google API for quality improvement
+      const response = await generateSixImagesParallelWithGoogle({
+        prompts: [{ source: 'implicit' as GenerationSource, prompt: qualityPrompt }],
         base_image: selectedImage.base64,
         style: currentStyle,
-        modifications: ['quality_improvement'],
-        ...getOptimalParameters('micro', generationCount),
-        strength: getOptimalParameters('micro', generationCount).strength ?? 0.25
+        parameters: {
+          ...getOptimalParameters('micro', generationCount),
+          strength: 0.15 // Very low strength for quality only
+        }
       });
 
-      if (!response || !response.images) {
+      if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
         setError("Nie udało się poprawić jakości obrazu.");
         return;
       }
 
+      const result = response.results[0];
       const newImage: GeneratedImage = {
         id: `quality-${Date.now()}`,
-        url: `data:image/png;base64,${response.images[0]}`,
-        base64: response.images[0],
+        url: `data:image/png;base64,${result.image}`,
+        base64: result.image,
         prompt: qualityPrompt,
+        provider: 'google' as const,
         parameters: { 
-          ...response.parameters, 
           modificationType: 'quality_improvement',
           modifications: ['quality_improvement'],
           iterationCount: generationCount,
@@ -1825,6 +2128,10 @@ export default function GeneratePage() {
           },
         ],
       } as any);
+
+      // Complete improvement
+      setLoadingProgress(100);
+      setStatusMessage("Jakość została poprawiona!");
     } catch (err) {
       console.error('Quality improvement failed:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas poprawiania jakości.');
@@ -2041,10 +2348,10 @@ export default function GeneratePage() {
             </GlassCard>
           )}
 
-          {/* 6-Image Matrix - Grid 2x3 with Loading Placeholders */}
+          {/* 6-Image Matrix (Google Nano Banana) with Loading Placeholders */}
           {/* Show grid if: matrix mode enabled OR generation in progress OR we have images */}
           {(isMatrixMode || isGenerating || matrixImages.length > 0) && !blindSelectionMade && (
-            <div className="space-y-6">
+            <div className="space-y-8">
               {/* Header */}
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-graphite mb-2">
@@ -2052,22 +2359,23 @@ export default function GeneratePage() {
                 </h2>
                 <p className="text-silver-dark text-sm">
                   {isGenerating 
-                    ? 'Twoje wizje są generowane. Obrazy pojawią się poniżej gdy będą gotowe.' 
+                    ? 'Twoje wizje są generowane przez Google Nano Banana. Obrazy pojawią się poniżej gdy będą gotowe.' 
                     : 'Wybierz wizję, która najbardziej Ci odpowiada'}
                 </p>
               </div>
               
-              {/* Grid 3x2 with Loading Placeholders - 3 columns for better fit */}
-              <div className="grid grid-cols-3 gap-3 max-w-5xl mx-auto">
-                {/* Generate 6 slots - show placeholders for missing images */}
-                {Array.from({ length: 6 }).map((_, index) => {
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
+                  {/* Generate 6 slots for Modal - show placeholders for missing images */}
+                  {Array.from({ length: 6 }).map((_, index) => {
                   const expectedSource = synthesisResult?.displayOrder[index] || null;
-                  const image = matrixImages.find(img => img.source === expectedSource);
+                  // Only show Google images
+                  const image = matrixImages.find(img => img.source === expectedSource && img.provider === 'google');
                   // Always show loading skeleton when there is no image (unless error)
                   const slotIsLoading = !image && !error;
                   const offset = progressOffsets[expectedSource || ''] ?? index * 3000;
                   const elapsedForFallback = Math.max(0, Date.now() - ((matrixGenerationStartTime || Date.now()) + offset));
-                  const pendingSources = synthesisResult?.displayOrder.filter(src => !matrixImages.some(img => img.source === src)) || [];
+                  const pendingSources = synthesisResult?.displayOrder.filter(src => !matrixImages.some(img => img.source === src && img.provider === 'google')) || [];
                   const activeSource = pendingSources[0];
                   const qualityInfo = synthesisResult?.qualityReports?.find(r => r.source === expectedSource);
                   const statusColor = qualityInfo?.status === 'insufficient'
@@ -2088,8 +2396,8 @@ export default function GeneratePage() {
                       ? Math.min(60, Math.round(base * 1.2)) // active slot slightly faster
                       : base;
                   })();
-                  const progressValue = expectedSource && imageProgress[expectedSource] !== undefined 
-                    ? Math.round(imageProgress[expectedSource])
+                  const progressValue = expectedSource && imageProgress[`google-${expectedSource}`] !== undefined 
+                    ? Math.round(imageProgress[`google-${expectedSource}`])
                     : fallbackProgress;
                   const sourceLabel = expectedSource ? GENERATION_SOURCE_LABELS[expectedSource]?.pl : `Wizja ${index + 1}`;
                   
@@ -2253,11 +2561,20 @@ export default function GeneratePage() {
                               priority={index < 2}
                             />
                             
-                            {/* Source Label */}
+                            {/* Source Label with Provider Badge */}
                             <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                               <div className="px-3 py-1.5 bg-black/70 backdrop-blur-sm rounded-lg">
-                                <p className="text-white text-xs font-medium opacity-70">Źródło danych:</p>
-                                <p className="text-gold font-bold text-sm">{sourceLabel}</p>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div>
+                                    <p className="text-white text-xs font-medium opacity-70">Źródło danych:</p>
+                                    <p className="text-gold font-bold text-sm">{sourceLabel}</p>
+                                  </div>
+                                  {image.provider === 'google' && (
+                                    <span className="px-2 py-0.5 bg-green-500/80 text-white text-xs font-semibold rounded">
+                                      Google
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             
@@ -2292,8 +2609,9 @@ export default function GeneratePage() {
                     </motion.div>
                   );
                 })}
+                </div>
               </div>
-              
+
               {/* Selected Image Info - Show when image is selected */}
               {selectedImage && (
                 <GlassCard className="p-4">
@@ -2398,8 +2716,8 @@ export default function GeneratePage() {
                     >
                       <Heart size={20} fill={selectedImage.isFavorite ? 'currentColor' : 'none'} />
                     </button>
-                    {/* Upscale button - only show if not already upscaled */}
-                    {!upscaledImage && selectedImage.parameters?.mode !== 'upscale' && (
+                    {/* Upscale button - only show if not already upscaled and not from matrix (since matrix is now high quality) */}
+                    {!upscaledImage && !blindSelectionMade && selectedImage.parameters?.mode !== 'upscale' && (
                       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
                         <GlassButton
                           onClick={() => handleUpscale(selectedImage)}
@@ -2420,8 +2738,8 @@ export default function GeneratePage() {
                         </GlassButton>
                       </div>
                     )}
-                    {/* Show indicator if already upscaled */}
-                    {upscaledImage && (
+                    {/* Show indicator if already upscaled or high-quality matrix selection */}
+                    {(upscaledImage || blindSelectionMade) && (
                       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
                         <motion.div
                           initial={{ opacity: 0, scale: 0.9 }}
@@ -2429,7 +2747,7 @@ export default function GeneratePage() {
                           className="px-4 py-2 bg-green-500/90 backdrop-blur-sm rounded-full flex items-center gap-2"
                         >
                           <CheckCircle2 size={16} className="text-white" />
-                          <span className="text-sm font-medium text-white">Upscalowane do 1024x1024</span>
+                          <span className="text-sm font-medium text-white">Wysoka jakość (1024px)</span>
                         </motion.div>
                       </div>
                     )}
@@ -2472,8 +2790,8 @@ export default function GeneratePage() {
                 </div>
               </GlassCard>
               
-              {/* Modifications and History - Show after upscale */}
-              {upscaledImage && !isUpscaling && (
+              {/* Modifications and History - Show after selection */}
+              {selectedImage && blindSelectionMade && (
                 <>
                   {/* Modifications Button */}
                   <motion.div

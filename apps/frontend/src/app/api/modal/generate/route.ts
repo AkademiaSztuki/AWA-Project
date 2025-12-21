@@ -30,6 +30,13 @@ async function urlToBase64(url: string): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
+  return NextResponse.json(
+    { error: 'Modal API is deprecated. Please use Google Nano Banana API instead.' },
+    { status: 410 } // Gone
+  );
+  
+  // Original implementation below (commented out as requested)
+  /*
   const requestStartTime = Date.now();
   console.log('[API] ========================================');
   console.log('[API] /api/modal/generate - ENDPOINT CALLED at', new Date().toISOString());

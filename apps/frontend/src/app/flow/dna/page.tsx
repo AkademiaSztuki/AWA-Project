@@ -51,8 +51,18 @@ export default function VisualDNAPage() {
     const likes = tinderData?.swipes?.filter((s: any) => s.direction === 'right') || [];
 
     const weighted = computeWeightedDNAFromSwipes(likes, tinderData?.totalImages || likes.length || 30);
-    // Use only the first (top) style to avoid tag soup
-    const dominantStyle = weighted.top.styles[0] || 'modern';
+    // #region agent log
+    const styleWeights = weighted.top.styles.map(s => ({ style: s, weight: weighted.weights[s] || 0 }));
+    const styleWeightRatio = styleWeights.length >= 2 && styleWeights[0].weight > 0
+      ? styleWeights[1].weight / styleWeights[0].weight
+      : 0;
+    const shouldUseTwoStyles = styleWeights.length >= 2 && styleWeightRatio >= 0.7; // If second style is within 30% of first (ratio >= 0.7)
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dna/page.tsx:analyzeDNA:style-selection',message:'Style selection decision',data:{availableStyles:weighted.top.styles,styleWeights,selectedStyle:weighted.top.styles[0],secondStyle:weighted.top.styles[1],styleWeightRatio:styleWeightRatio.toFixed(3),shouldUseTwoStyles,usingOnlyFirst:!shouldUseTwoStyles,reason:shouldUseTwoStyles?'two styles close in weight':'single dominant style'},timestamp:Date.now(),sessionId:'debug-session',runId:'style-aggregation-check'})}).catch(()=>{});
+    // #endregion
+    // Use two styles if they're close in weight (within 30%), otherwise use only the first
+    const dominantStyle = shouldUseTwoStyles && weighted.top.styles.length >= 2
+      ? `${weighted.top.styles[0]} with ${weighted.top.styles[1]} accents`
+      : (weighted.top.styles[0] || 'modern');
     const colorPalette = weighted.top.colors.join(' + ') || 'Neutral colors';
     const materials = weighted.top.materials.join(' + ') || 'Natural materials';
     const lighting = weighted.top.lighting.join(' + ') || 'Soft lighting';
@@ -71,6 +81,11 @@ export default function VisualDNAPage() {
     setShowResults(true);
 
     // Update session with structured preferences (used later in generation)
+    // Include style weights for smart style selection in prompt building
+    const styleWeightsMap: Record<string, number> = {};
+    weighted.top.styles.forEach(style => {
+      styleWeightsMap[style] = weighted.weights[style] || 0;
+    });
     await updateSession({
       visualDNA: {
         dominantTags: [dominantStyle, ...weighted.top.colors, ...weighted.top.materials].filter(Boolean),
@@ -79,6 +94,7 @@ export default function VisualDNAPage() {
           materials: weighted.top.materials,
           styles: weighted.top.styles,
           lighting: weighted.top.lighting,
+          styleWeights: styleWeightsMap, // Add style weights for smart selection
         },
         accuracyScore: Math.round(weighted.confidence),
         // Extended fields for convenience in prompt building

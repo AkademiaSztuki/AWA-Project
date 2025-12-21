@@ -15,6 +15,8 @@ import Image from 'next/image';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { saveRoom } from '@/lib/supabase-deep-personalization';
 import { useSession, useSessionData } from '@/hooks';
+import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
+import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { SessionData } from '@/types';
 import { RoomPreferencePayload, RoomActivity } from '@/types/deep-personalization';
 import { COLOR_PALETTE_OPTIONS, getPaletteLabel } from '@/components/setup/paletteOptions';
@@ -335,13 +337,26 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         const roomComment = language === 'pl' 
           ? (roomAnalysis?.human_comment || roomAnalysis?.comment)
           : (roomAnalysis?.comment || roomAnalysis?.human_comment);
-        const commentKey = roomComment ? `comment-${roomComment.substring(0, 20)}` : 'no-comment';
+        
+        // Add furniture removal info after the room comment
+        const hasProcessedImage = (sessionData as any)?.roomImageEmpty;
+        let fullMessage = roomComment;
+        if (roomComment && hasProcessedImage) {
+          const furnitureRemovalInfo = language === 'pl'
+            ? " Usunąłeś meble ze zdjęcia - to świetny pomysł! Dzięki temu generowane wizualizacje nie będą zbyt mocno trzymać się obecnego układu mebli."
+            : " You removed furniture from the photo - great idea! This will help generated visualizations not stick too closely to the current furniture layout.";
+          fullMessage = roomComment + furnitureRemovalInfo;
+        }
+        
+        const commentKey = fullMessage ? `comment-${fullMessage.substring(0, 20)}` : 'no-comment';
         console.log('[RoomSetup] Checking for room comment:', {
           language,
           hasRoomAnalysis: !!roomAnalysis,
           hasHumanComment: !!roomAnalysis?.human_comment,
           hasComment: !!roomAnalysis?.comment,
           roomComment,
+          hasProcessedImage,
+          fullMessage,
           commentKey,
           fullRoomAnalysis: roomAnalysis
         });
@@ -352,7 +367,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
               currentStep={STEP_TO_DIALOGUE[currentStep]} 
               fullWidth={true}
               autoHide={true}
-              customMessage={roomComment || undefined}
+              customMessage={fullMessage || undefined}
             />
           </div>
         );
@@ -648,7 +663,7 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
 export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: any) {
   const { language } = useLanguage();
   const { analyzeRoom, generateLLMComment } = useModalAPI();
-  const { updateSessionData } = useSessionData();
+  const { sessionData, updateSessionData } = useSessionData();
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>(photos || []);
   const [uploadedPhotosBase64, setUploadedPhotosBase64] = useState<string[]>([]); // Store base64 for API
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -659,8 +674,11 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
   const [humanComment, setHumanComment] = useState<string | null>(null);
   const [showRoomTypeSelection, setShowRoomTypeSelection] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [processedImage, setProcessedImage] = useState<string | null>(null); // Image with furniture removed
+  const [isRemovingFurniture, setIsRemovingFurniture] = useState(false);
   const [pendingAnalysisFile, setPendingAnalysisFile] = useState<File | null>(null);
   const [pendingAnalysisLabel, setPendingAnalysisLabel] = useState<string | null>(null);
+  const { generateSixImagesParallelWithGoogle } = useGoogleAI();
   
   // Basic room data
   const [roomName, setRoomName] = useState('');
@@ -719,7 +737,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       const base64 = await toBase64(file);
       console.log(`File converted to base64, length: ${base64.length} chars`);
       
-      // Analyze room using MiniCPM-o-2.6
+      // Analyze room using Google Gemini 2.0 Flash (replaced Gemma 3)
       const analysis = await analyzeRoom({ image: base64, metadata: { source: 'setup-room-step' } });
       
       console.log('Room analysis result:', analysis);
@@ -764,11 +782,123 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       // Check if it's a timeout error (cold start)
       if (error instanceof Error && error.message.includes('408')) {
         alert('Model AI jest jeszcze ładowany (pierwsze uruchomienie). Spróbuj ponownie za chwilę.');
+      } else if (error instanceof Error && error.message.includes('Limit analiz')) {
+        // If limit reached, allow user to continue anyway (they can manually select room type)
+        console.warn('[PhotoUploadStep] Analysis limit reached, but allowing user to continue');
+        // Don't block the flow - user can manually select room type
+      } else {
+        // For other errors, show a warning but don't block
+        console.warn('[PhotoUploadStep] Analysis failed, but allowing user to continue:', error);
       }
     } finally {
       setIsAnalyzing(false);
-      setPendingAnalysisFile(null);
-      setPendingAnalysisLabel(null);
+    }
+  };
+
+  const handleRemoveFurniture = async () => {
+    if (!uploadedPhotosBase64 || uploadedPhotosBase64.length === 0) {
+      alert(language === 'pl' ? 'Najpierw dodaj zdjęcie' : 'Please add a photo first');
+      return;
+    }
+
+    setIsRemovingFurniture(true);
+    try {
+      const originalBase64 = uploadedPhotosBase64[0];
+      
+      // Direct text prompt for furniture removal - more explicit and direct
+      // Improved to better fill empty spaces after removal
+      const removeFurniturePrompt = `TOTAL INTERIOR WIPE: Erase ALL furniture, objects, and decorative elements from this room.
+
+1. ERASE AND DELETE COMPLETELY:
+   - Furniture: sofas, chairs, tables, coffee tables, side tables, desks, beds, wardrobes, cabinets, shelves, bookcases
+   - Decorative items: rugs, carpets, curtains, drapes, blinds, window treatments, pillows, cushions, throws, blankets
+   - Lighting: lamps, ceiling lights, chandeliers, wall sconces, floor lamps, table lamps, all lighting fixtures
+   - Plants: potted plants, vases with flowers, planters, all vegetation and greenery
+   - Art and decor: paintings, pictures, frames, mirrors, sculptures, decorative objects, knick-knacks, ornaments
+   - Electronics: TVs, speakers, devices, cables, wires
+   - Textiles: curtains, drapes, fabric hangings, tapestries
+   - All other objects, accessories, and clutter
+
+2. PAINT OVER: Reconstruct the wall and floor surfaces behind removed items to look like a clean, seamless, empty room. Fill all gaps and holes where items were removed.
+
+3. PRESERVE EXACTLY: Keep ONLY the architectural elements:
+   - Walls (with their original texture and color)
+   - Windows (frames, glass, sills - but NO curtains, drapes, or blinds)
+   - Doors (frames, panels - but NO door handles or decorative elements if they are removable)
+   - Floor (original surface)
+   - Ceiling (original surface)
+   - Maintain the EXACT camera angle and perspective
+
+4. RESULT: A completely EMPTY bare architectural shell with NO furniture, objects, decorations, plants, lighting fixtures, or any other items. Only clean walls, floor, ceiling, windows, and doors remain.`;
+
+      // Clean base64 - remove data URI prefix if present
+      let cleanBase64 = originalBase64;
+      if (cleanBase64.includes(',')) {
+        cleanBase64 = cleanBase64.split(',')[1];
+      }
+
+      // Use Google API for furniture removal
+      // Google Gemini 2.5 Flash Image only supports temperature in generation_config
+      // The prompt and system instruction control the behavior, not strength/steps/guidance
+      // These parameters are kept for type compatibility but not actually used by Google API
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleRemoveFurniture',message:'Starting furniture removal',data:{prompt:removeFurniturePrompt.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'removal-debug',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
+
+      const baseParams = getGenerationParameters('micro', 0);
+      const response = await generateSixImagesParallelWithGoogle({
+        prompts: [{ source: 'implicit' as GenerationSource, prompt: removeFurniturePrompt }],
+        base_image: cleanBase64,
+        style: 'empty',
+        modifications: ['remove furniture'],
+        parameters: {
+          strength: baseParams.strength || 0.5, // Not used by Google, kept for type compatibility
+          steps: baseParams.steps || 25, // Not used by Google, kept for type compatibility
+          guidance: baseParams.guidance || 2.5, // Not used by Google, kept for type compatibility
+          image_size: baseParams.image_size,
+          width: baseParams.width,
+          height: baseParams.height
+        }
+      });
+
+      if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
+        throw new Error("Failed to remove furniture from image");
+      }
+
+      const processedBase64 = response.results[0].image;
+      
+      // #region agent log
+      const beforeSaveStorageCheck = typeof window !== 'undefined' ? sessionStorage.getItem('aura_session_room_image_empty') : null;
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleRemoveFurniture:before-save',message:'About to save roomImageEmpty to sessionData',data:{processedBase64Length:processedBase64?.length||0,hasProcessedBase64:!!processedBase64,hasBeforeSaveStorage:!!beforeSaveStorageCheck,beforeSaveStorageLength:beforeSaveStorageCheck?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'removal-debug',hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
+      
+      // Create data URL for display
+      const processedDataUrl = `data:image/jpeg;base64,${processedBase64}`;
+      setProcessedImage(processedDataUrl);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleRemoveFurniture:before-updateSessionData',message:'About to call updateSessionData',data:{processedBase64Length:processedBase64?.length||0,hasProcessedBase64:!!processedBase64},timestamp:Date.now(),sessionId:'debug-session',runId:'removal-debug',hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
+      
+      // Save to sessionData for use in generation
+      await updateSessionData({ 
+        roomImageEmpty: processedBase64 
+      } as any);
+      
+      // #region agent log
+      const afterSaveStorageCheck = typeof window !== 'undefined' ? sessionStorage.getItem('aura_session_room_image_empty') : null;
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleRemoveFurniture:after-save',message:'roomImageEmpty saved to sessionData',data:{processedBase64Length:processedBase64?.length||0,hasProcessedBase64:!!processedBase64,hasAfterSaveStorage:!!afterSaveStorageCheck,afterSaveStorageLength:afterSaveStorageCheck?.length||0,storageMatches:processedBase64===afterSaveStorageCheck},timestamp:Date.now(),sessionId:'debug-session',runId:'removal-debug',hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
+      
+      console.log('[PhotoUploadStep] Successfully removed furniture from image');
+    } catch (error) {
+      console.error('[PhotoUploadStep] Error removing furniture:', error);
+      alert(language === 'pl' 
+        ? 'Nie udało się usunąć mebli. Spróbuj ponownie lub przejdź dalej z oryginalnym zdjęciem.'
+        : 'Failed to remove furniture. Try again or continue with the original image.');
+    } finally {
+      setIsRemovingFurniture(false);
     }
   };
 
@@ -824,6 +954,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         setUploadedPhotos(newPhotos);
         setUploadedPhotosBase64(newPhotosBase64);
         setSelectedImage(imageObjectUrl);
+        setProcessedImage(null); // Clear processed image when new photo is added
+        updateSessionData({ roomImageEmpty: undefined } as any); // Clear roomImageEmpty when new photo is added
         onUpdate(newPhotosBase64, metadata.roomType, metadata.roomName);
         
         // Set pre-computed data instantly
@@ -852,9 +984,6 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           comment: metadata.comment
         });
         updateSessionData({ roomAnalysis: roomAnalysisData } as any);
-        
-        setPendingAnalysisFile(null);
-        setPendingAnalysisLabel(null);
       } else {
         // Custom image - prepare for analysis (manual trigger)
         const response = await fetch(imageUrl);
@@ -872,9 +1001,12 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         setUploadedPhotos(newPhotos);
         setUploadedPhotosBase64(newPhotosBase64);
         setSelectedImage(imageObjectUrl);
+        setProcessedImage(null); // Clear processed image when new photo is added
+        updateSessionData({ roomImageEmpty: undefined } as any); // Clear roomImageEmpty when new photo is added
         onUpdate(newPhotosBase64, detectedRoomType || '', roomName || '');
-        setPendingAnalysisFile(file);
-        setPendingAnalysisLabel(file.name || imageUrl);
+        
+        // Automatically analyze the example image
+        await analyzeImage(file);
       }
     } catch (error) {
       console.error("Error fetching example image", error);
@@ -920,11 +1052,14 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       setUploadedPhotos(newPhotos);
       setUploadedPhotosBase64(newPhotosBase64);
       setSelectedImage(imageUrl);
+      setProcessedImage(null); // Clear processed image when new photo is added
+      updateSessionData({ roomImageEmpty: undefined } as any); // Clear roomImageEmpty when new photo is added
       
       // Pass base64 to parent (for API usage)
       onUpdate(newPhotosBase64, detectedRoomType || '', roomName || '');
-      setPendingAnalysisFile(file);
-      setPendingAnalysisLabel(file.name || imageUrl);
+      
+      // Automatically analyze the uploaded image
+      await analyzeImage(file);
       
     } catch (error) {
       console.error("Error processing file", error);
@@ -955,18 +1090,6 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
             : 'Upload a photo of the current space state. IDA will analyze it and automatically detect the room type.'}
         </p>
 
-        {pendingAnalysisFile && (
-          <div className="mb-6 p-4 glass-panel rounded-2xl border border-white/20">
-            <p className="text-graphite font-modern mb-3">
-              {language === 'pl'
-                ? `Nowe zdjęcie "${pendingAnalysisLabel || pendingAnalysisFile.name}" czeka na analizę.`
-                : `New photo "${pendingAnalysisLabel || pendingAnalysisFile.name}" is ready for analysis.`}
-            </p>
-            <GlassButton onClick={handleAnalyzePending} disabled={isAnalyzing}>
-              {language === 'pl' ? 'Analizuj wybrane zdjęcie' : 'Analyze selected photo'}
-            </GlassButton>
-          </div>
-        )}
 
         {/* Room Analysis Results */}
         {isAnalyzing && (
@@ -985,25 +1108,34 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           </div>
         )}
         
-        {detectedRoomType && !isAnalyzing && (
+        {/* Room type display and selection - always show if image is uploaded */}
+        {selectedImage && !isAnalyzing && (
           <div className="mb-6 p-6 glass-panel rounded-2xl">
             <div className="flex items-start gap-4">
               <div className="w-8 h-8 bg-gradient-to-r from-gold/20 to-champagne/20 rounded-full flex items-center justify-center flex-shrink-0">
                 <div className="w-4 h-4 bg-gradient-to-r from-gold to-champagne rounded-full"></div>
               </div>
               <div className="flex-1">
-                <p className="text-graphite font-modern font-bold text-lg mb-3">
-                  {language === 'pl' ? 'IDA wykryła: ' : 'IDA detected: '}
-                  <span className="text-gold">
-                    {ROOM_TYPE_TRANSLATIONS[detectedRoomType] || detectedRoomType}
-                  </span>
-                </p>
+                {detectedRoomType ? (
+                  <p className="text-graphite font-modern font-bold text-lg mb-3">
+                    {language === 'pl' ? 'IDA wykryła: ' : 'IDA detected: '}
+                    <span className="text-gold">
+                      {ROOM_TYPE_TRANSLATIONS[detectedRoomType] || detectedRoomType}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-graphite font-modern font-bold text-lg mb-3">
+                    {language === 'pl' ? 'Wybierz typ pomieszczenia:' : 'Select room type:'}
+                  </p>
+                )}
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowRoomTypeSelection(true)}
                     className="px-4 py-2 bg-white/10 hover:bg-white/20 text-graphite text-sm font-modern font-semibold rounded-xl transition-all duration-200 hover:scale-105 border border-white/20"
                   >
-                    {language === 'pl' ? 'Zmień typ pomieszczenia' : 'Change room type'}
+                    {language === 'pl' 
+                      ? (detectedRoomType ? 'Zmień typ pomieszczenia' : 'Wybierz typ pomieszczenia')
+                      : (detectedRoomType ? 'Change room type' : 'Select room type')}
                   </button>
                 </div>
               </div>
@@ -1011,16 +1143,6 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           </div>
         )}
 
-        {/* LLM Comment - ukryte, wyświetlane w dialogu na dole */}
-        {isGeneratingHumanComment && !humanComment && (
-          <div className="mb-6 p-4 glass-panel rounded-2xl">
-            <p className="text-graphite font-modern">
-              {language === 'pl'
-                ? 'IDA przygotowuje naturalny komentarz na podstawie Twojego zdjęcia...'
-                : 'IDA is preparing a natural comment based on your photo...'}
-            </p>
-          </div>
-        )}
 
         {/* Room type selection - hidden until "Zmień" is clicked */}
         {showRoomTypeSelection && (
@@ -1114,28 +1236,76 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-graphite font-modern">
-                {language === 'pl' ? 'Wybrane zdjęcie' : 'Selected photo'}
+                {language === 'pl' 
+                  ? (processedImage ? 'Zdjęcie bez mebli' : 'Wybrane zdjęcie')
+                  : (processedImage ? 'Image without furniture' : 'Selected photo')}
               </h3>
-              <button
-                onClick={() => {
-                  setSelectedImage(null);
-                  setDetectedRoomType(null);
-                  setRoomAnalysis(null);
-                  setLlmComment(null);
-                  setHumanComment(null);
-                  setRoomName('');
-                }}
-                className="text-sm text-silver-dark hover:text-gold transition-colors font-modern"
-              >
-                {language === 'pl' ? 'Zmień zdjęcie' : 'Change photo'}
-              </button>
+              <div className="flex gap-2">
+                {!processedImage && (
+                  <GlassButton
+                    onClick={handleRemoveFurniture}
+                    disabled={isRemovingFurniture}
+                    variant="secondary"
+                    className="text-xs px-3 py-1"
+                  >
+                    {isRemovingFurniture 
+                      ? (language === 'pl' ? 'Usuwanie...' : 'Removing...')
+                      : (language === 'pl' ? 'Usuń meble' : 'Remove furniture')}
+                  </GlassButton>
+                )}
+                {processedImage && (
+                  <>
+                    <GlassButton
+                      onClick={handleRemoveFurniture}
+                      disabled={isRemovingFurniture}
+                      variant="secondary"
+                      className="text-xs px-3 py-1"
+                    >
+                      {isRemovingFurniture 
+                        ? (language === 'pl' ? 'Ponowne usuwanie...' : 'Retrying...')
+                        : (language === 'pl' ? 'Spróbuj ponownie' : 'Try again')}
+                    </GlassButton>
+                    <button
+                      onClick={() => {
+                        setProcessedImage(null);
+                        updateSessionData({ roomImageEmpty: undefined } as any);
+                      }}
+                      className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 text-graphite font-modern rounded-xl transition-all border border-white/20"
+                    >
+                      {language === 'pl' ? 'Przywróć oryginał' : 'Restore original'}
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => {
+                    setSelectedImage(null);
+                    setProcessedImage(null);
+                    setDetectedRoomType(null);
+                    setRoomAnalysis(null);
+                    setLlmComment(null);
+                    setHumanComment(null);
+                    setRoomName('');
+                    updateSessionData({ roomImageEmpty: undefined } as any);
+                  }}
+                  className="text-sm text-silver-dark hover:text-gold transition-colors font-modern"
+                >
+                  {language === 'pl' ? 'Zmień zdjęcie' : 'Change photo'}
+                </button>
+              </div>
             </div>
             <div className="relative">
               <img 
-                src={selectedImage} 
+                src={processedImage || selectedImage} 
                 alt={language === 'pl' ? 'Wybrane zdjęcie' : 'Selected photo'} 
                 className="w-full max-w-md mx-auto rounded-xl shadow-lg"
               />
+              {processedImage && (
+                <div className="mt-2 text-xs text-silver-dark text-center font-modern">
+                  {language === 'pl' 
+                    ? '✓ Meble zostały usunięte. To zdjęcie będzie używane podczas generowania.'
+                    : '✓ Furniture removed. This image will be used during generation.'}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1147,10 +1317,13 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           </GlassButton>
           <GlassButton 
             onClick={() => {
-              onUpdate(uploadedPhotosBase64, detectedRoomType, roomName);
+              // Use detected room type or allow manual selection
+              const finalRoomType = detectedRoomType || roomType || 'empty_room';
+              const finalRoomName = roomName || (language === 'pl' ? 'Pomieszczenie' : 'Room');
+              onUpdate(uploadedPhotosBase64, finalRoomType, finalRoomName);
               onNext();
             }}
-            disabled={isAnalyzing || !detectedRoomType}
+            disabled={isAnalyzing || uploadedPhotosBase64.length === 0}
           >
             {isAnalyzing 
               ? (language === 'pl' ? 'Analizuje...' : 'Analyzing...')

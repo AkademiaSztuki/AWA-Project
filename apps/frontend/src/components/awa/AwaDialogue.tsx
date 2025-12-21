@@ -467,7 +467,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     if (currentStep === 'landing') {
       return (
         <div 
-          className={`z-50 flex flex-col items-center justify-start w-full text-center ${
+          className={`z-10 flex flex-col items-center justify-start w-full text-center pointer-events-auto ${
             fullWidth ? 'fixed bottom-0 left-0 right-0' : ''
           } ${
             isLanding 
@@ -505,11 +505,11 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // });
   
   return (
-    <div className={`z-50 flex flex-col items-center justify-start w-full text-center pointer-events-none relative ${
-      fullWidth ? 'fixed bottom-0 left-0 right-0' : ''
+    <div className={`z-10 flex flex-col items-center justify-start w-full text-center pointer-events-none ${
+      fullWidth ? 'fixed bottom-0 left-0 right-0' : 'relative'
     } ${
       isLanding 
-        ? 'min-h-[380px] p-8 pointer-events-auto' // Landing needs interaction for audio start if needed, though main start is handled in separate block
+        ? 'min-h-[380px] p-8' // Dialog should not block clicks - pointer-events-none ensures clicks pass through
         : 'min-h-[260px] p-6 pb-8'
     }`}>
       {isLanding && audioReady && hasStarted && (
@@ -530,7 +530,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
         key={`${currentStep}-${currentSentenceIndex}`}
         as="div"
         initialDelay={isLanding ? 300 : 0}
-        className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center ${
+        className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center pointer-events-none ${
           isLanding 
             ? 'text-3xl md:text-4xl text-white' 
             : 'text-2xl md:text-3xl text-white/90'

@@ -26,6 +26,23 @@ npm install
 npm run dev
 ```
 
+## Konfiguracja
+
+### Zmienne środowiskowe
+
+Skopiuj `.env.example` do `.env.local` i uzupełnij:
+
+- `GOOGLE_AI_API_KEY` - Klucz API Google AI (używany do Gemini 2.5 Flash-Lite dla tagowania obrazów)
+  - Otrzymaj klucz na: https://ai.google.dev/
+- `GOOGLE_CLOUD_PROJECT` - ID projektu Google Cloud (wymagane dla generowania obrazów przez Vertex AI)
+  - Format: `project-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX` lub nazwa projektu
+  - Znajdziesz w: https://console.cloud.google.com/
+  - Uwaga: Generowanie obrazów wymaga OAuth 2.0 (Application Default Credentials)
+  - W środowisku produkcyjnym (np. Vercel) skonfiguruj zmienną środowiskową `GOOGLE_APPLICATION_CREDENTIALS` z kluczem service account
+  - Lokalnie: użyj `gcloud auth application-default login` lub ustaw `GOOGLE_APPLICATION_CREDENTIALS` na ścieżkę do JSON key
+- `GOOGLE_CLOUD_LOCATION` - Lokalizacja Vertex AI (opcjonalne, domyślnie `global`)
+- `NEXT_PUBLIC_MODAL_API_URL` - URL do Modal.com API (FLUX 2 Dev)
+
 ## Struktura
 
 - `src/app/` - Next.js routing

@@ -143,3 +143,5 @@ export function translateColor(color: string, language: 'pl' | 'en' = 'pl'): str
 }
 
 
+
+

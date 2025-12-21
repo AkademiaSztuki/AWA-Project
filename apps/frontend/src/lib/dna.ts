@@ -114,6 +114,18 @@ export function computeWeightedDNAFromSwipes(swipes: TinderSwipe[], totalShown?:
     mood: pickTop(mood, 2),
   };
 
+  // #region agent log
+  const topStylesWithWeights = top.styles.map(style => ({
+    style,
+    weight: weights[style] || 0
+  })).sort((a, b) => b.weight - a.weight);
+  const styleWeightDiff = topStylesWithWeights.length >= 2 
+    ? (topStylesWithWeights[0].weight - topStylesWithWeights[1].weight) / topStylesWithWeights[0].weight
+    : 1.0;
+  const shouldUseTwoStyles = topStylesWithWeights.length >= 2 && styleWeightDiff < 0.3; // If second style is within 30% of first
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dna.ts:computeWeightedDNAFromSwipes:style-analysis',message:'Style aggregation analysis',data:{likedCount:liked.length,totalShown:totalConsidered,topStyles:top.styles,topStylesWithWeights,styleWeightDiff:styleWeightDiff.toFixed(3),shouldUseTwoStyles,allStyleWeights:Object.entries(weights).filter(([k]) => styleTokens.includes(k)).map(([k,v]) => ({style:k,weight:v})).sort((a,b) => b.weight - a.weight)},timestamp:Date.now(),sessionId:'debug-session',runId:'style-aggregation-check'})}).catch(()=>{});
+  // #endregion
+
   const confidence = Math.min(95, Math.max(65, Math.round((liked.length / totalConsidered) * 100)));
 
   return { weights, top, confidence };

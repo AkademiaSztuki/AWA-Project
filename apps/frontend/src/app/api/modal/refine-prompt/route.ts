@@ -7,6 +7,13 @@ import { NextRequest, NextResponse } from 'next/server';
 const MODAL_API_URL = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://your-modal-endpoint.modal.run';
 
 export async function POST(request: NextRequest) {
+  return NextResponse.json(
+    { error: 'Modal API (refine-prompt) is deprecated. Please use Google Nano Banana API instead.' },
+    { status: 410 } // Gone
+  );
+  
+  // Original implementation below (commented out as requested)
+  /*
   try {
     const body = await request.json();
     const { prompt, targetTokens = 65, instructions = [] } = body;

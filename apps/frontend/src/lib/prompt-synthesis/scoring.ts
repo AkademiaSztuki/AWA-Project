@@ -18,6 +18,7 @@ export interface PromptInputs {
   aestheticDNA: {
     implicit: {
       dominantStyles: string[];  // From Tinder swipes pattern analysis
+      styleWeights?: Record<string, number>; // Style weights for smart selection
       colors: string[];           // Detected from liked images
       materials: string[];
       complexity: number;         // 0-1
@@ -135,6 +136,7 @@ export interface PromptWeights {
   
   // Style (from implicit + explicit)
   dominantStyle: string;
+  secondaryStyles: string[];     // Additional style influences
   styleConfidence: number;       // 0-1
   
   // Colors (weighted implicit vs explicit)
@@ -151,6 +153,7 @@ export interface PromptWeights {
   // Nature/Biophilia
   natureDensity: number;         // 0-1
   biophilicElements: string[];   // specific elements to include
+  natureMetaphor?: string;       // ID of selected nature place
   
   // Functional Requirements
   primaryActivity: string;
@@ -208,11 +211,19 @@ export interface PromptWeights {
 // =========================
 
 export function calculatePromptWeights(inputs: PromptInputs, sourceType?: GenerationSource | string): PromptWeights {
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:start',message:'STARTING: Calculating prompt weights',data:{sourceType,prsCurrent:inputs.prsCurrent,prsTarget:inputs.prsTarget,hasPersonality:!!inputs.personality,hasInspirations:!!inputs.inspirations,inspirationsCount:inputs.inspirations?.length||0,aestheticDNA:{implicit:{styles:inputs.aestheticDNA.implicit.dominantStyles,colors:inputs.aestheticDNA.implicit.colors},explicit:{style:inputs.aestheticDNA.explicit.selectedStyle,palette:inputs.aestheticDNA.explicit.selectedPalette}}},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+
   // 1. PRS GAP ANALYSIS (highest weight: 25%)
   // IMPORTANT: Some sources have PRS zeroed in modes.ts (Implicit, Explicit, Personality)
   // If PRS is (0,0) for both current and target, all needs will be 0 (correct behavior)
   // Only Mixed and MixedFunctional should use real PRS data
   const prsWeights = analyzePRSGap(inputs.prsCurrent, inputs.prsTarget);
+  
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:prs-weights',message:'PRS weights calculated',data:{sourceType,prsCurrent:inputs.prsCurrent,prsTarget:inputs.prsTarget,needsCalming:prsWeights.needsCalming,needsEnergizing:prsWeights.needsEnergizing,needsInspiration:prsWeights.needsInspiration,needsGrounding:prsWeights.needsGrounding},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
   
   // Pre-calculate inspiration biophilia if tags are present (for InspirationReference)
   // Średnia biophilia z inspiracji liczone względem wszystkich inspiracji (brak taga = 0)
@@ -256,6 +267,10 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     sourceType
   );
   
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:style-weights',message:'Style weights calculated',data:{sourceType,dominantStyle:styleWeights.dominantStyle,styleConfidence:styleWeights.confidence,materials:styleWeights.materials,complexity:styleWeights.complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  
   // 3. COLOR INTEGRATION (with personality and style fallback)
   const colorWeights = integrateColorPreferences(
     inputs.aestheticDNA,
@@ -266,9 +281,17 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     sourceType // Pass source type for Mixed/MixedFunctional differentiation
   );
   
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:color-weights',message:'Color weights calculated',data:{sourceType,colorPalette:colorWeights.palette,colorTemperature:colorWeights.temperature},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  
   // 4. BIOPHILIA SCORING
   // Each source type uses different biophilia data (as filtered in modes.ts)
   let biophiliaScoreToUse: number;
+  
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:biophilia-before-switch',message:'Biophilia scoring - before switch',data:{sourceType,explicitBiophilia:inputs.psychologicalBaseline.biophiliaScore,implicitBiophilia:inputs.psychologicalBaseline.implicitBiophiliaScore,inspirationBiophiliaRaw,inspirationBiophiliaNormalized,explicitBiophiliaNormalized},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
   
   switch (sourceType) {
     case GenerationSource.Implicit:
@@ -392,8 +415,14 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
   // 9. INSPIRATION TAGS INTEGRATION
   const inspirationWeights = integrateInspirationTags(inputs.inspirations);
   
+  // Use averaged biophilia from inspirations if available
+  if (sourceType === GenerationSource.InspirationReference || (inputs.inspirations && inputs.inspirations.length > 0)) {
+    biophiliaScoreToUse = inspirationWeights.biophiliaBoost;
+    console.log('[Biophilia] Using averaged biophilia from inspirations:', biophiliaScoreToUse);
+  }
+  
   // COMBINE ALL WEIGHTS
-  return {
+  const finalWeights: PromptWeights = {
     // Mood (from PRS gap)
     needsCalming: prsWeights.needsCalming,
     needsEnergizing: prsWeights.needsEnergizing,
@@ -402,6 +431,7 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     
     // Style
     dominantStyle: styleWeights.dominantStyle,
+    secondaryStyles: styleWeights.secondaryStyles,
     styleConfidence: styleWeights.confidence,
     
     // Colors (enhanced with inspirations)
@@ -448,6 +478,7 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
       return Math.min(1, base + boost * boostFactor);
     })(),
     biophilicElements: [...biophiliaWeights.elements],
+    natureMetaphor: inputs.sensory.natureMetaphor,
     
     // Functional
     primaryActivity: functionalWeights.primary,
@@ -492,6 +523,12 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     socialContextRecommendations: socialContextRecommendations,
     activityNeeds: activityNeeds
   };
+  
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:final',message:'FINAL PROMPT WEIGHTS calculated',data:{sourceType,weights:{dominantStyle:finalWeights.dominantStyle,styleConfidence:finalWeights.styleConfidence,colorPalette:finalWeights.colorPalette,colorTemperature:finalWeights.colorTemperature,primaryMaterials:finalWeights.primaryMaterials,natureDensity:finalWeights.natureDensity,biophilicElements:finalWeights.biophilicElements,needsCalming:finalWeights.needsCalming,needsEnergizing:finalWeights.needsEnergizing,needsInspiration:finalWeights.needsInspiration,needsGrounding:finalWeights.needsGrounding,lightingMood:finalWeights.lightingMood,naturalLightImportance:finalWeights.naturalLightImportance,visualComplexity:finalWeights.visualComplexity,primaryActivity:finalWeights.primaryActivity}},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  
+  return finalWeights;
 }
 
 // =========================
@@ -499,10 +536,21 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
 // =========================
 
 const VALID_STYLES = [
-  'modern', 'scandinavian', 'industrial', 'minimalist', 'rustic',
-  'bohemian', 'contemporary', 'traditional', 'mid-century', 'japandi',
-  'coastal', 'farmhouse', 'mediterranean', 'art-deco', 'maximalist',
-  'eclectic', 'hygge', 'zen', 'vintage', 'transitional'
+  // Modern & Minimal
+  'modern', 'minimalist', 'contemporary', 'transitional',
+  // Nordic & Zen
+  'scandinavian', 'japanese', 'zen',
+  // Industrial
+  'industrial',
+  // Classic & Traditional
+  'traditional', 'mid-century', 'art-deco', 'vintage',
+  // Bold & Eclectic
+  'bohemian', 'maximalist', 'eclectic', 'gothic',
+  // Natural & Warm
+  'rustic', 'farmhouse', 'coastal', 'mediterranean', 'tropical',
+  // Additional aliases/synonyms (for tag extraction)
+  'japandi', // alias for japanese
+  'hygge'    // related to scandinavian
 ];
 
 /**
@@ -694,18 +742,26 @@ function integrateStylePreferences(
   sourceType?: GenerationSource | string
 ): {
   dominantStyle: string;
+  secondaryStyles: string[];
   confidence: number;
   materials: string[];
   complexity: number;
 } {
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:integrateStylePreferences:start',message:'Integrating style preferences',data:{sourceType,hasImplicitStyles:aestheticDNA.implicit.dominantStyles?.length>0,implicitStyles:aestheticDNA.implicit.dominantStyles,hasExplicitStyle:!!aestheticDNA.explicit.selectedStyle,explicitStyle:aestheticDNA.explicit.selectedStyle,hasPersonality:!!personality,hasLifestyle:!!lifestyle},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+
   // CRITICAL: Personality source uses ONLY Big Five data, no other sources
   const isPersonality = sourceType === GenerationSource.Personality || sourceType === 'personality';
   if (isPersonality && personality) {
     const personalityStyle = deriveStyleFromPersonality(personality);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:644',message:'Personality source - using ONLY Big Five for style',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},result:personalityStyle,ignoredAestheticDNA:true,ignoredLifestyle:true,ignoredSensory:true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P3'})}).catch(()=>{});
+    // #region prompt debug
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:integrateStylePreferences:personality-only',message:'Personality source - using ONLY Big Five for style',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},result:personalityStyle,ignoredAestheticDNA:true,ignoredLifestyle:true,ignoredSensory:true},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
     // #endregion
-    return personalityStyle;
+    return {
+      ...personalityStyle,
+      secondaryStyles: []
+    };
   }
   
   // Normalize implicit styles - extract valid styles from tag soup
@@ -785,42 +841,51 @@ function integrateStylePreferences(
       availableStyles.push({ style: personalityBaseStyle, weight: 0.3, source: 'personality' });
     }
     
-    // If we have multiple sources, blend them
-    if (availableStyles.length >= 2) {
-      // Sort by weight (descending) to determine primary and secondary styles
-      availableStyles.sort((a, b) => b.weight - a.weight);
-      const primary = availableStyles[0];
-      const secondary = availableStyles[1];
-      const tertiary = availableStyles[2];
-      
-      // Create blended style name
-      let blendedStyle: string;
-      if (tertiary && primary.style.toLowerCase() !== secondary.style.toLowerCase() && secondary.style.toLowerCase() !== tertiary.style.toLowerCase()) {
-        // All three are different - blend all
-        blendedStyle = `${primary.style} with ${secondary.style} and ${tertiary.style} influences`;
-      } else if (primary.style.toLowerCase() !== secondary.style.toLowerCase()) {
-        // Two different styles
-        if (isMixedFunctional) {
-          // MixedFunctional: emphasize explicit if available, otherwise primary
-          const explicitIndex = availableStyles.findIndex(s => s.source === 'explicit');
-          if (explicitIndex >= 0 && explicitIndex !== 0) {
-            blendedStyle = `${availableStyles[explicitIndex].style} with ${primary.style} accents`;
-        } else {
-            blendedStyle = `${primary.style} with ${secondary.style} accents`;
-      }
-        } else {
-          // Mixed: emphasize implicit if available, otherwise primary
-          const implicitIndex = availableStyles.findIndex(s => s.source === 'implicit');
-          if (implicitIndex >= 0 && implicitIndex !== 0) {
-            blendedStyle = `${availableStyles[implicitIndex].style} with ${primary.style} influences`;
-          } else {
-            blendedStyle = `${primary.style} with ${secondary.style} influences`;
-          }
+      // If we have multiple sources, blend them
+      if (availableStyles.length >= 2) {
+        // Sort by weight (descending) to determine primary and secondary styles
+        availableStyles.sort((a, b) => b.weight - a.weight);
+        const primary = availableStyles[0];
+        const secondary = availableStyles[1];
+        const tertiary = availableStyles[2];
+        
+        const secondaryStyles: string[] = [];
+        if (secondary && secondary.style.toLowerCase() !== primary.style.toLowerCase()) {
+          secondaryStyles.push(secondary.style);
         }
+        if (tertiary && tertiary.style.toLowerCase() !== primary.style.toLowerCase() && 
+            tertiary.style.toLowerCase() !== secondary?.style.toLowerCase()) {
+          secondaryStyles.push(tertiary.style);
+        }
+        
+        // Create blended style name
+        let blendedStyle: string;
+        if (secondaryStyles.length >= 2) {
+          // All three are different - blend all
+          blendedStyle = `${primary.style} with ${secondaryStyles[0]} and ${secondaryStyles[1]} influences`;
+        } else if (secondaryStyles.length === 1) {
+          // Two different styles
+          if (isMixedFunctional) {
+            // MixedFunctional: emphasize explicit if available, otherwise primary
+            const explicitIndex = availableStyles.findIndex(s => s.source === 'explicit');
+            if (explicitIndex >= 0 && explicitIndex !== 0) {
+              blendedStyle = `${availableStyles[explicitIndex].style} with ${primary.style} accents`;
+            } else {
+              blendedStyle = `${primary.style} with ${secondaryStyles[0]} accents`;
+            }
+          } else {
+            // Mixed: emphasize implicit if available, otherwise primary
+            const implicitIndex = availableStyles.findIndex(s => s.source === 'implicit');
+            if (implicitIndex >= 0 && implicitIndex !== 0) {
+              blendedStyle = `${availableStyles[implicitIndex].style} with ${primary.style} influences`;
+            } else {
+              blendedStyle = `${primary.style} with ${secondaryStyles[0]} influences`;
+            }
+          }
         } else {
-        // Same styles - use primary with modifier
-        blendedStyle = primary.style;
-      }
+          // Same styles - use primary with modifier
+          blendedStyle = primary.style;
+        }
       
       // Blend materials using weights
       const blendedMaterials: string[] = [];
@@ -860,15 +925,16 @@ function integrateStylePreferences(
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Mixed-style',message:'Mixed source - blending ALL style sources',data:{implicitStyle:implicitStyle,explicitStyle:explicitStyle,personalityStyle:personalityBaseStyle,weights:{implicit:0.4,explicit:0.3,personality:0.3},blendedStyle:blendedStyle,materials:finalMaterials,complexity:blendedComplexity},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E13'})}).catch(()=>{});
       // #endregion
       
-      console.log('[StylePreferences] Mixed: blending ALL sources:', availableStyles.map(s => `${s.style} (${s.source}, ${s.weight})`).join(' + '), '→', blendedStyle);
-      
+        console.log('[StylePreferences] Mixed: blending ALL sources:', availableStyles.map(s => `${s.style} (${s.source}, ${s.weight})`).join(' + '), '→', blendedStyle);
+        
         return {
-          dominantStyle: blendedStyle,
-        confidence: 0.75,
-        materials: finalMaterials.length > 0 ? finalMaterials : aestheticDNA.explicit.topMaterials.slice(0, 3),
-        complexity: blendedComplexity
+          dominantStyle: primary.style,
+          secondaryStyles: secondaryStyles,
+          confidence: 0.75,
+          materials: finalMaterials.length > 0 ? finalMaterials : aestheticDNA.explicit.topMaterials.slice(0, 3),
+          complexity: blendedComplexity
         };
-    }
+      }
     
     // If no blending possible (no implicit, no personality, or same styles)
     // FORCE DIVERSITY: Use different styles for Mixed vs MixedFunctional vs Explicit
@@ -895,6 +961,7 @@ function integrateStylePreferences(
       console.log('[StylePreferences] Mixed: forcing diversity - using alternative style:', alternativeStyle, 'instead of', explicitStyle);
       return {
         dominantStyle: alternativeStyle,
+        secondaryStyles: [],
         confidence: 0.65,
         materials: aestheticDNA.explicit.topMaterials.slice(0, 3),
         complexity: aestheticDNA.explicit.complexityPreference * 1.1 // Slightly more complex
@@ -906,6 +973,7 @@ function integrateStylePreferences(
     console.log('[StylePreferences] Mixed: using explicit with', modifier, 'modifier:', explicitStyle);
     return {
       dominantStyle: `${modifier} ${explicitStyle}`,
+      secondaryStyles: [],
       confidence: 0.65,
       materials: aestheticDNA.explicit.topMaterials.slice(0, 3),
       complexity: aestheticDNA.explicit.complexityPreference * 1.1 // Slightly more complex
@@ -923,15 +991,34 @@ function integrateStylePreferences(
     fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:819',message:'Personality source - derived style result',data:{dominantStyle:personalityStyle.dominantStyle,confidence:personalityStyle.confidence,materials:personalityStyle.materials,complexity:personalityStyle.complexity,researchBasis:personalityStyle.researchBasis},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C'})}).catch(()=>{});
     // #endregion
     // Logging is already done in deriveStyleFromPersonality with research basis
-    return personalityStyle;
+    return {
+      ...personalityStyle,
+      secondaryStyles: []
+    };
   }
   
     // PRIORITY 2: If we have ONLY implicit data (Implicit source)
   if (hasImplicitStyles && !hasExplicitStyle && !hasExplicitPalette) {
     const selectedStyle = implicitValidStyles[0];
-    console.log('[StylePreferences] Using implicit style:', selectedStyle, '(from', aestheticDNA.implicit.dominantStyles, ')');
+    const secondStyle = implicitValidStyles[1];
+    // Check if we should use two styles based on weights
+    const styleWeights = aestheticDNA.implicit.styleWeights;
+    let finalStyle = selectedStyle;
+    let shouldUseTwo = false;
+    if (styleWeights && secondStyle && styleWeights[selectedStyle] && styleWeights[secondStyle]) {
+      const weightRatio = styleWeights[secondStyle] / styleWeights[selectedStyle];
+      shouldUseTwo = weightRatio >= 0.7; // If second style is within 30% of first
+      if (shouldUseTwo) {
+        finalStyle = `${selectedStyle} with ${secondStyle} accents`;
+      }
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:integrateStylePreferences:implicit-only',message:'Implicit source - style selection',data:{sourceType,availableStyles:aestheticDNA.implicit.dominantStyles,validStyles:implicitValidStyles,selectedStyle,secondStyle,hasStyleWeights:!!styleWeights,styleWeights:styleWeights?{[selectedStyle]:styleWeights[selectedStyle],...(secondStyle?{[secondStyle]:styleWeights[secondStyle]}:{})}:undefined,shouldUseTwo,usingOnlyFirst:!shouldUseTwo,reason:shouldUseTwo?'two styles close in weight':'single dominant style',finalStyle},timestamp:Date.now(),sessionId:'debug-session',runId:'style-aggregation-check'})}).catch(()=>{});
+    // #endregion
+    console.log('[StylePreferences] Using implicit style:', finalStyle, '(from', aestheticDNA.implicit.dominantStyles, ')');
     return {
-      dominantStyle: selectedStyle,
+      dominantStyle: finalStyle,
+      secondaryStyles: !shouldUseTwo ? implicitValidStyles.slice(1, 3) : implicitValidStyles.slice(2, 4),
       confidence: 0.8,
       materials: aestheticDNA.implicit.materials.slice(0, 3),
       complexity: aestheticDNA.implicit.complexity
@@ -970,6 +1057,7 @@ function integrateStylePreferences(
     console.log('[StylePreferences] Using explicit style:', explicitStyle, '(sourceType:', sourceType, ')');
     return {
       dominantStyle: explicitStyle,
+      secondaryStyles: [],
       confidence: 0.7,
       materials: aestheticDNA.explicit.topMaterials.slice(0, 3),
       complexity: aestheticDNA.explicit.complexityPreference
@@ -991,7 +1079,8 @@ function integrateStylePreferences(
     if (explicitStyle && implicitStyle.toLowerCase() !== explicitStyle.toLowerCase()) {
       console.log('[StylePreferences] Using blended style:', explicitStyle, '+', implicitStyle);
       return {
-        dominantStyle: `${explicitStyle} with ${implicitStyle} accents`,
+        dominantStyle: explicitStyle,
+        secondaryStyles: [implicitStyle],
         confidence: 0.75,
         materials: [
           ...aestheticDNA.implicit.materials.slice(0, 2),
@@ -1005,6 +1094,7 @@ function integrateStylePreferences(
     console.log('[StylePreferences] Mixed mode, using implicit:', implicitStyle);
     return {
       dominantStyle: implicitStyle,
+      secondaryStyles: implicitValidStyles.slice(1, 2),
       confidence: 0.8,
       materials: [
         ...aestheticDNA.implicit.materials.slice(0, 2),
@@ -1031,8 +1121,10 @@ function integrateStylePreferences(
     // If explicit and personality styles differ, create a blend
     if (explicitStyle && personalityStyle.dominantStyle.toLowerCase() !== explicitStyle.toLowerCase()) {
       console.log('[StylePreferences] Blending explicit + personality:', explicitStyle, '+', personalityStyle.dominantStyle);
+      const personalityBase = personalityStyle.dominantStyle.split(' ')[0].toLowerCase();
       return {
-        dominantStyle: `${explicitStyle} with ${personalityStyle.dominantStyle.split(' ')[0]} influences`,
+        dominantStyle: explicitStyle,
+        secondaryStyles: [personalityBase],
         confidence: 0.7,
         materials: [
           ...aestheticDNA.explicit.topMaterials.slice(0, 2),
@@ -1049,6 +1141,7 @@ function integrateStylePreferences(
     console.log('[StylePreferences] Mixed mode (no implicit), using explicit:', explicitStyle);
     return {
       dominantStyle: explicitStyle,
+      secondaryStyles: [],
       confidence: 0.7,
       materials: aestheticDNA.explicit.topMaterials.slice(0, 3),
       complexity: aestheticDNA.explicit.complexityPreference
@@ -1064,6 +1157,7 @@ function integrateStylePreferences(
     if (derivedStyle) {
       return {
         dominantStyle: derivedStyle,
+        secondaryStyles: [],
         confidence: 0.5,
         materials: [],
         complexity: 0.5
@@ -1074,6 +1168,7 @@ function integrateStylePreferences(
   // Ultimate fallback
   return {
     dominantStyle: 'modern',
+    secondaryStyles: [],
     confidence: 0.3,
     materials: [],
     complexity: 0.5

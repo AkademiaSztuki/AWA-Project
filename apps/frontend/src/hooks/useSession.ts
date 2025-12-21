@@ -6,6 +6,7 @@ import { uploadSpaceImage, saveSpaceImagesMetadata } from '@/lib/remote-spaces';
 const SESSION_STORAGE_KEY = 'aura_session';
 const USER_HASH_STORAGE_KEY = 'aura_user_hash';
 const ROOM_IMAGE_SESSION_KEY = 'aura_session_room_image';
+const ROOM_IMAGE_EMPTY_SESSION_KEY = 'aura_session_room_image_empty';
 const STORAGE_SIZE_THRESHOLD = 4_500_000; // ~4,5MB
 const MAX_INLINE_DATA_LENGTH = 120_000; // ~120KB
 const MAX_GENERATIONS_HISTORY = 120;
@@ -51,6 +52,7 @@ const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
 
   // Always drop heavy blobs from localStorage; they are cached separately (sessionStorage / Supabase)
   sanitized.roomImage = undefined;
+  sanitized.roomImageEmpty = undefined; // Also cached in sessionStorage
   sanitized.uploadedImage = undefined;
   sanitized.selectedImage = null;
 
@@ -255,6 +257,48 @@ const manageRoomImageCache = (roomImage?: string) => {
   }
 };
 
+const manageRoomImageEmptyCache = (roomImageEmpty?: string) => {
+  if (typeof window === 'undefined') return;
+
+  // #region agent log
+  const existingInStorage = safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:entry',message:'Managing roomImageEmpty cache - entry',data:{hasRoomImageEmpty:!!roomImageEmpty,roomImageEmptyLength:roomImageEmpty?.length||0,hasExistingInStorage:!!existingInStorage,existingInStorageLength:existingInStorage?.length||0,willSave:!!roomImageEmpty,action:roomImageEmpty?'save':(existingInStorage?'preserve':'remove')},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+
+  if (roomImageEmpty) {
+    try {
+      safeSessionStorage.setItem(ROOM_IMAGE_EMPTY_SESSION_KEY, roomImageEmpty);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:after-save',message:'roomImageEmpty saved to sessionStorage',data:{savedLength:roomImageEmpty.length,key:ROOM_IMAGE_EMPTY_SESSION_KEY,verifyExists:!!safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
+    } catch (e) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:save-error',message:'Failed to save roomImageEmpty to sessionStorage',data:{error:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
+    }
+  } else {
+    // CRITICAL: Don't remove roomImageEmpty from sessionStorage if it exists there
+    // It might not be in the current data object, but it should be preserved in sessionStorage
+    // Only remove if explicitly set to undefined/null AND it doesn't exist in sessionStorage
+    if (!existingInStorage) {
+      try {
+        safeSessionStorage.removeItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:after-remove',message:'roomImageEmpty removed from sessionStorage (was not in storage)',data:{key:ROOM_IMAGE_EMPTY_SESSION_KEY,verifyRemoved:!safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
+      } catch (e) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:remove-error',message:'Failed to remove roomImageEmpty from sessionStorage',data:{error:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
+      }
+    } else {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:preserve',message:'Preserving roomImageEmpty in sessionStorage (exists in storage but not in data)',data:{key:ROOM_IMAGE_EMPTY_SESSION_KEY,existingInStorageLength:existingInStorage.length},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
+    }
+  }
+};
+
 const persistSanitizedSessionData = (data: SessionData) => {
   if (typeof window === 'undefined') return;
 
@@ -303,7 +347,16 @@ const persistSanitizedSessionData = (data: SessionData) => {
 const persistSessionData = (data: SessionData): SessionData => {
   if (typeof window === 'undefined') return data;
 
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:persistSessionData:entry',message:'persistSessionData called',data:{hasRoomImage:!!data.roomImage,roomImageLength:data.roomImage?.length||0,hasRoomImageEmpty:!!data.roomImageEmpty,roomImageEmptyLength:data.roomImageEmpty?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+
   manageRoomImageCache(data.roomImage);
+  manageRoomImageEmptyCache(data.roomImageEmpty);
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:persistSessionData:after-cache',message:'After calling manageRoomImageEmptyCache',data:{hasRoomImageEmpty:!!data.roomImageEmpty,roomImageEmptyLength:data.roomImageEmpty?.length||0,verifyInStorage:!!safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY),storageLength:safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY)?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
 
   // Preserve existing Big Five/userHash/colorsAndMaterials/visualDNA from stored snapshot if incoming data lacks them
   try {
@@ -544,6 +597,23 @@ export const useSession = (): UseSessionReturn => {
         mergedLocalSession = { ...(mergedLocalSession || {}), roomImage: sessionRoomImage };
       }
 
+      const sessionRoomImageEmpty = safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:load-session-roomImageEmpty',message:'Loading roomImageEmpty from sessionStorage',data:{hasSessionRoomImageEmpty:!!sessionRoomImageEmpty,sessionRoomImageEmptyLength:sessionRoomImageEmpty?.length||0,hasMergedLocalSession:!!mergedLocalSession,hasMergedLocalRoomImageEmpty:!!mergedLocalSession?.roomImageEmpty,mergedLocalRoomImageEmptyLength:mergedLocalSession?.roomImageEmpty?.length||0,willUseSessionStorage:!!sessionRoomImageEmpty&&(!mergedLocalSession?.roomImageEmpty||mergedLocalSession.roomImageEmpty.length<sessionRoomImageEmpty.length)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
+      
+      if (sessionRoomImageEmpty && (!mergedLocalSession?.roomImageEmpty || mergedLocalSession.roomImageEmpty.length < sessionRoomImageEmpty.length)) {
+        mergedLocalSession = { ...(mergedLocalSession || {}), roomImageEmpty: sessionRoomImageEmpty };
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:load-session-roomImageEmpty:merged',message:'roomImageEmpty merged into mergedLocalSession',data:{sessionRoomImageEmptyLength:sessionRoomImageEmpty.length,mergedLocalRoomImageEmptyLength:mergedLocalSession.roomImageEmpty?.length||0,hasMergedLocalSession:!!mergedLocalSession},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
+      } else {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:load-session-roomImageEmpty:not-merged',message:'roomImageEmpty NOT merged (condition failed)',data:{hasSessionRoomImageEmpty:!!sessionRoomImageEmpty,sessionRoomImageEmptyLength:sessionRoomImageEmpty?.length||0,hasMergedLocalRoomImageEmpty:!!mergedLocalSession?.roomImageEmpty,mergedLocalRoomImageEmptyLength:mergedLocalSession?.roomImageEmpty?.length||0,condition1:!!sessionRoomImageEmpty,condition2:!mergedLocalSession?.roomImageEmpty||(sessionRoomImageEmpty?mergedLocalSession.roomImageEmpty.length<sessionRoomImageEmpty.length:false)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
+      }
+
       // Zawsze pobierz najnowszy snapshot z Supabase i połącz z danymi lokalnymi
       let remoteSession: SessionData | null = null;
       if (userHash && !DISABLE_SESSION_SYNC) {
@@ -560,6 +630,17 @@ export const useSession = (): UseSessionReturn => {
         ...(mergedLocalSession || {}),
         userHash,
       };
+
+      // Ensure roomImageEmpty from sessionStorage has priority (most recent)
+      // First check the earlier read (sessionRoomImageEmpty), then check again to be sure we have the latest
+      const sessionRoomImageEmptyLatest = safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY) || sessionRoomImageEmpty;
+      if (sessionRoomImageEmptyLatest) {
+        mergedSession.roomImageEmpty = sessionRoomImageEmptyLatest;
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:merged-session-roomImageEmpty',message:'Setting roomImageEmpty in mergedSession from sessionStorage',data:{hasSessionRoomImageEmpty:!!sessionRoomImageEmpty,sessionRoomImageEmptyLength:sessionRoomImageEmpty?.length||0,hasSessionRoomImageEmptyLatest:!!sessionRoomImageEmptyLatest,sessionRoomImageEmptyLatestLength:sessionRoomImageEmptyLatest?.length||0,hasMergedSessionRoomImageEmpty:!!mergedSession.roomImageEmpty,mergedSessionRoomImageEmptyLength:mergedSession.roomImageEmpty?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
+      }
 
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:434',message:'After merging remote/local session snapshot',data:{hasBigFive:!!mergedSession.bigFive,domains:mergedSession.bigFive?.scores?.domains||mergedSession.bigFive?.scores?.domains||null,facetsPresent:!!mergedSession.bigFive?.scores?.facets,facetCounts:mergedSession.bigFive?.scores?.facets?{O:Object.keys(mergedSession.bigFive.scores.facets.O||{}).length,C:Object.keys(mergedSession.bigFive.scores.facets.C||{}).length,E:Object.keys(mergedSession.bigFive.scores.facets.E||{}).length,A:Object.keys(mergedSession.bigFive.scores.facets.A||{}).length,N:Object.keys(mergedSession.bigFive.scores.facets.N||{}).length}:null,completedAt:mergedSession.bigFive?.completedAt,explicitStyle:mergedSession.colorsAndMaterials?.selectedStyle||null,explicitPalette:mergedSession.colorsAndMaterials?.selectedPalette||null,explicitMaterialsCount:mergedSession.colorsAndMaterials?.topMaterials?.length||0,remoteHasColorsAndMaterials:!!remoteSession?.colorsAndMaterials,remoteExplicitStyle:remoteSession?.colorsAndMaterials?.selectedStyle||null,localHasColorsAndMaterials:!!mergedLocalSession?.colorsAndMaterials,localExplicitStyle:mergedLocalSession?.colorsAndMaterials?.selectedStyle||null},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'S1'})}).catch(()=>{});
@@ -729,7 +810,7 @@ export const useSession = (): UseSessionReturn => {
               explicitMaterials: profileSessionData.colorsAndMaterials?.topMaterials
             });
             
-            // Load inspirations with gamma tags from user_profiles.inspirations
+            // Load inspirations with Gemini tags from user_profiles.inspirations
             if (userProfile.inspirations && Array.isArray(userProfile.inspirations) && userProfile.inspirations.length > 0) {
               // Convert user_profiles.inspirations format to SessionData.inspirations format
               const inspirationsFromProfile = userProfile.inspirations.map((insp: any) => {
@@ -741,8 +822,8 @@ export const useSession = (): UseSessionReturn => {
                   id: insp.fileId || `insp_${Date.now()}_${Math.random().toString(36).substring(2)}`,
                   fileId: insp.fileId,
                   url: insp.url,
-                  tags: insp.tags, // Tags from gamma model (Gemma3VisionModel)
-                  description: insp.description, // Description from gamma model
+                  tags: insp.tags, // Tags from Gemini 2.5 Flash-Lite
+                  description: insp.description, // Description from Gemini
                   addedAt: insp.addedAt || new Date().toISOString()
                 };
                 
@@ -765,18 +846,18 @@ export const useSession = (): UseSessionReturn => {
                 return result;
               });
 
-              // Merge inspirations: prefer Supabase (with gamma tags) over localStorage
+              // Merge inspirations: prefer Supabase (with Gemini tags) over localStorage
               const existingInspirations = mergedSession?.inspirations || [];
               const hasLocalInspirations = existingInspirations.length > 0;
               const hasSupabaseInspirations = inspirationsFromProfile.length > 0;
 
               if (hasSupabaseInspirations) {
-                // Use Supabase inspirations (with gamma tags) if available
+                // Use Supabase inspirations (with Gemini tags) if available
                 mergedSession = {
                   ...(mergedSession || {}),
                   inspirations: inspirationsFromProfile
                 };
-                console.log('[useSession] Loaded inspirations with gamma tags from user_profiles.inspirations:', inspirationsFromProfile.length);
+                console.log('[useSession] Loaded inspirations with Gemini tags from user_profiles.inspirations:', inspirationsFromProfile.length);
                 console.log('[useSession] Tags structure:', inspirationsFromProfile.map((i: any) => ({
                   hasTags: !!i.tags,
                   styles: i.tags?.styles?.length || 0,
@@ -801,6 +882,21 @@ export const useSession = (): UseSessionReturn => {
         mergedSession = { ...mergedSession, roomImage: sessionRoomImage };
       }
 
+      // CRITICAL: Upewnij się, że najświeższe roomImageEmpty z sessionStorage ma priorytet
+      const sessionRoomImageEmptyFinal = safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:sessionRoomImageEmptyFinal-check',message:'Checking sessionRoomImageEmptyFinal before merge',data:{hasSessionRoomImageEmptyFinal:!!sessionRoomImageEmptyFinal,sessionRoomImageEmptyFinalLength:sessionRoomImageEmptyFinal?.length||0,hasMergedSessionRoomImageEmpty:!!mergedSession.roomImageEmpty,mergedSessionRoomImageEmptyLength:mergedSession.roomImageEmpty?.length||0,willMerge:!!sessionRoomImageEmptyFinal&&(!mergedSession.roomImageEmpty||mergedSession.roomImageEmpty.length<sessionRoomImageEmptyFinal.length)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
+      
+      if (sessionRoomImageEmptyFinal && (!mergedSession.roomImageEmpty || mergedSession.roomImageEmpty.length < sessionRoomImageEmptyFinal.length)) {
+        mergedSession = { ...mergedSession, roomImageEmpty: sessionRoomImageEmptyFinal };
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:sessionRoomImageEmptyFinal-merged',message:'sessionRoomImageEmptyFinal merged into mergedSession',data:{sessionRoomImageEmptyFinalLength:sessionRoomImageEmptyFinal.length,mergedSessionRoomImageEmptyLength:mergedSession.roomImageEmpty?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
+      }
+
       // Migrate legacy spaces with data URLs to Supabase (one-time per browser)
       const legacyMigratedFlag = safeLocalStorage.getItem('aura_spaces_migrated');
       if (hasDataUrlSpaces(mergedSession.spaces) && legacyMigratedFlag !== '1') {
@@ -819,16 +915,27 @@ export const useSession = (): UseSessionReturn => {
         ...(mergedSession || createEmptySession()),
         userHash,
       };
-
+      
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:final-session',message:'Final session before setState',data:{hasBigFive:!!finalSession.bigFive,completedAt:finalSession.bigFive?.completedAt,userHash:finalSession.userHash,hasColorsAndMaterials:!!finalSession.colorsAndMaterials,explicitStyle:finalSession.colorsAndMaterials?.selectedStyle||null,explicitPalette:finalSession.colorsAndMaterials?.selectedPalette||null,explicitMaterialsCount:finalSession.colorsAndMaterials?.topMaterials?.length||0,mergedHasColorsAndMaterials:!!mergedSession.colorsAndMaterials,mergedExplicitStyle:mergedSession.colorsAndMaterials?.selectedStyle||null},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H13'})}).catch(()=>{});
+      const finalSessionStorageCheck = typeof window !== 'undefined' ? safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY) : null;
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:final-session:before-persist',message:'Final session before persistSessionData',data:{hasBigFive:!!finalSession.bigFive,completedAt:finalSession.bigFive?.completedAt,userHash:finalSession.userHash,hasColorsAndMaterials:!!finalSession.colorsAndMaterials,explicitStyle:finalSession.colorsAndMaterials?.selectedStyle||null,explicitPalette:finalSession.colorsAndMaterials?.selectedPalette||null,explicitMaterialsCount:finalSession.colorsAndMaterials?.topMaterials?.length||0,mergedHasColorsAndMaterials:!!mergedSession.colorsAndMaterials,mergedExplicitStyle:mergedSession.colorsAndMaterials?.selectedStyle||null,hasFinalSessionRoomImageEmpty:!!finalSession.roomImageEmpty,finalSessionRoomImageEmptyLength:finalSession.roomImageEmpty?.length||0,hasStorageRoomImageEmpty:!!finalSessionStorageCheck,storageRoomImageEmptyLength:finalSessionStorageCheck?.length||0,mergedHasRoomImageEmpty:!!mergedSession.roomImageEmpty,mergedRoomImageEmptyLength:mergedSession.roomImageEmpty?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
       // #endregion
 
       const persisted = persistSessionData(finalSession);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:final-session:after-persist',message:'Final session after persistSessionData',data:{hasPersistedRoomImageEmpty:!!persisted.roomImageEmpty,persistedRoomImageEmptyLength:persisted.roomImageEmpty?.length||0,hasFinalSessionRoomImageEmpty:!!finalSession.roomImageEmpty,finalSessionRoomImageEmptyLength:finalSession.roomImageEmpty?.length||0,storageAfterPersist:!!safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY),storageAfterPersistLength:safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY)?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
 
       if (isMounted) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:initializeSession:before-setState',message:'About to call setSessionData in initializeSession',data:{hasPersistedRoomImageEmpty:!!persisted.roomImageEmpty,persistedRoomImageEmptyLength:persisted.roomImageEmpty?.length||0,isMounted},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
         setSessionData(persisted);
         setIsInitialized(true);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:initializeSession:after-setState',message:'After calling setSessionData in initializeSession',data:{hasPersistedRoomImageEmpty:!!persisted.roomImageEmpty,persistedRoomImageEmptyLength:persisted.roomImageEmpty?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
       }
     };
 
@@ -841,8 +948,26 @@ export const useSession = (): UseSessionReturn => {
 
   const updateSession = (updates: Partial<SessionData>) => {
     setSessionData(prev => {
-      const newData = { ...prev, ...updates };
+      // Preserve roomImageEmpty from previous state if not explicitly provided in updates
+      const hasRoomImageEmptyInUpdates = 'roomImageEmpty' in updates;
+      const newData = { 
+        ...prev, 
+        ...updates,
+        // CRITICAL: Preserve roomImageEmpty from previous state if not explicitly in updates
+        roomImageEmpty: hasRoomImageEmptyInUpdates ? updates.roomImageEmpty : prev.roomImageEmpty
+      };
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:updateSession:entry',message:'updateSession called',data:{hasRoomImageEmptyInUpdates,updatesHasRoomImageEmpty:!!updates.roomImageEmpty,updatesRoomImageEmptyLength:updates.roomImageEmpty?.length||0,prevHasRoomImageEmpty:!!prev.roomImageEmpty,prevRoomImageEmptyLength:prev.roomImageEmpty?.length||0,newDataHasRoomImageEmpty:!!newData.roomImageEmpty,newDataRoomImageEmptyLength:newData.roomImageEmpty?.length||0,updatesKeys:Object.keys(updates)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H4'})}).catch(()=>{});
+      // #endregion
+      
       const persisted = persistSessionData(newData);
+      
+      // #region agent log
+      const persistedStorageCheck = typeof window !== 'undefined' ? safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY) : null;
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:updateSession:after-persist',message:'After persistSessionData',data:{persistedHasRoomImageEmpty:!!persisted.roomImageEmpty,persistedRoomImageEmptyLength:persisted.roomImageEmpty?.length||0,storageHasRoomImageEmpty:!!persistedStorageCheck,storageRoomImageEmptyLength:persistedStorageCheck?.length||0,storageMatches:persisted.roomImageEmpty===persistedStorageCheck},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H4'})}).catch(()=>{});
+      // #endregion
+      
       return persisted;
     });
   };

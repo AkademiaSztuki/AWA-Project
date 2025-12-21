@@ -129,10 +129,12 @@ interface InspirationAnalysisResponse {
   description: string;
 }
 
+// Increased limit since we're using Google Gemini (cheaper than Modal/Gemma 3)
+// Users may want to analyze multiple photos during room setup
 const ROOM_ANALYSIS_LIMIT =
-  Number(process.env.NEXT_PUBLIC_ROOM_ANALYSIS_LIMIT ?? '1') > 0
-    ? Number(process.env.NEXT_PUBLIC_ROOM_ANALYSIS_LIMIT ?? '1')
-    : 1;
+  Number(process.env.NEXT_PUBLIC_ROOM_ANALYSIS_LIMIT ?? '10') > 0
+    ? Number(process.env.NEXT_PUBLIC_ROOM_ANALYSIS_LIMIT ?? '10')
+    : 10;
 const ROOM_ANALYSIS_WINDOW_MS =
   (Number(process.env.NEXT_PUBLIC_ROOM_ANALYSIS_WINDOW_SECONDS ?? '3600') || 3600) * 1000;
 const ROOM_ANALYSIS_SESSION_KEY = 'aura_room_analysis_session_id';
@@ -290,12 +292,12 @@ export const getGenerationParameters = (
   // New preview/upscale modes
   if (mode === 'preview') {
     return {
-      steps: 20,  // Szybkie preview - mniej kroków dla szybszego generowania
-      guidance: 2.5,  // Zachowujemy umiarkowane guidance; niższe zapobiega przestawianiu geometrii
-      strength: 0.55,  // Obniżone strength, by mocniej zachować geometrię (okna, drzwi, układ)
-      image_size: 512,  // Niższa rozdzielczość dla szybszego generowania (max 512px)
-      width: 512,
-      height: 512,
+      steps: 25,  // Więcej kroków dla lepszej jakości początkowej
+      guidance: 2.5,
+      strength: 0.6,
+      image_size: 1024, // Wyższa rozdzielczość początkowa
+      width: 1024,
+      height: 1024,
       num_images: 1,
     };
   }
@@ -358,6 +360,10 @@ export const getGenerationParameters = (
   return baseParams[mode as 'initial' | 'micro' | 'macro'];
 };
 
+/**
+ * @deprecated Use useModalAPI with Google methods or dedicated Google AI hooks.
+ * This hook originally pointed to Modal/FLUX but is now being transitioned to Google Nano Banana.
+ */
 export const useModalAPI = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -417,20 +423,7 @@ export const useModalAPI = () => {
     setIsLoading(true);
     setError(null);
 
-    let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
-
-    // Fix for incorrect dev URL in Vercel
-    if (apiBase.includes('-dev')) {
-      apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
-    }
-
-    if (!apiBase) {
-      const msg = 'Brak konfiguracji ENDPOINTU analizy (NEXT_PUBLIC_MODAL_API_URL)';
-      setError(msg);
-      setIsLoading(false);
-      throw new Error(msg);
-    }
-
+    // Check cache first
     const cacheKey = request.image ? await hashBase64Data(request.image) : null;
     const cachedResult = cacheKey ? getCachedRoomAnalysis(cacheKey) : null;
 
@@ -440,6 +433,7 @@ export const useModalAPI = () => {
       return cachedResult;
     }
 
+    // Check quota
     const quota = checkAndIncrementRoomAnalysisUsage();
     if (!quota.allowed) {
       const msg = `Limit analiz pokoju (${ROOM_ANALYSIS_LIMIT}) został osiągnięty dla tej sesji. Odśwież stronę lub wróć później.`;
@@ -448,30 +442,17 @@ export const useModalAPI = () => {
       throw new Error(msg);
     }
 
-    const sessionId = getRoomAnalysisSessionId();
     const requestId = generateRandomId();
-    const payload: RoomAnalysisRequest = {
-      ...request,
-      metadata: {
-        ...request.metadata,
-        source: request.metadata?.source || 'unknown',
-        session_id: sessionId,
-        cache_key: cacheKey ?? undefined,
-        request_id: requestId,
-        client_timestamp: new Date().toISOString(),
-        cache_hit: false,
-      },
-    };
+    const source = request.metadata?.source || 'unknown';
 
     try {
-      console.log('Rozpoczynam analizę pokoju...', { requestId, source: payload.metadata?.source });
+      console.log('Rozpoczynam analizę pokoju (Google Gemini)...', { requestId, source });
 
-      const response = await fetch(`${apiBase}/analyze-room`, {
+      // Use Google Gemini API instead of Modal/Gemma 3
+      const response = await fetch('/api/google/analyze-room', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        redirect: 'follow', // Follow redirects
-        mode: 'cors', // Explicitly enable CORS
+        body: JSON.stringify({ image: request.image }),
       });
 
       if (!response.ok) {
@@ -483,6 +464,7 @@ export const useModalAPI = () => {
       const result: RoomAnalysisResponse = await response.json();
       console.log('Analiza pokoju zakończona! Otrzymano wynik:', { requestId, result });
 
+      // Cache the result
       if (cacheKey) {
         persistRoomAnalysisCache(cacheKey, result);
       }
@@ -888,124 +870,9 @@ export const useModalAPI = () => {
   /**
    * Generate preview images at 512x512 for fast selection
    */
-  const generatePreviews = useCallback(async (request: GenerationRequest): Promise<GenerationResponse> => {
-    setIsLoading(true);
-    setError(null);
-
-      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
-    
-    // Fix for incorrect dev URL in Vercel
-      if (apiBase.includes('-dev')) {
-        apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
-      }
-    
-    if (!apiBase) {
-      const msg = 'Brak konfiguracji ENDPOINTU generacji (NEXT_PUBLIC_MODAL_API_URL)';
-      setError(msg);
-      setIsLoading(false);
-      throw new Error(msg);
-    }
-    
-    try {
-      console.log('Rozpoczynam generowanie podglądów z parametrami:', request);
-      
-      // Use base_image directly - it's already clean base64 without MIME header
-      const base64Image = request.base_image;
-
-      // Use Next.js API route as proxy to avoid CORS issues with Modal API redirects
-      const response = await fetch('/api/modal/generate-previews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...request, base_image: base64Image }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API error response:', errorText);
-        throw new Error(`Błąd serwera: ${response.status} - ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('Generowanie podglądów zakończone! Otrzymano wynik:', result);
-      
-      setIsLoading(false);
-      return result;
-
-    } catch (err: any) {
-      console.error('Wystąpił błąd w generatePreviews:', err);
-      setError(err.message || 'Wystąpił nieznany błąd.');
-      setIsLoading(false);
-      throw err;
-    }
-  }, []);
-
-  /**
-   * Upscale a selected preview image to full resolution
-   */
-  const upscaleImage = useCallback(async (
-    previewImage: string,
-    seed: number,
-    prompt: string,
-    targetSize: number = 1024,
-    inspirationImages?: string[]
-  ): Promise<string> => {
-    setIsLoading(true);
-    setError(null);
-
-      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
-    
-    // Fix for incorrect dev URL in Vercel
-      if (apiBase.includes('-dev')) {
-        apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
-      }
-    
-    if (!apiBase) {
-      const msg = 'Brak konfiguracji ENDPOINTU upscalowania (NEXT_PUBLIC_MODAL_API_URL)';
-      setError(msg);
-      setIsLoading(false);
-      throw new Error(msg);
-    }
-    
-    try {
-      console.log('Rozpoczynam upscalowanie obrazu...', { targetSize, seed });
-      
-      // Use Next.js API route as proxy
-      const response = await fetch('/api/modal/upscale', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: previewImage,
-          seed,
-          prompt,
-          target_size: targetSize,
-          inspiration_images: inspirationImages,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Upscale API error response:', errorText);
-        throw new Error(`Błąd serwera: ${response.status} - ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('Upscalowanie zakończone! Otrzymano wynik.');
-      
-      setIsLoading(false);
-      return result.image;
-
-    } catch (err: any) {
-      console.error('Wystąpił błąd w upscaleImage:', err);
-      setError(err.message || 'Wystąpił nieznany błąd podczas upscalowania.');
-      setIsLoading(false);
-      throw err;
-    }
-  }, []);
 
   return {
     generateImages,
-    generatePreviews,
-    upscaleImage,
     generateFiveImagesParallel,
     generateSixImagesParallel,
     analyzeRoom,

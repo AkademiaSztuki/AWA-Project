@@ -77,6 +77,10 @@ export function buildPromptFromWeights(
     weights: PromptWeights;
   };
 } {
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildPromptFromWeights:start',message:'Starting prompt building from weights',data:{roomType,weights:{dominantStyle:weights.dominantStyle,styleConfidence:weights.styleConfidence,colorPalette:weights.colorPalette,colorTemperature:weights.colorTemperature,primaryMaterials:weights.primaryMaterials,natureDensity:weights.natureDensity,biophilicElements:weights.biophilicElements,needsCalming:weights.needsCalming,needsEnergizing:weights.needsEnergizing}},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+
   const components: PromptComponents = {
     roomType: buildRoomTypePhrase(roomType),
     style: buildStylePhrase(weights),
@@ -89,11 +93,19 @@ export function buildPromptFromWeights(
     layout: buildLayoutPhrase(weights, roomType)
   };
   
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildPromptFromWeights:components-built',message:'All components built',data:{components:{roomType:components.roomType,style:components.style,mood:components.mood,colors:components.colors,materials:components.materials,lighting:components.lighting,biophilia:components.biophilia,functional:components.functional,layout:components.layout}},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  
   // Assemble full prompt with prioritization
   const prompt = assemblePrompt(components, weights);
   
   // Token count estimation (rough)
   const tokenCount = prompt.split(/\s+/).length;
+  
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildPromptFromWeights:final',message:'FINAL PROMPT assembled',data:{prompt,promptLength:prompt.length,tokenCount,componentsCount:Object.values(components).filter(c=>c).length},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
   
   return {
     prompt,
@@ -121,20 +133,35 @@ function buildRoomTypePhrase(roomType: string): string {
     default: 'interior space'
   };
   
-  return `A ${roomTypeMap[roomType] || roomTypeMap.default}`;
+  const result = `A ${roomTypeMap[roomType] || roomTypeMap.default}`;
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildRoomTypePhrase',message:'Room type phrase built',data:{roomType,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  return result;
 }
 
 function buildStylePhrase(weights: PromptWeights): string {
-  if (!weights.dominantStyle) return '';
+  if (!weights.dominantStyle) {
+    // #region prompt debug
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildStylePhrase',message:'No dominant style found',data:{hasDominantStyle:false,styleConfidence:weights.styleConfidence},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+    // #endregion
+    return '';
+  }
   
   // Style confidence influences how strongly we state it
+  let result: string;
   if (weights.styleConfidence > 0.7) {
-    return `in ${weights.dominantStyle} style`;
+    result = `in ${weights.dominantStyle} style`;
   } else if (weights.styleConfidence > 0.4) {
-    return `with ${weights.dominantStyle} influences`;
+    result = `with ${weights.dominantStyle} influences`;
   } else {
-    return `with eclectic, ${weights.dominantStyle}-inspired design`;
+    result = `with eclectic, ${weights.dominantStyle}-inspired design`;
   }
+  
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildStylePhrase',message:'Style phrase built',data:{dominantStyle:weights.dominantStyle,styleConfidence:weights.styleConfidence,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  return result;
 }
 
 function buildMoodPhrase(weights: PromptWeights): string {
@@ -160,52 +187,67 @@ function buildMoodPhrase(weights: PromptWeights): string {
     moods.push('intimate', 'personal sanctuary feel');
   }
   
-  if (moods.length === 0) {
-    return 'with balanced, comfortable atmosphere';
-  }
+  const result = moods.length === 0 
+    ? 'with balanced, comfortable atmosphere'
+    : `featuring ${moods.slice(0, 2).join(' and ')}`;
   
-  return `featuring ${moods.slice(0, 2).join(' and ')}`;
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildMoodPhrase',message:'Mood phrase built',data:{needsCalming:weights.needsCalming,needsEnergizing:weights.needsEnergizing,needsInspiration:weights.needsInspiration,needsGrounding:weights.needsGrounding,privateVsShared:weights.privateVsShared,moods,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  return result;
 }
 
 function buildColorPhrase(weights: PromptWeights): string {
+  let result: string;
   if (!weights.colorPalette || weights.colorPalette.length === 0) {
     // Fallback to temperature
     if (weights.colorTemperature > 0.6) {
-      return 'in warm tones';
+      result = 'in warm tones';
     } else if (weights.colorTemperature < 0.4) {
-      return 'in cool tones';
+      result = 'in cool tones';
     } else {
-      return 'in neutral, balanced colors';
+      result = 'in neutral, balanced colors';
+    }
+  } else {
+    // Use specific colors from palette
+    const colors = weights.colorPalette.slice(0, 3).join(', ');
+    
+    // Add temperature descriptor
+    const tempDescriptor = weights.colorTemperature > 0.6 ? 'warm' :
+                           weights.colorTemperature < 0.4 ? 'cool' : '';
+    
+    if (tempDescriptor) {
+      result = `with ${tempDescriptor} color palette of ${colors}`;
+    } else {
+      result = `featuring colors of ${colors}`;
     }
   }
   
-  // Use specific colors from palette
-  const colors = weights.colorPalette.slice(0, 3).join(', ');
-  
-  // Add temperature descriptor
-  const tempDescriptor = weights.colorTemperature > 0.6 ? 'warm' :
-                         weights.colorTemperature < 0.4 ? 'cool' : '';
-  
-  if (tempDescriptor) {
-    return `with ${tempDescriptor} color palette of ${colors}`;
-  } else {
-    return `featuring colors of ${colors}`;
-  }
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildColorPhrase',message:'Color phrase built',data:{colorPalette:weights.colorPalette,colorTemperature:weights.colorTemperature,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  return result;
 }
 
 function buildMaterialsPhrase(weights: PromptWeights): string {
   if (!weights.primaryMaterials || weights.primaryMaterials.length === 0) {
+    // #region prompt debug
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildMaterialsPhrase',message:'No materials found',data:{hasMaterials:false},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+    // #endregion
     return '';
   }
   
   const materials = weights.primaryMaterials.slice(0, 3).join(', ');
   
   // Complexity influences how we describe materials
-  if (weights.visualComplexity > 0.6) {
-    return `with rich textures including ${materials}`;
-  } else {
-    return `featuring ${materials}`;
-  }
+  const result = weights.visualComplexity > 0.6
+    ? `with rich textures including ${materials}`
+    : `featuring ${materials}`;
+  
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildMaterialsPhrase',message:'Materials phrase built',data:{primaryMaterials:weights.primaryMaterials,visualComplexity:weights.visualComplexity,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  return result;
 }
 
 function buildLightingPhrase(weights: PromptWeights): string {
@@ -231,22 +273,37 @@ function buildLightingPhrase(weights: PromptWeights): string {
     lightPhrases.push('good natural light');
   }
   
-  if (lightPhrases.length === 0) {
-    return '';
-  }
+  const result = lightPhrases.length === 0 ? '' : `with ${lightPhrases.join(' and ')}`;
   
-  return `with ${lightPhrases.join(' and ')}`;
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildLightingPhrase',message:'Lighting phrase built',data:{lightingMood:weights.lightingMood,naturalLightImportance:weights.naturalLightImportance,lightPhrases,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  return result;
 }
 
 function buildBiophiliaPhrase(weights: PromptWeights): string {
   const descriptor = getBiophiliaDescriptors(weights.natureDensity, weights.biophilicElements);
-  if (descriptor.tier === 'none') return '';
+  
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildBiophiliaPhrase:start',message:'Building biophilia phrase',data:{natureDensity:weights.natureDensity,biophilicElements:weights.biophilicElements,descriptorTier:descriptor.tier,descriptorShortPhrase:descriptor.shortPhrase},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  
+  if (descriptor.tier === 'none') {
+    // #region prompt debug
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildBiophiliaPhrase:no-biophilia',message:'No biophilia (tier=none)',data:{natureDensity:weights.natureDensity},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+    // #endregion
+    return '';
+  }
 
   const extraElements = descriptor.naturalElements.slice(0, 2);
-  if (extraElements.length > 0) {
-    return `${descriptor.shortPhrase}, including ${extraElements.join(' and ')}`;
-  }
-  return descriptor.shortPhrase;
+  const result = extraElements.length > 0
+    ? `${descriptor.shortPhrase}, including ${extraElements.join(' and ')}`
+    : descriptor.shortPhrase;
+  
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildBiophiliaPhrase:result',message:'Biophilia phrase built',data:{descriptorTier:descriptor.tier,extraElements,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  return result;
 }
 
 function buildFunctionalPhrase(weights: PromptWeights, roomType: string): string {
@@ -277,7 +334,12 @@ function buildFunctionalPhrase(weights: PromptWeights, roomType: string): string
     phrases.push(priority);
   }
   
-  return phrases.length > 0 ? phrases.join(', ') : '';
+  const result = phrases.length > 0 ? phrases.join(', ') : '';
+  
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildFunctionalPhrase',message:'Functional phrase built',data:{roomType,primaryActivity:weights.primaryActivity,functionalPriorities:weights.functionalPriorities,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  return result;
 }
 
 function buildLayoutPhrase(weights: PromptWeights, roomType: string): string {
@@ -306,7 +368,12 @@ function buildLayoutPhrase(weights: PromptWeights, roomType: string): string {
     phrases.push('richly layered, detailed composition');
   }
   
-  return phrases.length > 0 ? phrases.join(', ') : '';
+  const result = phrases.length > 0 ? phrases.join(', ') : '';
+  
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildLayoutPhrase',message:'Layout phrase built',data:{roomType,requiresZoning:weights.requiresZoning,addressPainPoints:weights.addressPainPoints,visualComplexity:weights.visualComplexity,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  return result;
 }
 
 // =========================
@@ -317,6 +384,10 @@ function assemblePrompt(
   components: PromptComponents,
   weights: PromptWeights
 ): string {
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:assemblePrompt:start',message:'Starting prompt assembly',data:{components,partsCount:Object.values(components).filter(c=>c).length},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  
   // Priority-based assembly to stay under token limit
   const parts: string[] = [];
   
@@ -337,6 +408,10 @@ function assemblePrompt(
   if (components.functional) parts.push(components.functional);
   if (components.layout) parts.push(components.layout);
   
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:assemblePrompt:parts-assembled',message:'Parts assembled before joining',data:{parts,partsCount:parts.length},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+  
   // Join with proper punctuation
   let prompt = parts.join(', ');
   
@@ -346,11 +421,10 @@ function assemblePrompt(
     prompt += '.';
   }
   
-  // FLUX 2 supports much longer prompts (32K tokens), so we just log
+  // #region prompt debug
   const tokens = prompt.split(/\s+/);
-  if (tokens.length > 200) {
-    console.log(`[Prompt Builder] Long prompt (${tokens.length} words) - FLUX 2 supports up to 32K tokens`);
-  }
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:assemblePrompt:final',message:'FINAL ASSEMBLED PROMPT',data:{prompt,promptLength:prompt.length,wordCount:tokens.length,partsCount:parts.length},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
   
   return prompt;
 }
@@ -884,31 +958,22 @@ function getFurnitureForRoom(
   const getStyleDescriptor = (style: string, item: string): string => {
     const styleLower = style.toLowerCase();
     
-    // Map style to concrete description
+    // Simple, non-repetitive descriptors
     const descriptors: Record<string, (item: string) => string> = {
-      'modern': (i) => `sleek ${i} with clean lines and minimalist design`,
-      'scandinavian': (i) => `${i} in light wood with clean, simple lines`,
-      'bohemian': (i) => `eclectic ${i} with rich textures and patterns`,
-      'industrial': (i) => `${i} with exposed metal details and raw wood finishes`,
-      'minimalist': (i) => `simple, functional ${i} with clean geometry`,
-      'rustic': (i) => `${i} in natural wood with warm, organic textures`,
-      'contemporary': (i) => `modern ${i} with clean lines and neutral tones`,
-      'traditional': (i) => `classic ${i} with elegant, timeless design`,
-      'mid-century': (i) => `retro ${i} in 1950s-60s style with tapered legs`,
-      'japandi': (i) => `${i} blending Japanese minimalism with Scandinavian warmth`,
-      'wabi_sabi': (i) => `imperfect, organic ${i} with natural textures`,
-      'wabi': (i) => `imperfect, organic ${i} with natural textures`,
-      'art_deco': (i) => `geometric ${i} with luxurious materials and bold shapes`,
-      'art_nouveau': (i) => `flowing ${i} with organic, curved lines`,
-      'hollywood_regency': (i) => `glamorous ${i} with bold patterns and luxurious finishes`,
-      'french_provincial': (i) => `refined ${i} with romantic, elegant details`,
-      'english_country': (i) => `cozy ${i} with traditional, comfortable design`,
-      'nordic_hygge': (i) => `cozy ${i} with warm textures and soft lighting`,
-      'california_casual': (i) => `relaxed ${i} with natural materials and easy-going style`,
-      'brooklyn_loft': (i) => `urban ${i} with industrial elements and modern edge`,
-      'parisian_chic': (i) => `elegant ${i} with refined, sophisticated details`,
-      'memphis_postmodern': (i) => `bold ${i} with playful geometric patterns`,
-      'memphis': (i) => `bold ${i} with playful geometric patterns`
+      'modern': (i) => `modern ${i}`,
+      'scandinavian': (i) => `nordic ${i}`,
+      'bohemian': (i) => `bohemian ${i}`,
+      'industrial': (i) => `loft-style ${i}`,
+      'minimalist': (i) => `minimalist ${i}`,
+      'rustic': (i) => `rustic ${i}`,
+      'contemporary': (i) => `contemporary ${i}`,
+      'traditional': (i) => `classic ${i}`,
+      'mid-century': (i) => `mid-century ${i}`,
+      'japandi': (i) => `japandi ${i}`,
+      'wabi_sabi': (i) => `wabi-sabi ${i}`,
+      'art_deco': (i) => `art deco ${i}`,
+      'hollywood_regency': (i) => `glamorous ${i}`,
+      'nordic_hygge': (i) => `hygge ${i}`
     };
     
     // Find matching descriptor
@@ -1150,9 +1215,15 @@ function getFurnitureForRoom(
       .replace(/\s+with\s+.*$/i, '')
       .trim();
     
-    // Apply style descriptor to the base item
-    return getStyleDescriptor(primaryStyle, baseItem);
-  });
+  // Apply style descriptor to the base item
+  const result = getStyleDescriptor(primaryStyle, baseItem);
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:getFurnitureForRoom:mapping',message:'Furniture item style applied',data:{primaryStyle,baseItem,result},timestamp:Date.now(),sessionId:'debug-session',runId:'furniture-debug',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+  
+  return result;
+});
 }
 
 /**
@@ -1170,37 +1241,12 @@ export function buildFlux2Prompt(
 ): string {
   const roomName = getRoomName(roomType);
   
-  // Normalize style - extract valid style from potential tag soup
-  const rawStyle = weights.dominantStyle || 'modern';
-  
-  // Check if it's a blended style (contains "with" or "influences" or "accents")
-  const isBlendedStyle = rawStyle.toLowerCase().includes(' with ') || 
-                         rawStyle.toLowerCase().includes(' influences') ||
-                         rawStyle.toLowerCase().includes(' accents') ||
-                         rawStyle.toLowerCase().includes(' touches');
-  
-  let normalizedStyleId: string;
-  let styleLabel: string;
-  let styleDescription: string;
-  
-  if (isBlendedStyle) {
-    // For blended styles, extract the primary style for STYLE_OPTIONS lookup
-    // but keep the full blended description
-    const primaryStyle = normalizeStyle(rawStyle);
-    const styleOption = STYLE_OPTIONS.find(s => s.id === primaryStyle);
-    const primaryLabel = styleOption ? styleOption.labelEn : primaryStyle;
-    
-    // Use the full blended style as label
-    styleLabel = rawStyle;
-    normalizedStyleId = primaryStyle; // Use primary for color/material lookups
-    styleDescription = styleOption ? styleOption.description : '';
-  } else {
-    // For simple styles, normalize and use STYLE_OPTIONS
-    normalizedStyleId = normalizeStyle(rawStyle);
-    const styleOption = STYLE_OPTIONS.find(s => s.id === normalizedStyleId);
-    styleLabel = styleOption ? styleOption.labelEn : normalizedStyleId;
-    styleDescription = styleOption ? styleOption.description : '';
-  }
+  const primaryStyle = extractPrimaryStyle(weights.dominantStyle || 'modern');
+  const styleOption = STYLE_OPTIONS.find(s => s.id === primaryStyle);
+  const styleLabel = styleOption ? styleOption.labelEn : primaryStyle;
+  const styleDescription = styleOption ? styleOption.description : '';
+  const finalStyle = styleLabel;
+  const secondaryStyles = weights.secondaryStyles || [];
   
   // Mood determination - differentiate by source type
   const isMixed = sourceType === GenerationSource.Mixed || sourceType === GenerationSource.MixedFunctional;
@@ -1227,8 +1273,8 @@ export function buildFlux2Prompt(
       mood = 'intentional, comfortable, balanced';
     } else if (sourceType === GenerationSource.Personality) {
       mood = 'personalized, comfortable, balanced';
-  } else {
-    mood = 'comfortable, balanced';
+    } else {
+      mood = 'comfortable, balanced';
     }
   }
   
@@ -1253,22 +1299,6 @@ export function buildFlux2Prompt(
   
   // If no valid colors, derive from style
   if (colorPalette.length === 0) {
-    const styleColorMap: Record<string, string[]> = {
-      'modern': ['#FFFFFF', '#2C3E50', '#95A5A6', '#BDC3C7'],
-      'scandinavian': ['#FFFFFF', '#F5F5DC', '#D4A574', '#87CEEB'],
-      'bohemian': ['#8B4513', '#DAA520', '#CD853F', '#D2691E'],
-      'industrial': ['#36454F', '#708090', '#A9A9A9', '#D2691E'],
-      'minimalist': ['#FFFFFF', '#F5F5F5', '#E0E0E0', '#000000'],
-      'rustic': ['#8B4513', '#D2691E', '#DEB887', '#F5DEB3'],
-      'contemporary': ['#FFFFFF', '#808080', '#000000', '#C0C0C0'],
-      'traditional': ['#800020', '#DAA520', '#F5F5DC', '#8B4513'],
-      'mid-century': ['#FF6347', '#FFD700', '#008080', '#F5F5DC'],
-      'japandi': ['#F5F5DC', '#D4A574', '#808080', '#2F4F4F'],
-      'coastal': ['#FFFFFF', '#87CEEB', '#F5DEB3', '#20B2AA'],
-      'eclectic': ['#FF6347', '#9370DB', '#20B2AA', '#FFD700'],
-      'hygge': ['#F5F5DC', '#D2B48C', '#8B7355', '#A0522D']
-    };
-    
     // Instead of styleColorMap fallback, use temperature-based colors per source
     // This ensures different sources get different colors even with same style
     colorPalette = generateTemperatureBasedColors(weights.colorTemperature, sourceType);
@@ -1288,26 +1318,8 @@ export function buildFlux2Prompt(
     strategy: getRoomLightingStrategy(roomName)
   };
   
-  // Furniture style - for blended styles, create blended furniture description
-  let furnitureStyle: string;
-  if (isBlendedStyle) {
-    // Extract both primary and secondary styles for blended furniture
-    const styleParts = rawStyle.toLowerCase().split(/\s+(?:with|and|\+)\s+/);
-    const primaryStyle = styleParts[0] || normalizedStyleId;
-    const secondaryStyle = styleParts[1] || null;
-    
-    const primaryStyleMod = STYLE_OPTIONS.find(s => s.id === primaryStyle)?.labelEn || primaryStyle;
-    
-    if (secondaryStyle) {
-      const secondaryStyleMod = STYLE_OPTIONS.find(s => s.id === secondaryStyle)?.labelEn || secondaryStyle;
-      // Create blended furniture description
-      furnitureStyle = `${primaryStyleMod} furniture with ${secondaryStyleMod} influences`;
-    } else {
-      furnitureStyle = `${primaryStyleMod} furniture with clean lines`;
-    }
-  } else {
-    furnitureStyle = `${styleLabel} furniture with clean lines`;
-  }
+  // Furniture style - use primary style for main items
+  const furnitureStyle = `${styleLabel} furniture with clean lines`;
   
   // Biophilia - convert numeric level to descriptive text for FLUX.2
   const biophiliaDescriptor = getBiophiliaDescriptors(
@@ -1322,192 +1334,232 @@ export function buildFlux2Prompt(
   };
   
   // Build style string - use enriched description if available
-  // For blended styles, don't add description (it's already descriptive)
-  const styleString = isBlendedStyle
-    ? styleLabel
-    : (styleDescription ? `${styleLabel}: ${styleDescription}` : styleLabel);
+  const styleString = styleDescription ? `${styleLabel}: ${styleDescription}` : styleLabel;
   
   // Generate layout variation for diversity
   const layoutVariation = sourceType ? generateLayoutVariation(sourceType, weights) : null;
   
-  // Build JSON structure with clear transformation instructions
-  // FLUX.2 needs explicit instructions about what to change vs preserve
-  // For blended styles, use the full description; for simple styles, use label
-  const sceneStyleLabel = isBlendedStyle ? styleLabel : styleLabel;
-  const instructionStyleLabel = isBlendedStyle ? styleLabel : styleLabel;
+  // Helper mappings for compact prompt JSON
+  const complexity =
+    weights.visualComplexity < 0.35 ? 'simple' :
+    weights.visualComplexity > 0.70 ? 'complex' :
+    'balanced';
+
+  const brightness =
+    weights.naturalLightImportance < 0.35 ? 'dark' :
+    weights.naturalLightImportance > 0.70 ? 'bright' :
+    'balanced';
+
+  const moodAtmosphere = mood;
+
+  // Biophilia as explicit plant count (model follows numbers better than boolean flags)
+  const plantCount = (() => {
+    const d = Math.max(0, Math.min(1, weights.natureDensity || 0));
+    if (d <= 0.05) return 0;
+    if (d <= 0.17) return 1;
+    if (d <= 0.34) return 2;
+    if (d <= 0.50) return 4;
+    if (d <= 0.67) return 6;
+    if (d <= 0.83) return 8;
+    return 12;
+  })();
+
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildFlux2Prompt:style-extraction',message:'Using primary and secondary styles',data:{dominantStyle:finalStyle,secondaryStyles,roomType:roomName,sourceType},timestamp:Date.now(),sessionId:'debug-session',runId:'style-coherence-debug',hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
   
+  // Get furniture list for this source (especially important for MixedFunctional)
+  const furnitureList = getFurnitureForRoom(roomName, primaryStyle, weights, sourceType);
+  
+  // Build functional requirements for MixedFunctional
+  let functionalRequirements: any = null;
+  if (isMixedFunctional && weights.primaryActivity) {
+    functionalRequirements = {
+      primary_activity: weights.primaryActivity,
+      secondary_activities: weights.secondaryActivities || [],
+      functional_priorities: weights.functionalPriorities || []
+    };
+  }
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildFlux2Prompt:functional-check',message:'Checking functional requirements and furniture',data:{isMixedFunctional,hasFunctionalRequirements:!!functionalRequirements,functionalRequirements,furnitureListCount:furnitureList.length,furnitureList},timestamp:Date.now(),sessionId:'debug-session',runId:'functional-debug',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+  
+  // MINIMAL JSON - only the fields we want the model to follow
   const promptJson: any = {
-    scene: `Complete ${roomName} redesign in ${sceneStyleLabel} style`,
-    instruction: `REMOVE furniture, decorations, rugs, curtains, and accessories. REPLACE with new ${instructionStyleLabel} style furniture and decor. KEEP the base image geometry EXACTLY: walls, windows, doors, ceiling structure, floor layout, and perspective must stay unchanged. Do NOT add or move openings.`,
-    style: styleString,
-    mood: mood,
-    color_palette: uniqueColors,
+    room_type: roomName, // Add room type from photo analysis
+    primary_style: finalStyle, // ONE dominant style
+    secondary_styles: secondaryStyles, // Subtle secondary influences
+    colors: uniqueColors,
     materials: materials,
-    lighting: lighting,
-    furniture: {
-      style: furnitureStyle,
-      items: getFurnitureForRoom(roomName, styleLabel, weights, sourceType),
-      action: "completely replace - remove old, add new"
-    },
-    decor: {
-      style: `${sceneStyleLabel} decorative elements`,
-      action: "add new decorations matching the style"
-    },
-    biophilia: biophilia,
-    remove: ["all existing furniture", "current rugs and carpets", "existing curtains", "current decorations", "old accessories"],
-    preserve: [
-      "wall positions",
-      "window locations",
-      "door frames",
-      "ceiling height",
-      "floor material",
-      "room perspective",
-      "structural openings (doors/windows)"
-    ],
-    photography: "professional interior photography, high resolution, realistic"
+    complexity,
+    brightness,
+    lighting_mood: weights.lightingMood,
+    nature_metaphor: weights.natureMetaphor || '',
+    texture: getTextureFocus(materials, styleLabel),
+    mood: moodAtmosphere,
+    plants: plantCount
   };
   
-  // Add layout variation for diversity
-  if (layoutVariation) {
-    promptJson.layout = {
-      arrangement: layoutVariation.arrangement,
-      focal_point: layoutVariation.focalPoint,
-      furniture_grouping: layoutVariation.furnitureGrouping,
-      zoning: layoutVariation.zoning,
-      description: layoutVariation.description,
-      furniture_instructions: getLayoutFurnitureInstructions(layoutVariation)
-    };
+  // Add functional requirements for MixedFunctional
+  if (functionalRequirements) {
+    promptJson.functional_requirements = functionalRequirements;
+    promptJson.furniture = furnitureList; // Add furniture list for MixedFunctional
   }
   
-  // Add source-specific fields
-  if (sourceType === GenerationSource.MixedFunctional) {
-    // Add functional requirements for MixedFunctional
-    if (weights.primaryActivity) {
-      promptJson.functional_requirements = {
-        primary_activity: weights.primaryActivity,
-        secondary_activities: weights.secondaryActivities?.slice(0, 2) || [],
-        priorities: weights.functionalPriorities?.slice(0, 3) || []
-      };
-    }
-    if (weights.addressPainPoints && weights.addressPainPoints.length > 0) {
-      promptJson.address_pain_points = weights.addressPainPoints.slice(0, 3);
-    }
-    
-    // NEW: Mood transformation recommendations
-    if (weights.moodTransformation) {
-      const mt = weights.moodTransformation;
-      
-      // Modify colors based on mood transformation
-      if (mt.colorRecommendations.temperature === 'warm') {
-        promptJson.mood_color_adjustment = 'warm, soothing palette';
-      } else if (mt.colorRecommendations.temperature === 'cool') {
-        promptJson.mood_color_adjustment = 'cool, calming palette';
-      }
-      
-      if (mt.colorRecommendations.saturation === 'muted') {
-        promptJson.color_saturation = 'muted, soft tones';
-      } else if (mt.colorRecommendations.saturation === 'vibrant') {
-        promptJson.color_saturation = 'vibrant, energetic colors';
-      }
-      
-      // Add specific colors if recommended
-      if (mt.colorRecommendations.specificColors && mt.colorRecommendations.specificColors.length > 0) {
-        promptJson.mood_colors = mt.colorRecommendations.specificColors.slice(0, 3);
-      }
-      
-      // Add texture recommendations
-      if (mt.textureRecommendations.suggestions.length > 0) {
-        promptJson.texture_emphasis = mt.textureRecommendations.suggestions.slice(0, 3);
-      }
-      
-      // Adjust biophilia
-      const adjustedBiophilia = weights.natureDensity + mt.biophiliaModifier;
-      promptJson.biophilia_level = adjustedBiophilia > 0.7 ? 'abundant' : 
-                                   adjustedBiophilia > 0.4 ? 'moderate' : 'minimal';
-      
-      // Add mood transformation context
-      // Direction already describes the transformation
-      const directionDescriptions: Record<string, { from: string; to: string }> = {
-        'stressed_to_relaxed': { from: 'stressed, tense', to: 'relaxed, calm' },
-        'bored_to_inspired': { from: 'boring, uninspiring', to: 'inspiring, stimulating' },
-        'chaotic_to_grounded': { from: 'chaotic, overwhelming', to: 'grounded, stable' },
-        'low_to_energized': { from: 'low energy, tired', to: 'energized, vibrant' },
-        'neutral': { from: 'balanced', to: 'balanced' }
-      };
-      
-      const directionDesc = directionDescriptions[mt.direction] || { from: 'current state', to: 'desired state' };
-      
-      promptJson.mood_transformation = {
-        from: directionDesc.from,
-        to: directionDesc.to,
-        approach: mt.direction,
-        magnitude: mt.magnitude
-      };
-      
-      // Adjust lighting based on mood transformation
-      if (mt.lightingRecommendations.warmth !== 'neutral') {
-        promptJson.lighting_warmth = mt.lightingRecommendations.warmth;
-      }
-      if (mt.lightingRecommendations.intensity !== 'moderate') {
-        promptJson.lighting_intensity = mt.lightingRecommendations.intensity;
-      }
-      if (mt.lightingRecommendations.naturalLight === 'essential') {
-        promptJson.natural_light = 'essential, maximize windows and natural light sources';
-      }
-      
-      // Adjust complexity
-      if (mt.complexityModifier < -0.1) {
-        promptJson.complexity_adjustment = 'simplified, minimal visual clutter';
-      } else if (mt.complexityModifier > 0.1) {
-        promptJson.complexity_adjustment = 'enhanced visual interest, varied textures and elements';
-      }
-      
-      // Layout recommendations
-      if (mt.layoutRecommendations.openness !== 'balanced') {
-        promptJson.layout_openness = mt.layoutRecommendations.openness;
-      }
-      if (mt.layoutRecommendations.flow !== 'structured') {
-        promptJson.layout_flow = mt.layoutRecommendations.flow;
-      }
-    }
-    
-    // Social context recommendations
-    if (weights.socialContextRecommendations) {
-      const sc = weights.socialContextRecommendations;
-      promptJson.social_design = {
-        layout_openness: sc.layoutOpenness,
-        furniture_scale: sc.furnitureScale,
-        durability_priority: sc.durabilityPriority,
-        privacy_elements: sc.privacyElements,
-        social_elements: sc.socialElements
-      };
-    }
-    
-    // Activity priorities (focus on "difficult" satisfaction)
-    if (weights.activityNeeds && weights.activityNeeds.needsImprovement) {
-      promptJson.improve_activities = {
-        priority_activities: weights.activityNeeds.priorityActivities,
-        specific_needs: weights.activityNeeds.specificNeeds.slice(0, 5)
-      };
-    }
-  }
-  
-  if (sourceType === GenerationSource.Personality && weights.designImplications) {
-    // Add personality signature for Personality source
-    promptJson.personality_signature = {
-      visual_complexity: weights.visualComplexity > 0.6 ? 'high' : weights.visualComplexity < 0.4 ? 'low' : 'moderate',
-      design_approach: weights.designImplications.minimalistTendency ? 'minimalist' :
-                       weights.designImplications.eclecticMix ? 'eclectic' :
-                       weights.designImplications.cozyTextures ? 'cozy' : 'balanced',
-      texture_preference: weights.designImplications.softTextures ? 'soft' : 'varied',
-      color_approach: weights.designImplications.boldColors ? 'bold' : 'subtle'
-    };
-  }
-  
-  // FLUX.2 supports JSON structured prompts - use JSON for precise control
-  // According to documentation: "FLUX.2 understands both formats equally well"
-  // JSON is better for complex interior design scenes with multiple elements
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildFlux2Prompt:result',message:'Clean narrative JSON prompt built',data:{promptJson:JSON.stringify(promptJson).substring(0,1000)},timestamp:Date.now(),sessionId:'debug-session',runId:'geometry-debug',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+
   return JSON.stringify(promptJson, null, 2);
+}
+
+/**
+ * Converts FLUX 2 JSON structured prompt to JSON format for Google Nano Banana
+ * Google Nano Banana receives JSON as text in prompt, which provides better structure
+ * 
+ * @param jsonPrompt - JSON string from buildFlux2Prompt
+ * @returns JSON string formatted for Google Nano Banana (sent as text in prompt)
+ */
+export function buildGoogleNanoBananaPrompt(jsonPrompt: string): string {
+  // #region prompt debug
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildGoogleNanoBananaPrompt:start',message:'Starting Google Nano Banana prompt conversion',data:{jsonPromptLength:jsonPrompt.length,isJson:jsonPrompt.trim().startsWith('{')},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+  // #endregion
+
+  // Check if it's JSON
+  if (!jsonPrompt.trim().startsWith('{')) {
+    return jsonPrompt;
+  }
+
+  try {
+    const promptData = JSON.parse(jsonPrompt);
+    
+    // Extract key data from simplified JSON
+    const roomType = promptData.room_type || 'interior space';
+    // Ensure style is ONE dominant style (extract primary if it's a blend)
+    const primaryStyle = promptData.primary_style || promptData.style || 'modern';
+    const secondaryStyles = promptData.secondary_styles || [];
+    const style = extractPrimaryStyle(primaryStyle);
+    
+    const colors = promptData.colors || [];
+    const materials = promptData.materials || [];
+    const complexity = promptData.complexity || 'balanced';
+    const brightness = promptData.brightness || 'balanced';
+    const lightingMood = promptData.lighting_mood || '';
+    const natureMetaphor = promptData.nature_metaphor || '';
+    const texture = promptData.texture || '';
+    const mood = promptData.mood || '';
+    const plants = typeof promptData.plants === 'number' ? promptData.plants : 0;
+    
+    // Extract functional requirements (for MixedFunctional)
+    const functionalRequirements = promptData.functional_requirements || null;
+    const furnitureList = promptData.furniture || [];
+    
+    // Build SHORT, SIMPLE prompt
+    const colorList = colors.slice(0, 3).join(', ');
+    const materialList = materials.slice(0, 2).join(' and ');
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildGoogleNanoBananaPrompt:final-prompt',message:'Final prompt with room type and style',data:{roomType,style,secondaryStyles,hasRoomType:!!roomType,hasFunctionalRequirements:!!functionalRequirements,furnitureListCount:furnitureList.length},timestamp:Date.now(),sessionId:'debug-session',runId:'style-coherence-debug',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    
+    // Build functional requirements text (for MixedFunctional)
+    let functionalText = '';
+    if (functionalRequirements) {
+      const primaryActivity = functionalRequirements.primary_activity || '';
+      const secondaryActivities = functionalRequirements.secondary_activities || [];
+      const functionalPriorities = functionalRequirements.functional_priorities || [];
+      
+      const activityText = primaryActivity ? `Primary activity: ${primaryActivity}` : '';
+      const secondaryText = secondaryActivities.length > 0 ? `Secondary activities: ${secondaryActivities.join(', ')}` : '';
+      const prioritiesText = functionalPriorities.length > 0 ? `Functional priorities: ${functionalPriorities.join(', ')}` : '';
+      
+      functionalText = [activityText, secondaryText, prioritiesText].filter(Boolean).join('. ') + '.';
+      
+      // Add furniture list if available
+      if (furnitureList.length > 0) {
+        functionalText += ` Required furniture: ${furnitureList.slice(0, 8).join(', ')}.`;
+      }
+    }
+    
+    const secondaryStyleText = secondaryStyles.length > 0 
+      ? ` with subtle ${secondaryStyles.join(' and ')} influences`
+      : '';
+
+    const finalPrompt = `SYSTEM INSTRUCTION: High-End Architectural Redesign AI. Curated by an expert Interior Architect.
+1. ARCHITECTURAL LOCK: Keep walls, windows, and doors 100% IDENTICAL to the input image. NO new windows. NO moving doors. 
+2. VIEWPORT LOCK: Keep the exact camera perspective.
+3. CORE TASK: ERASE all existing furniture/decor completely. Reconstruct surfaces behind them. Furnish from scratch.
+4. INTELLIGENT DESIGN: Use your expertise to ensure style/material cohesion and realistic biophilia interpretation.
+
+Professional interior design of a ${roomType}.
+
+KEEP: walls, windows, doors, camera angle - IDENTICAL.
+
+CHANGE:
+- Style: ${style}${secondaryStyleText}
+- Mood: ${mood || 'match the style'}
+- Wall colors: ${colorList || 'match the style palette'}
+- Materials: ${materialList || 'match the style'}
+- Texture: ${texture || 'match the style'}
+- Complexity: ${complexity}; Brightness: ${brightness}; Lighting mood: ${lightingMood || 'neutral'}
+- Nature metaphor: ${natureMetaphor || 'none'}
+- Plants: ${plants} plants (Interpret into a realistic botanical arrangement)
+${functionalText ? `- Functional requirements: ${functionalText}\n` : ''}- REMOVE COMPLETELY: all furniture, rugs/carpets, curtains/blinds, lamps, wall art, shelves, TVs/monitors, plants, clutter, accessories. Inpaint surfaces behind them.
+- NEW INTERIOR: Add entirely NEW furniture + decor (new shapes, new layout) matching the ${style} style${functionalText ? ' and functional requirements' : ''}.
+- Rugs: REMOVE all. Floor must be visible unless the style REQUIRES a new rug.`;
+
+    // #region prompt debug
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildGoogleNanoBananaPrompt:final',message:'Google Nano Banana simplified prompt built',data:{finalPromptLength:finalPrompt.length,finalPromptPreview:finalPrompt,style,colorsCount:colors.length,materialsCount:materials.length},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+    // #endregion
+
+    return finalPrompt;
+  } catch (error) {
+    console.error('[buildGoogleNanoBananaPrompt] Error parsing JSON:', error);
+    return jsonPrompt;
+  }
+}
+
+// =========================
+// DESCRIPTIVE MAPPINGS FOR GOOGLE NANO BANANA
+// =========================
+
+const NATURE_METAPHOR_DESCRIPTIONS: Record<string, string> = {
+  'forest': 'Forest (Dappled light, organic forms, deep greens and earthy browns)',
+  'ocean': 'Ocean (Fluid forms, cooler shadows, tranquil blues and seafoam tones)',
+  'mountain': 'Mountain (Strong vertical lines, rugged stone textures, airy and crisp feel)',
+  'desert': 'Desert (Warm directional light, sandy textures, terracotta and ochre palette)',
+  'meadow': 'Meadow (Soft diffused light, airy textiles, wildflower accents and fresh greens)',
+  'jungle': 'Jungle (Lush foliage, high humidity feel, vibrant exotic colors and dense layering)'
+};
+
+const COMPLEXITY_LEVEL_MAPPINGS = [
+  { threshold: 0.2, label: 'Very Minimal (Hero pieces only, massive negative space, zero clutter)' },
+  { threshold: 0.4, label: 'Simple (Minimal accessories, breathable space, focus on function)' },
+  { threshold: 0.6, label: 'Balanced (Thoughtful layering, selective decor, lived-in but tidy)' },
+  { threshold: 0.8, label: 'Richly Layered (Textured textiles, multiple accessories, curated collections)' },
+  { threshold: 1.1, label: 'Maximalist (Dense patterns, abundant decor, highly complex visual interest)' }
+];
+
+const LIGHTING_SCENARIO_MAPPINGS: Record<string, string> = {
+  'warm_dim': 'Intimate Warm (Soft, low-intensity evening light, approx 2700K)',
+  'warm_bright': 'Golden Hour (Warm, directional sun-drenched light, approx 3000K)',
+  'neutral': 'Natural Daylight (Balanced, crisp morning light, approx 4500K)',
+  'cool_bright': 'Gallery Light (Clear, high-intensity focused light, approx 5500K)'
+};
+
+export function getComplexityLabel(weight: number): string {
+  return COMPLEXITY_LEVEL_MAPPINGS.find(m => weight <= m.threshold)?.label || 'Balanced';
+}
+
+function getNatureMetaphorDescription(id?: string): string {
+  if (!id) return 'Natural (Organic forms and balanced lighting)';
+  return NATURE_METAPHOR_DESCRIPTIONS[id.toLowerCase()] || `${id} inspired (Organic forms and nature-aligned colors)`;
+}
+
+function getTextureFocus(materials: string[], style: string): string {
+  if (materials.length < 2) return `Focus on authentic ${style} textures`;
+  return `${materials[0]} vs ${materials[1]} contrast for tactile depth`;
 }
 
 // =========================
@@ -1518,5 +1570,6 @@ export {
   type PromptComponents,
   getBiophiliaDescriptors
   // buildFlux2Prompt is already exported above as a named export
+  // buildGoogleNanoBananaPrompt is already exported above as a named export
 };
 

@@ -84,6 +84,7 @@ export interface SessionData {
   dnaFeedbackTime?: string;
   dnaAnalysisComplete?: boolean;
   roomImage?: string; // Base64 encoded image
+  roomImageEmpty?: string; // Base64 encoded image with furniture removed
   detectedRoomType?: string; // Automatycznie wykryty typ pokoju
   roomAnalysis?: {
     detected_room_type: string;

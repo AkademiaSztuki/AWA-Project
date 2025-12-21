@@ -10,7 +10,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { supabase, fetchLatestSessionSnapshot, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
 import { getUserHouseholds, saveHousehold, getCompletionStatus, getUserProfile } from '@/lib/supabase-deep-personalization';
-import { fetchSpacesWithImages, toggleSpaceImageFavorite, updateSpaceName, deleteSpace } from '@/lib/remote-spaces';
+import { fetchSpacesWithImages, toggleSpaceImageFavorite, updateSpaceName, deleteSpace, deleteSpaceImage } from '@/lib/remote-spaces';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, 
@@ -596,10 +596,18 @@ export function UserDashboard() {
     router.push(`/space/${spaceId}`);
   };
 
-  const handleDeleteInspiration = (inspiration: any) => {
+  const handleDeleteInspiration = async (inspiration: any) => {
     const id = inspiration?.id;
     const url = inspiration?.url || inspiration?.imageBase64 || inspiration?._imageUrl;
+    const userHash = getUserHash();
     
+    // Check if ID is a valid UUID (Supabase format)
+    const isUuid = (str: string | undefined): boolean => {
+      if (!str) return false;
+      return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(str);
+    };
+    
+    // Optimistic update - remove from local state immediately
     const currentInspirations = (sessionData as any)?.inspirations || [];
     const filteredInspirations = currentInspirations.filter((insp: any) => {
       const matchId = id && insp.id === id;
@@ -607,19 +615,161 @@ export function UserDashboard() {
       return !(matchId || matchUrl);
     });
 
-    const spaces = (sessionData as any)?.spaces || [];
-    const updatedSpaces = spaces.map((space: any) => ({
+    const currentSpaces = (sessionData as any)?.spaces || [];
+    const updatedSpaces = currentSpaces.map((space: any) => ({
       ...space,
       images: (space.images || []).filter((img: any) => {
         if (img.type !== 'inspiration') return true;
         const matchId = id && img.id === id;
-        const matchUrl = url && img.url === url;
+        const matchUrl = url && (img.url === url || img.thumbnailUrl === url);
         return !(matchId || matchUrl);
       })
     }));
 
+    // Update local state immediately
     updateSessionData({ inspirations: filteredInspirations, spaces: updatedSpaces } as any);
     setSpaces(updatedSpaces);
+
+    // Delete from Supabase if we have a valid UUID and userHash
+    let deletedFromSupabase = false;
+    if (userHash) {
+      let imageIdToDelete: string | null = null;
+      
+      // First, try to use the provided ID if it's a valid UUID
+      if (id && isUuid(id)) {
+        imageIdToDelete = id;
+      } else {
+        // If no valid UUID, search for the image in spaces by URL
+        // Search in currentSpaces (before filtering) to find the original UUID
+        for (const space of currentSpaces) {
+          const imageToDelete = (space.images || []).find((img: any) => {
+            if (img.type !== 'inspiration') return false;
+            // Match by URL or by ID (even if not UUID)
+            const urlMatch = url && (img.url === url || img.thumbnailUrl === url);
+            const idMatch = id && img.id === id;
+            return urlMatch || idMatch;
+          });
+          
+          if (imageToDelete?.id && isUuid(imageToDelete.id)) {
+            imageIdToDelete = imageToDelete.id;
+            break;
+          }
+        }
+      }
+      
+      // Delete from space_images table if we found a valid UUID
+      if (imageIdToDelete) {
+        try {
+          deletedFromSupabase = await deleteSpaceImage(userHash, imageIdToDelete);
+          if (deletedFromSupabase) {
+            console.log('[Dashboard] Successfully deleted inspiration from space_images:', imageIdToDelete);
+          } else {
+            console.warn('[Dashboard] Failed to delete inspiration from space_images, but local state updated');
+          }
+        } catch (error) {
+          console.error('[Dashboard] Error deleting inspiration from space_images:', error);
+        }
+      } else {
+        console.log('[Dashboard] Inspiration deleted locally (no Supabase UUID found in space_images)');
+      }
+
+      // Also delete from user_profiles.inspirations (JSONB field)
+      try {
+        const { data: profileData, error: fetchError } = await supabase
+          .from('user_profiles')
+          .select('inspirations')
+          .eq('user_hash', userHash)
+          .maybeSingle();
+
+        if (!fetchError && profileData?.inspirations && Array.isArray(profileData.inspirations)) {
+          // Filter out the deleted inspiration
+          const updatedInspirations = profileData.inspirations.filter((insp: any) => {
+            const matchId = id && insp.id === id;
+            const matchFileId = id && insp.fileId === id;
+            const matchUrl = url && (insp.url === url || insp.imageBase64 === url);
+            return !(matchId || matchFileId || matchUrl);
+          });
+
+          // Only update if something was actually removed
+          if (updatedInspirations.length < profileData.inspirations.length) {
+            const { error: updateError } = await supabase
+              .from('user_profiles')
+              .update({
+                inspirations: updatedInspirations,
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_hash', userHash);
+
+            if (updateError) {
+              console.warn('[Dashboard] Failed to update user_profiles.inspirations:', updateError);
+            } else {
+              console.log('[Dashboard] Successfully removed inspiration from user_profiles.inspirations');
+              deletedFromSupabase = true; // Mark as deleted even if only from user_profiles
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[Dashboard] Error updating user_profiles.inspirations:', error);
+      }
+    }
+
+    // Reload data from Supabase to ensure sync (especially important after deletion)
+    // This ensures that if the deletion succeeded, we get fresh data without the deleted item
+    if (deletedFromSupabase || userHash) {
+      try {
+        // Small delay to ensure Supabase has processed the deletion
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Reload spaces from Supabase to sync
+        const remoteSpaces = await fetchSpacesWithImages(userHash!, 6, 0);
+        if (remoteSpaces && Array.isArray(remoteSpaces)) {
+          const mapped: Space[] = remoteSpaces.map((entry: any) => {
+            const s = entry.space || entry;
+            const imgs = (entry.images || []).map((img: any) => ({
+              id: img.id,
+              url: img.url,
+              type: img.type,
+              addedAt: img.created_at || img.added_at || img.addedAt || new Date().toISOString(),
+              isFavorite: img.is_favorite ?? img.isFavorite,
+              thumbnailUrl: img.thumbnail_url || img.thumbnailUrl,
+              tags: img.tags
+            }));
+            return {
+              id: s.id,
+              name: s.name,
+              type: s.type || 'personal',
+              images: imgs,
+              createdAt: s.created_at || s.createdAt,
+              updatedAt: s.updated_at || s.updatedAt
+            };
+          });
+          const ordered = sortSpacesDescending(mapped);
+          setSpaces(ordered);
+          updateSessionData({ spaces: ordered } as any);
+          
+          // Also update inspirations from spaces
+          const inspirationImages = ordered
+            .flatMap(space => space.images || [])
+            .filter(img => img.type === 'inspiration')
+            .map(img => ({
+              id: img.id,
+              url: img.url,
+              imageBase64: img.url,
+              tags: img.tags || {},
+              description: undefined,
+              addedAt: img.addedAt
+            }));
+          
+          // Only update inspirations if we got data from Supabase
+          if (inspirationImages.length !== currentInspirations.length || deletedFromSupabase) {
+            updateSessionData({ inspirations: inspirationImages } as any);
+          }
+        }
+      } catch (error) {
+        console.warn('[Dashboard] Failed to reload data from Supabase after deletion:', error);
+        // Don't revert local changes if reload fails
+      }
+    }
   };
 
 

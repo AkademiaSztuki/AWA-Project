@@ -372,3 +372,70 @@ export async function deleteSpace(userHash: string, spaceId: string) {
 
   return true;
 }
+
+export async function deleteSpaceImage(
+  userHash: string,
+  imageId: string
+): Promise<boolean> {
+  if (!userHash || !imageId) return false;
+  
+  try {
+    // First, get the image to check if it exists and get the URL for storage cleanup
+    const { data: imageData, error: fetchError } = await supabase
+      .from('space_images')
+      .select('url')
+      .eq('id', imageId)
+      .eq('user_hash', userHash)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.warn('[remote-spaces] Failed to fetch image for deletion', fetchError);
+      return false;
+    }
+
+    if (!imageData) {
+      console.warn('[remote-spaces] Image not found for deletion');
+      return false;
+    }
+
+    // Delete from database
+    const { error: deleteError } = await supabase
+      .from('space_images')
+      .delete()
+      .eq('id', imageId)
+      .eq('user_hash', userHash);
+
+    if (deleteError) {
+      console.warn('[remote-spaces] deleteSpaceImage failed', deleteError);
+      return false;
+    }
+
+    // Try to delete from storage if it's a storage URL
+    const imageUrl = imageData.url;
+    if (imageUrl && imageUrl.includes('/storage/v1/object/public/space-images/')) {
+      try {
+        // Extract path from URL: https://...supabase.co/storage/v1/object/public/space-images/{path}
+        const urlParts = imageUrl.split('/space-images/');
+        if (urlParts.length > 1) {
+          const storagePath = urlParts[1];
+          const { error: storageError } = await supabase.storage
+            .from(SPACE_BUCKET)
+            .remove([storagePath]);
+
+          if (storageError) {
+            console.warn('[remote-spaces] Failed to delete from storage (non-critical)', storageError);
+            // Don't fail the whole operation if storage deletion fails
+          }
+        }
+      } catch (storageErr) {
+        console.warn('[remote-spaces] Storage deletion error (non-critical)', storageErr);
+        // Don't fail the whole operation
+      }
+    }
+
+    return true;
+  } catch (e) {
+    console.warn('[remote-spaces] deleteSpaceImage error', e);
+    return false;
+  }
+}

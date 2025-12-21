@@ -31,7 +31,9 @@ const STYLE_WORDS = new Set([
   'hollywood_regency', 'french_provincial', 'english_country', 'nordic_hygge', 'nordic',
   'brutalist', 'maximalist', 'eclectic', 'zen', 'moroccan', 'southwestern',
   'california_casual', 'brooklyn_loft', 'parisian_chic', 'memphis_postmodern', 'memphis',
-  'biophilic', 'vintage', 'retro', 'classic', 'luxury', 'glam'
+  'biophilic', 'vintage', 'retro', 'classic', 'luxury', 'glam',
+  // Added missing styles from STYLE_OPTIONS
+  'farmhouse', 'gothic', 'japanese', 'transitional'
 ]);
 
 // COLOR WORDS - expanded with earth tones and missing colors
@@ -80,6 +82,9 @@ function stripExtensions(filename: string): string {
 function parseFilenameToCategories(filename: string): TinderImage['categories'] & { tags: string[] } {
   const base = stripExtensions(filename);
   const parts = base.split('_');
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:parseFilename-entry',message:'Starting filename parsing',data:{filename,base,partsCount:parts.length,firstParts:parts.slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
 
   // Remove leading ["living","room"] if present
   const startIndex = parts[0] === 'living' && parts[1] === 'room' ? 2 : 0;
@@ -91,8 +96,35 @@ function parseFilenameToCategories(filename: string): TinderImage['categories'] 
   }
 
   const tags = [...tokens];
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:parseFilename-tokens',message:'Tokens extracted from filename',data:{filename,tokensCount:tokens.length,tokens:tokens.slice(0,10)},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
 
   // NEW APPROACH: Scan ALL tokens and categorize each one (not sequential)
+  // FIRST: Try to reconstruct multi-word styles (art_deco, mid_century, etc.)
+  const reconstructedTokens: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    const nextToken = tokens[i + 1];
+    
+    // Try two-word combinations for styles
+    if (nextToken) {
+      const twoWordStyle = `${token}_${nextToken}`;
+      if (STYLE_WORDS.has(twoWordStyle)) {
+        reconstructedTokens.push(twoWordStyle);
+        i++; // Skip next token since we used it
+        continue;
+      }
+    }
+    
+    // Single token
+    reconstructedTokens.push(token);
+  }
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:parseFilename-reconstructed',message:'Reconstructed tokens for multi-word styles',data:{filename,originalTokens:tokens.slice(0,5),reconstructedTokens:reconstructedTokens.slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+
   const styleTokens: string[] = [];
   const colors: string[] = [];
   const materials: string[] = [];
@@ -104,7 +136,7 @@ function parseFilenameToCategories(filename: string): TinderImage['categories'] 
 
   // Priority order: style > biophilia > colors > materials > furniture > lighting > layout > mood
   // This ensures style words are recognized first, then other categories
-  for (const token of tokens) {
+  for (const token of reconstructedTokens) {
     if (STYLE_WORDS.has(token)) {
       styleTokens.push(token);
     } else if (BIOPHILIA_WORDS.has(token)) {
@@ -129,13 +161,16 @@ function parseFilenameToCategories(filename: string): TinderImage['categories'] 
   const biophilia = biophiliaCount === 0 ? 0 : 
                     biophiliaCount <= 2 ? 1 :
                     biophiliaCount <= 4 ? 2 : 3;
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:parseFilename-categorization',message:'Categorization results',data:{filename,styleTokens,colors,materials,biophiliaCount,biophilia,lighting,mood},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H4'})}).catch(()=>{});
+  // #endregion
 
   // Style: join recognized style words, or use first style word if multiple
   const style = styleTokens.length > 0 
     ? (styleTokens.length === 1 ? styleTokens[0] : styleTokens[0]) // Use first style word for consistency
     : null;
 
-  return {
+  const result = {
     style,
     colors,
     materials,
@@ -146,16 +181,36 @@ function parseFilenameToCategories(filename: string): TinderImage['categories'] 
     biophilia,
     tags,
   };
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:parseFilename-result',message:'Final parsing result',data:{filename,result},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+  return result;
 }
 
 export async function GET() {
   try {
     const dir = path.join(process.cwd(), 'public', 'Tinder', 'Livingroom');
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:GET-entry',message:'Starting Tinder images load',data:{directory:dir},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    
     const all = await fs.promises.readdir(dir);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:GET-after-readdir',message:'All files found in directory',data:{totalFiles:all.length,allFiles:all.slice(0,10)},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    
     const images = all
       .filter((f) => /\.(jpg|jpeg|png)(\.(jpg|jpeg|png))?$/i.test(f))
       .map((filename, index) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:GET-parsing',message:'Parsing filename to categories',data:{filename,index},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H2'})}).catch(()=>{});
+        // #endregion
+        
         const parsed = parseFilenameToCategories(filename);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:GET-parsed',message:'Parsed categories from filename',data:{filename,parsed:{style:parsed.style,colors:parsed.colors,materials:parsed.materials,biophilia:parsed.biophilia,lighting:parsed.lighting,mood:parsed.mood},allTags:parsed.tags},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H2'})}).catch(()=>{});
+        // #endregion
+        
         const item: TinderImage = {
           id: index + 1,
           url: `/Tinder/Livingroom/${filename}`,
@@ -174,12 +229,23 @@ export async function GET() {
         };
         return item;
       });
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:GET-after-filter',message:'Images after filtering',data:{totalImages:images.length,imageFilenames:images.slice(0,5).map(i=>i.filename),stylesFound:images.map(i=>i.categories.style).filter(Boolean),biophiliaRange:{min:Math.min(...images.map(i=>i.categories.biophilia)),max:Math.max(...images.map(i=>i.categories.biophilia))}},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
 
     // Shuffle to randomize order
     const shuffled = images.sort(() => Math.random() - 0.5).slice(0, 30);
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:GET-after-shuffle',message:'Final shuffled images selected',data:{selectedCount:shuffled.length,selectedFilenames:shuffled.slice(0,5).map(i=>i.filename),selectedStyles:shuffled.map(i=>i.categories.style).filter(Boolean),categoriesCoverage:{hasStyle:shuffled.filter(i=>i.categories.style).length,hasColors:shuffled.filter(i=>i.categories.colors.length>0).length,hasMaterials:shuffled.filter(i=>i.categories.materials.length>0).length,hasBiophilia:shuffled.filter(i=>i.categories.biophilia>0).length}},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
 
     return NextResponse.json(shuffled);
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:GET-error',message:'Error loading images',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'tinder-images-check',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
     console.error('Failed to read Livingroom images', error);
     return NextResponse.json({ error: 'Failed to list images' }, { status: 500 });
   }

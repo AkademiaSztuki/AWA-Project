@@ -180,7 +180,7 @@ export const BIGFIVE_STYLE_MAPPINGS: StyleMapping[] = [
       E: ">0.6",
       E5_ExcitementSeeking: ">0.65"
     },
-    materials: ["bold patterns", "brass accents", "statement pieces", "vibrant colors"],
+    materials: ["bold patterns", "brass accents", "statement pieces", "saturated textiles"],
     complexity: 0.85,
     researchBasis: "whitfield1990",
     confidenceMultiplier: 0.9,
@@ -226,7 +226,7 @@ export const BIGFIVE_STYLE_MAPPINGS: StyleMapping[] = [
       E1_Warmth: ">0.65",
       A6_TenderMindedness: ">0.6"
     },
-    materials: ["soft textiles", "natural wood", "warm lighting", "comfortable fabrics"],
+    materials: ["soft textiles", "natural wood", "warm metals", "comfortable fabrics"],
     complexity: 0.5,
     researchBasis: "graham2017",
     confidenceMultiplier: 0.95,
@@ -241,7 +241,7 @@ export const BIGFIVE_STYLE_MAPPINGS: StyleMapping[] = [
       N: ">0.5",
       N1_Anxiety: ">0.6"
     },
-    materials: ["enclosed spaces", "soft textures", "calming colors", "protective elements"],
+    materials: ["soft fabrics", "natural wood", "plush textiles", "warm textures"],
     complexity: 0.3,
     researchBasis: "graham2017",
     confidenceMultiplier: 0.9,
@@ -256,7 +256,7 @@ export const BIGFIVE_STYLE_MAPPINGS: StyleMapping[] = [
       A: ">0.5",
       E2_Gregariousness: ">0.7"
     },
-    materials: ["open layouts", "social spaces", "bright lighting", "inviting furniture"],
+    materials: ["glass", "light wood", "bright surfaces", "comfortable seating"],
     complexity: 0.6,
     researchBasis: "gosling2002",
     confidenceMultiplier: 0.85,
@@ -271,7 +271,7 @@ export const BIGFIVE_STYLE_MAPPINGS: StyleMapping[] = [
       N: "<0.4",
       C: ">0.5"
     },
-    materials: ["sleek surfaces", "modern materials", "confident design", "balanced composition"],
+    materials: ["polished surfaces", "metal accents", "clean lines", "balanced materials"],
     complexity: 0.55,
     researchBasis: "nasar1989",
     confidenceMultiplier: 0.8,
@@ -426,7 +426,7 @@ export const BIGFIVE_STYLE_MAPPINGS: StyleMapping[] = [
       C: "0.45-0.65",
       N: "<0.6"
     },
-    materials: ["balanced wood/metal", "clean-lined upholstery", "muted palette", "soft accents"],
+    materials: ["balanced wood", "metal accents", "clean-lined upholstery", "soft fabrics"],
     complexity: 0.5,
     researchBasis: "nasar1989",
     confidenceMultiplier: 0.8,
@@ -437,7 +437,7 @@ export const BIGFIVE_STYLE_MAPPINGS: StyleMapping[] = [
     id: "modern_classic",
     style: "modern classic",
     conditions: {},  // Default/balanced profile
-    materials: ["timeless pieces", "balanced materials", "classic proportions", "refined details"],
+    materials: ["wood", "classic textiles", "refined metals", "timeless materials"],
     complexity: 0.5,
     researchBasis: "nasar1989",
     confidenceMultiplier: 0.7,

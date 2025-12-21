@@ -40,7 +40,7 @@ interface BigFiveDetailedProps {
 }
 
 // Radar Chart Component (używając SVG)
-function RadarChart({ scores }: { scores: BigFiveScores }) {
+export function RadarChart({ scores }: { scores: BigFiveScores }) {
   const dimensions = [
     { key: 'O', label: { pl: 'Otwartość', en: 'Openness' }, angle: 0 },
     { key: 'C', label: { pl: 'Sumienność', en: 'Conscientiousness' }, angle: 72 },
@@ -379,7 +379,7 @@ function FacetChart({
 }
 
 // Domain description component
-function DomainDescription({ domain, score, facets }: { domain: 'O' | 'C' | 'E' | 'A' | 'N'; score: number; facets?: { [key: number]: number } }) {
+export function DomainDescription({ domain, score, facets }: { domain: 'O' | 'C' | 'E' | 'A' | 'N'; score: number; facets?: { [key: number]: number } }) {
   const { language } = useLanguage();
   const [isExpanded, setIsExpanded] = useState(false);
 
