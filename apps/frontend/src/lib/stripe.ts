@@ -3,10 +3,21 @@ import Stripe from 'stripe';
 // Lazy initialization - nie rzucaj błędu podczas importu modułu
 // Błąd zostanie rzucony dopiero gdy próbujemy użyć Stripe API
 function createStripeInstance(): Stripe {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  let secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) {
     throw new Error('STRIPE_SECRET_KEY is not set. Please add it to .env.local');
   }
+  
+  // Usuń białe znaki i znaki nowej linii (częsty problem w Vercel env vars)
+  secretKey = secretKey.trim().replace(/\r?\n/g, '');
+  
+  // Sprawdź format klucza
+  if (!secretKey.startsWith('sk_test_') && !secretKey.startsWith('sk_live_')) {
+    console.warn('[Stripe] Warning: STRIPE_SECRET_KEY does not start with sk_test_ or sk_live_');
+  }
+  
+  console.log('[Stripe] Using Stripe key:', secretKey.substring(0, 12) + '...' + secretKey.substring(secretKey.length - 4));
+  
   return new Stripe(secretKey, {
     apiVersion: '2023-10-16',
     typescript: true,
