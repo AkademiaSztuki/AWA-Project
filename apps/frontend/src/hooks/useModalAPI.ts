@@ -389,6 +389,9 @@ export const useModalAPI = () => {
     try {
       console.log('Rozpoczynam generowanie z parametrami:', request);
       
+      // MODAL API TEMPORARILY DISABLED - Using Google API instead
+      // TODO: Uncomment below to re-enable Modal API when needed
+      /*
       // Use base_image directly - it's already clean base64 without MIME header
       const base64Image = request.base_image;
 
@@ -410,6 +413,10 @@ export const useModalAPI = () => {
       
       setIsLoading(false);
       return result;
+      */
+      
+      // Currently using Google API - Modal API is disabled
+      throw new Error('Modal API is currently disabled. Please use Google API (useGoogleAI hook) instead.');
 
     } catch (err: any) {
       console.error('Wystąpił błąd w useModalAPI:', err);
@@ -729,6 +736,9 @@ export const useModalAPI = () => {
             throw new Error('Generation cancelled');
           }
 
+          // MODAL API TEMPORARILY DISABLED - Using Google API instead
+          // TODO: Uncomment below to re-enable Modal API when needed
+          /*
           // Use Next.js API route as proxy to avoid CORS issues with Modal API redirects
           // Server-side proxy can handle 303 redirects without CORS restrictions
           console.log(`[6-Image Matrix] Sending request to /api/modal/generate for source: ${source}`);
@@ -815,6 +825,10 @@ export const useModalAPI = () => {
             }
             throw fetchErr;
           }
+          */
+          
+          // Currently using Google API - Modal API is disabled
+          throw new Error(`Modal API is currently disabled for source ${source}. Please use Google API (useGoogleAI hook) instead.`);
 
         } catch (err: any) {
           const processingTime = Date.now() - sourceStartTime;

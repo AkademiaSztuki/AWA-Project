@@ -17,6 +17,9 @@ export async function refineSyntaxWithLLM(
   basePrompt: string,
   targetTokens: number = 65
 ): Promise<string> {
+  // MODAL API TEMPORARILY DISABLED - Using fallback instead
+  // TODO: Uncomment below to re-enable Modal API when needed
+  /*
   // Call Modal API endpoint for prompt refinement
   try {
     const response = await fetch('/api/modal/refine-prompt', {
@@ -50,6 +53,11 @@ export async function refineSyntaxWithLLM(
     // Fallback: simple truncation if LLM fails
     return fallbackTruncation(basePrompt, targetTokens);
   }
+  */
+  
+  // Currently using fallback - Modal API is disabled
+  console.log('[Prompt Refinement] Modal API disabled, using fallback truncation');
+  return fallbackTruncation(basePrompt, targetTokens);
 }
 
 /**
