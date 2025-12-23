@@ -21,14 +21,26 @@ interface SensoryTestProps {
   className?: string;
   value?: string | null;
   frameless?: boolean;
+  stepCounter?: string;
 }
 
-export function SensoryTest({ type, onSelect, className = '', value, frameless = false }: SensoryTestProps) {
+export function SensoryTest({ type, onSelect, className = '', value, frameless = false, stepCounter }: SensoryTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+  
+  // #region agent log
+  useEffect(() => {
+    const options = type === 'texture' ? TEXTURE_PREFERENCES : type === 'light' ? LIGHT_PREFERENCES : MUSIC_PREFERENCES;
+    options.forEach(opt => {
+      if (opt.imageUrl) {
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:useEffect',message:'Rendering option with imageUrl',data:{type,optionId:opt.id,imageUrl:opt.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H3'})}).catch(()=>{});
+      }
+    });
+  }, [type]);
+  // #endregion
 
   const options = type === 'music' ? MUSIC_PREFERENCES :
                   type === 'texture' ? TEXTURE_PREFERENCES :
@@ -94,8 +106,10 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
 
   const gridCols =
     type === 'light'
-      ? 'grid-cols-2'
-      : 'grid-cols-2 md:grid-cols-3';
+      ? 'grid-cols-1 md:grid-cols-2'
+      : type === 'texture' || type === 'music'
+      ? 'grid-cols-2 md:grid-cols-3'
+      : 'grid-cols-1 md:grid-cols-2';
 
   const selectedOption = selectedId ? options.find(o => o.id === selectedId) : null;
 
@@ -142,75 +156,93 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
               key={option.id}
               type="button"
               onClick={() => handleSelect(option)}
-              className={`rounded-2xl border px-4 py-4 text-left flex flex-col gap-3 transition-all ${
+              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all ${
                 isSelected
                   ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
                   : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
             >
               {option.imageUrl && !imageErrors.has(option.imageUrl) ? (
-                <div className="relative w-full h-28 overflow-hidden rounded-xl bg-gray-200">
+                <div className={`relative w-full overflow-hidden rounded-t-2xl rounded-b-2xl bg-gray-200 ${type === 'music' ? 'h-40' : 'h-48'}`}>
                   <Image
                     src={option.imageUrl}
                     alt={t(option.label)}
                     fill
                     sizes="(max-width: 768px) 50vw, 33vw"
                     className="object-cover"
+                    style={{ objectPosition: type === 'texture' ? 'center center' : type === 'light' ? 'center 77%' : 'center 30%' }}
+                    onLoad={() => {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:onLoad',message:'Image loaded successfully',data:{type,optionId:option.id,imageUrl:option.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H1'})}).catch(()=>{});
+                      // #endregion
+                    }}
                     onError={() => {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:onError',message:'Image failed to load',data:{type,optionId:option.id,imageUrl:option.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H2'})}).catch(()=>{});
+                      // #endregion
                       setImageErrors(prev => new Set(prev).add(option.imageUrl!));
                     }}
                   />
                 </div>
               ) : (
-                <div className="w-full h-28 rounded-xl bg-gradient-to-br from-platinum-200 to-pearl-100 flex items-center justify-center">
+                <div className={`relative w-full overflow-hidden rounded-t-2xl rounded-b-2xl flex items-center justify-center ${type === 'music' ? 'h-40 bg-transparent' : 'h-48 bg-gray-200'}`}>
                   <Icon size={32} className="text-silver-dark" />
                 </div>
               )}
 
-              <div className="flex items-start justify-between gap-3">
-                <h4 className="font-nasalization text-sm text-graphite">
-                  {t(option.label)}
-                </h4>
-                {type === 'music' && option.audioUrl && (
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => handlePlayAudio(option, e)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        handlePlayAudio(option, e as any);
-                      }
-                    }}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors cursor-pointer ${
-                      isPlaying
-                        ? 'bg-gold text-white border-gold'
-                        : 'border-white/20 text-graphite hover:border-gold/50'
-                    }`}
-                  >
-                    {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-                  </div>
-                )}
+              <div className="px-4 pt-3 pb-4 flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-3">
+                  <h4 className="font-nasalization text-sm text-graphite">
+                    {t(option.label)}
+                  </h4>
+                  {type === 'music' && option.audioUrl && (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => handlePlayAudio(option, e)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handlePlayAudio(option, e as any);
+                        }
+                      }}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors cursor-pointer ${
+                        isPlaying
+                          ? 'bg-gold text-white border-gold'
+                          : 'border-white/20 text-graphite hover:border-gold/50'
+                      }`}
+                    >
+                      {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-silver-dark font-modern leading-relaxed">
+                  {t(option.description)}
+                </p>
               </div>
-              <p className="text-xs text-silver-dark font-modern leading-relaxed">
-                {t(option.description)}
-              </p>
             </button>
           );
         })}
       </div>
 
-      <p className="mt-4 text-xs text-center text-silver-dark font-modern">
-        {type === 'music' && (language === 'pl'
-          ? 'Muzyka ustawia tempo Twoich rytuałów.'
-          : 'Music sets the tempo of your rituals.')}
-        {type === 'texture' && (language === 'pl'
-          ? 'Tekstura wpływa na codzienny kontakt z przestrzenią.'
-          : 'Texture defines daily touchpoints in the space.')}
-        {type === 'light' && (language === 'pl'
-          ? 'Światło reguluje energię i skupienie przez cały dzień.'
-          : 'Light shapes your energy and focus throughout the day.')}
-      </p>
+      <div className="mt-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-silver-dark font-modern flex-1">
+          {type === 'music' && (language === 'pl'
+            ? 'Muzyka ustawia tempo Twoich rytuałów.'
+            : 'Music sets the tempo of your rituals.')}
+          {type === 'texture' && (language === 'pl'
+            ? 'Tekstura wpływa na codzienny kontakt z przestrzenią.'
+            : 'Texture defines daily touchpoints in the space.')}
+          {type === 'light' && (language === 'pl'
+            ? 'Światło reguluje energię i skupienie przez cały dzień.'
+            : 'Light shapes your energy and focus throughout the day.')}
+        </p>
+        {stepCounter && (
+          <p className="text-xs text-silver-dark font-modern whitespace-nowrap">
+            {stepCounter}
+          </p>
+        )}
+      </div>
     </ContentWrapper>
   );
 }
@@ -225,6 +257,7 @@ interface PaletteTestProps {
   onSelect: (id: string) => void;
   frameless?: boolean;
   className?: string;
+  stepCounter?: string;
 }
 
 interface StyleTestProps {
@@ -233,9 +266,10 @@ interface StyleTestProps {
   onSelect: (id: string) => void;
   frameless?: boolean;
   className?: string;
+  stepCounter?: string;
 }
 
-function PaletteTest({ options, selectedId, onSelect, frameless = false, className = '' }: PaletteTestProps) {
+function PaletteTest({ options, selectedId, onSelect, frameless = false, className = '', stepCounter }: PaletteTestProps) {
   const { language } = useLanguage();
 
   const ContentWrapper = frameless ? 'div' : GlassCard;
@@ -274,39 +308,50 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
               key={palette.id}
               type="button"
               onClick={() => onSelect(palette.id)}
-              className={`rounded-2xl border p-4 flex flex-col gap-3 text-left transition-all h-full ${
+              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all ${
                 isSelected
-                  ? 'border-gold bg-gold/10 shadow-inner shadow-gold/15'
+                  ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
                   : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
             >
-              <div className="flex gap-2 h-20 w-full">
-                {palette.colors.map((color, index) => (
-                  <div
-                    key={index}
-                    className="flex-1 rounded-lg h-full shadow-sm"
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
+              <div className="relative w-full h-32 overflow-hidden rounded-t-2xl rounded-b-2xl bg-gray-200">
+                <div className="flex gap-2 h-full w-full">
+                  {palette.colors.map((color, index) => (
+                    <div
+                      key={index}
+                      className="flex-1 h-full shadow-sm"
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
               </div>
-              <p className="text-sm font-nasalization text-graphite text-center">
-                {palette.label[language]}
-              </p>
+              <div className="px-4 pt-3 pb-4 flex flex-col gap-2">
+                <p className="text-sm font-nasalization text-graphite text-center">
+                  {palette.label[language]}
+                </p>
+              </div>
             </button>
           );
         })}
       </div>
 
-      <p className="mt-4 text-xs text-center text-silver-dark font-modern">
-        {language === 'pl'
-          ? 'Paleta ustawia bazę pod wszystkie sensoryczne decyzje.'
-          : 'The palette sets the base for every other sensory decision.'}
-      </p>
+      <div className="mt-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-silver-dark font-modern flex-1">
+          {language === 'pl'
+            ? 'Paleta ustawia bazę pod wszystkie sensoryczne decyzje.'
+            : 'The palette sets the base for every other sensory decision.'}
+        </p>
+        {stepCounter && (
+          <p className="text-xs text-silver-dark font-modern whitespace-nowrap">
+            {stepCounter}
+          </p>
+        )}
+      </div>
     </ContentWrapper>
   );
 }
 
-function StyleTest({ options, selectedId, onSelect, frameless = false, className = '' }: StyleTestProps) {
+function StyleTest({ options, selectedId, onSelect, frameless = false, className = '', stepCounter }: StyleTestProps) {
   const { language, t } = useLanguage();
 
   const ContentWrapper = frameless ? 'div' : GlassCard;
@@ -370,11 +415,18 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
         })}
       </div>
 
-      <p className="mt-4 text-xs text-center text-silver-dark font-modern">
-        {language === 'pl'
-          ? 'Styl ustawia bazę dla całej estetyki przestrzeni.'
-          : 'Style sets the foundation for the entire space aesthetic.'}
-      </p>
+      <div className="mt-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-silver-dark font-modern flex-1">
+          {language === 'pl'
+            ? 'Styl ustawia bazę dla całej estetyki przestrzeni.'
+            : 'Style sets the foundation for the entire space aesthetic.'}
+        </p>
+        {stepCounter && (
+          <p className="text-xs text-silver-dark font-modern whitespace-nowrap">
+            {stepCounter}
+          </p>
+        )}
+      </div>
     </ContentWrapper>
   );
 }
@@ -581,7 +633,7 @@ export function SensoryTestSuite({
   };
 
   return (
-    <div className={`flex flex-col gap-4 h-full ${className}`}>
+    <div className={`flex flex-col gap-4 h-full pb-4 ${className}`}>
       {profileContext && (
         <div className="glass-panel rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-silver-dark flex flex-wrap gap-4">
           {profileContext.paletteLabel && (
@@ -631,6 +683,9 @@ export function SensoryTestSuite({
             onSelect={(value) => handleSelect('palette', value)}
             frameless
             className="h-full overflow-y-auto flex flex-col justify-center"
+            stepCounter={language === 'pl'
+              ? `Krok ${currentIndex + 1} z ${tests.length}`
+              : `Step ${currentIndex + 1} of ${tests.length}`}
           />
         ) : currentTest === 'style' && hasStyle && styleOptions ? (
           <StyleTest
@@ -639,18 +694,27 @@ export function SensoryTestSuite({
             onSelect={(value) => handleSelect('style', value)}
             frameless
             className="h-full overflow-y-auto flex flex-col justify-center"
+            stepCounter={language === 'pl'
+              ? `Krok ${currentIndex + 1} z ${tests.length}`
+              : `Step ${currentIndex + 1} of ${tests.length}`}
           />
         ) : currentTest === 'nature' ? (
           <NatureMetaphorTest
             frameless
             className="h-full overflow-y-auto flex flex-col justify-center"
             onSelect={(value) => handleSelect('nature', value)}
+            stepCounter={language === 'pl'
+              ? `Krok ${currentIndex + 1} z ${tests.length}`
+              : `Step ${currentIndex + 1} of ${tests.length}`}
           />
         ) : currentTest === 'biophilia' ? (
           <BiophiliaTest
             frameless
             className="h-full overflow-y-auto flex flex-col justify-center"
             onSelect={(score) => handleSelect('biophilia', score)}
+            stepCounter={language === 'pl'
+              ? `Krok ${currentIndex + 1} z ${tests.length}`
+              : `Step ${currentIndex + 1} of ${tests.length}`}
           />
         ) : (
           <SensoryTest
@@ -659,15 +723,12 @@ export function SensoryTestSuite({
             className="h-full overflow-y-auto flex flex-col justify-center"
             value={results[currentTest as InteractiveTest] || null}
             frameless
+            stepCounter={language === 'pl'
+              ? `Krok ${currentIndex + 1} z ${tests.length}`
+              : `Step ${currentIndex + 1} of ${tests.length}`}
           />
         )}
       </div>
-
-      <p className="text-center text-xs text-silver-dark font-modern">
-        {language === 'pl'
-          ? `Krok ${currentIndex + 1} z ${tests.length}`
-          : `Step ${currentIndex + 1} of ${tests.length}`}
-      </p>
     </div>
   );
 }

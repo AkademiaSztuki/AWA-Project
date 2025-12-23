@@ -37,17 +37,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from('behavioral_logs')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      throw error;
-    }
-
-    return NextResponse.json({ logs: data });
+    // Legacy analytics tables removed after radical refactor
+    return NextResponse.json({ logs: [] });
   } catch (error) {
     console.error('Error fetching logs:', error);
     return NextResponse.json(

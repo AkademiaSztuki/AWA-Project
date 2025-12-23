@@ -1,5 +1,4 @@
-import { supabase } from '@/lib/supabase';
-import { ensureUserProfileExists } from '@/lib/supabase-deep-personalization';
+import { supabase, saveParticipantImage } from '@/lib/supabase';
 
 export type SpaceImageInput = {
   id: string;
@@ -20,29 +19,28 @@ export async function getOrCreateSpaceId(
 ): Promise<string | null> {
   // Basic UUID v4 pattern guard to avoid passing placeholder ids (e.g. "household-123")
   const isUuid = (id?: string) => !!id && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(id);
+  
+  // Normalize spaceId: remove "space_" prefix if present
+  const normalizeSpaceId = (id?: string): string | undefined => {
+    if (!id) return undefined;
+    return id.startsWith('space_') ? id.substring(6) : id;
+  };
 
   if (!userHash) return null;
+  
+  const normalizedSpaceId = normalizeSpaceId(opts?.spaceId);
   // Only reuse provided spaceId if it is a valid uuid; otherwise create a proper space record
-  if (opts?.spaceId && isUuid(opts.spaceId)) return opts.spaceId;
+  if (normalizedSpaceId && isUuid(normalizedSpaceId)) return normalizedSpaceId;
 
   const name = opts?.name || 'Moja Przestrzeń';
   const type = opts?.type || 'personal';
 
+  // After radical refactor we do NOT persist spaces in Supabase.
+  // Return a stable local-only id.
   try {
-    await ensureUserProfileExists(userHash);
-    const { data, error } = await supabase.rpc('add_space', {
-      p_user_hash: userHash,
-      p_name: name,
-      p_type: type
-    });
-    if (error) {
-      console.warn('[remote-spaces] add_space failed', error);
-      return null;
-    }
-    return (data as any)?.id || null;
-  } catch (e) {
-    console.warn('[remote-spaces] getOrCreateSpaceId error', e);
-    return null;
+    return normalizedSpaceId || (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `space_${Date.now()}`);
+  } catch {
+    return `space_${Date.now()}`;
   }
 }
 
@@ -90,6 +88,152 @@ export async function uploadSpaceImage(
   }
 }
 
+// NEW: Save images to participant_images (replaces saveSpaceImagesMetadata)
+export async function saveParticipantImages(
+  userHash: string,
+  images: Array<{
+    url: string;
+    thumbnail_url?: string;
+    type: 'generated' | 'inspiration' | 'room_photo' | 'room_photo_empty';
+    space_id?: string;
+    tags?: any;
+    is_favorite?: boolean;
+    source?: string;
+    generation_id?: string;
+  }>
+): Promise<boolean> {
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-entry',message:'Saving participant images',data:{userHash,imageCount:images.length,imageTypes:images.map(i=>i.type)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+  // #endregion
+  
+  if (!userHash || images.length === 0) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-skipped',message:'No userHash or images',data:{hasUserHash:!!userHash,imageCount:images.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
+    return true;
+  }
+  
+  try {
+    let savedCount = 0;
+    let failedCount = 0;
+    
+    // Upload images to Storage and save metadata
+    for (const img of images) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-processing',message:'Processing image',data:{imageType:img.type,urlStartsWith:img.url.substring(0,20),hasTags:!!img.tags},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+      // #endregion
+      let storagePath = '';
+      let publicUrl = img.url;
+      
+      // If image is base64, upload to Storage
+      if (img.url.startsWith('data:')) {
+        try {
+          const response = await fetch(img.url);
+          const blob = await response.blob();
+          const ext = blob.type?.split('/')[1] || 'png';
+          const imageId = `img_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+          storagePath = `${userHash}/${img.type}/${imageId}.${ext}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('participant-images')
+            .upload(storagePath, blob, {
+              cacheControl: '3600',
+              upsert: true,
+              contentType: blob.type || 'image/png'
+            });
+          
+          if (uploadError) {
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-upload-error',message:'Upload failed',data:{imageType:img.type,error:uploadError.message,errorCode:uploadError.statusCode},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+            // #endregion
+            console.warn('[remote-spaces] Upload failed for', img.type, uploadError);
+            failedCount++;
+            continue;
+          }
+          
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-upload-success',message:'Upload succeeded',data:{imageType:img.type,storagePath,blobType:blob.type||null,blobSize:blob.size||0},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+          // #endregion
+
+          const { data: publicData } = supabase.storage.from('participant-images').getPublicUrl(storagePath);
+          publicUrl = publicData?.publicUrl || img.url;
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-publicUrl',message:'Computed public URL',data:{imageType:img.type,storagePath,publicUrlStartsWith:publicUrl.substring(0,30)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+          // #endregion
+        } catch (e) {
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-upload-exception',message:'Exception during upload',data:{imageType:img.type,error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+          // #endregion
+          console.warn('[remote-spaces] Failed to upload image', e);
+          failedCount++;
+          continue;
+        }
+      } else if (img.url.startsWith('http')) {
+        // Already a URL, use as storage path
+        storagePath = img.url;
+      } else {
+        storagePath = img.url;
+      }
+      
+      // Extract tags from image.tags
+      const tags = img.tags || {};
+      const tagsStyles = Array.isArray(tags.styles) ? tags.styles : (tags.style ? [tags.style] : []);
+      const tagsColors = Array.isArray(tags.colors) ? tags.colors : [];
+      const tagsMaterials = Array.isArray(tags.materials) ? tags.materials : [];
+      const tagsBiophilia = typeof tags.biophilia === 'number' ? tags.biophilia : null;
+      
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-before-save',message:'About to call saveParticipantImage',data:{imageType:img.type,hasStoragePath:!!storagePath,hasPublicUrl:!!publicUrl,storagePathLength:storagePath.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+      // #endregion
+      
+      const imageId = await saveParticipantImage(userHash, {
+        type: img.type,
+        space_id: img.space_id,
+        storage_path: storagePath,
+        public_url: publicUrl,
+        thumbnail_url: img.thumbnail_url,
+        is_favorite: img.is_favorite || false,
+        tags_styles: tagsStyles,
+        tags_colors: tagsColors,
+        tags_materials: tagsMaterials,
+        tags_biophilia: tagsBiophilia,
+        description: tags.description || null,
+        source: img.source || null,
+        generation_id: img.generation_id || null
+      });
+      
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-after-save',message:'After saveParticipantImage call',data:{imageId,imageType:img.type,hasImageId:!!imageId},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+      // #endregion
+      
+      if (imageId) {
+        savedCount++;
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-saved',message:'Image saved successfully',data:{imageId,imageType:img.type},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+        // #endregion
+      } else {
+        failedCount++;
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-failed',message:'Image save failed (saveParticipantImage returned null)',data:{imageType:img.type,storagePath,publicUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+        // #endregion
+      }
+    }
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-complete',message:'Finished saving images',data:{totalImages:images.length,savedCount,failedCount},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
+    
+    return true;
+  } catch (e) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-exception',message:'Exception in saveParticipantImages',data:{error:e instanceof Error?e.message:String(e),imageCount:images.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
+    console.warn('[remote-spaces] saveParticipantImages error', e);
+    return false;
+  }
+}
+
+// LEGACY: Keep for backward compatibility (will be removed after migration)
 export async function saveSpaceImagesMetadata(
   userHash: string,
   spaceId: string,
@@ -103,124 +247,160 @@ export async function saveSpaceImagesMetadata(
     generation_set_id?: string;
   }>
 ): Promise<boolean> {
-  if (!userHash || !spaceId || images.length === 0) return true;
-  
-  // #region agent log
-  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: 'debug-session',
-      runId: 'sync-check',
-      hypothesisId: 'H2',
-      location: 'remote-spaces.ts:saveSpaceImagesMetadata',
-      message: 'Saving space images to Supabase',
-      data: {
-        userHash,
-        spaceId,
-        imageCount: images.length,
-        generatedCount: images.filter(img => img.type === 'generated').length,
-        inspirationCount: images.filter(img => img.type === 'inspiration').length
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
-  
-  try {
-    const { error } = await supabase.rpc('add_space_images', {
-      p_user_hash: userHash,
-      p_space_id: spaceId,
-      p_images: images
-    });
-    if (error) {
-      console.warn('[remote-spaces] add_space_images failed', error);
-      
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'sync-check',
-          hypothesisId: 'H2',
-          location: 'remote-spaces.ts:saveSpaceImagesMetadata-error',
-          message: 'Failed to save space images',
-          data: {
-            error: error.message,
-            errorCode: error.code
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
-      
-      return false;
-    }
-    
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'sync-check',
-        hypothesisId: 'H2',
-        location: 'remote-spaces.ts:saveSpaceImagesMetadata-success',
-        message: 'Space images saved successfully',
-        data: {
-          success: true,
-          imageCount: images.length
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
-    
-    return true;
-  } catch (e) {
-    console.warn('[remote-spaces] saveSpaceImagesMetadata error', e);
-    
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'sync-check',
-        hypothesisId: 'H2',
-        location: 'remote-spaces.ts:saveSpaceImagesMetadata-exception',
-        message: 'Exception saving space images',
-        data: {
-          error: e instanceof Error ? e.message : String(e)
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
-    
-    return false;
-  }
+  // Redirect to new function
+  return saveParticipantImages(userHash, images);
 }
 
+// NEW: Toggle favorite in participant_images
+export async function toggleParticipantImageFavorite(
+  userHash: string,
+  imageId: string,
+  isFavorite: boolean
+): Promise<boolean> {
+  if (!userHash || !imageId) return false;
+  
+  const { error } = await supabase
+    .from('participant_images')
+    .update({ is_favorite: isFavorite })
+    .eq('id', imageId)
+    .eq('user_hash', userHash);
+  
+  if (error) {
+    console.warn('[remote-spaces] toggleParticipantImageFavorite failed', error);
+    return false;
+  }
+  return true;
+}
+
+// LEGACY: Keep for backward compatibility
 export async function toggleSpaceImageFavorite(
   userHash: string,
   imageId: string,
   isFavorite: boolean
 ) {
-  if (!userHash || !imageId) return null;
-  const { data, error } = await supabase.rpc('toggle_space_image_favorite', {
-    p_user_hash: userHash,
-    p_image_id: imageId,
-    p_is_favorite: isFavorite
-  });
-  if (error) {
-    console.warn('[remote-spaces] toggle favorite failed', error);
-    return null;
-  }
-  return data;
+  return toggleParticipantImageFavorite(userHash, imageId, isFavorite);
 }
 
+// NEW: Fetch images from participant_images (replaces fetchSpacesWithImages)
+export async function fetchParticipantImages(userHash: string): Promise<Array<{
+  id: string;
+  type: 'generated' | 'inspiration' | 'room_photo' | 'room_photo_empty';
+  url: string;
+  thumbnailUrl?: string;
+  isFavorite: boolean;
+  spaceId?: string | null;
+  tags?: any;
+  source?: string;
+  createdAt: string;
+}>> {
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:fetchParticipantImages-entry',message:'Fetching participant images',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H6'})}).catch(()=>{});
+  // #endregion
+  
+  if (!userHash) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:fetchParticipantImages-no-hash',message:'No userHash provided',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H6'})}).catch(()=>{});
+    // #endregion
+    return [];
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('participant_images')
+      .select('*')
+      .eq('user_hash', userHash)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:fetchParticipantImages-error',message:'Error fetching images',data:{error:error.message,errorCode:error.code,userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H6'})}).catch(()=>{});
+      // #endregion
+      console.warn('[remote-spaces] fetchParticipantImages failed', error);
+      return [];
+    }
+    
+    const mapped = (data || []).map(img => ({
+      id: img.id,
+      type: img.type,
+      url: img.public_url || img.storage_path,
+      thumbnailUrl: img.thumbnail_url,
+      isFavorite: img.is_favorite || false,
+      spaceId: img.space_id || null,
+      tags: {
+        styles: img.tags_styles || [],
+        colors: img.tags_colors || [],
+        materials: img.tags_materials || [],
+        biophilia: img.tags_biophilia
+      },
+      source: img.source,
+      createdAt: img.created_at
+    }));
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:fetchParticipantImages-success',message:'Successfully fetched images',data:{imageCount:mapped.length,generatedCount:mapped.filter(i=>i.type==='generated').length,inspirationCount:mapped.filter(i=>i.type==='inspiration').length,roomPhotoCount:mapped.filter(i=>i.type==='room_photo').length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H6'})}).catch(()=>{});
+    // #endregion
+    
+    return mapped;
+  } catch (e) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:fetchParticipantImages-exception',message:'Exception fetching images',data:{error:e instanceof Error?e.message:String(e),userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H6'})}).catch(()=>{});
+    // #endregion
+    console.warn('[remote-spaces] fetchParticipantImages error', e);
+    return [];
+  }
+}
+
+export async function fetchParticipantSpaces(userHash: string): Promise<Array<{
+  id: string;
+  name: string;
+  type: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}>> {
+  if (!userHash) return [];
+  const { data, error } = await supabase
+    .from('participant_spaces')
+    .select('*')
+    .eq('user_hash', userHash)
+    .order('updated_at', { ascending: false });
+  if (error) {
+    console.warn('[remote-spaces] fetchParticipantSpaces failed', error);
+    return [];
+  }
+  return (data || []).map((s: any) => ({
+    id: s.id,
+    name: s.name,
+    type: s.type || 'personal',
+    isDefault: !!s.is_default,
+    createdAt: s.created_at,
+    updatedAt: s.updated_at || s.created_at
+  }));
+}
+
+export async function createParticipantSpace(
+  userHash: string,
+  space: { name: string; type?: string; is_default?: boolean }
+): Promise<{ id: string } | null> {
+  if (!userHash || !space?.name) return null;
+  const { data, error } = await supabase
+    .from('participant_spaces')
+    .insert({
+      user_hash: userHash,
+      name: space.name,
+      type: space.type || 'personal',
+      is_default: !!space.is_default
+    })
+    .select('id')
+    .single();
+  if (error) {
+    console.warn('[remote-spaces] createParticipantSpace failed', error);
+    return null;
+  }
+  return { id: data.id };
+}
+
+// LEGACY: Keep for backward compatibility (will be removed after migration)
 export async function fetchSpacesWithImages(
   userHash: string,
   limitPerSpace = 6,
@@ -317,21 +497,8 @@ export async function fetchSpaceImages(
   spaceId: string,
   params?: { limit?: number; offset?: number }
 ) {
-  if (!userHash || !spaceId) return [];
-  const { data, error } = await supabase
-    .from('space_images')
-    .select('*')
-    .eq('user_hash', userHash)
-    .eq('space_id', spaceId)
-    .order('created_at', { ascending: false })
-    .limit(params?.limit ?? 100)
-    .range(params?.offset ?? 0, (params?.offset ?? 0) + (params?.limit ?? 100) - 1);
-
-  if (error) {
-    console.warn('[remote-spaces] fetchSpaceImages failed', error);
-    return [];
-  }
-  return data || [];
+  // Legacy table removed after radical refactor
+  return [];
 }
 
 export async function updateSpaceName(
@@ -339,103 +506,77 @@ export async function updateSpaceName(
   spaceId: string,
   name: string
 ) {
+  // Legacy table removed after radical refactor (spaces are local-only).
   if (!userHash || !spaceId || !name.trim()) return null;
-  const trimmed = name.trim();
-  const { data, error } = await supabase
-    .from('spaces')
-    .update({ name: trimmed, updated_at: new Date().toISOString() })
-    .eq('id', spaceId)
-    .eq('user_hash', userHash)
-    .select('*')
-    .maybeSingle();
-
-  if (error) {
-    console.warn('[remote-spaces] updateSpaceName failed', error);
-    return null;
-  }
-
-  return data;
+  return { id: spaceId, user_hash: userHash, name: name.trim() } as any;
 }
 
 export async function deleteSpace(userHash: string, spaceId: string) {
+  // Legacy table removed after radical refactor (spaces are local-only).
   if (!userHash || !spaceId) return false;
-  const { error } = await supabase
-    .from('spaces')
-    .delete()
-    .eq('id', spaceId)
-    .eq('user_hash', userHash);
-
-  if (error) {
-    console.warn('[remote-spaces] deleteSpace failed', error);
-    return false;
-  }
-
   return true;
 }
 
-export async function deleteSpaceImage(
+// NEW: Delete image from participant_images
+export async function deleteParticipantImage(
   userHash: string,
   imageId: string
 ): Promise<boolean> {
   if (!userHash || !imageId) return false;
   
   try {
-    // First, get the image to check if it exists and get the URL for storage cleanup
-    const { data: imageData, error: fetchError } = await supabase
-      .from('space_images')
-      .select('url')
+    // First, get the image to find storage path
+    const { data: image, error: fetchError } = await supabase
+      .from('participant_images')
+      .select('storage_path')
       .eq('id', imageId)
       .eq('user_hash', userHash)
-      .maybeSingle();
-
-    if (fetchError) {
-      console.warn('[remote-spaces] Failed to fetch image for deletion', fetchError);
-      return false;
-    }
-
-    if (!imageData) {
+      .single();
+    
+    if (fetchError || !image) {
       console.warn('[remote-spaces] Image not found for deletion');
       return false;
     }
-
+    
     // Delete from database
     const { error: deleteError } = await supabase
-      .from('space_images')
+      .from('participant_images')
       .delete()
       .eq('id', imageId)
       .eq('user_hash', userHash);
-
+    
     if (deleteError) {
-      console.warn('[remote-spaces] deleteSpaceImage failed', deleteError);
+      console.warn('[remote-spaces] deleteParticipantImage failed', deleteError);
       return false;
     }
-
-    // Try to delete from storage if it's a storage URL
-    const imageUrl = imageData.url;
-    if (imageUrl && imageUrl.includes('/storage/v1/object/public/space-images/')) {
+    
+    // Try to delete from storage (non-critical)
+    if (image.storage_path && !image.storage_path.startsWith('http')) {
       try {
-        // Extract path from URL: https://...supabase.co/storage/v1/object/public/space-images/{path}
-        const urlParts = imageUrl.split('/space-images/');
-        if (urlParts.length > 1) {
-          const storagePath = urlParts[1];
-          const { error: storageError } = await supabase.storage
-            .from(SPACE_BUCKET)
-            .remove([storagePath]);
-
-          if (storageError) {
-            console.warn('[remote-spaces] Failed to delete from storage (non-critical)', storageError);
-            // Don't fail the whole operation if storage deletion fails
-          }
+        const { error: storageError } = await supabase.storage
+          .from('participant-images')
+          .remove([image.storage_path]);
+        
+        if (storageError) {
+          console.warn('[remote-spaces] Failed to delete from storage (non-critical)', storageError);
         }
       } catch (storageErr) {
         console.warn('[remote-spaces] Storage deletion error (non-critical)', storageErr);
-        // Don't fail the whole operation
       }
     }
-
+    
     return true;
   } catch (e) {
-    console.warn('[remote-spaces] deleteSpaceImage error', e);
+    console.warn('[remote-spaces] deleteParticipantImage error', e);
     return false;
   }
+}
+
+// LEGACY: Keep for backward compatibility
+export async function deleteSpaceImage(
+  userHash: string,
+  imageId: string
+): Promise<boolean> {
+  // Legacy compatibility: treat imageId as participant_images.id if possible
+  return deleteParticipantImage(userHash, imageId);
 }

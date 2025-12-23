@@ -5,8 +5,27 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 // Allow turning off full session sync to avoid RLS/CORS loops.
-// By default we disable it (value "1"), set NEXT_PUBLIC_DISABLE_SESSION_SYNC=0 to re-enable.
-export const DISABLE_SESSION_SYNC = (process.env.NEXT_PUBLIC_DISABLE_SESSION_SYNC ?? '1') !== '0';
+// Default: ENABLE sync (set NEXT_PUBLIC_DISABLE_SESSION_SYNC=1 to disable).
+export const DISABLE_SESSION_SYNC = (process.env.NEXT_PUBLIC_DISABLE_SESSION_SYNC ?? '0') !== '0';
+
+// Helper (debug-safe): read a few JWT claims without logging the token
+async function getAuthClaimsSafe(): Promise<{ role?: string; aud?: string; sub?: string } | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return null;
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const payloadJson = JSON.parse(atob(parts[1]));
+    return {
+      role: payloadJson?.role,
+      aud: payloadJson?.aud,
+      sub: payloadJson?.sub,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Custom storage adapter that gracefully handles storage errors (e.g., in 3rd-party iframes)
 const safeStorageAdapter = {
@@ -257,38 +276,13 @@ export const logBehavioralEvent = async (
   eventType: string, 
   eventData: Record<string, any>
 ) => {
-  const { error } = await supabase
-    .from('behavioral_logs')
-    .insert({
-      project_id: projectId,
-      event_type: eventType,
-      event_data: eventData,
-    });
-
-  if (error) {
-    console.error('Błąd logowania zdarzenia:', error);
-  }
+  // Legacy analytics table removed after radical refactor
+  return;
 };
 
 export const createProject = async (userHash: string) => {
-  const projectId = `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-  const { data, error } = await supabase
-    .from('projects')
-    .insert({
-      user_hash: userHash,
-      timestamp_consent_given: new Date().toISOString(),
-      project_id: projectId,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Błąd tworzenia projektu:', error);
-    return null;
-  }
-
-  return data;
+  // Legacy table removed after radical refactor
+  return null;
 };
 
 export const updateDiscoverySession = async (
@@ -298,37 +292,13 @@ export const updateDiscoverySession = async (
   ladderingPath: any,
   coreNeed: string
 ) => {
-  const { error } = await supabase
-    .from('discovery_sessions')
-    .insert({
-      project_id: projectId,
-      visual_dna: visualDNA,
-      dna_accuracy_score: accuracyScore,
-      laddering_path: ladderingPath,
-      core_need: coreNeed,
-    });
-
-  if (error) {
-    console.error('Błąd zapisywania sesji odkrywania:', error);
-  }
+  // Legacy table removed after radical refactor
+  return;
 };
 
 export const saveGenerationSet = async (projectId: string, prompt: string) => {
-  const { data, error } = await supabase
-    .from('generation_sets')
-    .insert({
-      project_id: projectId,
-      prompt: prompt,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Błąd zapisywania zestawu generacji:', error);
-    return null;
-  }
-
-  return data;
+  // Legacy table removed after radical refactor
+  return null;
 };
 
 export const saveGenerationFeedback = async (
@@ -406,40 +376,124 @@ export const saveRegenerationEvent = async (
 };
 
 export const saveFullSessionToSupabase = async (sessionData: any) => {
-  if (DISABLE_SESSION_SYNC) return true;
-  if (!sessionData?.userHash) return;
-  const { error } = await supabase
-    .from('sessions')
-    .upsert([
-      {
-        user_hash: sessionData.userHash,
-        session_json: sessionData,
-        updated_at: new Date().toISOString(),
-      }
-    ], { onConflict: 'user_hash' });
-  if (error) {
-    console.error('Błąd zapisu pełnej sesji:', error);
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-entry',message:'Saving full session to participants table',data:{hasUserHash:!!sessionData?.userHash,userHash:sessionData?.userHash,disableSync:DISABLE_SESSION_SYNC,hasBigFive:!!sessionData?.bigFive,hasVisualDNA:!!sessionData?.visualDNA,hasColorsAndMaterials:!!sessionData?.colorsAndMaterials},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
+  
+  if (DISABLE_SESSION_SYNC) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-skipped',message:'Session sync disabled',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    return true;
+  }
+  if (!sessionData?.userHash) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-no-hash',message:'No userHash provided',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    return;
+  }
+  
+  try {
+    // Map SessionData to participants format
+    const { mapSessionDataToParticipant } = await import('@/lib/participants-mapper');
+    
+    // Get auth_user_id if available
+    let authUserId: string | undefined;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      authUserId = session?.user?.id;
+    } catch (e) {
+      // Ignore auth errors
+    }
+    
+    const participantRow = mapSessionDataToParticipant(sessionData, authUserId);
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-before-insert',message:'Before upsert to participants',data:{userHash:participantRow.user_hash,hasBigFive:!!participantRow.bigfive_domains,hasImplicit:!!participantRow.implicit_style_1,hasExplicit:!!participantRow.explicit_style,hasInspirations:!!participantRow.inspiration_style_1},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-before-upsert',message:'Before upsert - participantRow values',data:{explicitWarmth:participantRow.explicit_warmth,explicitBrightness:participantRow.explicit_brightness,explicitComplexity:participantRow.explicit_complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'supabase-save',hypothesisId:'G'})}).catch(()=>{});
+    // #endregion
+    
+    const { error, data } = await supabase
+      .from('participants')
+      .upsert(participantRow, { onConflict: 'user_hash' })
+      .select();
+    
+    if (error) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-error',message:'Error saving to participants',data:{error:error.message,errorCode:error.code,errorDetails:error.details},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
+      console.error('Błąd zapisu uczestnika:', error);
+    } else {
+      // #region agent log
+      const savedRow = data?.[0];
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-success',message:'Successfully saved to participants',data:{savedCount:data?.length||0,userHash:participantRow.user_hash,savedWarmth:savedRow?.explicit_warmth,savedBrightness:savedRow?.explicit_brightness,savedComplexity:savedRow?.explicit_complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'supabase-save',hypothesisId:'G'})}).catch(()=>{});
+      // #endregion
+    }
+  } catch (err) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-exception',message:'Exception in saveFullSessionToSupabase',data:{error:err instanceof Error?err.message:String(err)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    console.error('Błąd mapowania/zapisu uczestnika:', err);
   }
 };
 
 export const fetchLatestSessionSnapshot = async (userHash: string) => {
-  if (!userHash) return null;
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:fetchLatestSessionSnapshot-entry',message:'Fetching latest session snapshot from participants',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+  // #endregion
+  
+  if (!userHash) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:fetchLatestSessionSnapshot-no-hash',message:'No userHash provided',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+    // #endregion
+    return null;
+  }
   try {
     const { data, error } = await supabase
-      .from('sessions')
-      .select('session_json')
+      .from('participants')
+      .select('*')
       .eq('user_hash', userHash)
-      .order('updated_at', { ascending: false })
-      .limit(1)
       .maybeSingle();
 
     if (error) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:fetchLatestSessionSnapshot-error',message:'Error fetching session snapshot',data:{error:error.message,errorCode:error.code,userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+      // #endregion
       console.warn('fetchLatestSessionSnapshot error:', error);
       return null;
     }
 
-    return (data as any)?.session_json ?? null;
+    if (!data) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:fetchLatestSessionSnapshot-not-found',message:'No participant found',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+      // #endregion
+      return null;
+    }
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:fetchLatestSessionSnapshot-found',message:'Participant found',data:{userHash,hasBigFive:!!data.big5_openness,hasImplicit:!!data.implicit_style_1,hasExplicit:!!data.explicit_style,hasInspirations:!!data.inspiration_style_1,dbWarmth:data.explicit_warmth,dbBrightness:data.explicit_brightness,dbComplexity:data.explicit_complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'supabase-retrieve',hypothesisId:'H'})}).catch(()=>{});
+    // #endregion
+    
+    // Map participants back to SessionData format
+    const { mapParticipantToSessionData } = await import('@/lib/participants-mapper');
+    const mapped = mapParticipantToSessionData(data);
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:fetchLatestSessionSnapshot-mapped',message:'Mapped participant to SessionData',data:{mappedWarmth:mapped?.semanticDifferential?.warmth,mappedBrightness:mapped?.semanticDifferential?.brightness,mappedComplexity:mapped?.semanticDifferential?.complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'supabase-retrieve',hypothesisId:'H'})}).catch(()=>{});
+    // #endregion
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:fetchLatestSessionSnapshot-success',message:'Successfully mapped participant to SessionData',data:{userHash,hasBigFive:!!mapped?.bigFive,hasVisualDNA:!!mapped?.visualDNA,hasColorsAndMaterials:!!mapped?.colorsAndMaterials},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+    // #endregion
+    
+    return mapped;
   } catch (err) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:fetchLatestSessionSnapshot-exception',message:'Exception fetching session snapshot',data:{error:err instanceof Error?err.message:String(err),userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+    // #endregion
     console.error('fetchLatestSessionSnapshot unexpected failure:', err);
     return null;
   }
@@ -448,28 +502,12 @@ export const fetchLatestSessionSnapshot = async (userHash: string) => {
 // --- NOWE POMOCNICZE FUNKCJE ---
 
 export const getOrCreateProjectId = async (userHash: string): Promise<string | null> => {
-  try {
-    // spróbuj znaleźć istniejący projekt
-    const { data: existing, error: selError } = await supabase
-      .from('projects')
-      .select('project_id')
-      .eq('user_hash', userHash)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (selError) {
-      console.warn('Błąd odczytu projektów, próba utworzenia nowego:', selError.message);
-    }
-
-    if (existing?.project_id) return existing.project_id as unknown as string;
-
-    const created = await createProject(userHash);
-    return created?.project_id ?? null;
-  } catch (e) {
-    console.error('getOrCreateProjectId failure', e);
-    return null;
-  }
+  // Legacy analytics tables removed after radical refactor (projects/page_views/...).
+  // Keep API stable: return null to skip optional tracking.
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:getOrCreateProjectId-disabled',message:'getOrCreateProjectId disabled (legacy tables removed)',data:{hasUserHash:!!userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'LEGACY'})}).catch(()=>{});
+  // #endregion
+  return null;
 };
 
 export const saveTinderSwipes = async (projectId: string, swipes: any[]) => {
@@ -482,44 +520,181 @@ export const saveTinderSwipes = async (projectId: string, swipes: any[]) => {
 
 // Device context
 export const saveDeviceContext = async (projectId: string, context: Record<string, any>) => {
-  const { error } = await supabase.from('device_context_snapshots').insert({
-    project_id: projectId,
-    context,
-    created_at: new Date().toISOString(),
-  });
-  if (error) console.error('Błąd zapisu device_context:', error);
+  // Legacy table removed after radical refactor
+  return;
 };
 
 // Page views
 export const startPageView = async (projectId: string, page: string, meta?: any) => {
-  const { data, error } = await supabase
-    .from('page_views')
-    .insert({ project_id: projectId, page, entered_at: new Date().toISOString(), meta })
-    .select()
-    .single();
-  if (error) { console.error('Błąd startPageView:', error); return null; }
-  return data?.id as string | null;
+  // Legacy table removed after radical refactor
+  return null;
 };
 
 export const endPageView = async (pageViewId: string) => {
-  const { error } = await supabase
-    .from('page_views')
-    .update({ exited_at: new Date().toISOString() })
-    .eq('id', pageViewId);
-  if (error) console.error('Błąd endPageView:', error);
+  // Legacy table removed after radical refactor
+  return;
 };
 
 // Tinder exposures + swipes (docelowe tabele)
 export const saveTinderExposures = async (projectId: string, exposures: any[]) => {
-  const rows = exposures.map((e) => ({ ...e, project_id: projectId }));
-  const { error } = await supabase.from('tinder_exposures').insert(rows);
-  if (error) console.error('Błąd zapisu tinder_exposures:', error);
+  // Legacy table removed after radical refactor
+  return;
 };
 
+// NEW: Save swipes to participant_swipes table
+export const saveParticipantSwipes = async (userHash: string, swipes: Array<{
+  imageId: number | string;
+  direction: 'left' | 'right';
+  reactionTime?: number;
+  reactionTimeMs?: number;
+  timestamp?: number | string;
+  tags?: string[];
+  categories?: {
+    style?: string | null;
+    colors?: string[];
+    materials?: string[];
+  };
+}>) => {
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-entry',message:'Saving swipes to participant_swipes',data:{userHash,swipeCount:swipes.length,swipes:swipes.map(s=>({imageId:s.imageId,direction:s.direction}))},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+  
+  if (!userHash || !swipes.length) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-skipped',message:'No userHash or swipes',data:{hasUserHash:!!userHash,swipeCount:swipes.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+    return;
+  }
+  
+  // Ensure participant exists before inserting swipes
+  const participantExists = await ensureParticipantExists(userHash);
+  if (!participantExists) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-no-participant',message:'Participant does not exist and could not be created',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+    return;
+  }
+  
+  const rows = swipes.map((s) => ({
+    user_hash: userHash,
+    image_id: String(s.imageId),
+    direction: s.direction,
+    reaction_time_ms: s.reactionTimeMs || s.reactionTime,
+    swipe_timestamp: s.timestamp ? (typeof s.timestamp === 'string' ? s.timestamp : new Date(s.timestamp).toISOString()) : new Date().toISOString(),
+    image_styles: s.categories?.style ? [s.categories.style] : s.tags?.filter(t => t.includes('style')) || [],
+    image_colors: s.categories?.colors || s.tags?.filter(t => t.includes('color')) || [],
+    image_materials: s.categories?.materials || s.tags?.filter(t => t.includes('material')) || []
+  }));
+  
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-before-insert',message:'Before insert to participant_swipes',data:{rowCount:rows.length,firstRow:rows[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+  
+  const { error, data } = await supabase.from('participant_swipes').insert(rows).select();
+  if (error) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-error',message:'Error saving swipes',data:{error:error.message,errorCode:error.code,errorDetails:error.details,userHash,rowCount:rows.length,firstRow:rows[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+    console.error('Błąd zapisu participant_swipes:', error);
+    return false;
+  }
+  
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-success',message:'Successfully saved swipes to participant_swipes',data:{userHash,savedCount:data?.length||0,swipeCount:swipes.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+
+  // After saving swipes, recompute implicit aggregates (top styles/colors/materials) and store in participants
+  try {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-aggregate-start',message:'Recomputing implicit aggregates from participant_swipes',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+
+    const { data: swipeRows, error: swipeErr } = await supabase
+      .from('participant_swipes')
+      .select('direction,image_styles,image_colors,image_materials')
+      .eq('user_hash', userHash);
+
+    if (swipeErr) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-aggregate-error',message:'Failed to load swipes for aggregation',data:{error:swipeErr.message,errorCode:swipeErr.code},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
+    } else {
+      const all = swipeRows || [];
+      const liked = all.filter((r: any) => r.direction === 'right');
+
+      const countMap = (vals: string[]) => {
+        const m = new Map<string, number>();
+        for (const v of vals) m.set(v, (m.get(v) || 0) + 1);
+        return m;
+      };
+      const topN = (m: Map<string, number>, n: number) =>
+        Array.from(m.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, n)
+          .map(([k]) => k);
+
+      const styles = liked.flatMap((r: any) => (Array.isArray(r.image_styles) ? r.image_styles : [])).filter(Boolean);
+      const colors = liked.flatMap((r: any) => (Array.isArray(r.image_colors) ? r.image_colors : [])).filter(Boolean);
+      const materials = liked.flatMap((r: any) => (Array.isArray(r.image_materials) ? r.image_materials : [])).filter(Boolean);
+
+      const topStyles = topN(countMap(styles), 3);
+      const topColors = topN(countMap(colors), 3);
+      const topMaterials = topN(countMap(materials), 3);
+
+      const total = all.length;
+      const likes = liked.length;
+      const dislikes = total - likes;
+
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-aggregate-result',message:'Computed implicit aggregates',data:{userHash,total,likes,dislikes,topStyles,topColors,topMaterials},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
+
+      const { error: updErr } = await supabase
+        .from('participants')
+        .update({
+          implicit_dominant_style: topStyles[0] || null,
+          implicit_style_1: topStyles[0] || null,
+          implicit_style_2: topStyles[1] || null,
+          implicit_style_3: topStyles[2] || null,
+          implicit_color_1: topColors[0] || null,
+          implicit_color_2: topColors[1] || null,
+          implicit_color_3: topColors[2] || null,
+          implicit_material_1: topMaterials[0] || null,
+          implicit_material_2: topMaterials[1] || null,
+          implicit_material_3: topMaterials[2] || null,
+          tinder_total_swipes: total,
+          tinder_likes: likes,
+          tinder_dislikes: dislikes,
+          updated_at: new Date().toISOString()
+        } as any)
+        .eq('user_hash', userHash);
+
+      if (updErr) {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-participants-update-error',message:'Failed updating participants implicit fields',data:{error:updErr.message,errorCode:updErr.code},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+        // #endregion
+      } else {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-participants-update-success',message:'Updated participants implicit fields',data:{userHash,topStylesCount:topStyles.length,topColorsCount:topColors.length,topMaterialsCount:topMaterials.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+        // #endregion
+      }
+    }
+  } catch (e) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-aggregate-exception',message:'Exception while updating implicit aggregates',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+  }
+  
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-success',message:'Successfully saved swipes',data:{savedCount:data?.length||0,userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+  return true;
+};
+
+// LEGACY: Keep for backward compatibility (will be removed after migration)
 export const saveTinderSwipesDetailed = async (projectId: string, swipes: any[]) => {
-  const rows = swipes.map((s) => ({ ...s, project_id: projectId }));
-  const { error } = await supabase.from('tinder_swipes').insert(rows);
-  if (error) console.error('Błąd zapisu tinder_swipes:', error);
+  // Legacy table removed after radical refactor
+  return;
 };
 
 // DNA snapshot
@@ -527,35 +702,118 @@ export const saveDnaSnapshot = async (
   projectId: string,
   snapshot: { weights: any; top: any; confidence: number; parser_version: string }
 ) => {
-  const { error } = await supabase.from('dna_snapshots').insert({
-    project_id: projectId,
-    weights: snapshot.weights,
-    top: snapshot.top,
-    confidence: snapshot.confidence,
-    parser_version: snapshot.parser_version,
-    created_at: new Date().toISOString(),
-  });
-  if (error) console.error('Błąd zapisu dna_snapshot:', error);
+  // Legacy table removed after radical refactor
+  return;
 };
 
 // Ladder path + summary
 export const saveLadderPathRows = async (projectId: string, rows: any[]) => {
-  const payload = rows.map((r) => ({ ...r, project_id: projectId }));
-  const { error } = await supabase.from('ladder_paths').insert(payload);
-  if (error) console.error('Błąd zapisu ladder_paths:', error);
+  // Legacy table removed after radical refactor
+  return;
 };
 
 export const saveLadderSummary = async (projectId: string, summary: any) => {
-  const { error } = await supabase.from('ladder_summary').insert({
-    project_id: projectId,
-    core_need: summary.core_need,
-    prompt_elements: summary.prompt_elements,
-    created_at: new Date().toISOString(),
-  });
-  if (error) console.error('Błąd zapisu ladder_summary:', error);
+  // Legacy table removed after radical refactor
+  return;
 };
 
-// Generation jobs (timing/params)
+// NEW: Save generation to participant_generations table
+export const startParticipantGeneration = async (
+  userHash: string,
+  job: { 
+    type: 'initial' | 'micro' | 'macro'; 
+    prompt: string; 
+    parameters: any; 
+    has_base_image: boolean; 
+    modification_label?: string;
+    source?: string;
+  }
+) => {
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:startParticipantGeneration-entry',message:'Starting participant generation',data:{userHash,jobType:job.type,hasBaseImage:job.has_base_image,hasPrompt:!!job.prompt,promptLength:job.prompt?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+  
+  if (!userHash) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:startParticipantGeneration-no-hash',message:'No userHash provided',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
+    return null;
+  }
+  
+  // Ensure participant exists before inserting generation
+  const participantExists = await ensureParticipantExists(userHash);
+  if (!participantExists) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:startParticipantGeneration-no-participant',message:'Participant does not exist and could not be created',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
+    return null;
+  }
+  
+  const { data, error } = await supabase
+    .from('participant_generations')
+    .insert({
+      user_hash: userHash,
+      job_type: job.type,
+      prompt: job.prompt,
+      parameters: job.parameters || {},
+      source: job.source || null,
+      has_base_image: job.has_base_image,
+      modification_label: job.modification_label || null,
+      started_at: new Date().toISOString(),
+      status: 'pending'
+    })
+    .select()
+    .single();
+    
+  if (error) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:startParticipantGeneration-error',message:'Error starting generation',data:{error:error.message,errorCode:error.code,errorDetails:error.details},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
+    console.error('Błąd startParticipantGeneration:', error);
+    return null;
+  }
+  
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:startParticipantGeneration-success',message:'Successfully started generation',data:{jobId:data?.id,userHash,jobType:job.type},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+  return data?.id as string | null;
+};
+
+export const endParticipantGeneration = async (
+  jobId: string,
+  outcome: { status: 'success' | 'error'; latency_ms: number; error_message?: string }
+) => {
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:endParticipantGeneration-entry',message:'Ending participant generation',data:{jobId,status:outcome.status,latencyMs:outcome.latency_ms,hasError:!!outcome.error_message},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+  
+  const safeLatency = Math.min(Math.max(0, Math.round(outcome.latency_ms)), 2147483647);
+  
+  const { error } = await supabase
+    .from('participant_generations')
+    .update({ 
+      finished_at: new Date().toISOString(), 
+      status: outcome.status, 
+      latency_ms: safeLatency, 
+      error_message: outcome.error_message || null 
+    })
+    .eq('id', jobId);
+    
+  if (error) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:endParticipantGeneration-error',message:'Error ending generation',data:{error:error.message,errorCode:error.code,jobId},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
+    console.error('Błąd endParticipantGeneration:', error);
+    return false;
+  }
+  
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:endParticipantGeneration-success',message:'Successfully ended generation',data:{jobId,status:outcome.status,latencyMs:safeLatency},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+  return true;
+};
+
+// LEGACY: Keep for backward compatibility (will be removed after migration)
 export const startGenerationJob = async (
   projectId: string,
   job: { type: string; prompt: string; parameters: any; has_base_image: boolean; modification_label?: string }
@@ -581,8 +839,6 @@ export const endGenerationJob = async (
   jobId: string,
   outcome: { status: 'success' | 'error'; latency_ms: number; error_message?: string }
 ) => {
-  // Ensure latency_ms is within integer range (max ~2.1 billion)
-  // Sometimes timestamps are passed instead of durations
   const safeLatency = Math.min(Math.max(0, Math.round(outcome.latency_ms)), 2147483647);
   
   const { error } = await supabase
@@ -630,41 +886,170 @@ export const logErrorEvent = async (projectId: string, payload: { source: string
   if (error) console.error('Błąd zapisu errors:', error);
 };
 
+// NEW: Save images to participant_images table
+// Helper: Ensure participant exists before inserting into related tables
+const ensureParticipantExists = async (userHash: string): Promise<boolean> => {
+  if (!userHash) return false;
+  
+  try {
+    // Check if participant exists
+    const { data: existing } = await supabase
+      .from('participants')
+      .select('user_hash')
+      .eq('user_hash', userHash)
+      .maybeSingle();
+    
+    if (existing) return true;
+    
+    // Create minimal participant if doesn't exist
+    const { error } = await supabase
+      .from('participants')
+      .insert({
+        user_hash: userHash,
+        consent_timestamp: new Date().toISOString()
+      });
+    
+    if (error) {
+      const claims = await getAuthClaimsSafe();
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:ensureParticipantExists-error',message:'Error creating participant',data:{error:error.message,errorCode:error.code,userHash,authClaims:claims},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H14'})}).catch(()=>{});
+      // #endregion
+      return false;
+    }
+    
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:ensureParticipantExists-created',message:'Created participant',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H14'})}).catch(()=>{});
+    // #endregion
+    return true;
+  } catch (e) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:ensureParticipantExists-exception',message:'Exception ensuring participant exists',data:{error:e instanceof Error?e.message:String(e),userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H14'})}).catch(()=>{});
+    // #endregion
+    return false;
+  }
+};
+
+export const saveParticipantImage = async (
+  userHash: string,
+  image: {
+    type: 'generated' | 'inspiration' | 'room_photo' | 'room_photo_empty';
+    space_id?: string;
+    storage_path: string;
+    public_url?: string;
+    thumbnail_url?: string;
+    is_favorite?: boolean;
+    tags_styles?: string[];
+    tags_colors?: string[];
+    tags_materials?: string[];
+    tags_biophilia?: number;
+    description?: string;
+    source?: string;
+    generation_id?: string;
+  }
+): Promise<string | null> => {
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantImage-entry',message:'Saving participant image',data:{userHash,imageType:image.type,hasStoragePath:!!image.storage_path,hasPublicUrl:!!image.public_url,hasTags:!!(image.tags_styles?.length||image.tags_colors?.length||image.tags_materials?.length)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H4'})}).catch(()=>{});
+  // #endregion
+  
+  if (!userHash || !image.storage_path) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantImage-skipped',message:'No userHash or storage_path',data:{hasUserHash:!!userHash,hasStoragePath:!!image.storage_path},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
+    return null;
+  }
+  
+  // Ensure participant exists before inserting image
+  const participantExists = await ensureParticipantExists(userHash);
+  if (!participantExists) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantImage-no-participant',message:'Participant does not exist and could not be created',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
+    return null;
+  }
+  
+  const { data, error } = await supabase
+    .from('participant_images')
+    .insert({
+      user_hash: userHash,
+      space_id: image.space_id || null,
+      type: image.type,
+      storage_path: image.storage_path,
+      public_url: image.public_url || null,
+      thumbnail_url: image.thumbnail_url || null,
+      is_favorite: image.is_favorite || false,
+      tags_styles: image.tags_styles || [],
+      tags_colors: image.tags_colors || [],
+      tags_materials: image.tags_materials || [],
+      tags_biophilia: image.tags_biophilia || null,
+      description: image.description || null,
+      source: image.source || null,
+      generation_id: image.generation_id || null
+    })
+    .select('id')
+    .single();
+    
+  if (error) {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantImage-error',message:'Error saving image',data:{error:error.message,errorCode:error.code,errorDetails:error.details,imageType:image.type},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
+    console.error('Błąd zapisu participant_images:', error);
+    return null;
+  }
+  
+  // #region agent log
+  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantImage-success',message:'Successfully saved image',data:{imageId:data?.id,userHash,imageType:image.type},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H4'})}).catch(()=>{});
+  // #endregion
+  return data?.id || null;
+};
+
 export const saveGeneratedImages = async (
   generationSetId: string,
   images: Array<{ url: string; prompt: string; parameters?: any }>
 ) => {
-  const rows = images.map((img) => ({
-    generation_set_id: generationSetId,
-    image_url: img.url,
-    prompt_fragment: img.prompt,
-    created_at: new Date().toISOString(),
-  }));
-  const { data, error } = await supabase
-    .from('generated_images')
-    .insert(rows)
-    .select();
-  if (error) {
-    console.error('Błąd zapisu generated_images:', error);
-    return [];
-  }
-  return data;
+  // Legacy table removed after radical refactor
+  return [];
 };
 
 export const updateGeneratedImageRatings = async (
   imageId: string,
   ratings: { aesthetic_match?: number; character?: number; harmony?: number }
 ) => {
-  const { error } = await supabase
-    .from('generated_images')
-    .update({
-      aesthetic_match_score: ratings.aesthetic_match,
-      character_score: ratings.character,
-      harmony_score: ratings.harmony,
+  // Legacy table removed after radical refactor
+  return;
+};
+
+// Consent version constant
+export const CONSENT_VERSION = '2025-12-22';
+
+// Save research consent
+export const saveResearchConsent = async (
+  userId: string,
+  consent: {
+    consentResearch: boolean;
+    consentProcessing: boolean;
+    acknowledgedArt13: boolean;
+  },
+  locale: 'pl' | 'en'
+) => {
+  const { data, error } = await supabase
+    .from('research_consents')
+    .insert({
+      user_id: userId,
+      consent_version: CONSENT_VERSION,
+      consent_research: consent.consentResearch,
+      consent_processing: consent.consentProcessing,
+      acknowledged_art13: consent.acknowledgedArt13,
+      locale: locale,
+      created_at: new Date().toISOString(),
     })
-    .eq('id', imageId);
+    .select()
+    .single();
+
   if (error) {
-    console.error('Błąd aktualizacji ocen obrazu:', error);
+    console.error('Błąd zapisu zgody:', error);
+    return null;
   }
+
+  return data;
 };
 

@@ -296,9 +296,9 @@ export default function PhotoUploadPage() {
         
         router.push('/flow/generate');
       } else {
-        // FULL EXPERIENCE: continue with complete flow
-        console.log('[PhotoUpload] 🌟 FULL EXPERIENCE - Continuing to tinder');
-        router.push('/flow/tinder');
+        // FULL EXPERIENCE: continue with complete flow (CoreProfileWizard includes Tinder)
+        console.log('[PhotoUpload] 🌟 FULL EXPERIENCE - Continuing to CoreProfileWizard');
+        router.push('/setup/profile');
       }
     }
   };

@@ -136,6 +136,38 @@ export interface Database {
           created_at?: string;
         };
       };
+      research_consents: {
+        Row: {
+          id: string;
+          user_id: string;
+          consent_version: string;
+          consent_research: boolean;
+          consent_processing: boolean;
+          acknowledged_art13: boolean;
+          locale: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          consent_version: string;
+          consent_research: boolean;
+          consent_processing: boolean;
+          acknowledged_art13: boolean;
+          locale: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          consent_version?: string;
+          consent_research?: boolean;
+          consent_processing?: boolean;
+          acknowledged_art13?: boolean;
+          locale?: string;
+          created_at?: string;
+        };
+      };
     };
   };
 }

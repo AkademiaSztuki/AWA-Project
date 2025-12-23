@@ -10,11 +10,13 @@ import { GlassSlider } from '@/components/ui/GlassSlider';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { MoodGrid } from '@/components/research';
 import { ACTIVITY_QUESTIONS, PAIN_POINTS } from '@/lib/questions/adaptive-questions';
-import { ArrowRight, ArrowLeft, Camera, Activity, AlertCircle, Target, X, Heart } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Camera, Activity, AlertCircle, Target, X, Heart, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { saveRoom } from '@/lib/supabase-deep-personalization';
 import { useSession, useSessionData } from '@/hooks';
+import { saveParticipantImages } from '@/lib/remote-spaces';
+import { supabase } from '@/lib/supabase';
 import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { SessionData } from '@/types';
@@ -313,6 +315,31 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         spaces: updatedSpaces
       });
       
+      // Save room photos to participant_images
+      try {
+        const userHash = (sessionData as any)?.userHash;
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleComplete',message:'Saving room photo to participant_images',data:{userHash,hasRoomImage:!!roomImageBase64,roomImageLength:roomImageBase64?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H10'})}).catch(()=>{});
+        // #endregion
+        if (userHash && roomImageBase64) {
+          // Convert base64 to data URL for saveParticipantImages
+          const dataUrl = `data:image/jpeg;base64,${roomImageBase64}`;
+          await saveParticipantImages(userHash, [{
+            url: dataUrl,
+            type: 'room_photo',
+            is_favorite: false
+          }]);
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleComplete-complete',message:'Room photo saved successfully',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H10'})}).catch(()=>{});
+          // #endregion
+        }
+      } catch (e) {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleComplete-error',message:'Error saving room photo',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H10'})}).catch(()=>{});
+        // #endregion
+        console.warn('[RoomSetup] Failed to save room photo to participant_images:', e);
+      }
+      
       // Navigate to generate flow
       router.push(`/flow/generate`);
       
@@ -341,11 +368,20 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         // Add furniture removal info after the room comment
         const hasProcessedImage = (sessionData as any)?.roomImageEmpty;
         let fullMessage = roomComment;
-        if (roomComment && hasProcessedImage) {
-          const furnitureRemovalInfo = language === 'pl'
-            ? " Usunąłeś meble ze zdjęcia - to świetny pomysł! Dzięki temu generowane wizualizacje nie będą zbyt mocno trzymać się obecnego układu mebli."
-            : " You removed furniture from the photo - great idea! This will help generated visualizations not stick too closely to the current furniture layout.";
-          fullMessage = roomComment + furnitureRemovalInfo;
+        
+        if (roomComment) {
+          if (hasProcessedImage) {
+            const furnitureRemovalInfo = language === 'pl'
+              ? " Usunąłeś meble ze zdjęcia - to świetny pomysł! Dzięki temu generowane wizualizacje nie będą zbyt mocno trzymać się obecnego układu mebli."
+              : " You removed furniture from the photo - great idea! This will help generated visualizations not stick too closely to the current furniture layout.";
+            fullMessage = roomComment + furnitureRemovalInfo;
+          } else if ((sessionData as any)?.roomAnalysis) {
+            // Suggest furniture removal if not done yet and analysis is available
+            const suggestion = language === 'pl'
+              ? " Sugestia: Jeśli chcesz, możesz usunąć meble ze zdjęcia przyciskiem poniżej. Pomoże to IDA stworzyć zupełnie nową aranżację bez sugerowania się obecnym układem."
+              : " Pro Tip: You can remove furniture using the button below. This helps IDA create a completely new arrangement without being influenced by the current layout.";
+            fullMessage = roomComment + suggestion;
+          }
         }
         
         const commentKey = fullMessage ? `comment-${fullMessage.substring(0, 20)}` : 'no-comment';
@@ -1110,34 +1146,39 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         
         {/* Room type display and selection - always show if image is uploaded */}
         {selectedImage && !isAnalyzing && (
-          <div className="mb-6 p-6 glass-panel rounded-2xl">
+          <div className="mb-6 p-6 glass-panel rounded-2xl relative overflow-hidden">
+            {!processedImage && detectedRoomType !== 'empty_room' && (
+              <div className="absolute top-0 right-0 w-64 h-64 bg-gold/5 blur-3xl -z-10 animate-pulse" />
+            )}
             <div className="flex items-start gap-4">
               <div className="w-8 h-8 bg-gradient-to-r from-gold/20 to-champagne/20 rounded-full flex items-center justify-center flex-shrink-0">
                 <div className="w-4 h-4 bg-gradient-to-r from-gold to-champagne rounded-full"></div>
               </div>
               <div className="flex-1">
                 {detectedRoomType ? (
-                  <p className="text-graphite font-modern font-bold text-lg mb-3">
-                    {language === 'pl' ? 'IDA wykryła: ' : 'IDA detected: '}
-                    <span className="text-gold">
-                      {ROOM_TYPE_TRANSLATIONS[detectedRoomType] || detectedRoomType}
-                    </span>
-                  </p>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <p className="text-graphite font-modern font-bold text-lg">
+                        {language === 'pl' ? 'IDA wykryła: ' : 'IDA detected: '}
+                        <span className="text-gold">
+                          {ROOM_TYPE_TRANSLATIONS[detectedRoomType] || detectedRoomType}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowRoomTypeSelection(true)}
+                        className="px-4 py-2 bg-white/10 hover:bg-white/20 text-graphite text-xs font-modern font-semibold rounded-xl transition-all duration-200 border border-white/20"
+                      >
+                        {language === 'pl' ? 'Zmień pomieszczenie' : 'Change room'}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <p className="text-graphite font-modern font-bold text-lg mb-3">
                     {language === 'pl' ? 'Wybierz typ pomieszczenia:' : 'Select room type:'}
                   </p>
                 )}
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowRoomTypeSelection(true)}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-graphite text-sm font-modern font-semibold rounded-xl transition-all duration-200 hover:scale-105 border border-white/20"
-                  >
-                    {language === 'pl' 
-                      ? (detectedRoomType ? 'Zmień typ pomieszczenia' : 'Wybierz typ pomieszczenia')
-                      : (detectedRoomType ? 'Change room type' : 'Select room type')}
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -1240,26 +1281,14 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                   ? (processedImage ? 'Zdjęcie bez mebli' : 'Wybrane zdjęcie')
                   : (processedImage ? 'Image without furniture' : 'Selected photo')}
               </h3>
-              <div className="flex gap-2">
-                {!processedImage && (
-                  <GlassButton
-                    onClick={handleRemoveFurniture}
-                    disabled={isRemovingFurniture}
-                    variant="secondary"
-                    className="text-xs px-3 py-1"
-                  >
-                    {isRemovingFurniture 
-                      ? (language === 'pl' ? 'Usuwanie...' : 'Removing...')
-                      : (language === 'pl' ? 'Usuń meble' : 'Remove furniture')}
-                  </GlassButton>
-                )}
+              <div className="flex gap-3">
                 {processedImage && (
                   <>
                     <GlassButton
                       onClick={handleRemoveFurniture}
                       disabled={isRemovingFurniture}
                       variant="secondary"
-                      className="text-xs px-3 py-1"
+                      className="text-[10px] px-2 h-8 min-h-0 rounded-lg"
                     >
                       {isRemovingFurniture 
                         ? (language === 'pl' ? 'Ponowne usuwanie...' : 'Retrying...')
@@ -1270,9 +1299,9 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                         setProcessedImage(null);
                         updateSessionData({ roomImageEmpty: undefined } as any);
                       }}
-                      className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 text-graphite font-modern rounded-xl transition-all border border-white/20"
+                      className="text-[10px] px-3 h-8 bg-white/10 hover:bg-white/20 text-graphite font-modern rounded-lg transition-all border border-white/20"
                     >
-                      {language === 'pl' ? 'Przywróć oryginał' : 'Restore original'}
+                      {language === 'pl' ? 'Przywróć meble' : 'Restore furniture'}
                     </button>
                   </>
                 )}
@@ -1287,7 +1316,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                     setRoomName('');
                     updateSessionData({ roomImageEmpty: undefined } as any);
                   }}
-                  className="text-sm text-silver-dark hover:text-gold transition-colors font-modern"
+                  className="text-xs text-silver-dark hover:text-gold transition-colors font-modern underline underline-offset-4"
                 >
                   {language === 'pl' ? 'Zmień zdjęcie' : 'Change photo'}
                 </button>
@@ -1310,27 +1339,53 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           </div>
         )}
 
-        <div className="flex justify-between">
+        <div className="flex justify-between items-center mt-6">
           <GlassButton onClick={onBack} variant="secondary">
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
-          <GlassButton 
-            onClick={() => {
-              // Use detected room type or allow manual selection
-              const finalRoomType = detectedRoomType || roomType || 'empty_room';
-              const finalRoomName = roomName || (language === 'pl' ? 'Pomieszczenie' : 'Room');
-              onUpdate(uploadedPhotosBase64, finalRoomType, finalRoomName);
-              onNext();
-            }}
-            disabled={isAnalyzing || uploadedPhotosBase64.length === 0}
-          >
-            {isAnalyzing 
-              ? (language === 'pl' ? 'Analizuje...' : 'Analyzing...')
-              : (language === 'pl' ? 'Dalej' : 'Next')
-            }
-            <ArrowRight size={18} />
-          </GlassButton>
+
+          <div className="flex gap-4 items-center">
+            {selectedImage && !processedImage && !isAnalyzing && detectedRoomType !== 'empty_room' && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <GlassButton
+                  onClick={handleRemoveFurniture}
+                  disabled={isRemovingFurniture}
+                  variant="primary"
+                  className="group"
+                >
+                  <Sparkles size={18} className="text-gold-700 group-hover:animate-pulse" />
+                  <span>
+                    {isRemovingFurniture 
+                      ? (language === 'pl' ? 'Usuwanie...' : 'Removing...')
+                      : (language === 'pl' ? 'Usuń meble (Zalecane)' : 'Remove furniture (Recommended)')}
+                  </span>
+                </GlassButton>
+              </motion.div>
+            )}
+
+            <GlassButton 
+              onClick={() => {
+                // Use detected room type or allow manual selection
+                const finalRoomType = detectedRoomType || roomType || 'empty_room';
+                const finalRoomName = roomName || (language === 'pl' ? 'Pomieszczenie' : 'Room');
+                onUpdate(uploadedPhotosBase64, finalRoomType, finalRoomName);
+                onNext();
+              }}
+              disabled={isAnalyzing || uploadedPhotosBase64.length === 0}
+              variant={processedImage || !selectedImage || detectedRoomType === 'empty_room' ? 'primary' : 'secondary'}
+            >
+              {isAnalyzing 
+                ? (language === 'pl' ? 'Analizuje...' : 'Analyzing...')
+                : (language === 'pl' ? 'Dalej' : 'Next')
+              }
+              <ArrowRight size={18} />
+            </GlassButton>
+          </div>
         </div>
       </GlassCard>
     </motion.div>
@@ -1548,24 +1603,24 @@ function PreferenceQuestionsStep({
       question: { pl: 'Które wnętrze bardziej do Ciebie pasuje?', en: 'Which interior suits you better?' },
       leftLabel: { pl: 'Zimne', en: 'Cool' },
       rightLabel: { pl: 'Ciepłe', en: 'Warm' },
-      leftImage: '/images/tinder/Living Room (2).jpg',
-      rightImage: '/images/tinder/Living Room (1).jpg'
+      leftImage: '/research/semantic/Cool.png',
+      rightImage: '/research/semantic/Warm.png'
     },
     {
       id: 'brightness',
       question: { pl: 'Które wnętrze bardziej do Ciebie pasuje?', en: 'Which interior suits you better?' },
       leftLabel: { pl: 'Ciemne', en: 'Dark' },
       rightLabel: { pl: 'Jasne', en: 'Bright' },
-      leftImage: '/images/tinder/Living Room (3).jpg',
-      rightImage: '/images/tinder/Living Room (1).jpg'
+      leftImage: '/research/semantic/Dark.jpeg',
+      rightImage: '/research/semantic/Bright.jpeg'
     },
     {
       id: 'complexity',
       question: { pl: 'Które wnętrze bardziej do Ciebie pasuje?', en: 'Which interior suits you better?' },
       leftLabel: { pl: 'Proste', en: 'Simple' },
       rightLabel: { pl: 'Złożone', en: 'Complex' },
-      leftImage: '/images/tinder/Living Room (2).jpg',
-      rightImage: '/images/tinder/Living Room (3).jpg'
+      leftImage: '/research/semantic/Simple.png',
+      rightImage: '/research/semantic/Complex.png'
     }
   ];
 
@@ -1633,7 +1688,7 @@ function PreferenceQuestionsStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[700px] max-h-[85vh] overflow-auto scrollbar-hide flex flex-col">
+      <GlassCard className="p-6 lg:p-8 h-[73vh] overflow-auto scrollbar-hide flex flex-col">
         <div className="mb-6">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
             {language === 'pl' ? 'Testy Sensoryczne' : 'Sensory Suite'}
@@ -1679,6 +1734,17 @@ function PreferenceQuestionsStep({
                     alt={visualQuestions[currentVisualQuestion].leftLabel[language]}
                     fill
                     className="object-cover"
+                    style={{ objectPosition: 'center 30%' }}
+                    onLoad={() => {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:leftImage-onLoad',message:'Semantic differential left image loaded',data:{questionId:visualQuestions[currentVisualQuestion].id,imageUrl:visualQuestions[currentVisualQuestion].leftImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H1'})}).catch(()=>{});
+                      // #endregion
+                    }}
+                    onError={() => {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:leftImage-onError',message:'Semantic differential left image failed',data:{questionId:visualQuestions[currentVisualQuestion].id,imageUrl:visualQuestions[currentVisualQuestion].leftImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H2'})}).catch(()=>{});
+                      // #endregion
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
                     <p className="text-white font-modern text-sm font-semibold">
@@ -1697,6 +1763,17 @@ function PreferenceQuestionsStep({
                     alt={visualQuestions[currentVisualQuestion].rightLabel[language]}
                     fill
                     className="object-cover"
+                    style={{ objectPosition: 'center 30%' }}
+                    onLoad={() => {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:rightImage-onLoad',message:'Semantic differential right image loaded',data:{questionId:visualQuestions[currentVisualQuestion].id,imageUrl:visualQuestions[currentVisualQuestion].rightImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H1'})}).catch(()=>{});
+                      // #endregion
+                    }}
+                    onError={() => {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:rightImage-onError',message:'Semantic differential right image failed',data:{questionId:visualQuestions[currentVisualQuestion].id,imageUrl:visualQuestions[currentVisualQuestion].rightImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H2'})}).catch(()=>{});
+                      // #endregion
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
                     <p className="text-white font-modern text-sm font-semibold">
@@ -1750,7 +1827,7 @@ function PreferenceQuestionsStep({
           </AnimatePresence>
         </div>
 
-        <div className="flex justify-between">
+        <div className="flex justify-between mt-8">
           <GlassButton 
             onClick={() => {
               if (currentVisualQuestion > 0 && currentVisualQuestion < visualQuestions.length) {

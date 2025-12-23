@@ -10,7 +10,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { supabase, fetchLatestSessionSnapshot, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
 import { getUserHouseholds, saveHousehold, getCompletionStatus, getUserProfile } from '@/lib/supabase-deep-personalization';
-import { fetchSpacesWithImages, toggleSpaceImageFavorite, updateSpaceName, deleteSpace, deleteSpaceImage } from '@/lib/remote-spaces';
+import { fetchParticipantImages, fetchParticipantSpaces, createParticipantSpace, toggleParticipantImageFavorite, deleteParticipantImage, updateSpaceName, deleteSpace } from '@/lib/remote-spaces';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, 
@@ -31,7 +31,6 @@ import {
 import Image from 'next/image';
 import {
   PreferencesOverviewSection,
-  CoreNeedsSection,
   RoomAnalysisSection,
   InspirationsPreviewSection,
   GenerationStatsSection
@@ -159,7 +158,7 @@ export function UserDashboard() {
     updateSessionData({ spaces: updatedSpaces } as any);
 
     if (userHash && imageId) {
-      await toggleSpaceImageFavorite(userHash, imageId, !!updatedSpaces.flatMap(s => s.images).find(i => i.id === imageId)?.isFavorite);
+      await toggleParticipantImageFavorite(userHash, imageId, !!updatedSpaces.flatMap(s => s.images).find(i => i.id === imageId)?.isFavorite);
     }
   }, [spaces, sessionData, updateSessionData]);
   
@@ -201,11 +200,20 @@ export function UserDashboard() {
       // Pull freshest session snapshot from Supabase (used for completion flags)
       if (!DISABLE_SESSION_SYNC) {
       try {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-remoteSnapshot-start',message:'Fetching remote participant snapshot for dashboard',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+        // #endregion
         const remote = await fetchLatestSessionSnapshot(userHash);
         if (remote) {
           setRemoteSession(remote);
         }
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-remoteSnapshot-done',message:'Remote participant snapshot loaded for dashboard',data:{userHash,remoteFound:!!remote,remoteHasBigFive:!!remote?.bigFive,remoteHasVisualDNA:!!remote?.visualDNA,remoteHasColorsAndMaterials:!!remote?.colorsAndMaterials},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+        // #endregion
       } catch (e) {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-remoteSnapshot-error',message:'Failed to load remote participant snapshot for dashboard',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+        // #endregion
         console.warn('[Dashboard] Failed to load remote session snapshot', e);
         }
       }
@@ -249,11 +257,17 @@ export function UserDashboard() {
               selectedPalette: userProfile.aestheticDNA.explicit.selectedPalette,
               topMaterials: userProfile.aestheticDNA.explicit.topMaterials || []
             };
-            mappedData.semanticDifferential = {
-              warmth: userProfile.aestheticDNA.explicit.warmthPreference,
-              brightness: userProfile.aestheticDNA.explicit.brightnessPreference,
-              complexity: userProfile.aestheticDNA.explicit.complexityPreference
-            };
+            mappedData.semanticDifferential = (() => {
+              const semantic = {
+                warmth: userProfile.aestheticDNA.explicit.warmthPreference,
+                brightness: userProfile.aestheticDNA.explicit.brightnessPreference,
+                complexity: userProfile.aestheticDNA.explicit.complexityPreference
+              };
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-semanticDifferential',message:'Mapping semanticDifferential for dashboard display',data:{warmth:semantic.warmth,brightness:semantic.brightness,complexity:semantic.complexity,hasExplicit:!!userProfile.aestheticDNA?.explicit,rawExplicit:userProfile.aestheticDNA?.explicit},timestamp:Date.now(),sessionId:'debug-session',runId:'dashboard-load',hypothesisId:'E'})}).catch(()=>{});
+              // #endregion
+              return semantic;
+            })();
             console.log('[Dashboard] Mapped explicit preferences:', {
               hasPalette: !!mappedData.colorsAndMaterials.selectedPalette,
               materialsCount: mappedData.colorsAndMaterials.topMaterials?.length || 0,
@@ -346,103 +360,76 @@ export function UserDashboard() {
         console.warn('[Dashboard] getCompletionStatus failed (likely unauthenticated):', e);
       }
 
-      // Fetch spaces + images from Supabase (primary) - WYGENEROWANE OBRAZY
+      // Fetch spaces + images from participant_* (source of truth)
       try {
-        const remoteSpaces = await fetchSpacesWithImages(userHash, 6, 0);
-        if (remoteSpaces && Array.isArray(remoteSpaces)) {
-          const mapped: Space[] = remoteSpaces.map((entry: any) => {
-            const s = entry.space || entry;
-            const imgs = (entry.images || []).map((img: any) => ({
-              id: img.id,
-              url: img.url,
-              type: img.type,
-              addedAt: img.created_at || img.added_at || img.addedAt || new Date().toISOString(),
-              isFavorite: img.is_favorite ?? img.isFavorite,
-              thumbnailUrl: img.thumbnail_url || img.thumbnailUrl,
-              tags: img.tags
-            }));
-            return {
-              id: s.id,
-              name: s.name,
-              type: s.type || 'personal',
-              images: imgs,
-              createdAt: s.created_at || s.createdAt,
-              updatedAt: s.updated_at || s.updatedAt
-            };
-          });
-          const ordered = sortSpacesDescending(mapped);
-          
-          const totalGenerated = ordered.reduce((sum, space) => 
-            sum + (space.images?.filter(img => img.type === 'generated').length || 0), 0);
-          const totalInspirations = ordered.reduce((sum, space) => 
-            sum + (space.images?.filter(img => img.type === 'inspiration').length || 0), 0);
-          
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'sync-check',
-              hypothesisId: 'H5',
-              location: 'UserDashboard.tsx:loadUserData-spaces',
-              message: 'Loaded spaces with images from Supabase',
-              data: {
-                spaceCount: ordered.length,
-                totalGenerated,
-                totalInspirations,
-                totalImages: totalGenerated + totalInspirations
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
-          
-          setSpaces(ordered);
-          // lightweight cache in session
-          updateSessionData({ spaces: ordered } as any);
-          setIsLoading(false);
-          return;
-        } else {
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'sync-check',
-              hypothesisId: 'H5',
-              location: 'UserDashboard.tsx:loadUserData-spaces-empty',
-              message: 'No spaces found in Supabase',
-              data: {
-                remoteSpacesIsArray: Array.isArray(remoteSpaces),
-                remoteSpacesLength: remoteSpaces?.length || 0
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
-        }
-      } catch (e) {
-        console.warn('[Dashboard] fetchSpacesWithImages failed, fallback to local/session', e);
-        
         // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: 'debug-session',
-            runId: 'sync-check',
-            hypothesisId: 'H5',
-            location: 'UserDashboard.tsx:loadUserData-spaces-error',
-            message: 'Error fetching spaces from Supabase',
-            data: {
-              error: e instanceof Error ? e.message : String(e)
-            },
-            timestamp: Date.now()
-          })
-        }).catch(() => {});
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-fetch',message:'Fetching participant spaces+images for dashboard',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H11'})}).catch(()=>{});
         // #endregion
+
+        const [participantSpaces, participantImages] = await Promise.all([
+          fetchParticipantSpaces(userHash),
+          fetchParticipantImages(userHash)
+        ]);
+
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-fetched',message:'Fetched participant spaces+images',data:{userHash,spaceCount:participantSpaces?.length||0,imageCount:participantImages?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H11'})}).catch(()=>{});
+        // #endregion
+
+        // Build spaces from participant_spaces, fallback to default if missing
+        const fallbackName = (sessionData as any)?.roomName || 'Moja Przestrzeń';
+        const fallbackType = (sessionData as any)?.roomType || 'personal';
+
+        let spacesSource = participantSpaces;
+        if (!spacesSource || spacesSource.length === 0) {
+          const created = await createParticipantSpace(userHash, { name: fallbackName, type: fallbackType, is_default: true });
+          if (created?.id) {
+            spacesSource = [{ id: created.id, name: fallbackName, type: fallbackType, isDefault: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
+          }
+        }
+
+        const defaultId =
+          (spacesSource || []).find(s => s.isDefault)?.id ||
+          (spacesSource || [])[0]?.id ||
+          'default-space';
+
+        const bySpaceId = new Map<string, SpaceImage[]>();
+        for (const img of participantImages || []) {
+          if (img.type !== 'generated' && img.type !== 'inspiration') continue;
+          const sid = (img as any).spaceId || defaultId;
+          if (!bySpaceId.has(sid)) bySpaceId.set(sid, []);
+          bySpaceId.get(sid)!.push({
+            id: img.id,
+            url: img.url,
+            type: img.type === 'generated' ? 'generated' : 'inspiration',
+            addedAt: img.createdAt,
+            isFavorite: img.isFavorite,
+            thumbnailUrl: img.thumbnailUrl,
+            tags: img.tags ? (Object.values(img.tags).flat().filter((t): t is string => typeof t === 'string')) : []
+          });
+        }
+
+        const mappedSpaces: Space[] = (spacesSource || []).map((s) => {
+          const imgs = sortImagesDescending(bySpaceId.get(s.id) || []);
+          return {
+            id: s.id,
+            name: s.name,
+            type: s.type || 'personal',
+            images: imgs,
+            createdAt: imgs.length > 0 ? imgs[imgs.length - 1].addedAt : s.createdAt,
+            updatedAt: imgs.length > 0 ? imgs[0].addedAt : s.updatedAt
+          };
+        });
+
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:spaces-grouped',message:'Grouped participant_images into participant_spaces',data:{userHash,spaceCount:mappedSpaces.length,imageCount:participantImages?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SP1'})}).catch(()=>{});
+        // #endregion
+
+        setSpaces(sortSpacesDescending(mappedSpaces));
+        updateSessionData({ spaces: mappedSpaces } as any);
+        setIsLoading(false);
+        return;
+      } catch (e) {
+        console.warn('[Dashboard] fetch participant_spaces/images failed, fallback to local/session', e);
       }
 
       // Fallback: sessionData
@@ -490,36 +477,29 @@ export function UserDashboard() {
         return;
       }
 
-      // Try to reuse latest household if exists
-      let householdId: string | null = null;
-      try {
-        const households = await getUserHouseholds(userHash);
-        if (households && households.length > 0) {
-          householdId = households[0].id;
-        }
-      } catch (e) {
-        console.warn('[Dashboard] Failed to load households, will try to create a new one.', e);
-      }
+      const newSpaceName = `Przestrzeń ${spaces.length + 1}`;
+      const created = await createParticipantSpace(userHash, { name: newSpaceName, type: (sessionData as any)?.roomType || 'personal' });
+      const newSpaceId = created?.id;
+      if (!newSpaceId) return;
 
-      // If none, create a minimal default household in background
-      if (!householdId) {
-        try {
-          const created = await saveHousehold({
-            userHash,
-            name: language === 'pl' ? 'Moja przestrzeń' : 'My Space',
-            householdType: 'home',
-            livingSituation: 'alone',
-            householdDynamics: null,
-            householdGoals: []
-          } as any);
-          householdId = created?.id || `household-${Date.now()}`;
-        } catch (e) {
-          console.warn('[Dashboard] Failed to create household, using fallback id.', e);
-          householdId = `household-${Date.now()}`;
-        }
-      }
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:handleAddSpace-created',message:'Created participant_space',data:{userHash,spaceId:newSpaceId,spaceName:newSpaceName},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SP2'})}).catch(()=>{});
+      // #endregion
 
-      router.push(`/setup/room/${householdId}`);
+      const newSpace: Space = {
+        id: newSpaceId,
+        name: newSpaceName,
+        type: (sessionData as any)?.roomType || 'personal',
+        images: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const updatedSpaces = sortSpacesDescending([newSpace, ...spaces]);
+      setSpaces(updatedSpaces);
+      updateSessionData({ spaces: updatedSpaces, currentSpaceId: newSpaceId } as any);
+
+      router.push(`/setup/room/${newSpaceId}`);
     } catch (error) {
       console.error('[Dashboard] Error in handleAddSpace:', error);
     }
@@ -660,7 +640,7 @@ export function UserDashboard() {
       // Delete from space_images table if we found a valid UUID
       if (imageIdToDelete) {
         try {
-          deletedFromSupabase = await deleteSpaceImage(userHash, imageIdToDelete);
+          deletedFromSupabase = await deleteParticipantImage(userHash, imageIdToDelete);
           if (deletedFromSupabase) {
             console.log('[Dashboard] Successfully deleted inspiration from space_images:', imageIdToDelete);
           } else {
@@ -673,55 +653,30 @@ export function UserDashboard() {
         console.log('[Dashboard] Inspiration deleted locally (no Supabase UUID found in space_images)');
       }
 
-      // Also delete from user_profiles.inspirations (JSONB field)
-      try {
-        const { data: profileData, error: fetchError } = await supabase
-          .from('user_profiles')
-          .select('inspirations')
-          .eq('user_hash', userHash)
-          .maybeSingle();
-
-        if (!fetchError && profileData?.inspirations && Array.isArray(profileData.inspirations)) {
-          // Filter out the deleted inspiration
-          const updatedInspirations = profileData.inspirations.filter((insp: any) => {
-            const matchId = id && insp.id === id;
-            const matchFileId = id && insp.fileId === id;
-            const matchUrl = url && (insp.url === url || insp.imageBase64 === url);
-            return !(matchId || matchFileId || matchUrl);
-          });
-
-          // Only update if something was actually removed
-          if (updatedInspirations.length < profileData.inspirations.length) {
-            const { error: updateError } = await supabase
-              .from('user_profiles')
-              .update({
-                inspirations: updatedInspirations,
-                updated_at: new Date().toISOString()
-              })
-              .eq('user_hash', userHash);
-
-            if (updateError) {
-              console.warn('[Dashboard] Failed to update user_profiles.inspirations:', updateError);
-            } else {
-              console.log('[Dashboard] Successfully removed inspiration from user_profiles.inspirations');
-              deletedFromSupabase = true; // Mark as deleted even if only from user_profiles
-            }
-          }
-        }
-      } catch (error) {
-        console.warn('[Dashboard] Error updating user_profiles.inspirations:', error);
-      }
+      // NOTE: After radical refactor inspirations are persisted only in participant_images.
     }
 
     // Reload data from Supabase to ensure sync (especially important after deletion)
-    // This ensures that if the deletion succeeded, we get fresh data without the deleted item
     if (deletedFromSupabase || userHash) {
       try {
-        // Small delay to ensure Supabase has processed the deletion
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Reload spaces from Supabase to sync
-        const remoteSpaces = await fetchSpacesWithImages(userHash!, 6, 0);
+        // Reload images from Supabase to sync
+        const participantImages = await fetchParticipantImages(userHash!);
+        const remoteSpaces: Space[] = participantImages ? [{
+          id: 'all-images',
+          name: 'Moja Przestrzeń',
+          type: 'personal',
+          images: participantImages.map(img => ({
+            id: img.id,
+            url: img.url,
+            type: img.type === 'generated' ? 'generated' : 'inspiration',
+            addedAt: img.createdAt,
+            isFavorite: img.isFavorite,
+            thumbnailUrl: img.thumbnailUrl,
+            tags: img.tags
+          })),
+          createdAt: participantImages[0]?.createdAt || new Date().toISOString(),
+          updatedAt: participantImages[0]?.createdAt || new Date().toISOString()
+        }] : [];
         if (remoteSpaces && Array.isArray(remoteSpaces)) {
           const mapped: Space[] = remoteSpaces.map((entry: any) => {
             const s = entry.space || entry;
@@ -943,11 +898,6 @@ export function UserDashboard() {
             sessionData={sessionData}
             visualDNA={(sessionData as any)?.visualDNA}
           />
-
-          {/* Core Needs / Laddering (opcjonalne, ukryte jeśli nie ma danych) */}
-          {(sessionData as any)?.ladderResults && (
-            <CoreNeedsSection ladderResults={(sessionData as any)?.ladderResults} />
-          )}
 
           {/* Room Analysis - ukryte, komentarz wyświetlany w dialogu na dole */}
           {/* <RoomAnalysisSection 
@@ -1472,127 +1422,9 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
           }
         }
         
-        // Priority 3: Fetch from Supabase user_profiles (primary source)
-        const { getUserProfile } = await import('@/lib/supabase-deep-personalization');
-        const userProfile = await getUserProfile(userHash);
-        if (userProfile?.personality) {
-          // Map personality from user_profiles to bigFive format
-          // IPIP-NEO-120 format only (O/C/E/A/N)
-          const rawDomains = userProfile.personality.domains || {};
-          let domains: Record<string, number> = {};
-          
-          // Check if domains use O/C/E/A/N format (IPIP-NEO-120)
-          if (rawDomains.O !== undefined || rawDomains.C !== undefined || rawDomains.E !== undefined || rawDomains.A !== undefined || rawDomains.N !== undefined) {
-            domains = rawDomains as Record<string, number>;
-          } else {
-            // Map from openness/conscientiousness format to O/C/E/A/N
-            const domainMapping: Record<string, string> = {
-              'openness': 'O',
-              'conscientiousness': 'C',
-              'extraversion': 'E',
-              'agreeableness': 'A',
-              'neuroticism': 'N'
-            };
-            Object.entries(rawDomains).forEach(([key, value]) => {
-              const mappedKey = domainMapping[key.toLowerCase()] || key;
-              if (typeof value === 'number') {
-                domains[mappedKey] = value;
-              }
-            });
-          }
-          
-          // Force IPIP-NEO-120 if we have O/C/E/A/N domains or facets
-          const hasOCEANFormat = domains.O !== undefined || domains.C !== undefined || domains.E !== undefined || domains.A !== undefined || domains.N !== undefined;
-          const hasFacets = userProfile.personality.facets && (
-            userProfile.personality.facets.O || 
-            userProfile.personality.facets.C || 
-            userProfile.personality.facets.E || 
-            userProfile.personality.facets.A || 
-            userProfile.personality.facets.N
-          );
-          const instrument = (hasOCEANFormat || hasFacets) ? 'IPIP-NEO-120' : (userProfile.personality.instrument || 'IPIP-NEO-120');
-          
-          const mappedBigFive = {
-            instrument: instrument,
-            scores: {
-              domains: domains,
-              facets: userProfile.personality.facets || {}
-            },
-            completedAt: userProfile.personality.completedAt
-          };
-          
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'sync-check',
-              hypothesisId: 'H14',
-              location: 'UserDashboard.tsx:BigFiveResults-user_profiles',
-              message: 'Loaded Big Five from user_profiles.personality',
-              data: {
-                hasPersonality: true,
-                originalInstrument: userProfile.personality.instrument,
-                hasOCEANFormat: hasOCEANFormat,
-                hasFacets: !!hasFacets,
-                finalInstrument: mappedBigFive.instrument,
-                rawDomainsKeys: Object.keys(rawDomains),
-                rawDomainsValues: Object.values(rawDomains),
-                mappedDomainsKeys: Object.keys(domains),
-                mappedDomainsValues: Object.values(domains),
-                domainsO: domains.O,
-                domainsC: domains.C,
-                domainsE: domains.E,
-                domainsA: domains.A,
-                domainsN: domains.N
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
-          
-          if (mounted) {
-            setBigFiveData(mappedBigFive);
-            setLoading(false);
-            return;
-          }
-        } else {
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'sync-check',
-              hypothesisId: 'H9',
-              location: 'UserDashboard.tsx:BigFiveResults-user_profiles-missing',
-              message: 'No personality in user_profiles',
-              data: {
-                hasPersonality: false,
-                hasUserProfile: !!userProfile
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
-        }
-        
-        // Priority 4: Fallback to Supabase sessions table (legacy)
-        const { data, error } = await supabase
-          .from('sessions')
-          .select('session_json')
-          .eq('user_hash', userHash)
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (error) throw error;
-        const bigFive = (data as any)?.session_json?.bigFive;
-        if (mounted && bigFive?.scores) {
-          setBigFiveData(bigFive);
-        } else if (mounted) {
-          setBigFiveData(null);
-        }
+        // NOTE: Legacy fallbacks to user_profiles/sessions removed after radical refactor.
+        // Big Five should come from participants snapshot (sessionData) or localStorage.
+        if (mounted) setBigFiveData(null);
       } catch (e) {
         console.warn('[Dashboard] Big Five fetch failed', e);
         if (mounted) setBigFiveData(null);

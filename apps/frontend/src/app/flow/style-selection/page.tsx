@@ -65,8 +65,8 @@ export default function StyleSelectionPage() {
       coreNeed: 'comfortable and functional interior'
     });
 
-    // Go to generation
-    router.push('/flow/generate');
+    // Go to fast track generation
+    router.push('/flow/fast-generate');
   };
 
   return (

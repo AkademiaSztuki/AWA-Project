@@ -8,7 +8,6 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { 
   Brain, 
   Palette, 
-  Target, 
   Heart, 
   Home as HomeIcon,
   Image as ImageIcon,
@@ -186,6 +185,11 @@ export function PreferencesOverviewSection({
   const implicitWarmth = visualDNA?.preferences?.warmth ?? visualDNA?.implicitScores?.warmth;
   const implicitBrightness = visualDNA?.preferences?.brightness ?? visualDNA?.implicitScores?.brightness;
   const implicitComplexity = visualDNA?.preferences?.complexity ?? visualDNA?.implicitScores?.complexity;
+  // #region agent log
+  React.useEffect(() => {
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProfileSections.tsx:PreferencesOverviewSection-display-values',message:'Displaying semantic values in dashboard',data:{implicitWarmth,implicitBrightness,implicitComplexity,explicitWarmth:semantic?.warmth,explicitBrightness:semantic?.brightness,explicitComplexity:semantic?.complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'dashboard-display',hypothesisId:'F'})}).catch(()=>{});
+  }, [implicitWarmth, implicitBrightness, implicitComplexity, semantic]);
+  // #endregion
 
   // CRITICAL: Check if selectedStyle exists and is not empty string
   const explicitStyleLabel = colorsAndMaterials?.selectedStyle && colorsAndMaterials.selectedStyle.length > 0
@@ -475,70 +479,6 @@ export function ExplicitPreferencesSection({ sessionData }: { sessionData: any }
             </div>
           )}
         </div>
-      </GlassCard>
-    </motion.div>
-  );
-}
-
-// Laddering / Core Needs Section
-export function CoreNeedsSection({ ladderResults }: { ladderResults: any }) {
-  const { language } = useLanguage();
-
-  if (!ladderResults) return null;
-
-  const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="mb-6"
-    >
-      <GlassCard className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-platinum flex items-center justify-center">
-              <Target size={20} className="text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-nasalization text-graphite">
-                {t('Podstawowa Potrzeba', 'Core Need')}
-              </h3>
-              <p className="text-sm text-silver-dark font-modern">
-                {t('Twój główny motyw', 'Your main motivation')}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Core Need Badge */}
-        <div className="text-center py-4 mb-4">
-          <div className="inline-block px-4 py-2 rounded-2xl glass-panel border border-gold/40 text-graphite">
-            <p className="text-lg font-nasalization">
-              {ladderResults.coreNeed || t('Nieokreślona', 'Undefined')}
-            </p>
-          </div>
-        </div>
-
-        {/* Laddering Path */}
-        {ladderResults.path && ladderResults.path.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs text-silver-dark font-modern mb-2">
-              {t('Ścieżka Wyboru', 'Choice Path')}
-            </p>
-            {ladderResults.path.map((step: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center text-white text-xs font-bold">
-                  {step.level}
-                </div>
-                <span className="text-sm text-graphite font-modern">
-                  {step.selectedAnswer}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
       </GlassCard>
     </motion.div>
   );

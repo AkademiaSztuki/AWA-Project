@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NATURE_METAPHOR_OPTIONS, SensoryOption } from '@/lib/questions/validated-scales';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -11,6 +11,7 @@ interface NatureMetaphorTestProps {
   onSelect: (selectedId: string) => void;
   className?: string;
   frameless?: boolean;
+  stepCounter?: string;
 }
 
 /**
@@ -20,10 +21,51 @@ interface NatureMetaphorTestProps {
  * User selects nature place that "feels like" their ideal room
  * Reveals archetypal patterns and deep preferences
  */
-export function NatureMetaphorTest({ onSelect, className = '', frameless = false }: NatureMetaphorTestProps) {
+export function NatureMetaphorTest({ onSelect, className = '', frameless = false, stepCounter }: NatureMetaphorTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+  
+  // #region agent log
+  useEffect(() => {
+    const measureHeights = () => {
+      const buttons = document.querySelectorAll('[data-nature-metaphor-button]');
+      const heights: number[] = [];
+      const textHeights: number[] = [];
+      buttons.forEach((btn, idx) => {
+        const height = (btn as HTMLElement).offsetHeight;
+        heights.push(height);
+        const textSection = (btn as HTMLElement).querySelector('[data-nature-metaphor-text]') as HTMLElement;
+        const textHeight = textSection?.offsetHeight || 0;
+        textHeights.push(textHeight);
+        const h4 = textSection?.querySelector('h4') as HTMLElement;
+        const p = textSection?.querySelector('p') as HTMLElement;
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProjectiveTechniques.tsx:measureHeights',message:'Nature metaphor button height measured',data:{buttonIndex:idx,buttonHeight:height,textSectionHeight:textHeight,h4Height:h4?.offsetHeight||0,pHeight:p?.offsetHeight||0,optionId:NATURE_METAPHOR_OPTIONS[idx]?.id,gridCols:'2x3'},timestamp:Date.now(),sessionId:'debug-session',runId:'height-measurement',hypothesisId:'H1'})}).catch(()=>{});
+      });
+      if (heights.length > 0) {
+        const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
+        const minHeight = Math.min(...heights);
+        const maxHeight = Math.max(...heights);
+        const avgTextHeight = textHeights.reduce((a, b) => a + b, 0) / textHeights.length;
+        const minTextHeight = Math.min(...textHeights);
+        const maxTextHeight = Math.max(...textHeights);
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProjectiveTechniques.tsx:measureHeights',message:'Nature metaphor button heights summary',data:{avgHeight,minHeight,maxHeight,heightDiff:maxHeight-minHeight,avgTextHeight,minTextHeight,maxTextHeight,textHeightDiff:maxTextHeight-minTextHeight,count:heights.length},timestamp:Date.now(),sessionId:'debug-session',runId:'height-measurement',hypothesisId:'H1'})}).catch(()=>{});
+      }
+    };
+    const timeout = setTimeout(measureHeights, 500);
+    return () => clearTimeout(timeout);
+  }, [selectedId]);
+  // #endregion
+
+  // #region agent log
+  useEffect(() => {
+    NATURE_METAPHOR_OPTIONS.forEach(opt => {
+      if (opt.imageUrl) {
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProjectiveTechniques.tsx:useEffect',message:'Rendering nature metaphor option with imageUrl',data:{optionId:opt.id,imageUrl:opt.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H3'})}).catch(()=>{});
+      }
+    });
+  }, []);
+  // #endregion
 
   const handleSelect = (option: SensoryOption) => {
     setSelectedId(option.id);
@@ -33,11 +75,11 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
   const content = (
     <>
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-1">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <Mountain className="text-white" size={20} />
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
               {language === 'pl' ? 'Metafora' : 'Metaphor'}
             </p>
@@ -67,7 +109,8 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
             <button
               key={option.id}
               type="button"
-              className={`rounded-2xl border px-4 py-4 text-left flex flex-col gap-3 transition-all ${
+              data-nature-metaphor-button
+              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all ${
                 isSelected
                   ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
                   : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
@@ -75,7 +118,7 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
               onClick={() => handleSelect(option)}
             >
               {/* Image */}
-              <div className="relative w-full h-28 overflow-hidden rounded-xl bg-gray-200">
+              <div className="relative w-full h-48 overflow-hidden rounded-t-2xl rounded-b-2xl bg-gray-200">
                 {option.imageUrl && !imageErrors.has(option.imageUrl) ? (
                   <Image
                     src={option.imageUrl}
@@ -83,7 +126,16 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
                     fill
                     sizes="(max-width: 768px) 50vw, 33vw"
                     className="object-cover"
+                    style={{ objectPosition: 'center 65%' }}
+                    onLoad={() => {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProjectiveTechniques.tsx:onLoad',message:'Nature metaphor image loaded successfully',data:{optionId:option.id,imageUrl:option.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H1'})}).catch(()=>{});
+                      // #endregion
+                    }}
                     onError={() => {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProjectiveTechniques.tsx:onError',message:'Nature metaphor image failed to load',data:{optionId:option.id,imageUrl:option.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H2'})}).catch(()=>{});
+                      // #endregion
                       setImageErrors(prev => new Set(prev).add(option.imageUrl!));
                     }}
                   />
@@ -101,24 +153,33 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
               </div>
 
               {/* Content */}
-              <div className="flex items-start justify-between gap-3">
-                <h4 className="font-nasalization text-sm text-graphite">
-                  {t(option.label)}
-                </h4>
+              <div className="px-4 pt-3 pb-4 flex flex-col gap-2 min-h-[80px]" data-nature-metaphor-text>
+                <div className="flex items-start justify-between gap-3">
+                  <h4 className="font-nasalization text-sm text-graphite">
+                    {t(option.label)}
+                  </h4>
+                </div>
+                <p className="text-xs text-silver-dark font-modern leading-relaxed">
+                  {t(option.description)}
+                </p>
               </div>
-              <p className="text-xs text-silver-dark font-modern leading-relaxed">
-                {t(option.description)}
-              </p>
             </button>
           );
         })}
       </div>
 
-      <p className="mt-4 text-xs text-center text-silver-dark font-modern">
-        {language === 'pl'
-          ? 'Techniki projekcyjne pomagają odkryć autentyczne preferencje poza świadomymi filtrami'
-          : 'Projective techniques help discover authentic preferences beyond conscious filters'}
-      </p>
+      <div className="mt-4 mb-2 flex items-center justify-between gap-4">
+        <p className="text-xs text-silver-dark font-modern flex-1">
+          {language === 'pl'
+            ? 'Techniki projekcyjne pomagają odkryć autentyczne preferencje poza świadomymi filtrami'
+            : 'Projective techniques help discover authentic preferences beyond conscious filters'}
+        </p>
+        {stepCounter && (
+          <p className="text-xs text-silver-dark font-modern whitespace-nowrap">
+            {stepCounter}
+          </p>
+        )}
+      </div>
     </>
   );
 

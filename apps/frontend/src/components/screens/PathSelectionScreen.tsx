@@ -54,12 +54,16 @@ export default function PathSelectionScreen() {
   }, [user, authLoading, showLoginModal, pendingPath]);
   // #endregion
 
+  const fastCompleted = searchParams.get('fast_completed') === 'true';
+  
   const pathTexts = {
     pl: {
       title: 'Wybierz Swoją Ścieżkę',
       subtitle: 'Zdecyduj jak chcesz doświadczyć',
       ida: 'IDA',
       subtext: '- szybko czy dogłębnie',
+      fastCompletedTitle: 'Ukończyłeś szybką ścieżkę! 🎉',
+      fastCompletedMessage: 'Chcesz głębsze doświadczenie? Wypróbuj pełną ścieżkę, która bierze pod uwagę Twoje preferencje, styl życia i potrzeby, aby stworzyć jeszcze bardziej spersonalizowane wnętrze.',
       fastTrack: 'Szybka Ścieżka',
       fastTrackEn: 'Fast Track',
       fastDesc: 'Wypróbuj IDA szybko - prześlij zdjęcie, przesuń kilka inspiracji i generuj!',
@@ -94,6 +98,8 @@ export default function PathSelectionScreen() {
       subtitle: 'Decide how you want to experience',
       ida: 'IDA',
       subtext: '- quick or deep',
+      fastCompletedTitle: 'You completed the fast track! 🎉',
+      fastCompletedMessage: 'Want a deeper experience? Try the full path, which uses your personality, preferences, and lifestyle to create an even more personalized interior.',
       fastTrack: 'Fast Track',
       fastTrackEn: 'Fast Track',
       fastDesc: 'Try IDA quickly - upload photo, swipe a few inspirations and generate!',
@@ -405,7 +411,7 @@ export default function PathSelectionScreen() {
                       <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                         {texts.fastTrack}
                       </h3>
-                      <p className="text-xs text-silver-dark font-modern">3-5 min • 5 {language === 'pl' ? 'generacji' : 'generations'}</p>
+                      <p className="text-xs text-silver-dark font-modern">3-5 min • 10 {language === 'pl' ? 'generacji' : 'generations'}</p>
                     </div>
                   </div>
                   <p className="text-sm text-graphite font-modern">
@@ -425,7 +431,7 @@ export default function PathSelectionScreen() {
               >
                 <GlassCard 
                   variant="highlighted"
-                  className="p-6 lg:p-8 h-full hover:border-gold/50 transition-all group rounded-3xl"
+                  className="p-6 lg:p-8 h-full hover:border-gold/50 transition-all group rounded-2xl"
                 >
                   <div className="absolute top-3 right-3 bg-gradient-to-r from-gold to-champagne text-white px-3 py-1 rounded-full text-xs font-bold">
                     ✨ {texts.recommended}
@@ -438,7 +444,7 @@ export default function PathSelectionScreen() {
                       <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                         {texts.fullExp}
                       </h3>
-                      <p className="text-xs text-silver-dark font-modern">20-30 min • {language === 'pl' ? 'Nieograniczone' : 'Unlimited'}</p>
+                      <p className="text-xs text-silver-dark font-modern">20-30 min • 50 {language === 'pl' ? 'generacji' : 'generations'}</p>
                     </div>
                   </div>
                   <p className="text-sm text-graphite font-modern">

@@ -9,8 +9,6 @@ import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
 import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
-import { saveUserProfile } from "@/lib/supabase-deep-personalization";
-import { mapSessionToUserProfile } from "@/lib/profile-mapper";
 import { RadarChart, DomainDescription } from '@/components/dashboard/BigFiveDetailed';
 import { 
   Brain, 
@@ -39,6 +37,7 @@ export default function BigFivePage() {
   const resultsShownRef = React.useRef(false);
   const retakeInitializedRef = React.useRef(false);
   const prevRetakeRef = React.useRef(retake);
+  const initializedRef = React.useRef(false);
 
   const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[85vh]";
 
@@ -53,10 +52,10 @@ export default function BigFivePage() {
 
   const t = (pl: string, en: string) => (language === "pl" ? pl : en);
 
-  // Load existing responses from session
+  // Load existing responses from session - only on mount or when retake changes
   useEffect(() => {
     // CRITICAL: Never reset if results are already showing - completely block useEffect
-    if (resultsShownRef.current) {
+    if (resultsShownRef.current && !retake) {
       return;
     }
     
@@ -67,14 +66,21 @@ export default function BigFivePage() {
       setShowResults(false);
       setScores(null);
       setIsLegacyResult(false);
+      setAnsweredCount(0);
       autoSavedRef.current = false;
       resultsShownRef.current = false;
       retakeInitializedRef.current = true;
+      initializedRef.current = false;
       return;
     }
     
     // If retake is true but we've already initialized, don't interfere with the test
     if (retake && retakeInitializedRef.current) {
+      return;
+    }
+    
+    // If we've already initialized and user is actively taking the test, don't reset
+    if (initializedRef.current && Object.keys(responses).length > 0 && !retake) {
       return;
     }
 
@@ -98,6 +104,7 @@ export default function BigFivePage() {
       }
       setResponses({});
       setCurrentQuestion(0);
+      setAnsweredCount(0);
       return;
     }
 
@@ -105,6 +112,29 @@ export default function BigFivePage() {
 
     const storedResponses = sessionData.bigFive.responses || {};
     const responseCount = Object.keys(storedResponses).length;
+    
+    // Only load if we don't have responses yet, or if stored responses are more complete
+    // OR if the test is completed in sessionData but not in our state
+    const currentResponseCount = Object.keys(responses).length;
+    const isCompletedInSession = Boolean(sessionData.bigFive.completedAt);
+    const isCompletedInState = resultsShownRef.current && showResults;
+    
+    // Don't overwrite if we have same or more responses AND test is not completed in session
+    if (currentResponseCount > 0 && responseCount <= currentResponseCount && !isCompletedInSession && !retake) {
+      // We already have responses and they're not less complete than stored - don't overwrite
+      return;
+    }
+    
+    // If test is completed in session but not in state, we should load it
+    if (isCompletedInSession && !isCompletedInState) {
+      // Force load completed test
+    } else if (currentResponseCount >= IPIP_120_ITEMS.length && !retake) {
+      // We already have all responses - don't overwrite unless retaking
+      return;
+    }
+    
+    // Initialize answeredCount from loaded responses
+    setAnsweredCount(responseCount);
     
     // Completed test – prefer stored scores if present
     if (sessionData.bigFive.completedAt && savedScores && !retake) {
@@ -146,11 +176,19 @@ export default function BigFivePage() {
       const nextQuestion = Math.min(responseCount, IPIP_120_ITEMS.length - 1);
       setCurrentQuestion(nextQuestion);
     }
-  }, [sessionData, retake]);
+    
+    // Mark as initialized after loading
+    initializedRef.current = true;
+  }, [sessionData?.bigFive?.completedAt, sessionData?.bigFive?.responses, retake]); // Only depend on specific fields
 
   const handleResponse = (value: number) => {
     const item = IPIP_120_ITEMS[currentQuestion];
     if (!item) return; // Safety check
+    
+    // Prevent double-clicking or rapid responses
+    if (responses[item.id] === value) {
+      return; // Already answered with this value
+    }
     
     const isLastQuestion = currentQuestion >= IPIP_120_ITEMS.length - 1;
     
@@ -164,11 +202,12 @@ export default function BigFivePage() {
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'big-five/page.tsx:106',message:'handleResponse setResponses',data:{questionIndex:currentQuestion,itemId:item.id,value,prevCount,nextCount,already,isLastQuestion,nextCountTotal:Object.keys(next).length},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H4'})}).catch(()=>{});
       // #endregion
       
-      // If this is the last question, calculate scores and show results using the updated state
+      // If this is the last question, calculate scores and show results
       if (isLastQuestion) {
         // Verify all 120 responses are present
         const allResponsesCount = Object.keys(next).length;
         if (allResponsesCount === IPIP_120_ITEMS.length) {
+          // Calculate and show results immediately
           const finalScores = calculateIPIPNEO120Scores(next);
           setScores(finalScores);
           setShowResults(true);
@@ -220,6 +259,11 @@ export default function BigFivePage() {
       return;
     }
 
+    // Prevent double submission
+    if (isSubmitting) {
+      return;
+    }
+
     // Validation: ensure all 120 responses are present before saving
     const responseCount = Object.keys(responses).length;
     const hasAllResponses = responseCount === IPIP_120_ITEMS.length;
@@ -249,17 +293,12 @@ export default function BigFivePage() {
 
     setValidationError(null);
     setIsSubmitting(true);
+    
+    // Mark as saved to prevent auto-save from running again
+    autoSavedRef.current = true;
+    
     try {
-      const finalScores = calculateIPIPNEO120Scores(responses);
-      const updatedSessionData = {
-        ...sessionData,
-        bigFive: {
-          instrument: 'IPIP-NEO-120',
-          responses,
-          scores: finalScores,
-          completedAt: new Date().toISOString()
-        }
-      };
+      const finalScores = scores || calculateIPIPNEO120Scores(responses);
       
       // Update session data first
       await updateSessionData({
@@ -271,21 +310,8 @@ export default function BigFivePage() {
         }
       } as any);
       
-      // CRITICAL: Immediately save to Supabase user_profiles to ensure data is persisted
-      // This ensures that retake updates are saved even if useProfileSync hasn't run yet
-      try {
-        const profileData = mapSessionToUserProfile(updatedSessionData as any);
-        if (profileData.personality && sessionData?.userHash) {
-          await saveUserProfile({
-            userHash: sessionData.userHash,
-            personality: profileData.personality
-          });
-          console.log('[BigFive] Saved personality to Supabase user_profiles');
-        }
-      } catch (supabaseError) {
-        console.warn('[BigFive] Failed to save to Supabase directly (useProfileSync will handle it):', supabaseError);
-        // Don't fail the whole operation if Supabase save fails - useProfileSync will retry
-      }
+      // NOTE: After radical refactor, data is saved via updateSessionData -> saveFullSessionToSupabase
+      // which writes to participants table. No need for direct saveUserProfile call.
       
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'big-five/page.tsx:209',message:'handleSave redirect',data:{fromDashboard,retake,shouldGoDashboard,redirectingTo:'/dashboard'},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H5'})}).catch(()=>{});
@@ -311,15 +337,6 @@ export default function BigFivePage() {
     const runAutoSave = async () => {
       try {
         const finalScores = scores || calculateIPIPNEO120Scores(responses);
-        const updatedSessionData = {
-          ...sessionData,
-          bigFive: {
-            instrument: 'IPIP-NEO-120',
-            responses,
-            scores: finalScores,
-            completedAt: new Date().toISOString()
-          }
-        };
         
         await updateSessionData({
           bigFive: {
@@ -333,14 +350,17 @@ export default function BigFivePage() {
         // CRITICAL: Immediately save to Supabase user_profiles to ensure data is persisted
         // This ensures that retake updates are saved even if useProfileSync hasn't run yet
         try {
-          const profileData = mapSessionToUserProfile(updatedSessionData as any);
-          if (profileData.personality && sessionData?.userHash) {
-            await saveUserProfile({
-              userHash: sessionData.userHash,
-              personality: profileData.personality
-            });
-            console.log('[BigFive] Auto-saved personality to Supabase user_profiles');
-          }
+          const updatedSessionData = {
+            ...sessionData,
+            bigFive: {
+              instrument: 'IPIP-NEO-120',
+              responses,
+              scores: finalScores,
+              completedAt: new Date().toISOString()
+            }
+          };
+          // NOTE: After radical refactor, data is saved via updateSessionData -> saveFullSessionToSupabase
+          // which writes to participants table. No need for direct saveUserProfile call.
         } catch (supabaseError) {
           console.warn('[BigFive] Failed to auto-save to Supabase (useProfileSync will handle it):', supabaseError);
           // Don't fail the whole operation if Supabase save fails - useProfileSync will retry
@@ -358,7 +378,7 @@ export default function BigFivePage() {
     };
 
     void runAutoSave();
-  }, [showResults, scores, responses, updateSessionData, sessionData]);
+  }, [showResults, scores, responses, updateSessionData, sessionData?.userHash]); // Only depend on userHash, not entire sessionData
 
   const handleSkip = () => {
     router.push("/dashboard");
@@ -373,7 +393,9 @@ export default function BigFivePage() {
     setIsLegacyResult(false);
   };
 
-  const progress = (answeredCount / IPIP_120_ITEMS.length) * 100;
+  // Calculate progress from actual responses (more reliable than answeredCount state)
+  const actualResponseCount = Object.keys(responses).length;
+  const progress = (actualResponseCount / IPIP_120_ITEMS.length) * 100;
   const currentItem = IPIP_120_ITEMS[currentQuestion];
   const isAnswered = currentItem ? responses[currentItem.id] !== undefined : false;
   

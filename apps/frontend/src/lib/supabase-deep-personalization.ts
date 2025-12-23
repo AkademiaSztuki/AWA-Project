@@ -10,7 +10,7 @@ import {
   EnhancedSwipeData,
   SwipePattern
 } from '@/types/deep-personalization';
-import { supabase } from '@/lib/supabase'; // Use shared Supabase client to avoid multiple instances
+import { supabase, ensureParticipantExists } from '@/lib/supabase'; // Use shared Supabase client to avoid multiple instances
 
 // =========================
 // USER PROFILE
@@ -18,8 +18,9 @@ import { supabase } from '@/lib/supabase'; // Use shared Supabase client to avoi
 
 export async function getUserProfile(userHash: string): Promise<UserProfile | null> {
   try {
+    // New source of truth after refactor: participants (+ aggregates updated from participant_swipes)
     const { data, error } = await supabase
-      .from('user_profiles')
+      .from('participants')
       .select('*')
       .eq('user_hash', userHash)
       .maybeSingle(); // Use maybeSingle() instead of single() to avoid 406 errors
@@ -37,19 +38,83 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
     }
     
     if (!data) return null;
-    
-    // Map Supabase snake_case to TypeScript camelCase
+
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase-deep-personalization.ts:getUserProfile-raw-data',message:'Raw participant data from getUserProfile',data:{dbWarmth:data.explicit_warmth,dbBrightness:data.explicit_brightness,dbComplexity:data.explicit_complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'getUserProfile-retrieve',hypothesisId:'I'})}).catch(()=>{});
+    // #endregion
+
+    const implicitColors = [data.implicit_color_1, data.implicit_color_2, data.implicit_color_3].filter(Boolean) as string[];
+    const implicitMaterials = [data.implicit_material_1, data.implicit_material_2, data.implicit_material_3].filter(Boolean) as string[];
+    const implicitStyles = [data.implicit_style_1, data.implicit_style_2, data.implicit_style_3].filter(Boolean) as string[];
+    const explicitMaterials = [data.explicit_material_1, data.explicit_material_2, data.explicit_material_3].filter(Boolean) as string[];
+
+    // Map participants row to legacy UserProfile shape expected by existing UI mappers
     const profile = {
       userHash: data.user_hash,
-      auth_user_id: data.auth_user_id, // CRITICAL: Map auth_user_id from Supabase
-      aestheticDNA: data.aesthetic_dna,
-      psychologicalBaseline: data.psychological_baseline,
-      lifestyle: data.lifestyle_data,
-      sensoryPreferences: data.sensory_preferences,
-      projectiveResponses: data.projective_responses,
-      personality: data.personality,
-      inspirations: data.inspirations,
-      profileCompletedAt: data.profile_completed_at
+      auth_user_id: data.auth_user_id, // keep for auth mapping
+      aestheticDNA: {
+        implicit: {
+          dominantStyles: implicitStyles.length ? implicitStyles : (data.implicit_dominant_style ? [data.implicit_dominant_style] : []),
+          colors: implicitColors,
+          materials: implicitMaterials,
+          // We don't compute implicit warmth/brightness/complexity from swipes yet; keep neutral defaults
+          warmth: 0.5,
+          brightness: 0.5,
+          complexity: 0.5,
+          swipePatterns: []
+        },
+        explicit: {
+          selectedStyle: data.explicit_style || '',
+          selectedPalette: data.explicit_palette || '',
+          topMaterials: explicitMaterials,
+          warmthPreference: (() => {
+            const val = data.explicit_warmth ?? 0.5;
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase-deep-personalization.ts:getUserProfile-warmthPreference',message:'Mapping warmthPreference from getUserProfile',data:{dbWarmth:data.explicit_warmth,mappedWarmth:val},timestamp:Date.now(),sessionId:'debug-session',runId:'getUserProfile-mapping',hypothesisId:'I'})}).catch(()=>{});
+            // #endregion
+            return val;
+          })(),
+          brightnessPreference: (() => {
+            const val = data.explicit_brightness ?? 0.5;
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase-deep-personalization.ts:getUserProfile-brightnessPreference',message:'Mapping brightnessPreference from getUserProfile',data:{dbBrightness:data.explicit_brightness,mappedBrightness:val},timestamp:Date.now(),sessionId:'debug-session',runId:'getUserProfile-mapping',hypothesisId:'I'})}).catch(()=>{});
+            // #endregion
+            return val;
+          })(),
+          complexityPreference: (() => {
+            const val = data.explicit_complexity ?? 0.5;
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase-deep-personalization.ts:getUserProfile-complexityPreference',message:'Mapping complexityPreference from getUserProfile',data:{dbComplexity:data.explicit_complexity,mappedComplexity:val},timestamp:Date.now(),sessionId:'debug-session',runId:'getUserProfile-mapping',hypothesisId:'I'})}).catch(()=>{});
+            // #endregion
+            return val;
+          })()
+        }
+      },
+      psychologicalBaseline: {
+        biophiliaScore: data.biophilia_score,
+        prsIdeal: data.prs_ideal_x !== null && data.prs_ideal_x !== undefined ? { x: data.prs_ideal_x, y: data.prs_ideal_y ?? 0 } : undefined
+      },
+      lifestyle: data.life_vibe || (data.life_goals && data.life_goals.length) ? { vibe: data.life_vibe || '', goals: data.life_goals || [] } : undefined,
+      sensoryPreferences: data.sensory_music || data.sensory_texture || data.sensory_light ? {
+        music: data.sensory_music || '',
+        texture: data.sensory_texture || '',
+        light: data.sensory_light || '',
+        natureMetaphor: data.nature_metaphor || ''
+      } : undefined,
+      personality: (data.big5_openness !== null && data.big5_openness !== undefined) || data.big5_completed_at ? {
+        instrument: 'IPIP-NEO-120',
+        domains: {
+          O: data.big5_openness,
+          C: data.big5_conscientiousness,
+          E: data.big5_extraversion,
+          A: data.big5_agreeableness,
+          N: data.big5_neuroticism
+        },
+        facets: data.big5_facets || {},
+        completedAt: data.big5_completed_at
+      } : undefined,
+      inspirations: [], // now sourced from participant_images
+      profileCompletedAt: data.core_profile_completed_at
     } as UserProfile;
     
     // #region agent log
@@ -67,14 +132,11 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
           hasAestheticDNA: !!profile.aestheticDNA,
           hasExplicit: !!profile.aestheticDNA?.explicit,
           explicitSelectedStyle: (profile.aestheticDNA?.explicit as any)?.selectedStyle,
-          explicitSelectedStyleType: typeof (profile.aestheticDNA?.explicit as any)?.selectedStyle,
-          explicitSelectedStyleIsEmpty: (profile.aestheticDNA?.explicit as any)?.selectedStyle === '',
-          explicitSelectedStyleIsNull: (profile.aestheticDNA?.explicit as any)?.selectedStyle === null,
-          explicitSelectedStyleIsUndefined: (profile.aestheticDNA?.explicit as any)?.selectedStyle === undefined,
           explicitSelectedPalette: profile.aestheticDNA?.explicit?.selectedPalette,
           explicitTopMaterials: profile.aestheticDNA?.explicit?.topMaterials || [],
-          rawAestheticDNA: data.aesthetic_dna,
-          rawExplicit: data.aesthetic_dna?.explicit
+          implicitStyleCount: profile.aestheticDNA?.implicit?.dominantStyles?.length || 0,
+          implicitColorsCount: profile.aestheticDNA?.implicit?.colors?.length || 0,
+          implicitMaterialsCount: profile.aestheticDNA?.implicit?.materials?.length || 0
         },
         timestamp: Date.now()
       })
@@ -138,9 +200,11 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
 export async function getUserProfileFromAuth(authUserId: string): Promise<UserProfile | null> {
   try {
     const { data, error } = await supabase
-      .from('user_profiles')
+      .from('participants')
       .select('*')
       .eq('auth_user_id', authUserId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) {
@@ -153,19 +217,8 @@ export async function getUserProfileFromAuth(authUserId: string): Promise<UserPr
     
     if (!data) return null;
     
-    // Map Supabase snake_case to TypeScript camelCase
-    const profile = {
-      userHash: data.user_hash,
-      auth_user_id: data.auth_user_id,
-      aestheticDNA: data.aesthetic_dna,
-      psychologicalBaseline: data.psychological_baseline,
-      lifestyle: data.lifestyle_data,
-      sensoryPreferences: data.sensory_preferences,
-      projectiveResponses: data.projective_responses,
-      personality: data.personality,
-      inspirations: data.inspirations,
-      profileCompletedAt: data.profile_completed_at
-    } as UserProfile;
+    const profile = await getUserProfile(data.user_hash);
+    if (!profile) return null;
     
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
@@ -223,7 +276,7 @@ export async function getBestProfileForAuth(authUserId: string): Promise<UserPro
     // #endregion
 
     const { data, error } = await supabase
-      .from('user_profiles')
+      .from('participants')
       .select('*')
       .eq('auth_user_id', authUserId)
       .order('updated_at', { ascending: false });
@@ -251,28 +304,16 @@ export async function getBestProfileForAuth(authUserId: string): Promise<UserPro
 
     if (!data || data.length === 0) return null;
 
-    // Pick first profile that has any meaningful data
+    // Pick first row that has any meaningful data (participants columns)
     const hasData = (row: any) =>
-      !!row.personality ||
-      !!row.aesthetic_dna?.implicit ||
-      !!row.aesthetic_dna?.explicit ||
-      !!row.sensory_preferences ||
-      row.psychological_baseline?.biophiliaScore !== undefined;
+      row.big5_completed_at ||
+      row.explicit_style ||
+      row.implicit_style_1 ||
+      row.biophilia_score !== null;
 
     const candidate = data.find(hasData) || data[0];
-
-    const profile = {
-      userHash: candidate.user_hash,
-      auth_user_id: candidate.auth_user_id,
-      aestheticDNA: candidate.aesthetic_dna,
-      psychologicalBaseline: candidate.psychological_baseline,
-      lifestyle: candidate.lifestyle_data,
-      sensoryPreferences: candidate.sensory_preferences,
-      projectiveResponses: candidate.projective_responses,
-      personality: candidate.personality,
-      inspirations: candidate.inspirations,
-      profileCompletedAt: candidate.profile_completed_at
-    } as UserProfile;
+    const profile = await getUserProfile(candidate.user_hash);
+    if (!profile) return null;
 
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
@@ -332,7 +373,7 @@ export async function getUserHashFromAuth(authUserId: string): Promise<string | 
     // #endregion
 
     const { data, error } = await supabase
-      .from('user_profiles')
+      .from('participants')
       .select('user_hash')
       .eq('auth_user_id', authUserId)
       .maybeSingle();
@@ -429,6 +470,10 @@ export async function getUserHashFromAuth(authUserId: string): Promise<string | 
 
 export async function saveUserProfile(profile: Partial<UserProfile>): Promise<UserProfile | null> {
   try {
+    // Legacy user_profiles table removed after radical refactor.
+    // Source of truth is participants + participant_* tables.
+    return null;
+
     if (!profile.userHash) {
       console.warn('saveUserProfile: userHash is required');
       return null;
@@ -631,16 +676,8 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
 }
 
 export async function getCompletionStatus(userHash: string): Promise<CompletionStatus | null> {
-  try {
-    const { data, error } = await supabase
-      .rpc('get_completion_status', { p_user_hash: userHash });
-
-    if (error) throw error;
-    return data as CompletionStatus;
-  } catch (error) {
-    console.error('Error getting completion status:', error);
-    return null;
-  }
+  // Legacy RPC removed/unused after radical refactor (participants snapshot is source of truth)
+  return null;
 }
 
 // =========================
@@ -648,19 +685,8 @@ export async function getCompletionStatus(userHash: string): Promise<CompletionS
 // =========================
 
 export async function getUserHouseholds(userHash: string): Promise<Household[]> {
-  try {
-    const { data, error } = await supabase
-      .from('households')
-      .select('*')
-      .eq('user_hash', userHash)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data as Household[];
-  } catch (error) {
-    console.error('Error fetching households:', error);
-    return [];
-  }
+  // Legacy table removed after radical refactor
+  return [];
 }
 
 /**
@@ -669,30 +695,8 @@ export async function getUserHouseholds(userHash: string): Promise<Household[]> 
  */
 export async function ensureUserProfileExists(userHash: string): Promise<boolean> {
   try {
-    // Check if profile exists
-    const existing = await getUserProfile(userHash);
-    if (existing) {
-      return true; // Profile already exists
-    }
-
-    // Create minimal profile
-    const { error } = await supabase
-      .from('user_profiles')
-      .insert({
-        user_hash: userHash,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-
-    if (error) {
-      // If it's a unique constraint violation, profile was created by another request
-      if (error.code === '23505') {
-        return true;
-      }
-      throw error;
-    }
-
-    return true;
+    // After refactor, "profile" existence == participants row existence
+    return await ensureParticipantExists(userHash);
   } catch (error) {
     console.error('Error ensuring user profile exists:', error);
     return false;
@@ -700,51 +704,13 @@ export async function ensureUserProfileExists(userHash: string): Promise<boolean
 }
 
 export async function saveHousehold(household: Omit<Household, 'id' | 'createdAt' | 'updatedAt'>): Promise<Household | null> {
-  try {
-    // Ensure user profile exists first (required by foreign key constraint)
-    const profileExists = await ensureUserProfileExists(household.userHash);
-    if (!profileExists) {
-      console.error('Failed to ensure user profile exists before saving household');
-      return null;
-    }
-
-    const { data, error } = await supabase
-      .from('households')
-      .insert({
-        user_hash: household.userHash,
-        name: household.name,
-        household_type: household.householdType,
-        living_situation: household.livingSituation,
-        household_dynamics: household.householdDynamics,
-        household_goals: household.householdGoals
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data as Household;
-  } catch (error) {
-    console.error('Error saving household:', error);
-    return null;
-  }
+  // Legacy table removed after radical refactor
+  return null;
 }
 
 export async function updateHousehold(id: string, updates: Partial<Household>): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('households')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id);
-
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error('Error updating household:', error);
-    return false;
-  }
+  // Legacy table removed after radical refactor
+  return false;
 }
 
 // =========================
@@ -752,109 +718,23 @@ export async function updateHousehold(id: string, updates: Partial<Household>): 
 // =========================
 
 export async function getHouseholdRooms(householdId: string): Promise<Room[]> {
-  try {
-    const { data, error } = await supabase
-      .from('rooms')
-      .select('*')
-      .eq('household_id', householdId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data as Room[];
-  } catch (error) {
-    console.error('Error fetching rooms:', error);
-    return [];
-  }
+  // Legacy table removed after radical refactor
+  return [];
 }
 
 export async function getRoom(roomId: string): Promise<Room | null> {
-  try {
-    const { data, error } = await supabase
-      .from('rooms')
-      .select('*')
-      .eq('id', roomId)
-      .single();
-
-    if (error) throw error;
-    return data as Room;
-  } catch (error) {
-    console.error('Error fetching room:', error);
-    return null;
-  }
+  // Legacy table removed after radical refactor
+  return null;
 }
 
 export async function saveRoom(room: Omit<Room, 'id' | 'createdAt' | 'updatedAt'>): Promise<Room | null> {
-  try {
-    // Build insert object, excluding columns that don't exist in schema
-    const insertData: any = {
-      household_id: room.householdId,
-      name: room.name,
-      room_type: room.roomType,
-      usage_type: room.usageType,
-      shared_with: room.sharedWith,
-      ownership_feeling: room.ownershipFeeling,
-      current_photos: room.currentPhotos,
-      // preference_source column doesn't exist in schema - skip it
-      // preference_source: room.preferenceSource,
-      // room_preference_payload column doesn't exist in schema - skip it
-      // room_preference_payload: room.roomPreferencePayload,
-      prs_pre_test: room.prsCurrent,
-      pain_points: room.painPoints,
-      activities: room.activities,
-      room_visual_dna: room.roomVisualDNA,
-      aspirational_state: room.aspirationalState
-    };
-
-    const { data, error } = await supabase
-      .from('rooms')
-      .insert(insertData)
-      .select()
-      .single();
-
-    if (error) {
-      // If error is about missing column, try without problematic columns
-      if (error.message?.includes('preference_source') || error.message?.includes('activity_context') || error.message?.includes('room_preference_payload')) {
-        console.warn('Some columns not found in schema, saving without them:', error.message);
-        // Remove problematic fields and retry
-        const retryData: any = { ...insertData };
-        delete retryData.preference_source;
-        delete retryData.room_preference_payload;
-        delete retryData.activity_context;
-        
-        const { data: retryDataResult, error: retryError } = await supabase
-          .from('rooms')
-          .insert(retryData)
-          .select()
-          .single();
-        
-        if (retryError) throw retryError;
-        return retryDataResult as Room;
-      }
-      throw error;
-    }
-    return data as Room;
-  } catch (error) {
-    console.error('Error saving room:', error);
-    return null;
-  }
+  // Legacy table removed after radical refactor (room data lives in participants + participant_images)
+  return null;
 }
 
 export async function updateRoom(roomId: string, updates: Partial<Room>): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('rooms')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', roomId);
-
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error('Error updating room:', error);
-    return false;
-  }
+  // Legacy table removed after radical refactor
+  return false;
 }
 
 // =========================
@@ -862,94 +742,28 @@ export async function updateRoom(roomId: string, updates: Partial<Room>): Promis
 // =========================
 
 export async function getRoomSessions(roomId: string): Promise<DesignSession[]> {
-  try {
-    const { data, error } = await supabase
-      .from('design_sessions')
-      .select('*')
-      .eq('room_id', roomId)
-      .order('session_number', { ascending: true });
-
-    if (error) throw error;
-    return data as DesignSession[];
-  } catch (error) {
-    console.error('Error fetching design sessions:', error);
-    return [];
-  }
+  // Legacy table removed after radical refactor
+  return [];
 }
 
 export async function getLatestSession(roomId: string): Promise<DesignSession | null> {
-  try {
-    const { data, error } = await supabase
-      .from('design_sessions')
-      .select('*')
-      .eq('room_id', roomId)
-      .order('session_number', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error) throw error;
-    return data as DesignSession;
-  } catch (error) {
-    console.error('Error fetching latest session:', error);
-    return null;
-  }
+  // Legacy table removed after radical refactor
+  return null;
 }
 
 export async function saveDesignSession(
   session: Omit<DesignSession, 'id' | 'sessionNumber' | 'createdAt'>
 ): Promise<DesignSession | null> {
-  try {
-    // Get next session number
-    const { data: nextNumber } = await supabase
-      .rpc('get_next_session_number', { p_room_id: session.roomId });
-
-    const { data, error } = await supabase
-      .from('design_sessions')
-      .insert({
-        room_id: session.roomId,
-        session_number: nextNumber || 1,
-        intent: session.intent,
-        prompt_used: session.promptUsed,
-        prompt_synthesis_data: session.promptSynthesisData,
-        parameters_used: session.parametersUsed,
-        generated_images: session.generatedImages,
-        selected_image_index: session.selectedImageIndex,
-        prs_post_test: session.prsPostTest,
-        satisfaction_score: session.satisfactionScore,
-        reflects_identity_score: session.reflectsIdentityScore,
-        implementation_intention: session.implementationIntention,
-        feedback_text: session.feedbackText,
-        feedback_voice_url: session.feedbackVoiceUrl,
-        what_loved: session.whatLoved,
-        what_change: session.whatChange
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data as DesignSession;
-  } catch (error) {
-    console.error('Error saving design session:', error);
-    return null;
-  }
+  // Legacy table removed after radical refactor
+  return null;
 }
 
 export async function updateDesignSession(
   sessionId: string,
   updates: Partial<DesignSession>
 ): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('design_sessions')
-      .update(updates)
-      .eq('id', sessionId);
-
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error('Error updating design session:', error);
-    return false;
-  }
+  // Legacy table removed after radical refactor
+  return false;
 }
 
 // =========================
@@ -961,54 +775,16 @@ export async function saveEnhancedSwipe(
   sessionContext: string,  // "core_profile" or roomId
   swipe: EnhancedSwipeData
 ): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('enhanced_swipes')
-      .insert({
-        user_hash: userHash,
-        session_context: sessionContext,
-        image_id: swipe.imageId,
-        image_metadata: swipe.imageMetadata,
-        direction: swipe.direction,
-        reaction_time_ms: swipe.reactionTimeMs,
-        dwell_time_ms: swipe.dwellTimeMs,
-        hesitation_count: swipe.hesitationCount,
-        swipe_velocity: swipe.swipeVelocity,
-        decided_at: swipe.timestamp
-      });
-
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error('Error saving enhanced swipe:', error);
-    return false;
-  }
+  // Legacy table removed after radical refactor
+  return false;
 }
 
 export async function getSwipePatterns(
   userHash: string,
   sessionContext?: string
 ): Promise<SwipePattern[]> {
-  try {
-    const query = supabase
-      .from('enhanced_swipes')
-      .select('*')
-      .eq('user_hash', userHash);
-
-    if (sessionContext) {
-      query.eq('session_context', sessionContext);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    // Analyze patterns
-    // TODO: Implement pattern detection algorithm
-    return [];
-  } catch (error) {
-    console.error('Error fetching swipe patterns:', error);
-    return [];
-  }
+  // Legacy table removed after radical refactor
+  return [];
 }
 
 // =========================

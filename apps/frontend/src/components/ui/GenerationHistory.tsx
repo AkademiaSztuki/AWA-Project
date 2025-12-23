@@ -1,8 +1,8 @@
 "use client";
 
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Wand2, RefreshCw } from 'lucide-react';
+import { ArrowRight, Wand2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface GenerationNode {
   id: string;
@@ -23,7 +23,45 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
   currentIndex,
   onNodeClick,
 }) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
   if (history.length === 0) return null;
+
+  // Check scroll position
+  const checkScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+    setCanScrollLeft(scrollLeft > 0);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
+  };
+
+  useEffect(() => {
+    checkScroll();
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', checkScroll);
+      window.addEventListener('resize', checkScroll);
+      return () => {
+        container.removeEventListener('scroll', checkScroll);
+        window.removeEventListener('resize', checkScroll);
+      };
+    }
+  }, [history]);
+
+  // Scroll functions
+  const scrollLeft = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: -200, behavior: 'smooth' });
+    }
+  };
+
+  const scrollRight = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: 200, behavior: 'smooth' });
+    }
+  };
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -55,8 +93,35 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
     <div className="glass-panel p-4 rounded-2xl">
       <h3 className="text-sm font-nasalization text-gray-700 mb-3">Historia Generacji</h3>
       
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        {history.map((node, index) => (
+      <div className="relative">
+        {/* Left arrow */}
+        {canScrollLeft && (
+          <button
+            onClick={scrollLeft}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center hover:bg-white/30 transition-all shadow-lg"
+            aria-label="Przewiń w lewo"
+          >
+            <ChevronLeft size={20} className="text-gray-700" />
+          </button>
+        )}
+        
+        {/* Right arrow */}
+        {canScrollRight && (
+          <button
+            onClick={scrollRight}
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center hover:bg-white/30 transition-all shadow-lg"
+            aria-label="Przewiń w prawo"
+          >
+            <ChevronRight size={20} className="text-gray-700" />
+          </button>
+        )}
+        
+        <div 
+          ref={scrollContainerRef}
+          className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {history.map((node, index) => (
           <React.Fragment key={node.id}>
             <motion.button
               whileHover={{ scale: 1.05 }}
@@ -99,6 +164,7 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
             )}
           </React.Fragment>
         ))}
+        </div>
       </div>
       
       <div className="mt-3 text-xs text-gray-600 font-modern">

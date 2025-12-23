@@ -143,89 +143,8 @@ const hasDataUrlSpaces = (spaces?: any[]): boolean =>
   spaces.some(space => (space?.images || []).some((img: any) => typeof img?.url === 'string' && img.url.startsWith('data:')));
 
 const migrateLegacySpacesToSupabase = async (spaces: any[], userHash: string): Promise<any[]> => {
-  if (!userHash || !Array.isArray(spaces)) return spaces || [];
-
-  const migrated: any[] = [];
-
-  for (const space of spaces) {
-    const spaceId = space.id || `space_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    const spaceName = space.name || 'Moja Przestrzeń';
-    const spaceType = space.type || 'personal';
-
-    // Ensure space exists in Supabase
-    try {
-      await supabase
-        .from('spaces')
-        .upsert({
-          id: spaceId,
-          user_hash: userHash,
-          name: spaceName,
-          type: spaceType,
-          created_at: space.createdAt || new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
-    } catch (e) {
-      console.warn('[useSession] migrate: upsert space failed', e);
-    }
-
-    const images = Array.isArray(space.images) ? space.images : [];
-    const uploadedMeta: Array<{
-      url: string;
-      thumbnail_url?: string;
-      type: 'generated' | 'inspiration';
-      tags?: any;
-      is_favorite?: boolean;
-      source?: string;
-      generation_set_id?: string;
-    }> = [];
-    const newImages: any[] = [];
-
-    for (const img of images) {
-      const imgId = img.id || `img_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-      let finalUrl = img.url;
-
-      if (typeof img.url === 'string' && img.url.startsWith('data:')) {
-        const uploaded = await uploadSpaceImage(userHash, spaceId, imgId, img.url);
-        if (uploaded?.publicUrl) {
-          finalUrl = uploaded.publicUrl;
-        }
-      }
-
-      uploadedMeta.push({
-        url: finalUrl,
-        thumbnail_url: img.thumbnailUrl,
-        type: img.type || 'generated',
-        tags: img.tags,
-        is_favorite: img.isFavorite || false
-      });
-
-      newImages.push({
-        id: imgId,
-        url: finalUrl,
-        type: img.type || 'generated',
-        addedAt: img.addedAt || new Date().toISOString(),
-        isFavorite: img.isFavorite || false,
-        thumbnailUrl: img.thumbnailUrl,
-        tags: img.tags
-      });
-    }
-
-    if (uploadedMeta.length > 0) {
-      await saveSpaceImagesMetadata(userHash, spaceId, uploadedMeta);
-    }
-
-    migrated.push({
-      ...space,
-      id: spaceId,
-      name: spaceName,
-      type: spaceType,
-      images: newImages,
-      createdAt: space.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-  }
-
-  return migrated;
+  // Legacy spaces tables removed after radical refactor; keep local-only.
+  return Array.isArray(spaces) ? spaces : [];
 };
 
 const isQuotaExceededError = (error: unknown): boolean => {
@@ -490,8 +409,51 @@ export const useSession = (): UseSessionReturn => {
     const initializeSession = async () => {
       if (typeof window === 'undefined') return;
 
-      // Ensure user hash exists
+      // STEP 1: Quick load from localStorage first (synchronous) - for fast initial render
       let userHash = safeLocalStorage.getItem(USER_HASH_STORAGE_KEY);
+      let mergedLocalSession: Partial<SessionData> | null = null;
+      const savedData = safeLocalStorage.getItem(SESSION_STORAGE_KEY);
+
+      if (savedData) {
+        try {
+          mergedLocalSession = JSON.parse(savedData) as SessionData;
+        } catch (error) {
+          console.error('Failed to load session data from localStorage:', error);
+        }
+      }
+
+      // Get room images from sessionStorage (fast)
+      const sessionRoomImage = safeSessionStorage.getItem(ROOM_IMAGE_SESSION_KEY);
+      const sessionRoomImageEmpty = safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
+
+      // Generate userHash if missing (fast, synchronous)
+      if (!userHash) {
+        userHash = generateUserHash();
+        safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
+      }
+
+      // Create initial session from localStorage (fast)
+      let initialSession: SessionData = {
+        ...createEmptySession(),
+        ...(mergedLocalSession || {}),
+        userHash,
+      };
+
+      // Add room images from sessionStorage
+      if (sessionRoomImage) {
+        initialSession.roomImage = sessionRoomImage;
+      }
+      if (sessionRoomImageEmpty) {
+        initialSession.roomImageEmpty = sessionRoomImageEmpty;
+      }
+
+      // Set initial session immediately (for fast render)
+      if (isMounted) {
+        setSessionData(initialSession);
+        setIsInitialized(true);
+      }
+
+      // STEP 2: Load from Supabase in background (async, can take time)
       let authUserId: string | undefined;
 
       // If no userHash in localStorage, try to restore it from Supabase if user is authenticated
@@ -512,15 +474,6 @@ export const useSession = (): UseSessionReturn => {
         }
       } catch (error) {
         console.warn('[useSession] Failed to restore userHash from Supabase:', error);
-      }
-
-      // If still no userHash, generate a new one
-      if (!userHash) {
-        userHash = generateUserHash();
-        safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:generate-userHash',message:'Generated new userHash',data:{userHash:userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I2'})}).catch(()=>{});
-        // #endregion
       }
 
       // If authenticated, check if there's an existing profile with data linked to auth_user_id
@@ -551,14 +504,14 @@ export const useSession = (): UseSessionReturn => {
               // No profile with data — check if there's any mapping at all
               const existingHash = await getUserHashFromAuth(authUserId);
               if (!existingHash) {
-                // No mapping yet — link this userHash to auth_user_id
+                // No mapping yet — link this userHash to auth_user_id (participants is source of truth)
                 const { error } = await supabase
-                  .from('user_profiles')
+                  .from('participants')
                   .upsert({
                     user_hash: userHash,
                     auth_user_id: authUserId,
                     updated_at: new Date().toISOString()
-                  }, { onConflict: 'user_hash' });
+                  } as any, { onConflict: 'user_hash' } as any);
 
                 // #region agent log
                 fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:link-userHash',message:'Linking userHash to auth_user_id',data:{userHash,authUserId,hadExisting:!!existingHash,upsertError:!!error,errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I11'})}).catch(()=>{});
@@ -578,48 +531,29 @@ export const useSession = (): UseSessionReturn => {
         }
       }
 
-      let mergedLocalSession: Partial<SessionData> | null = null;
-      const savedData = safeLocalStorage.getItem(SESSION_STORAGE_KEY);
-
-      if (savedData) {
-        try {
-          mergedLocalSession = JSON.parse(savedData) as SessionData;
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:loaded-local-session',message:'Loaded session from localStorage',data:{hasBigFive:!!mergedLocalSession?.bigFive,completedAt:mergedLocalSession?.bigFive?.completedAt,userHash:mergedLocalSession?.userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H12'})}).catch(()=>{});
-          // #endregion
-        } catch (error) {
-          console.error('Failed to load session data from localStorage:', error);
-        }
-      }
-
-      const sessionRoomImage = safeSessionStorage.getItem(ROOM_IMAGE_SESSION_KEY);
-      if (sessionRoomImage && (!mergedLocalSession?.roomImage || mergedLocalSession.roomImage.length < sessionRoomImage.length)) {
-        mergedLocalSession = { ...(mergedLocalSession || {}), roomImage: sessionRoomImage };
-      }
-
-      const sessionRoomImageEmpty = safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
-      
+      // Use mergedLocalSession from step 1 (already loaded from localStorage)
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:load-session-roomImageEmpty',message:'Loading roomImageEmpty from sessionStorage',data:{hasSessionRoomImageEmpty:!!sessionRoomImageEmpty,sessionRoomImageEmptyLength:sessionRoomImageEmpty?.length||0,hasMergedLocalSession:!!mergedLocalSession,hasMergedLocalRoomImageEmpty:!!mergedLocalSession?.roomImageEmpty,mergedLocalRoomImageEmptyLength:mergedLocalSession?.roomImageEmpty?.length||0,willUseSessionStorage:!!sessionRoomImageEmpty&&(!mergedLocalSession?.roomImageEmpty||mergedLocalSession.roomImageEmpty.length<sessionRoomImageEmpty.length)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:loaded-local-session',message:'Loaded session from localStorage',data:{hasBigFive:!!mergedLocalSession?.bigFive,completedAt:mergedLocalSession?.bigFive?.completedAt,userHash:mergedLocalSession?.userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H12'})}).catch(()=>{});
       // #endregion
-      
-      if (sessionRoomImageEmpty && (!mergedLocalSession?.roomImageEmpty || mergedLocalSession.roomImageEmpty.length < sessionRoomImageEmpty.length)) {
-        mergedLocalSession = { ...(mergedLocalSession || {}), roomImageEmpty: sessionRoomImageEmpty };
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:load-session-roomImageEmpty:merged',message:'roomImageEmpty merged into mergedLocalSession',data:{sessionRoomImageEmptyLength:sessionRoomImageEmpty.length,mergedLocalRoomImageEmptyLength:mergedLocalSession.roomImageEmpty?.length||0,hasMergedLocalSession:!!mergedLocalSession},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
-      } else {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:load-session-roomImageEmpty:not-merged',message:'roomImageEmpty NOT merged (condition failed)',data:{hasSessionRoomImageEmpty:!!sessionRoomImageEmpty,sessionRoomImageEmptyLength:sessionRoomImageEmpty?.length||0,hasMergedLocalRoomImageEmpty:!!mergedLocalSession?.roomImageEmpty,mergedLocalRoomImageEmptyLength:mergedLocalSession?.roomImageEmpty?.length||0,condition1:!!sessionRoomImageEmpty,condition2:!mergedLocalSession?.roomImageEmpty||(sessionRoomImageEmpty?mergedLocalSession.roomImageEmpty.length<sessionRoomImageEmpty.length:false)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
-      }
 
       // Zawsze pobierz najnowszy snapshot z Supabase i połącz z danymi lokalnymi
       let remoteSession: SessionData | null = null;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:remote-snapshot-check',message:'Checking whether to fetch remote snapshot',data:{hasUserHash:!!userHash,disableSync:DISABLE_SESSION_SYNC},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+      // #endregion
       if (userHash && !DISABLE_SESSION_SYNC) {
         try {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:remote-snapshot-fetch',message:'Fetching remote snapshot from Supabase',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+          // #endregion
           remoteSession = await fetchLatestSessionSnapshot(userHash);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:remote-snapshot-result',message:'Remote snapshot fetched',data:{userHash,remoteFound:!!remoteSession,remoteHasBigFive:!!remoteSession?.bigFive,remoteHasVisualDNA:!!remoteSession?.visualDNA,remoteHasColorsAndMaterials:!!remoteSession?.colorsAndMaterials},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+          // #endregion
         } catch (error) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:remote-snapshot-error',message:'Failed to fetch remote snapshot',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
+          // #endregion
           console.warn('[useSession] Nie udało się pobrać sesji z Supabase.', error);
         }
       }

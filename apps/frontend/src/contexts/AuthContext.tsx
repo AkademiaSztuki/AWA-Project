@@ -187,16 +187,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      // Update user_profiles table to link auth user
+      // After radical refactor, link auth user on participants (source of truth)
       const { error } = await supabase
-        .from('user_profiles')
+        .from('participants')
         .upsert({
           user_hash: userHash,
-          auth_user_id: user.id, // CRITICAL: Link to auth user
+          auth_user_id: user.id,
           updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_hash'
-        });
+        }, { onConflict: 'user_hash' } as any);
 
       if (error) {
         console.error('Error linking user_hash to auth:', error);

@@ -9,8 +9,8 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { ArrowLeft, Heart, Sparkles, Trash2, Download, X } from 'lucide-react';
 import Image from 'next/image';
-import { fetchSpaceImages } from '@/lib/remote-spaces';
-import { supabase, safeLocalStorage } from '@/lib/supabase';
+import { deleteParticipantImage, fetchParticipantImages } from '@/lib/remote-spaces';
+import { safeLocalStorage } from '@/lib/supabase';
 
 interface SpaceImage {
   id: string;
@@ -56,15 +56,20 @@ export default function SpaceDetailPage() {
       const userHash = (sessionData as any)?.userHash ||
         safeLocalStorage.getItem('aura_user_hash') || '';
 
-      // Fetch space info
+      // NOTE: After radical refactor, Space view is derived from participant_images (source of truth).
       try {
-        const { data: spaceRow } = await supabase
-          .from('spaces')
-          .select('*')
-          .eq('id', spaceId)
-          .maybeSingle();
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:load-space-entry',message:'Loading space detail',data:{spaceId,hasUserHash:!!userHash,userHash:userHash||null,sessionSpaceCount:((sessionData as any)?.spaces||[]).length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD1'})}).catch(()=>{});
+        // #endregion
 
-        const images = userHash ? await fetchSpaceImages(userHash, spaceId) : [];
+        const participantImages = userHash ? await fetchParticipantImages(userHash) : [];
+
+        // Normalize spaceId: remove "space_" prefix if present, for matching
+        const normalizedSpaceId = spaceId?.startsWith('space_') ? spaceId.substring(6) : spaceId;
+
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:load-space-fetched',message:'Fetched participant_images for space detail',data:{spaceId,normalizedSpaceId,userHash:userHash||null,imageCount:participantImages.length,generatedCount:participantImages.filter(i=>i.type==='generated').length,inspirationCount:participantImages.filter(i=>i.type==='inspiration').length,imagesWithSpaceId:participantImages.filter((i:any)=>i.spaceId).length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD2'})}).catch(()=>{});
+        // #endregion
 
         // Inspirations from session (global) to display inside the space
         const sessionInspirations = ((sessionData as any)?.inspirations || []).map((insp: any) => ({
@@ -84,32 +89,64 @@ export default function SpaceDetailPage() {
             const key = `${img.type}:${img.url}`;
             if (!byKey.has(key)) byKey.set(key, img);
           };
-          (images || []).forEach((img: any) =>
-            add({
-              id: img.id,
-              url: img.url,
-              type: img.type,
-              addedAt: img.created_at || img.added_at || img.addedAt || new Date().toISOString(),
-              isFavorite: img.is_favorite ?? img.isFavorite,
-              thumbnailUrl: img.thumbnail_url || img.thumbnailUrl,
-              tags: img.tags
+
+          // Source of truth: participant_images
+          // Filter by spaceId: only show images that belong to this space
+          (participantImages || [])
+            .filter((img: any) => {
+              // Only include generated/inspiration images
+              if (img.type !== 'generated' && img.type !== 'inspiration') return false;
+              // If image has spaceId, it must match normalizedSpaceId
+              if (img.spaceId) {
+                const imgSpaceId = img.spaceId?.startsWith('space_') ? img.spaceId.substring(6) : img.spaceId;
+                return imgSpaceId === normalizedSpaceId;
+              }
+              // If image has no spaceId, only include if this is the default space (fallback for old data)
+              // For now, exclude images without spaceId to avoid showing all images in every space
+              return false;
             })
-          );
+            .forEach((img: any) =>
+              add({
+                id: img.id,
+                url: img.url,
+                type: img.type,
+                addedAt: img.createdAt || img.created_at || new Date().toISOString(),
+                isFavorite: img.isFavorite ?? img.is_favorite,
+                thumbnailUrl: img.thumbnailUrl || img.thumbnail_url,
+                tags: img.tags
+              })
+            );
+
+          // Session inspirations are global, so don't filter by spaceId
           sessionInspirations.forEach(add);
-          return sortImagesDescending(Array.from(byKey.values()));
+          
+          const result = sortImagesDescending(Array.from(byKey.values()));
+          
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:load-space-filtered',message:'Filtered images by spaceId',data:{spaceId,normalizedSpaceId,filteredCount:result.length,generatedCount:result.filter(i=>i.type==='generated').length,inspirationCount:result.filter(i=>i.type==='inspiration').length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD4'})}).catch(()=>{});
+          // #endregion
+          
+          return result;
         })();
 
-        if (spaceRow) {
-          setSpace({
-            id: spaceRow.id,
-            name: spaceRow.name,
-            type: spaceRow.type || 'personal',
-            images: mergedImages,
-            createdAt: spaceRow.created_at,
-            updatedAt: spaceRow.updated_at
-          });
-          return;
-        }
+        const roomName = (sessionData as any)?.roomName || 'Moja Przestrzeń';
+        const roomType = (sessionData as any)?.roomType || 'personal';
+
+        const newSpace: Space = {
+          id: spaceId,
+          name: roomName,
+          type: roomType,
+          images: mergedImages,
+          createdAt: mergedImages.length > 0 ? mergedImages[mergedImages.length - 1].addedAt : new Date().toISOString(),
+          updatedAt: mergedImages.length > 0 ? mergedImages[0].addedAt : new Date().toISOString()
+        };
+
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:load-space-set',message:'Setting space state from participant_images',data:{spaceId,userHash:userHash||null,totalImages:newSpace.images.length,totalGenerated:newSpace.images.filter(i=>i.type==='generated').length,totalInspirations:newSpace.images.filter(i=>i.type==='inspiration').length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD3'})}).catch(()=>{});
+        // #endregion
+
+        setSpace(newSpace);
+        return;
       } catch (e) {
         console.warn('[SpacePage] remote fetch failed, fallback to session/local', e);
       }
@@ -140,7 +177,18 @@ export default function SpaceDetailPage() {
       sessionInspirations.forEach(add);
 
       setSpace({ ...foundSpace, images: sortImagesDescending(Array.from(byKey.values())) });
+      return;
     }
+
+    // If nothing found, still stop infinite loading state
+    setSpace({
+      id: spaceId,
+      name: (sessionData as any)?.roomName || 'Moja Przestrzeń',
+      type: (sessionData as any)?.roomType || 'personal',
+      images: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
     })();
   }, [spaceId, sessionData]);
 
@@ -158,20 +206,41 @@ export default function SpaceDetailPage() {
 
   const handleDeleteImage = (imageId: string) => {
     if (!space) return;
-    
-    const updatedImages = space.images.filter(img => img.id !== imageId);
-    const updatedSpace = { ...space, images: updatedImages, updatedAt: new Date().toISOString() };
-    
-    // Update spaces in session data
-    const spaces = (sessionData as any)?.spaces || [];
-    const updatedSpaces = spaces.map((s: Space) => s.id === spaceId ? updatedSpace : s);
-    
-    updateSessionData({ spaces: updatedSpaces });
-    setSpace(updatedSpace);
-    
-    if (selectedImage?.id === imageId) {
-      setSelectedImage(null);
-    }
+
+    const userHash = (sessionData as any)?.userHash || safeLocalStorage.getItem('aura_user_hash') || '';
+    const isUuid = (id: string) =>
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(id);
+
+    (async () => {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:delete-image',message:'Deleting image from space detail',data:{spaceId,userHash:userHash||null,imageId,isUuid:isUuid(imageId)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD4'})}).catch(()=>{});
+      // #endregion
+
+      if (userHash && isUuid(imageId)) {
+        await deleteParticipantImage(userHash, imageId);
+      }
+
+      // Refresh from participant_images
+      const participantImages = userHash ? await fetchParticipantImages(userHash) : [];
+      const refreshed = participantImages
+        .filter((img: any) => img.type === 'generated' || img.type === 'inspiration')
+        .map((img: any) => ({
+          id: img.id,
+          url: img.url,
+          type: img.type,
+          addedAt: img.createdAt || img.created_at || new Date().toISOString(),
+          isFavorite: img.isFavorite ?? img.is_favorite,
+          thumbnailUrl: img.thumbnailUrl || img.thumbnail_url,
+          tags: img.tags
+        })) as SpaceImage[];
+
+      setSpace((prev) =>
+        prev
+          ? { ...prev, images: sortImagesDescending(refreshed), updatedAt: new Date().toISOString() }
+          : prev
+      );
+      if (selectedImage?.id === imageId) setSelectedImage(null);
+    })();
   };
 
   const handleDownloadImage = (url: string) => {

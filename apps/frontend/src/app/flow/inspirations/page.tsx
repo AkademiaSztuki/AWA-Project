@@ -10,9 +10,8 @@ import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
 import { analyzeInspirationsWithGamma, type InspirationTaggingResult } from "@/lib/vision/gamma-tagging";
-import { getOrCreateSpaceId, saveSpaceImagesMetadata } from "@/lib/remote-spaces";
+import { saveParticipantImages } from "@/lib/remote-spaces";
 import { supabase } from "@/lib/supabase";
-import { addMultipleInspirationsToSpace } from "@/lib/spaces";
 import { 
   Upload, 
   X, 
@@ -272,26 +271,26 @@ export default function InspirationsPage() {
       
       setItems(itemsWithBase64);
 
-      // Upload files to Supabase Storage
+      // Upload files to Supabase Storage (participant-images bucket)
       const userHash = (sessionData as any)?.userHash || 'anonymous';
       const uploads = await Promise.all(itemsWithBase64.map(async (i) => {
         try {
           if (!i.file) return { id: i.id };
-          const path = `inspirations/${userHash}/${i.id}`;
+          const path = `${userHash}/inspiration/${i.id}`;
           const { data, error } = await supabase
             .storage
-            .from('aura-assets')
+            .from('participant-images')
             .upload(path, i.file, { upsert: true, contentType: i.file?.type || 'image/jpeg' });
           
           if (error) {
             const status = (error as any)?.statusCode ?? (error as any)?.status;
             if (error.message?.includes('Bucket not found') || status === 404 || status === '404') {
-              console.warn('Bucket aura-assets not found - skipping upload');
+              console.warn('Bucket participant-images not found - skipping upload');
               return { id: i.id };
             }
             throw error;
           }
-          const { data: pub } = supabase.storage.from('aura-assets').getPublicUrl(path);
+          const { data: pub } = supabase.storage.from('participant-images').getPublicUrl(path);
           return { id: i.id, fileId: data?.path, url: pub?.publicUrl || undefined };
         } catch (e) {
           console.warn('Upload failed for', i.id, e);
@@ -330,56 +329,36 @@ export default function InspirationsPage() {
 
       await updateSessionData({ inspirations: finalInspirations } as any);
       
-      // Also save inspirations to spaces/local snapshot and Supabase space_images with tags
+      // Save inspirations to participant_images with tags
       try {
         const userHash = (sessionData as any)?.userHash;
-        if (userHash) {
-          const spaceId = await getOrCreateSpaceId(userHash, {
-            spaceId: (sessionData as any)?.currentSpaceId,
-            name: (sessionData as any)?.roomName || 'Moja Przestrzeń'
-          });
-
-          const currentSpaces = (sessionData as any)?.spaces || [];
-          const inspirationsForSpacesLocal = finalInspirations.map(p => ({
-            url: p.url || '',
-            tags: p.tags ? [...(p.tags.styles || []), ...(p.tags.colors || []), ...(p.tags.materials || [])] : undefined
-          })).filter(x => x.url);
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:handleSave',message:'Saving inspirations to participant_images',data:{userHash,inspirationCount:finalInspirations.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H9'})}).catch(()=>{});
+        // #endregion
+        if (userHash && finalInspirations.length > 0) {
+          // Map inspirations to participant_images format
+          const imagesForParticipant = finalInspirations.map(p => ({
+            url: p.url || p.imageBase64 || '',
+            thumbnail_url: undefined,
+            type: 'inspiration' as const,
+            tags: p.tags,
+            is_favorite: false,
+            source: undefined,
+            generation_id: undefined
+          })).filter(img => !!img.url);
           
-          const updatedSpaces = addMultipleInspirationsToSpace(currentSpaces, spaceId || undefined, inspirationsForSpacesLocal);
-          await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId } as any);
-        
-          if (spaceId) {
-            const imagesForSpace = finalInspirations.map(p => ({
-              url: p.url || p.imageBase64 || '',
-              type: 'inspiration' as const,
-              tags: p.tags,
-              is_favorite: false
-            })).filter(img => !!img.url);
-            if (imagesForSpace.length > 0) {
-              await saveSpaceImagesMetadata(userHash, spaceId, imagesForSpace);
-            }
-          }
-
-          try {
-            const inspirationsForProfile = finalInspirations.map(p => ({
-              fileId: p.fileId,
-              url: p.url,
-              imageBase64: p.imageBase64,
-              tags: p.tags,
-              description: p.description,
-              addedAt: p.addedAt
-            }));
-            await supabase.from('user_profiles').update({
-              inspirations: inspirationsForProfile,
-              metadata: { spaces: updatedSpaces, last_updated: new Date().toISOString() },
-              updated_at: new Date().toISOString()
-            }).eq('user_hash', userHash);
-          } catch (e) {
-            console.warn('[Inspirations] Failed to save to user_profiles:', e);
+          if (imagesForParticipant.length > 0) {
+            await saveParticipantImages(userHash, imagesForParticipant);
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:handleSave-complete',message:'Inspirations saved successfully',data:{userHash,savedCount:imagesForParticipant.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H9'})}).catch(()=>{});
+            // #endregion
           }
         }
       } catch (e) {
-        console.warn('[Inspirations] Failed to update spaces:', e);
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:handleSave-error',message:'Error saving inspirations',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H9'})}).catch(()=>{});
+        // #endregion
+        console.warn('[Inspirations] Failed to save to participant_images:', e);
       }
       
       const untaggedItems = itemsWithBase64.filter(i => i.file && (!i.tags || Object.keys(i.tags).length === 0));

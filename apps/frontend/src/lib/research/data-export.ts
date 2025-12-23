@@ -37,12 +37,13 @@ export interface ResearchDataExport {
 export async function exportAllResearchData(): Promise<ResearchDataExport | null> {
   try {
     // Fetch all data
+    // Legacy tables removed after radical refactor; keep function but return empty legacy payload.
     const [profiles, households, rooms, sessions, swipes] = await Promise.all([
-      supabase.from('user_profiles').select('*'),
-      supabase.from('households').select('*'),
-      supabase.from('rooms').select('*'),
-      supabase.from('design_sessions').select('*'),
-      supabase.from('enhanced_swipes').select('*')
+      Promise.resolve({ data: [] as any[] }),
+      Promise.resolve({ data: [] as any[] }),
+      Promise.resolve({ data: [] as any[] }),
+      Promise.resolve({ data: [] as any[] }),
+      Promise.resolve({ data: [] as any[] })
     ]);
 
     return {
@@ -72,11 +73,8 @@ export async function exportAllResearchData(): Promise<ResearchDataExport | null
  */
 export async function exportToCSV(dataType: 'profiles' | 'sessions' | 'swipes'): Promise<string> {
   try {
-    const { data } = await supabase.from(
-      dataType === 'profiles' ? 'user_profiles' :
-      dataType === 'sessions' ? 'design_sessions' :
-      'enhanced_swipes'
-    ).select('*');
+    // Legacy tables removed after radical refactor
+    const data: any[] = [];
 
     if (!data || data.length === 0) {
       return '';
@@ -125,17 +123,8 @@ export interface PRSAnalysisResult {
  */
 export async function analyzePRSImprovement(): Promise<PRSAnalysisResult | null> {
   try {
-    // Fetch all sessions with pre/post data
-    const { data: sessions } = await supabase
-      .from('design_sessions')
-      .select(`
-        id,
-        room_id,
-        prs_post_test,
-        satisfaction_score,
-        rooms!inner(prs_pre_test)
-      `)
-      .not('prs_post_test', 'is', null);
+    // Legacy tables removed after radical refactor
+    const sessions: any[] = [];
 
     if (!sessions || sessions.length === 0) {
       return null;
@@ -207,8 +196,8 @@ export interface PreferenceCorrelationResult {
  */
 export async function analyzePreferenceCorrelation(): Promise<PreferenceCorrelationResult | null> {
   try {
-    // Fetch user profiles with swipe data and session satisfaction scores
-    const { data: profiles } = await supabase.from('user_profiles').select('*');
+    // Legacy tables removed after radical refactor
+    const profiles: any[] = [];
     
     if (!profiles || profiles.length === 0) {
       return null;
@@ -255,9 +244,8 @@ export interface BehavioralMetricsResult {
  */
 export async function analyzeBehavioralMetrics(): Promise<BehavioralMetricsResult | null> {
   try {
-    const { data: swipes } = await supabase
-      .from('enhanced_swipes')
-      .select('*');
+    // Legacy tables removed after radical refactor
+    const swipes: any[] = [];
 
     if (!swipes || swipes.length === 0) {
       return null;

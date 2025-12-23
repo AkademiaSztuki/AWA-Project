@@ -60,3 +60,6 @@ coverage/
 **/keys/
 **/*service-account*.json
 **/*.json
+
+# Exported data (may contain personal data)
+**/exports/

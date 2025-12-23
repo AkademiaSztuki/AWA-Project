@@ -116,7 +116,7 @@ export const BIOPHILIA_OPTIONS: BiophiliaOption[] = [
       pl: 'Miejski, elegancki, bez elementów naturalnych',
       en: 'Urban, sleek, no natural elements'
     },
-    imageUrl: '/research/biophilia/level-0-none.jpg'
+    imageUrl: '/research/biophilia/bio0.png'
   },
   {
     id: 'minimal',
@@ -126,7 +126,7 @@ export const BIOPHILIA_OPTIONS: BiophiliaOption[] = [
       pl: '1-2 rośliny, subtelne materiały naturalne',
       en: '1-2 plants, subtle natural materials'
     },
-    imageUrl: '/research/biophilia/level-1-minimal.jpg'
+    imageUrl: '/research/biophilia/bio1.png'
   },
   {
     id: 'moderate',
@@ -136,17 +136,17 @@ export const BIOPHILIA_OPTIONS: BiophiliaOption[] = [
       pl: 'Kilka roślin, drewniane materiały, naturalne światło',
       en: 'Several plants, wood materials, natural light'
     },
-    imageUrl: '/research/biophilia/level-2-moderate.jpg'
+    imageUrl: '/research/biophilia/bio2.png'
   },
   {
     id: 'maximum',
     score: 3,
     label: { pl: 'Maksymalna', en: 'Maximum' },
     description: { 
-      pl: 'Miejska dżungla, obfite organiczne materiały, maksimum zieleni',
-      en: 'Urban jungle, abundant organic materials, maximum greenery'
+      pl: 'Miejska dżungla, obfite materiały, maksimum zieleni',
+      en: 'Urban jungle, abundant materials, maximum greenery'
     },
-    imageUrl: '/research/biophilia/level-3-maximum.jpg'
+    imageUrl: '/research/biophilia/bio3.png'
   }
 ];
 
@@ -317,37 +317,37 @@ export const TEXTURE_PREFERENCES: SensoryOption[] = [
   { 
     id: 'soft_fabric', 
     label: { pl: 'Miękka tkanina', en: 'Soft fabric' }, 
-    imageUrl: '/research/sensory/texture-soft-fabric.jpg', 
+    imageUrl: '/research/sensory/soft_fabric.jpeg', 
     description: { pl: 'Przytulna, komfortowa, ciepła', en: 'Cozy, comfort, warmth' }
   },
   { 
     id: 'smooth_wood', 
     label: { pl: 'Gładkie drewno', en: 'Smooth wood' }, 
-    imageUrl: '/research/sensory/texture-smooth-wood.jpg', 
+    imageUrl: '/research/sensory/smooth_wood.jpeg', 
     description: { pl: 'Naturalne, ciepłe, organiczne', en: 'Natural, warm, organic' }
   },
   { 
     id: 'cold_metal', 
     label: { pl: 'Zimny metal', en: 'Cold metal' }, 
-    imageUrl: '/research/sensory/texture-cold-metal.jpg', 
+    imageUrl: '/research/sensory/cold_metal.jpeg', 
     description: { pl: 'Nowoczesny, elegancki, industrialny', en: 'Modern, sleek, industrial' }
   },
   { 
     id: 'rough_stone', 
     label: { pl: 'Szorstki kamień', en: 'Rough stone' }, 
-    imageUrl: '/research/sensory/texture-rough-stone.jpg', 
+    imageUrl: '/research/sensory/rough_stone.jpeg', 
     description: { pl: 'Solidny, uziemiony, surowy', en: 'Solid, grounded, raw' }
   },
   { 
     id: 'warm_leather', 
     label: { pl: 'Ciepła skóra', en: 'Warm leather' }, 
-    imageUrl: '/research/sensory/texture-warm-leather.jpg', 
+    imageUrl: '/research/sensory/warm_leather.jpeg', 
     description: { pl: 'Luksusowa, bogata, wyrafinowana', en: 'Luxurious, rich, sophisticated' }
   },
   { 
     id: 'glass', 
     label: { pl: 'Szkło', en: 'Glass' }, 
-    imageUrl: '/research/sensory/texture-glass.jpg', 
+    imageUrl: '/research/sensory/glass.jpeg', 
     description: { pl: 'Czyste, przezroczyste, przestronne', en: 'Clean, transparent, airy' }
   }
 ];
@@ -356,25 +356,25 @@ export const LIGHT_PREFERENCES: SensoryOption[] = [
   { 
     id: 'warm_low', 
     label: { pl: 'Ciepłe, przyciemnione', en: 'Warm, dimmed' }, 
-    imageUrl: '/research/sensory/light-warm-low.jpg', 
+    imageUrl: '/research/sensory/warm_low.png', 
     description: { pl: '2700K, przytulny wieczorny nastrój', en: '2700K, cozy evening vibe' }
   },
   { 
     id: 'warm_bright', 
     label: { pl: 'Ciepłe, jasne', en: 'Warm, bright' }, 
-    imageUrl: '/research/sensory/light-warm-bright.jpg', 
+    imageUrl: '/research/sensory/warm_bright.png', 
     description: { pl: '3000K, zachęcające i energetyzujące', en: '3000K, inviting and energizing' }
   },
   { 
     id: 'neutral', 
     label: { pl: 'Neutralne', en: 'Neutral' }, 
-    imageUrl: '/research/sensory/light-neutral.jpg', 
+    imageUrl: '/research/sensory/neutral.png', 
     description: { pl: '4000K, zbalansowane światło dzienne', en: '4000K, balanced daylight' }
   },
   { 
     id: 'cool_bright', 
     label: { pl: 'Zimne, jasne', en: 'Cool, bright' }, 
-    imageUrl: '/research/sensory/light-cool-bright.jpg', 
+    imageUrl: '/research/sensory/cool_bright.png', 
     description: { pl: '5000K+, skoncentrowane i ostre', en: '5000K+, focused and crisp' }
   }
 ];
@@ -388,37 +388,37 @@ export const NATURE_METAPHOR_OPTIONS: SensoryOption[] = [
   { 
     id: 'ocean', 
     label: { pl: 'Ocean', en: 'Ocean' }, 
-    imageUrl: '/research/projective/nature-ocean.jpg', 
+    imageUrl: '/research/sensory/ocean.jpeg', 
     description: { pl: 'Rozległy, płynny, kojący, tajemniczy', en: 'Vast, flowing, calming, mysterious' }
   },
   { 
     id: 'forest', 
     label: { pl: 'Las', en: 'Forest' }, 
-    imageUrl: '/research/projective/nature-forest.jpg', 
+    imageUrl: '/research/sensory/Las.jpeg', 
     description: { pl: 'Uziemiony, organiczny, spokojny, złożony', en: 'Grounded, organic, peaceful, complex' }
   },
   { 
     id: 'mountain', 
     label: { pl: 'Góry', en: 'Mountains' }, 
-    imageUrl: '/research/projective/nature-mountain.jpg', 
+    imageUrl: '/research/sensory/gory.jpeg', 
     description: { pl: 'Silne, wyniosłe, inspirujące, solidne', en: 'Strong, elevated, inspiring, solid' }
   },
   { 
     id: 'desert', 
     label: { pl: 'Pustynia', en: 'Desert' }, 
-    imageUrl: '/research/projective/nature-desert.jpg', 
-    description: { pl: 'Minimalistyczna, ciepła, przestronna, spokojna', en: 'Minimal, warm, spacious, serene' }
+    imageUrl: '/research/sensory/pustynia.jpeg', 
+    description: { pl: 'Minimalistyczna, ciepła, przestronna', en: 'Minimal, warm, spacious' }
   },
   { 
     id: 'garden', 
     label: { pl: 'Ogród', en: 'Garden' }, 
-    imageUrl: '/research/projective/nature-garden.jpg', 
-    description: { pl: 'Kultywowany, zbalansowany, pielęgnujący, żywy', en: 'Cultivated, balanced, nurturing, alive' }
+    imageUrl: '/research/sensory/ogrod.jpeg', 
+    description: { pl: 'Kultywowany, zbalansowany, żywy', en: 'Cultivated, balanced, alive' }
   },
   { 
     id: 'sunset', 
     label: { pl: 'Zachód słońca', en: 'Sunset' }, 
-    imageUrl: '/research/projective/nature-sunset.jpg', 
+    imageUrl: '/research/sensory/Zachod.jpeg', 
     description: { pl: 'Ciepły, przejściowy, refleksyjny, miękki', en: 'Warm, transitional, reflective, soft' }
   }
 ];

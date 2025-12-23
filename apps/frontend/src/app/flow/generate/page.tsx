@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
-import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startGenerationJob, endGenerationJob, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage } from '@/lib/supabase';
+import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage } from '@/lib/supabase';
 import { supabase } from '@/lib/supabase';
 import { assessAllSourcesQuality, getViableSources, type DataStatus } from '@/lib/prompt-synthesis/data-quality';
 import { calculateImplicitQuality } from '@/lib/prompt-synthesis/implicit-quality';
@@ -46,8 +46,7 @@ import {
 import { addGeneratedImageToSpace } from '@/lib/spaces';
 import {
   getOrCreateSpaceId,
-  uploadSpaceImage,
-  saveSpaceImagesMetadata
+  saveParticipantImages
 } from '@/lib/remote-spaces';
 
 interface GeneratedImage {
@@ -145,6 +144,7 @@ export default function GeneratePage() {
   const [synthesisResult, setSynthesisResult] = useState<SixPromptSynthesisResult | null>(null); // Store synthesis result for skipped sources info
   const [imageProgress, setImageProgress] = useState<Record<string, number>>({}); // Track progress for each image source
   const [progressOffsets, setProgressOffsets] = useState<Record<string, number>>({}); // Per-source stagger for loading anims
+  const [lastFailedModification, setLastFailedModification] = useState<ModificationOption | null>(null); // Track last failed modification for retry
   
   const [generationHistory, setGenerationHistory] = useState<Array<{
     id: string;
@@ -228,18 +228,201 @@ export default function GeneratePage() {
     };
   }, [abortController]);
 
+  // Restore state from sessionData after page refresh
+  useEffect(() => {
+    if (!isSessionInitialized || !sessionData) return;
+
+    const typedSessionData = sessionData as any;
+    const savedGeneratedImages = typedSessionData?.generatedImages || [];
+    const savedGenerations = typedSessionData?.generations || [];
+    const imageRatings = typedSessionData?.imageRatings || {};
+
+    // Check if we have generated images in sessionData
+    if (savedGeneratedImages.length > 0 && generatedImages.length === 0) {
+      console.log('[Generate] Restoring state from sessionData:', {
+        savedImagesCount: savedGeneratedImages.length,
+        savedGenerationsCount: savedGenerations.length,
+        hasRatings: Object.keys(imageRatings).length > 0
+      });
+
+      // Restore generated images from sessionData
+      // Note: sessionData only stores lightweight versions (id, url), not full base64
+      // We'll need to reconstruct the images from URLs
+      const restoredImages: GeneratedImage[] = savedGeneratedImages.map((img: any, index: number) => {
+        const ratings = imageRatings[img.id] || { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 };
+        
+        // Extract source from ID if it's a matrix image (format: matrix-google-{count}-{source})
+        let source: GenerationSource = GenerationSource.Implicit;
+        let displayIndex = index;
+        
+        if (img.id.startsWith('matrix-google-')) {
+          // Extract source from ID: matrix-google-{count}-{source}
+          const parts = img.id.split('-');
+          if (parts.length >= 4) {
+            const sourcePart = parts.slice(3).join('-'); // Handle sources with dashes
+            source = sourcePart as GenerationSource;
+            // Try to find display index from synthesis result if available
+            const synthesisResult = typedSessionData?.synthesisResult;
+            if (synthesisResult?.displayOrder) {
+              displayIndex = synthesisResult.displayOrder.indexOf(source);
+              if (displayIndex < 0) displayIndex = index;
+            }
+          }
+        } else if (img.id.startsWith('matrix-')) {
+          // Legacy format: matrix-{count}-{source}
+          const parts = img.id.split('-');
+          if (parts.length >= 3) {
+            source = parts.slice(2).join('-') as GenerationSource;
+          }
+        }
+        
+        // Determine modification type from ID
+        let modificationType: 'initial' | 'micro' | 'macro' = 'initial';
+        if (img.id.startsWith('mod-')) {
+          modificationType = img.id.includes('macro') ? 'macro' : 'micro';
+        } else if (img.id.startsWith('remove-')) {
+          modificationType = 'initial'; // Furniture removal is not a modification type
+        }
+        
+        return {
+          id: img.id,
+          url: img.url,
+          base64: img.base64 || '', // May have base64 if stored, otherwise empty
+          prompt: savedGenerations.find((g: any) => {
+            // Try to match generation by ID pattern
+            if (img.id.startsWith('matrix-')) {
+              return g.type === 'initial' || !g.type;
+            }
+            if (img.id.startsWith('mod-')) {
+              return g.modification && img.id.includes(g.modification.toLowerCase().replace(/\s+/g, '_'));
+            }
+            return false;
+          })?.prompt || 'Restored from session',
+          provider: 'google' as const,
+          parameters: {
+            modificationType: modificationType,
+            modifications: [],
+            iterationCount: 0,
+            usedOriginal: false,
+            source: source !== 'implicit' ? source : undefined,
+            sourceLabel: source !== 'implicit' ? GENERATION_SOURCE_LABELS[source] : undefined
+          },
+          ratings: ratings,
+          isFavorite: false,
+          createdAt: Date.now() - (savedGeneratedImages.length - index) * 1000, // Stagger timestamps
+          source: source,
+          displayIndex: displayIndex,
+          isBlindSelected: false
+        };
+      });
+
+      setGeneratedImages(restoredImages);
+
+      // Check if user has already selected an image (has ratings)
+      const ratedImageIds = Object.keys(imageRatings).filter(id => {
+        const ratings = imageRatings[id];
+        return ratings && (ratings.is_my_interior > 0 || ratings.aesthetic_match > 0);
+      });
+
+      if (ratedImageIds.length > 0) {
+        // User has already selected and rated an image
+        const selectedImageId = ratedImageIds[0]; // Use first rated image
+        const selectedImage = restoredImages.find(img => img.id === selectedImageId);
+        
+        if (selectedImage) {
+          console.log('[Generate] Restoring selected image from sessionData:', selectedImageId);
+          setSelectedImage(selectedImage);
+          setBlindSelectionMade(true);
+          
+          // Check if interior question was answered
+          if (selectedImage.ratings.is_my_interior > 0) {
+            setHasAnsweredInteriorQuestion(true);
+          }
+          
+          // Check if all ratings are complete
+          if (selectedImage.ratings.aesthetic_match > 0) {
+            setHasCompletedRatings(true);
+          }
+        }
+      }
+
+      // Restore matrix images (first 6 images that are matrix images, sorted by displayIndex)
+      const matrixImages = restoredImages
+        .filter(img => 
+          img.id.startsWith('matrix-') &&
+          !img.id.startsWith('mod-') && 
+          !img.id.startsWith('remove-') &&
+          img.source !== GenerationSource.Implicit // Only matrix images with actual source
+        )
+        .sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0))
+        .slice(0, 6);
+
+      if (matrixImages.length > 0) {
+        console.log('[Generate] Restoring matrix images from sessionData:', matrixImages.length);
+        setMatrixImages(matrixImages);
+      }
+
+      // Restore generation history
+      if (savedGenerations.length > 0) {
+        const history: Array<{ id: string; type: 'initial' | 'micro' | 'macro'; label: string; timestamp: number; imageUrl: string }> = savedGenerations.map((gen: any) => {
+          const image = restoredImages.find(img => img.id.startsWith(gen.id.split('-')[0] + '-'));
+          return {
+            id: gen.id,
+            type: gen.type || 'initial',
+            label: gen.modification || gen.prompt?.substring(0, 30) || 'Generacja',
+            timestamp: gen.timestamp || Date.now(),
+            imageUrl: image?.url || ''
+          };
+        });
+        
+        if (history.length > 0) {
+          setGenerationHistory(history);
+          const currentIndex = history.length - 1;
+          setCurrentHistoryIndex(currentIndex);
+        }
+      }
+
+      // Mark that we've restored state, so don't trigger new generation
+      setHasAttemptedGeneration(true);
+      setGenerationCount(savedGenerations.length);
+      
+      console.log('[Generate] State restored from sessionData. Skipping auto-generation.');
+    }
+  }, [isSessionInitialized, sessionData]);
+
   useEffect(() => {
     if (!isSessionInitialized) {
       console.log('[Generate] Session not initialized yet, delaying auto-generation.');
       return;
     }
 
-    if (isApiReady && generationCount === 0 && !hasAttemptedGeneration) {
-      console.log('[Generate] Auto-triggering initial generation:', { isApiReady, generationCount, hasAttemptedGeneration, isMatrixMode, isSessionInitialized });
+    // Only trigger generation if:
+    // 1. We haven't restored state from sessionData
+    // 2. We haven't attempted generation
+    // 3. We don't have any images (generated or matrix)
+    // 4. User hasn't already selected an image (blindSelectionMade)
+    const shouldGenerate = isApiReady && 
+                          generationCount === 0 && 
+                          !hasAttemptedGeneration && 
+                          generatedImages.length === 0 && 
+                          matrixImages.length === 0 &&
+                          !blindSelectionMade;
+
+    if (shouldGenerate) {
+      console.log('[Generate] Auto-triggering initial generation:', { 
+        isApiReady, 
+        generationCount, 
+        hasAttemptedGeneration, 
+        isMatrixMode, 
+        isSessionInitialized,
+        hasGeneratedImages: generatedImages.length > 0,
+        hasMatrixImages: matrixImages.length > 0,
+        blindSelectionMade
+      });
       setHasAttemptedGeneration(true);
       handleInitialGeneration();
     }
-  }, [isApiReady, generationCount, hasAttemptedGeneration, isSessionInitialized]);
+  }, [isApiReady, generationCount, hasAttemptedGeneration, isSessionInitialized, generatedImages.length, matrixImages.length, blindSelectionMade]);
 
   // Generate IDA comment when image is selected
   useEffect(() => {
@@ -691,16 +874,29 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         strength: parameters.strength 
       });
       
-      // Log generation job
-      const projectId = await getOrCreateProjectId(typedSessionData.userHash);
+      // Log generation job to participant_generations
+      const userHash = typedSessionData.userHash;
       let jobId: string | null = null;
-      if (projectId) {
-        jobId = await startGenerationJob(projectId, {
-          type: 'initial', // Use 'initial' to match constraint (initial/micro/macro)
-          prompt: JSON.stringify(prompts.map(p => ({ source: p.source, prompt: p.prompt.substring(0, 200) }))),
-          parameters: { ...parameters, num_sources: prompts.length },
-          has_base_image: true,
-        });
+      if (userHash) {
+        // Save each prompt separately
+        for (const prompt of prompts) {
+          jobId = await startParticipantGeneration(userHash, {
+            type: 'initial',
+            prompt: prompt.prompt,
+            parameters: { ...parameters, num_sources: prompts.length, source: prompt.source },
+            has_base_image: true,
+            source: prompt.source
+          });
+        }
+        // Use first jobId for tracking
+        if (prompts.length > 0) {
+          jobId = await startParticipantGeneration(userHash, {
+            type: 'initial',
+            prompt: JSON.stringify(prompts.map(p => ({ source: p.source, prompt: p.prompt.substring(0, 200) }))),
+            parameters: { ...parameters, num_sources: prompts.length },
+            has_base_image: true,
+          });
+        }
       }
       
       // Step 3: Generate all images in parallel with progressive display
@@ -713,11 +909,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       const startTime = Date.now();
       let progressInterval: NodeJS.Timeout | null = null;
 
-      // Smooth, slower fallback progress curve (asymptotic to 60% over ~90s)
+      // Smooth, slower fallback progress curve (asymptotic to 90% over ~90s)
       const calcFallbackProgress = (elapsedMs: number) => {
         const t = Math.max(0, Math.min(1, elapsedMs / 90000)); // 0..1 over 90s
         const eased = 1 - Math.pow(1 - t, 4); // ease-out quart
-        return Math.min(60, Math.round(2 + eased * 58)); // start at 2%, max 60%
+        return Math.min(90, Math.round(2 + eased * 88)); // start at 2%, max 90%
       };
       
       const updateProgress = () => {
@@ -933,7 +1129,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         {
           prompts,
           base_image: baseImage,
-          inspiration_images: filteredInspirationImages,
+          // Note: inspiration_images not supported in MultiSourceGenerationRequest type
+          // filteredInspirationImages would need to be passed differently if needed
           style: typedSessionData.visualDNA?.dominantStyle || 'modern',
           parameters: {
             ...parameters,
@@ -1049,7 +1246,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       if (generationResponse.successful_count === 0) {
         setError("Wszystkie generacje zakończyły się niepowodzeniem.");
-        if (jobId) await endGenerationJob(jobId, { status: 'error', latency_ms: Date.now() - matrixGenerationStartTime, error_message: 'All generations failed' });
+        if (jobId) await endParticipantGeneration(jobId, { status: 'error', latency_ms: Date.now() - matrixGenerationStartTime, error_message: 'All generations failed' });
         return;
       }
       
@@ -1160,90 +1357,42 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         });
 
         if (spaceId) {
-          const uploaded: Array<{ url: string; thumbnail_url?: string; type: 'generated' | 'inspiration'; is_favorite?: boolean; source?: string; generation_set_id?: string }> = [];
-        for (const img of newMatrixImages) {
-            const uploadedResult = await uploadSpaceImage(userHash, spaceId, img.id, img.url);
-            const finalUrl = uploadedResult?.publicUrl || img.url;
-            uploaded.push({
-              url: finalUrl,
-              type: 'generated',
-              is_favorite: img.isFavorite || false,
-              source: img.source
-            });
-          }
-          await saveSpaceImagesMetadata(userHash, spaceId, uploaded);
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:save-matrix-images',message:'Saving matrix images to participant_images',data:{userHash,imageCount:newMatrixImages.length,spaceId},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H7'})}).catch(()=>{});
+          // #endregion
+          
+          // Save all generated images to participant_images
+          const imagesToSave = newMatrixImages.map(img => ({
+            url: img.url,
+            type: 'generated' as const,
+            is_favorite: img.isFavorite || false,
+            source: img.source,
+            generation_id: (sessionData as any)?.currentGenerationId || undefined,
+            space_id: spaceId
+          }));
+          await saveParticipantImages(userHash, imagesToSave);
+          
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:save-matrix-images-complete',message:'Finished saving matrix images',data:{userHash,imageCount:imagesToSave.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H7'})}).catch(()=>{});
+          // #endregion
 
           // Keep local minimal spaces snapshot
           updatedSpaces = addGeneratedImageToSpace(
             (typedSessionData?.spaces || []),
             spaceId,
-            uploaded[0]?.url || newMatrixImages[0].url
+            newMatrixImages[0]?.url || ''
           );
           await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId } as any);
         }
         
-        // Save spaces to Supabase for persistence across sessions
-        // This ensures data is available after logout/login
-        try {
-          const userHash = (sessionData as any).userHash;
-          if (userHash && updatedSpaces.length > 0) {
-            // Store spaces in user profile metadata or as a separate table
-            // For now, we'll ensure localStorage is synced and Supabase RPC can access it
-            // The get_user_complete_profile RPC should return spaces from user_profiles.metadata or a spaces table
-            console.log('[Generate] Spaces saved locally, syncing to Supabase...');
-            
-            // Try to save to user profile metadata
-            const { ensureUserProfileExists } = await import('@/lib/supabase-deep-personalization');
-            const profileExists = await ensureUserProfileExists(userHash);
-            if (profileExists) {
-              // Update user profile with spaces metadata
-              const { data, error } = await supabase
-                .from('user_profiles')
-                .update({
-                  metadata: {
-                    spaces: updatedSpaces,
-                    last_updated: new Date().toISOString()
-                  }
-                })
-                .eq('user_hash', userHash);
-              
-              if (error) {
-                console.warn('[Generate] Failed to save spaces to user profile:', error);
-              } else {
-                console.log('[Generate] Spaces saved to Supabase user profile');
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('[Generate] Failed to save spaces to Supabase:', e);
-          // Non-critical - spaces are saved locally and will be available in localStorage
-        }
+        // NOTE: After radical refactor we do NOT persist "spaces" in Supabase.
+        // Persistence across sessions is handled via participant_images + participants snapshot.
         
-        if (projectId && jobId) {
+        if (userHash && jobId) {
           const totalTime = Date.now() - matrixGenerationStartTime;
-          await endGenerationJob(jobId, { 
+          await endParticipantGeneration(jobId, { 
             status: 'success', 
             latency_ms: totalTime
-          });
-          
-          // Save each generated image to Supabase
-          for (const img of newMatrixImages) {
-            const genSet = await saveGenerationSet(projectId, img.prompt);
-            if (genSet?.id) {
-              await saveGeneratedImages(genSet.id, [{ 
-                url: img.url, 
-                prompt: img.prompt,
-                parameters: { source: img.source }
-              }]);
-            }
-          }
-          
-          await logBehavioralEvent(projectId, 'matrix_generation_complete', {
-            sources: newMatrixImages.map(i => i.source),
-            displayOrder,
-            successCount: generationResponse.successful_count,
-            failedCount: generationResponse.failed_count,
-            totalTime
           });
         }
       } catch (e) {
@@ -1545,10 +1694,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     console.log("Google Nano Banana Parameters:", parameters);
 
     try {
-      const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+      const userHash = (sessionData as any).userHash;
       let jobId: string | null = null;
-      if (projectId) {
-        jobId = await startGenerationJob(projectId, {
+      if (userHash) {
+        jobId = await startParticipantGeneration(userHash, {
           type: 'initial',
           prompt,
           parameters,
@@ -1626,30 +1775,35 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         const lightweight = generatedImagesPayload.map(g => ({ url: g.url, id: g.id }));
         await updateSessionData({ generatedImages: [...currentGenerated, ...lightweight] } as any);
       
-      // Save generated images to spaces (Supabase)
-      const userHash = (sessionData as any)?.userHash;
+      // Save generated images to spaces (Supabase) - używamy już zdefiniowanego userHash z linii 1745
       const spaceId = await getOrCreateSpaceId(userHash, {
         spaceId: (sessionData as any)?.currentSpaceId,
         name: (sessionData as any)?.roomName || 'Moja Przestrzeń'
       });
 
       if (spaceId) {
-        const uploaded: Array<{ url: string; type: 'generated' | 'inspiration'; is_favorite?: boolean }> = [];
-      for (const img of newImages) {
-          const uploadedResult = await uploadSpaceImage(userHash, spaceId, img.id, img.url);
-          const finalUrl = uploadedResult?.publicUrl || img.url;
-          uploaded.push({
-            url: finalUrl,
-            type: 'generated',
-            is_favorite: img.isFavorite || false
-          });
-        }
-        await saveSpaceImagesMetadata(userHash, spaceId, uploaded);
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:save-initial-images',message:'Saving initial images to participant_images',data:{userHash,imageCount:newImages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H7'})}).catch(()=>{});
+        // #endregion
+        
+        // Save all generated images to participant_images
+        const imagesToSave = newImages.map(img => ({
+          url: img.url,
+          type: 'generated' as const,
+          is_favorite: img.isFavorite || false,
+          generation_id: (sessionData as any)?.currentGenerationId || undefined,
+          space_id: spaceId
+        }));
+        await saveParticipantImages(userHash, imagesToSave);
+        
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:save-initial-images-complete',message:'Finished saving initial images',data:{userHash,imageCount:imagesToSave.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H7'})}).catch(()=>{});
+        // #endregion
 
         const updatedSpaces = addGeneratedImageToSpace(
           (sessionData as any)?.spaces || [],
           spaceId,
-          uploaded[0]?.url || newImages[0].url
+          newImages[0]?.url || ''
         );
         await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId });
       }
@@ -1687,11 +1841,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       try {
         const projectIdPersist = await getOrCreateProjectId((sessionData as any).userHash);
         if (projectIdPersist) {
-          const genSet = await saveGenerationSet(projectIdPersist, prompt);
-          if (genSet?.id) {
-            await saveGeneratedImages(genSet.id, newImages.map((i) => ({ url: i.url, prompt: i.prompt })));
-          }
-          await logBehavioralEvent(projectIdPersist, 'generation_initial', { prompt, parameters });
+          // legacy analytics disabled after refactor
         }
       } catch (e) {
         console.warn('Supabase persist failed (initial generation):', e);
@@ -1699,21 +1849,21 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
       // Close job with timing (approx, since we don't have precise start time here)
       try {
-        if (jobId) await endGenerationJob(jobId, { status: 'success', latency_ms: 0 });
+        if (jobId) await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 });
       } catch {}
     } catch (err) {
       console.error('Generation failed in handleInitialGeneration:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas generacji.');
       try {
-        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
-        if (projectId) {
-          const jobId = await startGenerationJob(projectId, {
+        const userHash = (sessionData as any).userHash;
+        if (userHash) {
+          const jobId = await startParticipantGeneration(userHash, {
             type: 'initial',
             prompt: buildInitialPrompt(),
             parameters: getOptimalParameters('initial', generationCount),
             has_base_image: Boolean((sessionData as any).roomImage),
           });
-          if (jobId) await endGenerationJob(jobId, { status: 'error', latency_ms: 0, error_message: String(err) });
+          if (jobId) await endParticipantGeneration(jobId, { status: 'error', latency_ms: 0, error_message: String(err) });
         }
       } catch {}
     }
@@ -1721,6 +1871,18 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
   const handleModification = async (modification: ModificationOption) => {
     if (!selectedImage) return;
+    
+    // Prevent multiple simultaneous modifications
+    if (isLoading || isGenerating) {
+      console.warn('[Modification] Already generating, ignoring duplicate request');
+      return;
+    }
+    
+    // Require user to answer interior question before allowing modifications
+    if (!hasAnsweredInteriorQuestion) {
+      setError("Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed modyfikacją obrazu.");
+      return;
+    }
 
     const isMacro = modification.category === 'macro';
     const baseImageSource = selectedImage.base64;
@@ -1743,10 +1905,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     setIdaComment(null); // Reset comment for new generation
 
     try {
-      const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+      const userHash = (sessionData as any).userHash;
       let jobId: string | null = null;
-      if (projectId) {
-        jobId = await startGenerationJob(projectId, {
+      if (userHash) {
+        jobId = await startParticipantGeneration(userHash, {
           type: isMacro ? 'macro' : 'micro',
           prompt: modificationPrompt,
           parameters,
@@ -1770,19 +1932,55 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       });
 
       // #region prompt debug
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:response',message:'Modification response received',data:{hasResponse:!!response,hasImages:!!response?.results,imagesCount:response?.results?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:response',message:'Modification response received',data:{hasResponse:!!response,hasImages:!!response?.results,imagesCount:response?.results?.length||0,successfulCount:response?.successful_count,failedCount:response?.failed_count},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
       // #endregion
 
-      if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
-        console.error("Otrzymano pustą odpowiedź z API po modyfikacji.");
+      // Check for errors in response
+      if (!response) {
+        console.error("[Modification] No response from API");
+        setLastFailedModification(modification);
+        setError("Nie udało się zmodyfikować obrazu. Brak odpowiedzi z serwera.");
+        return;
+      }
+
+      // Check if all results failed
+      if (response.failed_count > 0 && response.successful_count === 0) {
+        console.error("[Modification] All generation attempts failed:", response.results);
+        const errorMessage = response.results.find(r => r.error)?.error || "Nieznany błąd";
+        setLastFailedModification(modification);
+        setError(`Nie udało się zmodyfikować obrazu: ${errorMessage}`);
+        return;
+      }
+
+      // Check if we have any successful results
+      if (!response.results || response.results.length === 0) {
+        console.error("[Modification] Empty results array");
+        setLastFailedModification(modification);
         setError("Nie udało się zmodyfikować obrazu. Otrzymano pustą odpowiedź z serwera.");
         return;
       }
 
-      // Convert Google API response format to GeneratedImage format
-      // generateSixImagesParallelWithGoogle returns results array, we use first result
-      const result = response.results[0];
-      const newImages: GeneratedImage[] = [{
+      // Find first successful result
+      const successfulResult = response.results.find(r => r.success && r.image);
+      if (!successfulResult || !successfulResult.image) {
+        console.error("[Modification] No successful results with image:", response.results);
+        setLastFailedModification(modification);
+        setError("Nie udało się zmodyfikować obrazu. Wszystkie próby zakończyły się niepowodzeniem.");
+        return;
+      }
+
+      // Clear failed modification on success
+      setLastFailedModification(null);
+
+      // Log how many results we received (should be 1 for modifications)
+      console.log(`[Modification] Received ${response.results.length} result(s) from API. Using first successful result.`);
+      if (response.results.length > 1) {
+        console.warn(`[Modification] WARNING: Received ${response.results.length} results but expected 1. This may cause multiple images to be generated.`);
+      }
+
+      // Use the successful result we found above
+      const result = successfulResult;
+      const newImage: GeneratedImage = {
         id: `mod-${generationCount}-0`,
         url: `data:image/png;base64,${result.image}`,
         base64: result.image,
@@ -1792,55 +1990,56 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           modificationType: isMacro ? 'macro' : 'micro',
           modifications: [modification.label],
           iterationCount: generationCount,
-          usedOriginal: false
+          usedOriginal: false,
+          parentImageId: selectedImage.id // Track which image this modification is based on
         },
         ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
         isFavorite: false,
         createdAt: Date.now(),
-      }];
+      };
 
-      setGeneratedImages((prev) => [...prev, ...newImages]);
-      setSelectedImage(newImages[0]);
+      // Add to generatedImages so it can be found in history, but not to matrixImages
+      // This way modifications appear in history but not in the 6-image matrix grid
+      setGeneratedImages((prev) => [...prev, newImage]);
+      setSelectedImage(newImage);
       setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
       
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
       
-      // Save generated images to sessionData (like inspirations)
-      const generatedImagesPayload = newImages.map(img => ({
-        id: img.id,
-        url: img.url,
-        base64: img.base64,
-        prompt: img.prompt,
-        parameters: img.parameters,
-        createdAt: new Date(img.createdAt).toISOString(),
-        isFavorite: img.isFavorite || false,
-        ratings: img.ratings
-      }));
+      // Save modified image to sessionData (but not to generatedImages array to avoid showing in matrix)
+      const generatedImagePayload = {
+        id: newImage.id,
+        url: newImage.url,
+        base64: newImage.base64,
+        prompt: newImage.prompt,
+        parameters: newImage.parameters,
+        createdAt: new Date(newImage.createdAt).toISOString(),
+        isFavorite: newImage.isFavorite || false,
+        ratings: newImage.ratings
+      };
       
       const currentGenerated = ((sessionData as any)?.generatedImages || []).map((g: any) => ({ id: g.id, url: g.url }));
-      const lightweight = generatedImagesPayload.map(g => ({ id: g.id, url: g.url }));
+      const lightweight = { id: generatedImagePayload.id, url: generatedImagePayload.url };
       await updateSessionData({ 
-        generatedImages: [...currentGenerated, ...lightweight]
+        generatedImages: [...currentGenerated, lightweight]
       } as any);
       
-      // Save generated images to spaces
+      // Save modified image to spaces
       const currentSpaces = (sessionData as any)?.spaces || [];
       let updatedSpaces = currentSpaces;
       const activeSpaceId = (sessionData as any)?.currentSpaceId;
       const activeSpaceName = (sessionData as any)?.roomName;
-      for (const img of newImages) {
-        updatedSpaces = addGeneratedImageToSpace(
-          updatedSpaces,
-          activeSpaceId,
-          img.url,
-          activeSpaceName,
-          undefined,
-          undefined,
-          img.isFavorite || false
-        );
-      }
+      updatedSpaces = addGeneratedImageToSpace(
+        updatedSpaces,
+        activeSpaceId,
+        newImage.url,
+        activeSpaceName,
+        undefined,
+        undefined,
+        newImage.isFavorite || false
+      );
       const sessionUpdates: any = { spaces: updatedSpaces };
       if (!activeSpaceId && updatedSpaces.length > 0) {
         sessionUpdates.currentSpaceId = updatedSpaces[updatedSpaces.length - 1].id;
@@ -1855,11 +2054,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       // Add to history
       const historyNode = {
-        id: newImages[0].id,
+        id: newImage.id,
         type: isMacro ? ('macro' as const) : ('micro' as const),
         label: modification.label,
         timestamp: Date.now(),
-        imageUrl: newImages[0].url,
+        imageUrl: newImage.url,
       };
       setGenerationHistory((prev) => [...prev, historyNode]);
       setCurrentHistoryIndex(generationHistory.length);
@@ -1870,7 +2069,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           {
             id: `mod-${generationCount}`,
             prompt: modificationPrompt,
-            images: newImages.length,
+            images: 1,
             timestamp: Date.now(),
             type: isMacro ? 'macro' : 'micro',
             modification: modification.label,
@@ -1884,35 +2083,27 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       try {
         const projectIdPersist = await getOrCreateProjectId((sessionData as any).userHash);
         if (projectIdPersist) {
-          const genSet = await saveGenerationSet(projectIdPersist, modificationPrompt);
-          if (genSet?.id) {
-            await saveGeneratedImages(genSet.id, newImages.map((i) => ({ url: i.url, prompt: i.prompt })));
-          }
-          await logBehavioralEvent(projectIdPersist, 'generation_modification', {
-            type: isMacro ? 'macro' : 'micro',
-            modification: modification.label,
-            parameters,
-          });
+          // legacy analytics disabled after refactor
         }
       } catch (e) {
         console.warn('Supabase persist failed (modification):', e);
       }
 
-      try { if (jobId) await endGenerationJob(jobId, { status: 'success', latency_ms: 0 }); } catch {}
+      try { if (jobId) await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 }); } catch {}
     } catch (err) {
       console.error('Modification failed:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas modyfikacji.');
       try {
-        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
-        if (projectId) {
-          const jobId = await startGenerationJob(projectId, {
+        const userHash = (sessionData as any).userHash;
+        if (userHash) {
+          const jobId = await startParticipantGeneration(userHash, {
             type: modification.category,
             prompt: 'n/a',
             parameters: getOptimalParameters(modification.category === 'macro' ? 'macro' : 'micro', generationCount),
             has_base_image: true,
             modification_label: modification.label,
           });
-          if (jobId) await endGenerationJob(jobId, { status: 'error', latency_ms: 0, error_message: String(err) });
+          if (jobId) await endParticipantGeneration(jobId, { status: 'error', latency_ms: 0, error_message: String(err) });
         }
       } catch {}
     }
@@ -1920,6 +2111,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
   const handleRemoveFurniture = async () => {
     if (!selectedImage) return;
+    
+    // Require user to answer interior question before allowing furniture removal
+    if (!hasAnsweredInteriorQuestion) {
+      setError("Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed usunięciem mebli.");
+      return;
+    }
     
     // JSON prompt for Nano Banana removal
     const removeFurniturePrompt = JSON.stringify({
@@ -2031,111 +2228,35 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     }
   };
 
-  const handleQualityImprovement = async () => {
-    if (!selectedImage) return;
-    
-    const currentStyle = selectedImage.parameters?.style || 'modern';
-    
-    // JSON prompt for Nano Banana quality improvement
-    const qualityPrompt = JSON.stringify({
-      instruction: `ENHANCE QUALITY: Sharpen textures, improve lighting, and refine materials while keeping everything exactly the same.`,
-      preserve: [
-        "ALL elements - position, shape, and color must remain identical",
-        "Camera perspective - DO NOT CHANGE",
-        "Furniture placement - DO NOT CHANGE",
-        "Architecture - DO NOT CHANGE"
-      ],
-      style: `${currentStyle} - Enhanced`,
-      photography: "Professional architectural photography, high resolution, 8k, sharp focus, perfect exposure",
-      redesign_process: "Keep the image exactly as it is, but improve its technical quality, sharpness, and lighting."
-    });
-    
-    // Set loading state for improvement
-    setLoadingStage(2);
-    setLoadingProgress(30);
-    setStatusMessage("Poprawiam jakość (Google Nano Banana)...");
-    setEstimatedTime(25);
-
-    try {
-      // Use Google API for quality improvement
-      const response = await generateSixImagesParallelWithGoogle({
-        prompts: [{ source: 'implicit' as GenerationSource, prompt: qualityPrompt }],
-        base_image: selectedImage.base64,
-        style: currentStyle,
-        parameters: {
-          ...getOptimalParameters('micro', generationCount),
-          strength: 0.15 // Very low strength for quality only
-        }
-      });
-
-      if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
-        setError("Nie udało się poprawić jakości obrazu.");
-        return;
-      }
-
-      const result = response.results[0];
-      const newImage: GeneratedImage = {
-        id: `quality-${Date.now()}`,
-        url: `data:image/png;base64,${result.image}`,
-        base64: result.image,
-        prompt: qualityPrompt,
-        provider: 'google' as const,
-        parameters: { 
-          modificationType: 'quality_improvement',
-          modifications: ['quality_improvement'],
-          iterationCount: generationCount,
-          usedOriginal: false
-        },
-        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
-        isFavorite: false,
-        createdAt: Date.now(),
-      };
-
-      setGeneratedImages((prev) => [...prev, newImage]);
-      setSelectedImage(newImage);
-      setGenerationCount((prev) => prev + 1);
-      setShowModifications(false);
-      
-      setHasAnsweredInteriorQuestion(false);
-      setHasCompletedRatings(false);
-
-      // Save generated image to sessionData (like inspirations)
-      const generatedImagePayload = {
-        id: newImage.id,
-        url: newImage.url,
-        base64: newImage.base64,
-        prompt: newImage.prompt,
-        parameters: newImage.parameters,
-        createdAt: new Date(newImage.createdAt).toISOString(),
-        isFavorite: newImage.isFavorite || false,
-        ratings: newImage.ratings
-      };
-      
-      const currentGenerated = ((sessionData as any)?.generatedImages || []);
-      await updateSessionData({
-        generatedImages: [...currentGenerated, generatedImagePayload],
-        generations: [
-          ...((sessionData as any).generations || []),
-          {
-            id: `quality-${Date.now()}`,
-            prompt: qualityPrompt,
-            images: 1,
-            timestamp: Date.now(),
-            type: 'quality_improvement',
-            modifications: ['quality_improvement'],
-            iterationCount: generationCount,
-            usedOriginal: false
-          },
-        ],
-      } as any);
-
-      // Complete improvement
-      setLoadingProgress(100);
-      setStatusMessage("Jakość została poprawiona!");
-    } catch (err) {
-      console.error('Quality improvement failed:', err);
-      setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas poprawiania jakości.');
+  const handleShowOriginal = () => {
+    const roomImage = (sessionData as any)?.roomImage;
+    if (!roomImage) {
+      setError("Nie znaleziono oryginalnego zdjęcia z room setup.");
+      return;
     }
+
+    const originalImg: GeneratedImage = {
+      id: 'original-uploaded-image',
+      url: roomImage.startsWith('data:') ? roomImage : `data:image/jpeg;base64,${roomImage}`,
+      base64: roomImage.includes(',') ? roomImage.split(',')[1] : roomImage,
+      prompt: 'Oryginalne zdjęcie',
+      provider: 'google' as const,
+      parameters: { 
+        modificationType: 'original',
+        modifications: [],
+        iterationCount: 0,
+        usedOriginal: true
+      },
+      ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 5 },
+      isFavorite: false,
+      createdAt: 0
+    };
+
+    setSelectedImage(originalImg);
+    setShowModifications(false);
+    
+    // Don't reset hasAnsweredInteriorQuestion - user already answered this question
+    setHasCompletedRatings(false);
   };
 
   const buildMacroPrompt = (modification: ModificationOption) => {
@@ -2161,16 +2282,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     const currentStyle = selectedImage?.parameters?.style || 'modern';
     
     const microPrompts = {
-      warmer_colors: `Change color palette to warm beige and cream tones in this ${currentStyle} interior, keep all furniture and layout exactly the same`,
-      cooler_colors: `Change color palette to cool blue-gray and silver tones in this ${currentStyle} interior, keep all furniture and layout exactly the same`, 
-      more_lighting: `Add more lamps, chandeliers, and brighter lighting fixtures to this ${currentStyle} interior, enhance natural light, keep furniture arrangement`,
-      darker_mood: `Create darker, more intimate mood with dim lighting and shadows in this ${currentStyle} interior, keep same furniture placement`,
-      natural_materials: `Replace materials with natural wood, stone, and organic textures in this ${currentStyle} interior, keep furniture layout`,
-      more_plants: `Add potted plants, hanging greenery, and natural elements throughout this ${currentStyle} interior, keep furniture arrangement`,
-      less_plants: `Remove all plants, flowers, and greenery from this ${currentStyle} interior, keep furniture arrangement`,
-      textured_walls: `Add wall textures, panels, or wallpaper to this ${currentStyle} interior, maintain furniture layout`,
-      add_decorations: `Add artwork, decorative accessories, and styling elements to this ${currentStyle} interior`,
-      change_flooring: `Change floor material to different texture or pattern in this ${currentStyle} interior, keep everything else exactly the same`
+      warmer_colors: `SYSTEM INSTRUCTION: Image-to-image color modification. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: REPAINT color palette to warm beige, cream, and golden tones throughout this ${currentStyle} interior. Apply warm colors to walls, furniture upholstery, and accessories while maintaining exact furniture positions and room structure.`,
+      cooler_colors: `SYSTEM INSTRUCTION: Image-to-image color modification. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: REPAINT color palette to cool blue-gray, silver, and icy tones throughout this ${currentStyle} interior. Apply cool colors to walls, furniture upholstery, and accessories while maintaining exact furniture positions and room structure.`, 
+      more_lighting: `SYSTEM INSTRUCTION: Image-to-image lighting enhancement. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: ADD more lamps, chandeliers, and brighter lighting fixtures. Enhance natural light through windows. Increase overall brightness and add warm ambient lighting while maintaining exact furniture positions and room structure.`,
+      darker_mood: `SYSTEM INSTRUCTION: Image-to-image mood modification. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: Create darker, more intimate mood with dim lighting and deeper shadows. Reduce overall brightness, add dramatic shadows, and adjust lighting to create cozy atmosphere while maintaining exact furniture positions and room structure.`,
+      natural_materials: `SYSTEM INSTRUCTION: Image-to-image material replacement. KEEP: walls, windows, doors, furniture layout, camera angle - IDENTICAL. CHANGE: REPAINT materials to natural wood, stone, and organic textures. Replace synthetic materials with natural ones (wood furniture, stone surfaces, organic fabrics) while maintaining exact furniture positions and room structure.`,
+      more_plants: `SYSTEM INSTRUCTION: Image-to-image plant addition. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: ADD potted plants, hanging greenery, and natural elements throughout this ${currentStyle} interior. Place plants strategically around furniture and in empty spaces while maintaining exact furniture positions and room structure.`,
+      less_plants: `SYSTEM INSTRUCTION: Image-to-image plant removal. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: ERASE all plants, flowers, and greenery. Remove all botanical elements and inpaint the surfaces behind them seamlessly while maintaining exact furniture positions and room structure.`,
+      textured_walls: `SYSTEM INSTRUCTION: Image-to-image wall modification. KEEP: windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: REPAINT walls with textures, panels, or wallpaper. Add wall treatments while maintaining exact furniture positions and room structure.`,
+      add_decorations: `SYSTEM INSTRUCTION: Image-to-image decoration addition. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: ADD artwork, decorative accessories, and styling elements to this ${currentStyle} interior. Place decorative items on walls, surfaces, and shelves while maintaining exact furniture positions and room structure.`,
+      change_flooring: `SYSTEM INSTRUCTION: Image-to-image floor modification. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: REPAINT floor material to different texture or pattern. Replace existing flooring with new material (wood, tile, carpet, etc.) while keeping everything else exactly the same. Maintain exact furniture positions and room structure.`
     };
     
     return microPrompts[modification.id as keyof typeof microPrompts] || `${modification.label} in ${currentStyle} style`;
@@ -2339,8 +2460,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 <p className="font-semibold">Wystąpił błąd podczas generowania</p>
                 <p className="text-sm mt-2">{error}</p>
                 <GlassButton onClick={() => { 
-                  setRegenerateCount(prev => prev + 1);
-                  void handleInitialGeneration(true); 
+                  setError(null); // Clear error first
+                  if (lastFailedModification) {
+                    // Retry the failed modification
+                    console.log('[Retry] Retrying last failed modification:', lastFailedModification.label);
+                    void handleModification(lastFailedModification);
+                  } else {
+                    // Retry initial generation
+                    setRegenerateCount(prev => prev + 1);
+                    void handleInitialGeneration(true);
+                  }
                 }} className="mt-4 whitespace-normal break-words">
                   Spróbuj ponownie
                 </GlassButton>
@@ -2561,23 +2690,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               priority={index < 2}
                             />
                             
-                            {/* Source Label with Provider Badge */}
-                            <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <div className="px-3 py-1.5 bg-black/70 backdrop-blur-sm rounded-lg">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div>
-                                    <p className="text-white text-xs font-medium opacity-70">Źródło danych:</p>
-                                    <p className="text-gold font-bold text-sm">{sourceLabel}</p>
-                                  </div>
-                                  {image.provider === 'google' && (
-                                    <span className="px-2 py-0.5 bg-green-500/80 text-white text-xs font-semibold rounded">
-                                      Google
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            
                             {/* Hover overlay */}
                             <div className="absolute inset-0 bg-gold/0 group-hover:bg-gold/10 transition-colors" />
                             
@@ -2738,19 +2850,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         </GlassButton>
                       </div>
                     )}
-                    {/* Show indicator if already upscaled or high-quality matrix selection */}
-                    {(upscaledImage || blindSelectionMade) && (
-                      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          className="px-4 py-2 bg-green-500/90 backdrop-blur-sm rounded-full flex items-center gap-2"
-                        >
-                          <CheckCircle2 size={16} className="text-white" />
-                          <span className="text-sm font-medium text-white">Wysoka jakość (1024px)</span>
-                        </motion.div>
-                      </div>
-                    )}
                   </div>
                   
                   {/* Quick Interior Question */}
@@ -2759,6 +2858,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       <motion.div
                         initial={{ opacity: 0, y: 20, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ 
+                          opacity: 0, 
+                          y: -20, 
+                          scale: 0.95,
+                          transition: { duration: 0.5, ease: "easeIn" }
+                        }}
                         transition={{ duration: 0.5, ease: "easeOut" }}
                       >
                         <GlassCard variant="highlighted" className="p-5">
@@ -2778,7 +2883,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               value={(selectedImage.ratings as any).is_my_interior || 3}
                               onChange={(value) => {
                                 handleImageRating(selectedImage.id, 'is_my_interior', value);
-                                setHasAnsweredInteriorQuestion(true);
+                                // Delay hiding the bar to allow smooth exit animation
+                                setTimeout(() => {
+                                  setHasAnsweredInteriorQuestion(true);
+                                }, 800);
                               }}
                               className="mb-2"
                             />
@@ -2790,8 +2898,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 </div>
               </GlassCard>
               
-              {/* Modifications and History - Show after selection */}
-              {selectedImage && blindSelectionMade && (
+              {/* Modifications and History - Show after selection and after answering interior question */}
+              {selectedImage && blindSelectionMade && hasAnsweredInteriorQuestion && (
                 <>
                   {/* Modifications Button */}
                   <motion.div
@@ -2810,15 +2918,15 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       <span className="truncate">Usuń meble</span>
                     </GlassButton>
 
-                    <GlassButton onClick={handleQualityImprovement} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
-                      <RefreshCw size={16} className="mr-2 flex-shrink-0" />
-                      <span className="truncate">Popraw Jakość</span>
+                    <GlassButton onClick={handleShowOriginal} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                      <Eye size={16} className="mr-2 flex-shrink-0" />
+                      <span className="truncate">Pokaż oryginalne</span>
                     </GlassButton>
                   </motion.div>
 
                   {/* Modifications Panel */}
                   <AnimatePresence>
-                    {showModifications && (
+                    {showModifications && hasAnsweredInteriorQuestion && (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -3080,7 +3188,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       </div>
 
                       <AnimatePresence>
-                        {(hasCompletedRatings || selectedImage?.id === 'original-uploaded-image') && (
+                        {(hasCompletedRatings || selectedImage?.id === 'original-uploaded-image') && hasAnsweredInteriorQuestion && (
                           <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -3097,9 +3205,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               <span className="truncate">Usuń meble</span>
                             </GlassButton>
 
-                            <GlassButton onClick={handleQualityImprovement} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
-                              <RefreshCw size={16} className="mr-2 flex-shrink-0" />
-                              <span className="truncate">Popraw Jakość</span>
+                            <GlassButton onClick={handleShowOriginal} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                              <Eye size={16} className="mr-2 flex-shrink-0" />
+                              <span className="truncate">Pokaż oryginalne</span>
                             </GlassButton>
 
                             <GlassButton 
@@ -3134,7 +3242,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               </div>
 
               <AnimatePresence>
-                {showModifications && (
+                {showModifications && hasAnsweredInteriorQuestion && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
