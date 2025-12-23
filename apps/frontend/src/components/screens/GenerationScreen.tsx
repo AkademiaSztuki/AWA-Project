@@ -5,13 +5,13 @@ import { GlassButton } from '../ui/GlassButton';
 import { AwaContainer } from '../awa/AwaContainer';
 import { AwaDialogue } from '../awa/AwaDialogue';
 import { useSessionData } from '@/hooks/useSessionData';
-import { useModalAPI } from '@/hooks/useModalAPI';
+import { useGoogleAI } from '@/hooks/useGoogleAI';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 export function GenerationScreen() {
   const router = useRouter();
   const { sessionData, updateSessionData } = useSessionData();
-  const { generateSixImagesParallelWithGoogle, isLoading } = useModalAPI();
+  const { generateSixImagesParallelWithGoogle, isLoading } = useGoogleAI();
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [ratings, setRatings] = useState<Record<string, any>>({});
@@ -41,7 +41,7 @@ export function GenerationScreen() {
     };
 
     generateInitialImages();
-  }, [sessionData, generateImages]);
+  }, [sessionData, generateSixImagesParallelWithGoogle]);
 
   const buildPrompt = (visualDNA: any, coreNeed: string) => {
     return `Interior design, ${visualDNA.dominantStyle} style, ${visualDNA.colorPalette} colors, 
