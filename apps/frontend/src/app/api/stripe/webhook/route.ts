@@ -68,8 +68,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    console.log('[Webhook] Processing event:', {
+      eventId: event.id,
+      eventType: event.type,
+      livemode: event.livemode,
+    });
+
     // Przetwórz event
     await handleWebhookEvent(event);
+
+    console.log('[Webhook] Event processed successfully:', event.id);
 
     // Oznacz jako przetworzony
     await supabase
@@ -77,9 +85,14 @@ export async function POST(request: NextRequest) {
       .update({ processed: true })
       .eq('stripe_event_id', event.id);
 
-    return NextResponse.json({ received: true });
+    return NextResponse.json({ received: true, processed: true });
   } catch (error: any) {
-    console.error('Error processing webhook event:', error);
+    console.error('[Webhook] Error processing webhook event:', {
+      eventId: event.id,
+      eventType: event.type,
+      error: error.message,
+      stack: error.stack,
+    });
 
     // Zwiększ retry_count
     await supabase
@@ -91,7 +104,7 @@ export async function POST(request: NextRequest) {
       .eq('stripe_event_id', event.id);
 
     return NextResponse.json(
-      { error: 'Error processing webhook event' },
+      { error: 'Error processing webhook event', details: error.message },
       { status: 500 }
     );
   }
@@ -135,14 +148,27 @@ async function handleWebhookEvent(event: Stripe.Event) {
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  console.log('[Webhook] handleCheckoutCompleted called:', {
+    sessionId: session.id,
+    subscriptionId: session.subscription,
+    userHash: session.metadata?.user_hash || session.client_reference_id,
+    metadata: session.metadata,
+  });
+
   const subscriptionId = session.subscription as string;
   const userHash = session.metadata?.user_hash || session.client_reference_id;
 
   if (!userHash || !subscriptionId) {
-    console.error('Missing userHash or subscriptionId in checkout session');
-    return;
+    console.error('[Webhook] Missing userHash or subscriptionId:', {
+      userHash,
+      subscriptionId,
+      metadata: session.metadata,
+      clientReferenceId: session.client_reference_id,
+    });
+    throw new Error(`Missing userHash or subscriptionId. userHash: ${userHash}, subscriptionId: ${subscriptionId}`);
   }
 
+  console.log('[Webhook] Retrieving subscription from Stripe:', subscriptionId);
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   const customerId = subscription.customer as string;
 
@@ -150,8 +176,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const billingPeriod = session.metadata?.billing_period as 'monthly' | 'yearly';
   const credits = parseInt(session.metadata?.credits || '0');
 
+  console.log('[Webhook] Subscription details:', {
+    subscriptionId,
+    customerId,
+    planId,
+    billingPeriod,
+    credits,
+    status: subscription.status,
+  });
+
   // Utwórz lub zaktualizuj subskrypcję w bazie
-  const { error } = await supabase
+  console.log('[Webhook] Creating/updating subscription in database...');
+  const { error, data } = await supabase
     .from('subscriptions')
     .upsert({
       user_hash: userHash,
@@ -171,13 +207,23 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     });
 
   if (error) {
-    console.error('Error creating subscription:', error);
+    console.error('[Webhook] Error creating subscription:', error);
     throw error;
   }
 
+  console.log('[Webhook] Subscription created/updated successfully');
+
   // Przydziel kredyty
+  console.log('[Webhook] Allocating subscription credits...', {
+    userHash,
+    planId,
+    billingPeriod,
+    credits,
+    expiresAt: new Date(subscription.current_period_end * 1000).toISOString(),
+  });
+
   const expiresAt = new Date(subscription.current_period_end * 1000);
-  await allocateSubscriptionCredits(
+  const allocationResult = await allocateSubscriptionCredits(
     userHash,
     planId,
     billingPeriod,
@@ -185,6 +231,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     expiresAt,
     subscriptionId
   );
+
+  if (!allocationResult) {
+    console.error('[Webhook] Failed to allocate subscription credits');
+    throw new Error('Failed to allocate subscription credits');
+  }
+
+  console.log('[Webhook] Credits allocated successfully:', {
+    userHash,
+    credits,
+    subscriptionId,
+  });
 }
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
