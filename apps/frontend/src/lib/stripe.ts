@@ -138,9 +138,17 @@ export function getPlanConfig(planId: PlanId, billingPeriod: BillingPeriod): Pla
   const config = configs[planId][billingPeriod];
   
   if (!config.priceId || config.priceId === '') {
+    const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}`;
+    const isProduction = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+    const envLocation = isProduction ? 'Vercel environment variables' : '.env.local';
+    
+    console.error(`[Stripe] Missing environment variable: ${envVarName}`);
+    console.error(`[Stripe] Environment: ${process.env.VERCEL_ENV || process.env.NODE_ENV || 'unknown'}`);
+    console.error(`[Stripe] Available STRIPE_* env vars:`, Object.keys(process.env).filter(k => k.startsWith('STRIPE_')).join(', '));
+    
     throw new Error(
-      `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()} is not set in .env.local. ` +
-      `Please create the product in Stripe Dashboard and add the Price ID.`
+      `${envVarName} is not set in ${envLocation}. ` +
+      `Please add it to Vercel Dashboard → Settings → Environment Variables (for production) or .env.local (for development).`
     );
   }
   
@@ -169,17 +177,50 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
   
   try {
     // Ta funkcja jest wywoływana tylko po stronie serwera (API route)
+    console.log('[Stripe] Creating checkout session:', { planId, billingPeriod, userHash: userHash.substring(0, 8) + '...' });
+    console.log('[Stripe] Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      VERCEL: process.env.VERCEL,
+    });
+    
+    // Debug: sprawdź czy zmienne są dostępne
+    const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}`;
+    const envValue = process.env[envVarName];
+    console.log(`[Stripe] Checking ${envVarName}:`, envValue ? `${envValue.substring(0, 20)}...` : 'NOT SET');
+    console.log('[Stripe] All STRIPE_* env vars:', Object.keys(process.env).filter(k => k.startsWith('STRIPE_')).sort());
+    
     const configs = getPlanConfigs();
     const planConfig = configs[planId][billingPeriod];
     
+    console.log('[Stripe] Plan config:', { 
+      planId, 
+      billingPeriod, 
+      credits: planConfig.credits,
+      priceId: planConfig.priceId ? planConfig.priceId.substring(0, 20) + '...' : 'MISSING',
+      priceIdLength: planConfig.priceId?.length || 0
+    });
+    
     if (!planConfig.priceId || planConfig.priceId === '') {
+      const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}`;
+      console.error(`[Stripe] Missing environment variable: ${envVarName}`);
+      console.error(`[Stripe] Available env vars:`, Object.keys(process.env).filter(k => k.startsWith('STRIPE_')));
       throw new Error(
-        `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()} is not set in .env.local.`
+        `${envVarName} is not set. Please add it to Vercel environment variables (production) or .env.local (development).`
       );
     }
     
+    // Sprawdź czy Stripe secret key jest ustawiony
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error('[Stripe] STRIPE_SECRET_KEY is not set');
+      throw new Error('STRIPE_SECRET_KEY is not set. Please add it to Vercel environment variables.');
+    }
+    
+    console.log('[Stripe] Stripe secret key present:', process.env.STRIPE_SECRET_KEY.substring(0, 10) + '...');
+    
     const stripeInstance = getStripe();
     
+    console.log('[Stripe] Calling Stripe API to create checkout session...');
     const session = await stripeInstance.checkout.sessions.create({
     mode: 'subscription',
     payment_method_types: ['card'],
@@ -208,7 +249,14 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
       },
   });
 
+    console.log('[Stripe] Checkout session created:', { 
+      sessionId: session.id, 
+      url: session.url ? 'present' : 'MISSING',
+      status: session.status 
+    });
+
     if (!session.url) {
+      console.error('[Stripe] Session created but no URL:', session);
       throw new Error('Stripe checkout session created but no URL returned');
     }
 

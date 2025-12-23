@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createCheckoutSession, PlanId, BillingPeriod } from '@/lib/stripe';
 
 export async function POST(request: NextRequest) {
+  let planId: string | undefined;
+  let billingPeriod: string | undefined;
+  
   try {
     const body = await request.json();
-    const { userHash, planId, billingPeriod, successUrl, cancelUrl } = body;
+    const { userHash, planId: bodyPlanId, billingPeriod: bodyBillingPeriod, successUrl, cancelUrl } = body;
+    planId = bodyPlanId;
+    billingPeriod = bodyBillingPeriod;
 
     if (!userHash || !planId || !billingPeriod) {
       return NextResponse.json(
@@ -35,11 +40,29 @@ export async function POST(request: NextRequest) {
       cancelUrl: cancelUrl || `${request.nextUrl.origin}/subscription/cancel`,
     });
 
+    if (!checkoutUrl || checkoutUrl === '') {
+      console.error('[API] Checkout session created but URL is empty');
+      return NextResponse.json(
+        { error: 'Stripe checkout session created but no URL returned. Check Stripe logs.' },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({ url: checkoutUrl });
   } catch (error: any) {
-    console.error('Error creating checkout session:', error);
+    console.error('[API] Error creating checkout session:', error);
+    console.error('[API] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      planId,
+      billingPeriod,
+    });
+    
     return NextResponse.json(
-      { error: error.message || 'Failed to create checkout session' },
+      { 
+        error: error.message || 'Failed to create checkout session',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
