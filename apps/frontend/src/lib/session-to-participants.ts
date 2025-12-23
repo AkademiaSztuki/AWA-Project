@@ -182,7 +182,8 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
   return {
     user_hash: sessionData.userHash,
     auth_user_id: authUserId,
-    consent_timestamp: sessionData.consentTimestamp || undefined,
+    // consent_timestamp jest NOT NULL w bazie - jeśli nie ma w sessionData, użyj aktualnego czasu
+    consent_timestamp: sessionData.consentTimestamp || new Date().toISOString(),
     path_type: sessionData.pathType,
     current_step: sessionData.currentStep,
     

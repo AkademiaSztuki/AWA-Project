@@ -126,8 +126,13 @@ export async function getCreditBalance(userHash: string): Promise<CreditBalance>
  * Odejmuje kredyty po udanej generacji
  */
 export async function deductCredits(userHash: string, generationId: string): Promise<boolean> {
+  // Użyj service_role client dla operacji które wymagają omijania RLS
+  const supabaseAdmin = getSupabaseAdmin();
+
   try {
-    const { error } = await supabase
+    console.log('[Credits] Deducting credits:', { userHash, generationId, amount: CREDITS_PER_GENERATION });
+    
+    const { error } = await supabaseAdmin
       .from('credit_transactions')
       .insert({
         user_hash: userHash,
@@ -141,33 +146,27 @@ export async function deductCredits(userHash: string, generationId: string): Pro
     if (error) {
       // Jeśli tabela nie istnieje, to nie jest błąd krytyczny
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
-        console.warn('Credit transactions table does not exist yet:', error);
+        console.warn('[Credits] Credit transactions table does not exist yet:', error);
         return true; // Zwróć true aby nie blokować aplikacji
       }
-      console.error('Error deducting credits:', error);
+      console.error('[Credits] Error deducting credits:', error);
       return false;
     }
+
+    console.log('[Credits] Credits deducted successfully');
   } catch (error: any) {
     // Jeśli tabela nie istnieje, to nie jest błąd krytyczny
     if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
-      console.warn('Credit transactions table does not exist yet:', error);
+      console.warn('[Credits] Credit transactions table does not exist yet:', error);
       return true; // Zwróć true aby nie blokować aplikacji
     }
-    console.error('Error deducting credits:', error);
+    console.error('[Credits] Error deducting credits:', error);
     return false;
   }
 
   // Aktualizuj subscription_credits_remaining jeśli ma aktywną subskrypcję
   try {
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('id, subscription_credits_remaining')
-      .eq('user_hash', userHash)
-      .eq('status', 'active')
-      .maybeSingle(); // Użyj maybeSingle zamiast single aby nie rzucać błędu gdy nie ma subskrypcji
-
-    // Aktualizuj subscription_credits_remaining jeśli ma aktywną subskrypcję
-    const { data: activeSubscription } = await supabase
+    const { data: activeSubscription } = await supabaseAdmin
       .from('subscriptions')
       .select('id, subscription_credits_remaining, credits_used')
       .eq('user_hash', userHash)
@@ -176,17 +175,19 @@ export async function deductCredits(userHash: string, generationId: string): Pro
 
     if (activeSubscription && activeSubscription.subscription_credits_remaining > 0) {
       const newRemaining = Math.max(0, activeSubscription.subscription_credits_remaining - CREDITS_PER_GENERATION);
-      await supabase
+      await supabaseAdmin
         .from('subscriptions')
         .update({
           subscription_credits_remaining: newRemaining,
           credits_used: (activeSubscription.credits_used || 0) + CREDITS_PER_GENERATION,
         })
         .eq('id', activeSubscription.id);
+      
+      console.log('[Credits] Subscription credits updated:', { newRemaining, creditsUsed: activeSubscription.credits_used + CREDITS_PER_GENERATION });
     }
   } catch (subscriptionError) {
     // Jeśli tabela subscriptions nie istnieje, to nie jest błąd krytyczny
-    console.warn('Error updating subscription credits (table may not exist):', subscriptionError);
+    console.warn('[Credits] Error updating subscription credits (table may not exist):', subscriptionError);
   }
 
   return true;
