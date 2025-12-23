@@ -337,9 +337,10 @@ export default function FastGeneratePage() {
       try {
         if (projectId) {
           const genSet = await saveGenerationSet(projectId, prompt);
-          if (genSet?.id) {
-            await saveGeneratedImages(genSet.id, [{ url: newImage.url, prompt: newImage.prompt }]);
-          }
+          // Note: saveGenerationSet returns null (legacy table removed), so we skip saveGeneratedImages
+          // if (genSet?.id) {
+          //   await saveGeneratedImages(genSet.id, [{ url: newImage.url, prompt: newImage.prompt }]);
+          // }
           await logBehavioralEvent(projectId, 'generation_initial', { 
             prompt, 
             parameters,
@@ -507,9 +508,10 @@ export default function FastGeneratePage() {
         const projectId = await getOrCreateProjectId((sessionData as any).userHash);
         if (projectId) {
           const genSet = await saveGenerationSet(projectId, modificationPrompt);
-          if (genSet?.id) {
-            await saveGeneratedImages(genSet.id, [{ url: newImage.url, prompt: newImage.prompt }]);
-          }
+          // Note: saveGenerationSet returns null (legacy table removed), so we skip saveGeneratedImages
+          // if (genSet?.id) {
+          //   await saveGeneratedImages(genSet.id, [{ url: newImage.url, prompt: newImage.prompt }]);
+          // }
           await logBehavioralEvent(projectId, 'generation_modification', {
             type: isMacro ? 'macro' : 'micro',
             modification: modification.label,

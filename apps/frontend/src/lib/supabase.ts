@@ -888,7 +888,7 @@ export const logErrorEvent = async (projectId: string, payload: { source: string
 
 // NEW: Save images to participant_images table
 // Helper: Ensure participant exists before inserting into related tables
-const ensureParticipantExists = async (userHash: string): Promise<boolean> => {
+export const ensureParticipantExists = async (userHash: string): Promise<boolean> => {
   if (!userHash) return false;
   
   try {
