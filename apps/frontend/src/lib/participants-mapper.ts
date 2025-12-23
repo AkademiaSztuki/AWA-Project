@@ -222,7 +222,13 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     prs_target_y: sessionData.prsTarget?.y,
     
     // Laddering
-    ladder_path: sessionData.ladderResults?.path || sessionData.ladderPath,
+    // Convert ladderResults.path (array of objects) to string[] if needed
+    ladder_path: sessionData.ladderPath || 
+      (sessionData.ladderResults?.path 
+        ? sessionData.ladderResults.path.map((step: any) => 
+            typeof step === 'string' ? step : step.selectedAnswer || ''
+          )
+        : undefined),
     ladder_core_need: sessionData.ladderResults?.coreNeed || sessionData.coreNeed,
     
     // Surveys
