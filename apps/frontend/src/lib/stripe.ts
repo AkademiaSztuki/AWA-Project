@@ -86,35 +86,42 @@ export const PLAN_CREDITS: Record<PlanId, Record<BillingPeriod, number>> = {
 // Mapowanie planów do Stripe Price IDs (tylko po stronie serwera)
 // Te wartości muszą być ustawione w zmiennych środowiskowych
 function getPlanConfigs(): Record<PlanId, Record<BillingPeriod, Omit<PlanConfig, 'planId' | 'billingPeriod'>>> {
+  // Helper function to clean Price ID (remove '=' prefix if present)
+  const cleanPriceId = (priceId: string | undefined): string => {
+    if (!priceId) return '';
+    // Remove '=' prefix if present (common mistake in Vercel env vars)
+    return priceId.startsWith('=') ? priceId.substring(1) : priceId;
+  };
+
   return {
     basic: {
       monthly: {
         credits: 2000,
-        priceId: process.env.STRIPE_PRICE_BASIC_MONTHLY || '',
+        priceId: cleanPriceId(process.env.STRIPE_PRICE_BASIC_MONTHLY),
       },
       yearly: {
         credits: 24000,
-        priceId: process.env.STRIPE_PRICE_BASIC_YEARLY || '',
+        priceId: cleanPriceId(process.env.STRIPE_PRICE_BASIC_YEARLY),
       },
     },
     pro: {
       monthly: {
         credits: 5000,
-        priceId: process.env.STRIPE_PRICE_PRO_MONTHLY || '',
+        priceId: cleanPriceId(process.env.STRIPE_PRICE_PRO_MONTHLY),
       },
       yearly: {
         credits: 60000,
-        priceId: process.env.STRIPE_PRICE_PRO_YEARLY || '',
+        priceId: cleanPriceId(process.env.STRIPE_PRICE_PRO_YEARLY),
       },
     },
     studio: {
       monthly: {
         credits: 8000,
-        priceId: process.env.STRIPE_PRICE_STUDIO_MONTHLY || '',
+        priceId: cleanPriceId(process.env.STRIPE_PRICE_STUDIO_MONTHLY),
       },
       yearly: {
         credits: 96000,
-        priceId: process.env.STRIPE_PRICE_STUDIO_YEARLY || '',
+        priceId: cleanPriceId(process.env.STRIPE_PRICE_STUDIO_YEARLY),
       },
     },
   };
@@ -186,12 +193,25 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
     
     // Debug: sprawdź czy zmienne są dostępne
     const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}`;
-    const envValue = process.env[envVarName];
+    let envValue = process.env[envVarName];
+    
+    // Usuń znak '=' z początku jeśli istnieje (częsty błąd w Vercel)
+    if (envValue && envValue.startsWith('=')) {
+      console.warn(`[Stripe] Warning: ${envVarName} starts with '='. Removing it.`);
+      envValue = envValue.substring(1);
+    }
+    
     console.log(`[Stripe] Checking ${envVarName}:`, envValue ? `${envValue.substring(0, 20)}...` : 'NOT SET');
     console.log('[Stripe] All STRIPE_* env vars:', Object.keys(process.env).filter(k => k.startsWith('STRIPE_')).sort());
     
     const configs = getPlanConfigs();
     const planConfig = configs[planId][billingPeriod];
+    
+    // Napraw Price ID jeśli zaczyna się od '='
+    if (planConfig.priceId && planConfig.priceId.startsWith('=')) {
+      planConfig.priceId = planConfig.priceId.substring(1);
+      console.warn(`[Stripe] Fixed Price ID: removed '=' prefix`);
+    }
     
     console.log('[Stripe] Plan config:', { 
       planId, 
@@ -221,53 +241,87 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
     const stripeInstance = getStripe();
     
     console.log('[Stripe] Calling Stripe API to create checkout session...');
-    const session = await stripeInstance.checkout.sessions.create({
-    mode: 'subscription',
-    payment_method_types: ['card'],
-      line_items: [
-        {
-          price: planConfig.priceId,
-          quantity: 1,
-        },
-      ],
+    console.log('[Stripe] Request params:', {
+      mode: 'subscription',
+      price: planConfig.priceId,
       success_url: successUrl,
       cancel_url: cancelUrl,
-      client_reference_id: userHash,
-      metadata: {
-        user_hash: userHash,
-        plan_id: planId,
-        billing_period: billingPeriod,
-        credits: PLAN_CREDITS[planId][billingPeriod].toString(),
-      },
-      subscription_data: {
+    });
+    
+    try {
+      const session = await stripeInstance.checkout.sessions.create({
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: planConfig.priceId,
+            quantity: 1,
+          },
+        ],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        client_reference_id: userHash,
         metadata: {
           user_hash: userHash,
           plan_id: planId,
           billing_period: billingPeriod,
           credits: PLAN_CREDITS[planId][billingPeriod].toString(),
         },
-      },
-  });
+        subscription_data: {
+          metadata: {
+            user_hash: userHash,
+            plan_id: planId,
+            billing_period: billingPeriod,
+            credits: PLAN_CREDITS[planId][billingPeriod].toString(),
+          },
+        },
+      });
 
-    console.log('[Stripe] Checkout session created:', { 
-      sessionId: session.id, 
-      url: session.url ? 'present' : 'MISSING',
-      status: session.status 
-    });
+      console.log('[Stripe] Checkout session created:', { 
+        sessionId: session.id, 
+        url: session.url ? 'present' : 'MISSING',
+        status: session.status 
+      });
 
-    if (!session.url) {
-      console.error('[Stripe] Session created but no URL:', session);
-      throw new Error('Stripe checkout session created but no URL returned');
+      if (!session.url) {
+        console.error('[Stripe] Session created but no URL:', session);
+        throw new Error('Stripe checkout session created but no URL returned');
+      }
+
+      return session.url;
+    } catch (stripeError: any) {
+      // Log szczegółowy błąd Stripe
+      console.error('[Stripe] Stripe API error:', {
+        type: stripeError.type,
+        code: stripeError.code,
+        message: stripeError.message,
+        statusCode: stripeError.statusCode,
+        raw: stripeError.raw ? JSON.stringify(stripeError.raw, null, 2) : 'N/A',
+      });
+      
+      // Sprawdź czy to problem z Price ID
+      if (stripeError.code === 'resource_missing' || stripeError.message?.includes('No such price')) {
+        throw new Error(`Price ID "${planConfig.priceId}" not found in Stripe. Please check if the Price is active in Stripe Dashboard.`);
+      }
+      
+      // Sprawdź czy to problem z API key
+      if (stripeError.code === 'api_key_expired' || stripeError.message?.includes('Invalid API Key')) {
+        throw new Error('Invalid Stripe API key. Please check STRIPE_SECRET_KEY in Vercel environment variables.');
+      }
+      
+      // Sprawdź czy to problem z mode (test vs live)
+      if (stripeError.message?.includes('test mode') || stripeError.message?.includes('live mode')) {
+        throw new Error(`Stripe mode mismatch: You're using ${process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_') ? 'test' : 'live'} keys but Price ID might be from ${process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_') ? 'live' : 'test'} mode.`);
+      }
+      
+      throw stripeError;
     }
-
-    return session.url;
   } catch (error: any) {
     if (error.message?.includes('STRIPE_PRICE_')) {
       throw error; // Przekaż błąd o brakującym Price ID
     }
-    if (error.message?.includes('No such price')) {
-      throw new Error(`Price ID does not exist in Stripe. Please check your .env.local and Stripe Dashboard.`);
-    }
+    
+    console.error('[Stripe] Error creating checkout session:', error);
     throw new Error(`Failed to create Stripe checkout session: ${error.message || error}`);
   }
 }
