@@ -144,7 +144,7 @@ export async function saveParticipantImages(
           
           if (uploadError) {
             // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-upload-error',message:'Upload failed',data:{imageType:img.type,error:uploadError.message,errorCode:uploadError.statusCode},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-upload-error',message:'Upload failed',data:{imageType:img.type,error:uploadError.message,errorCode:(uploadError as any).statusCode || 'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
             // #endregion
             console.warn('[remote-spaces] Upload failed for', img.type, uploadError);
             failedCount++;
@@ -198,8 +198,8 @@ export async function saveParticipantImages(
         tags_materials: tagsMaterials,
         tags_biophilia: tagsBiophilia,
         description: tags.description || null,
-        source: img.source || null,
-        generation_id: img.generation_id || null
+        source: img.source || undefined,
+        generation_id: img.generation_id || undefined
       });
       
       // #region agent log

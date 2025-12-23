@@ -436,7 +436,14 @@ export function mapParticipantToSessionData(row: any): SessionData {
     ladderResults: row.ladder_path || row.ladder_core_need ? {
       path: row.ladder_path || [],
       coreNeed: row.ladder_core_need || '',
-      promptElements: {}
+      promptElements: {
+        atmosphere: '',
+        colors: '',
+        lighting: '',
+        materials: '',
+        layout: '',
+        mood: ''
+      }
     } : undefined,
     
     // Surveys

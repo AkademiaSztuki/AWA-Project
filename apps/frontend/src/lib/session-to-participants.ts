@@ -168,9 +168,9 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     }
   });
   
-  const uniqueInspirationStyles = [...new Set(allInspirationStyles)];
-  const uniqueInspirationColors = [...new Set(allInspirationColors)];
-  const uniqueInspirationMaterials = [...new Set(allInspirationMaterials)];
+  const uniqueInspirationStyles = Array.from(new Set(allInspirationStyles));
+  const uniqueInspirationColors = Array.from(new Set(allInspirationColors));
+  const uniqueInspirationMaterials = Array.from(new Set(allInspirationMaterials));
   const inspirationBiophiliaAvg = biophiliaScores.length > 0
     ? biophiliaScores.reduce((a, b) => a + b, 0) / biophiliaScores.length
     : undefined;
@@ -251,7 +251,13 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     prs_target_y: prsTarget?.y,
     
     // Laddering
-    ladder_path: ladderResults?.path || sessionData.ladderPath,
+    // Convert ladderResults.path (array of objects) to string[] if needed
+    ladder_path: sessionData.ladderPath || 
+      (ladderResults?.path 
+        ? ladderResults.path.map((step: any) => 
+            typeof step === 'string' ? step : step.selectedAnswer || ''
+          )
+        : undefined),
     ladder_core_need: ladderResults?.coreNeed || sessionData.coreNeed,
     
     // Surveys
@@ -278,8 +284,8 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     
     // Tinder stats
     tinder_total_swipes: tinderResults.length,
-    tinder_likes,
-    tinder_dislikes,
+    tinder_likes: tinderLikes,
+    tinder_dislikes: tinderDislikes,
     
     // Inspiration tags
     inspiration_style_1: uniqueInspirationStyles[0],
@@ -430,9 +436,23 @@ export function mapParticipantToSessionData(participant: ParticipantRow): Partia
     // Laddering
     ladderResults: participant.ladder_path || participant.ladder_core_need
       ? {
-          path: participant.ladder_path || [],
+          // Convert string[] to array of objects format expected by LadderResults
+          path: (participant.ladder_path || []).map((answer: string, index: number) => ({
+            level: index + 1,
+            question: '',
+            selectedAnswer: answer,
+            selectedId: '',
+            timestamp: new Date().toISOString()
+          })),
           coreNeed: participant.ladder_core_need || '',
-          promptElements: {},
+          promptElements: {
+            atmosphere: '',
+            colors: '',
+            lighting: '',
+            materials: '',
+            layout: '',
+            mood: ''
+          }
         }
       : undefined,
     ladderPath: participant.ladder_path,

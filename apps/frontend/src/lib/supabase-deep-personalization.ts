@@ -94,7 +94,11 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
         biophiliaScore: data.biophilia_score,
         prsIdeal: data.prs_ideal_x !== null && data.prs_ideal_x !== undefined ? { x: data.prs_ideal_x, y: data.prs_ideal_y ?? 0 } : undefined
       },
-      lifestyle: data.life_vibe || (data.life_goals && data.life_goals.length) ? { vibe: data.life_vibe || '', goals: data.life_goals || [] } : undefined,
+      lifestyle: data.life_vibe || (data.life_goals && data.life_goals.length) ? { 
+        vibe: data.life_vibe || '', 
+        goals: data.life_goals || [],
+        values: []
+      } : undefined,
       sensoryPreferences: data.sensory_music || data.sensory_texture || data.sensory_light ? {
         music: data.sensory_music || '',
         texture: data.sensory_texture || '',
@@ -114,7 +118,10 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
         completedAt: data.big5_completed_at
       } : undefined,
       inspirations: [], // now sourced from participant_images
-      profileCompletedAt: data.core_profile_completed_at
+      profileCompletedAt: data.core_profile_completed_at,
+      profileVersion: 1,
+      createdAt: data.created_at || new Date().toISOString(),
+      updatedAt: data.updated_at || new Date().toISOString()
     } as UserProfile;
     
     // #region agent log
@@ -479,8 +486,11 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
       return null;
     }
     
+    // Type guard: after check, userHash is definitely string
+    const userHash = profile.userHash!;
+    
     // First, get existing profile to preserve auth_user_id
-    const existing = await getUserProfile(profile.userHash);
+    const existing = await getUserProfile(userHash);
     
     // Get authenticated user ID if available
     let authUserId: string | undefined = existing?.auth_user_id;
@@ -488,7 +498,7 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user?.id) {
-          authUserId = session.user.id;
+          authUserId = session?.user?.id!;
           // #region agent log
           void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
             method: 'POST',
@@ -609,7 +619,7 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
 
     if (error) {
       // If personality column doesn't exist, try again without it
-      if (error.code === 'PGRST204' && error.message?.includes('personality')) {
+      if (error?.code === 'PGRST204' && error?.message?.includes('personality')) {
         console.warn('⚠️ Personality column not found in Supabase!');
         console.warn('⚠️ Please run migration: apps/frontend/supabase/migrations/20250131000000_add_personality_inspirations.sql');
         console.warn('⚠️ Or run SQL from: apps/frontend/ADD_PERSONALITY_COLUMN.sql in Supabase SQL Editor');
@@ -625,8 +635,8 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
             location: 'supabase-deep-personalization.ts:personality-column-missing',
             message: 'Personality column missing - migration needed',
             data: {
-              error: error.message,
-              errorCode: error.code,
+              error: error?.message,
+              errorCode: error?.code,
               hasPersonality: !!profile.personality,
               migrationFile: '20250131000000_add_personality_inspirations.sql'
             },
