@@ -172,7 +172,7 @@ export function SubscriptionManagement({ userHash, className }: SubscriptionMana
             <div className="flex justify-between">
               <span className="text-gray-600 font-modern">Status:</span>
               <span className={`font-exo2 font-semibold ${
-                subscription.status === 'active' ? 'text-green-600' : 'text-amber-600'
+                subscription.status === 'active' ? 'text-white' : 'text-amber-600'
               }`}>
                 {subscription.status === 'active' ? 'Aktywna' : subscription.status}
               </span>

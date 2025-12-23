@@ -42,13 +42,6 @@ export default function SubscriptionSuccessPage() {
           >
             Przejdź do dashboardu
           </GlassButton>
-          <GlassButton
-            onClick={() => router.push('/flow/generate')}
-            variant="secondary"
-            className="w-full"
-          >
-            Rozpocznij generowanie
-          </GlassButton>
         </div>
       </GlassCard>
     </div>

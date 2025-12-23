@@ -37,7 +37,6 @@ import {
 } from '@/components/dashboard/ProfileSections';
 import { CompletionStatus } from '@/types/deep-personalization';
 import { CreditBalance } from '@/components/subscription/CreditBalance';
-import { SubscriptionManagement } from '@/components/subscription/SubscriptionManagement';
 
 interface Space {
   id: string;
@@ -862,9 +861,8 @@ export function UserDashboard() {
               if (!userHash) return null;
               
               return (
-                <div className="space-y-6 mb-8">
+                <div className="mb-8">
                   <CreditBalance userHash={userHash} />
-                  <SubscriptionManagement userHash={userHash} />
                 </div>
               );
             } catch (error) {
