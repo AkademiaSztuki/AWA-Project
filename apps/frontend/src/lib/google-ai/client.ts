@@ -18,6 +18,7 @@ import { GoogleAuth } from 'google-auth-library';
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY;
 const GOOGLE_CLOUD_PROJECT = process.env.GOOGLE_CLOUD_PROJECT;
 const GOOGLE_CLOUD_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'global';
+const GOOGLE_APPLICATION_CREDENTIALS_JSON = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
 // Vertex AI endpoint for image generation (requires OAuth 2.0)
 const VERTEX_AI_API_BASE = 'https://aiplatform.googleapis.com/v1';
 // Google AI Studio endpoint for text-only models (works with API key)
@@ -45,10 +46,24 @@ export class GoogleAIClient {
     
     // Initialize Google Auth for Vertex AI (OAuth 2.0)
     if (this.projectId) {
-      this.auth = new GoogleAuth({
+      const authOptions: any = {
         scopes: ['https://www.googleapis.com/auth/cloud-platform'],
         projectId: this.projectId,
-      });
+      };
+
+      // If service account JSON is provided as environment variable (for Vercel/production)
+      if (GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+        try {
+          const credentials = JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON);
+          authOptions.credentials = credentials;
+          console.log('[GoogleAI] Using service account credentials from GOOGLE_APPLICATION_CREDENTIALS_JSON');
+        } catch (error) {
+          console.error('[GoogleAI] Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON:', error);
+          // Fall back to default credentials
+        }
+      }
+
+      this.auth = new GoogleAuth(authOptions);
     }
   }
 
