@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user || null);
 
-        // If user just signed in, restore user_hash from Supabase
+        // If user just signed in, restore user_hash from Supabase and grant free credits
         if (event === 'SIGNED_IN' && session?.user?.id && typeof window !== 'undefined') {
           try {
             const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
@@ -69,6 +69,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (userHash) {
               safeLocalStorage.setItem('aura_user_hash', userHash);
               console.log('[AuthContext] Restored user_hash from Supabase:', userHash);
+              
+              // Przyznaj darmowy grant kredytów (600 kredytów = 60 generacji)
+              try {
+                const { grantFreeCredits } = await import('@/lib/credits');
+                await grantFreeCredits(userHash);
+                console.log('[AuthContext] Granted free credits to new user:', userHash);
+              } catch (creditError) {
+                console.warn('[AuthContext] Failed to grant free credits:', creditError);
+                // Nie blokuj logowania jeśli grant się nie powiódł
+              }
             }
           } catch (error) {
             console.warn('[AuthContext] Failed to restore user_hash:', error);

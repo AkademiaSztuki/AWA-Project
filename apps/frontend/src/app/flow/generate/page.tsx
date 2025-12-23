@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage } from '@/lib/supabase';
+import { checkCreditsAvailable, deductCredits } from '@/lib/credits';
+import { UpgradePrompt } from '@/components/subscription/UpgradePrompt';
 import { supabase } from '@/lib/supabase';
 import { assessAllSourcesQuality, getViableSources, type DataStatus } from '@/lib/prompt-synthesis/data-quality';
 import { calculateImplicitQuality } from '@/lib/prompt-synthesis/implicit-quality';
@@ -1636,6 +1638,25 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       console.log('[Generate] Generation already done, skipping');
       return;
     }
+
+    // Sprawdź dostępność kredytów przed generacją
+    const userHash = (sessionData as any)?.userHash;
+    if (userHash) {
+      // Sprawdź kredyty (z try-catch aby nie blokować aplikacji jeśli tabela nie istnieje)
+      let hasCredits = true;
+      try {
+        hasCredits = await checkCreditsAvailable(userHash, 10);
+      } catch (creditError) {
+        console.warn('Error checking credits (tables may not exist yet):', creditError);
+        // Kontynuuj bez sprawdzania kredytów jeśli tabela nie istnieje
+      }
+      
+      if (!hasCredits) {
+        setError('Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jedną generację.');
+        setStatusMessage('Brak kredytów');
+        return;
+      }
+    }
     
     // Use matrix generation mode (6 images from different sources)
     if (isMatrixMode) {
@@ -1849,7 +1870,18 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
       // Close job with timing (approx, since we don't have precise start time here)
       try {
-        if (jobId) await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 });
+        if (jobId) {
+          await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 });
+          // Odejmij kredyty po udanej generacji
+          if (userHash) {
+            try {
+              await deductCredits(userHash, jobId);
+            } catch (creditError) {
+              console.warn('Error deducting credits (tables may not exist yet):', creditError);
+              // Nie blokuj aplikacji jeśli odejmowanie kredytów się nie powiodło
+            }
+          }
+        }
       } catch {}
     } catch (err) {
       console.error('Generation failed in handleInitialGeneration:', err);

@@ -36,6 +36,8 @@ import {
   GenerationStatsSection
 } from '@/components/dashboard/ProfileSections';
 import { CompletionStatus } from '@/types/deep-personalization';
+import { CreditBalance } from '@/components/subscription/CreditBalance';
+import { SubscriptionManagement } from '@/components/subscription/SubscriptionManagement';
 
 interface Space {
   id: string;
@@ -852,6 +854,24 @@ export function UserDashboard() {
               );
             })()}
           </motion.div>
+
+          {/* Credits & Subscription */}
+          {(() => {
+            try {
+              const userHash = getUserHash();
+              if (!userHash) return null;
+              
+              return (
+                <div className="space-y-6 mb-8">
+                  <CreditBalance userHash={userHash} />
+                  <SubscriptionManagement userHash={userHash} />
+                </div>
+              );
+            } catch (error) {
+              console.error('Error rendering credits/subscription:', error);
+              return null;
+            }
+          })()}
 
           {/* User Profile Overview */}
           <ProfileOverview
