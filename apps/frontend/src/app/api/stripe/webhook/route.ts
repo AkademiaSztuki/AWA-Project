@@ -3,7 +3,25 @@ import { stripe } from '@/lib/stripe';
 import { supabase } from '@/lib/supabase';
 import { allocateSubscriptionCredits } from '@/lib/credits';
 import { getPlanConfig } from '@/lib/stripe';
+import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+
+// Supabase client z service_role key dla webhook handlera (omija RLS)
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY. Webhook handler requires service role key to bypass RLS.');
+  }
+  
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
 
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -40,20 +58,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Użyj service_role client dla operacji które wymagają omijania RLS
+  const supabaseAdmin = getSupabaseAdmin();
+
   // Sprawdź czy event już został przetworzony (idempotencja)
-  const { data: existingEvent } = await supabase
+  const { data: existingEvent } = await supabaseAdmin
     .from('stripe_webhook_events')
     .select('id, processed, retry_count')
     .eq('stripe_event_id', event.id)
     .maybeSingle();
 
   if (existingEvent?.processed) {
-    console.log('Event already processed:', event.id);
+    console.log('[Webhook] Event already processed:', event.id);
     return NextResponse.json({ received: true, alreadyProcessed: true });
   }
 
-  // Zapisz event do bazy
-  const { error: insertError } = await supabase
+  // Zapisz event do bazy (użyj service_role client)
+  const { error: insertError } = await supabaseAdmin
     .from('stripe_webhook_events')
     .insert({
       stripe_event_id: event.id,
@@ -64,7 +85,7 @@ export async function POST(request: NextRequest) {
     });
 
   if (insertError && !insertError.message.includes('duplicate')) {
-    console.error('Error saving webhook event:', insertError);
+    console.error('[Webhook] Error saving webhook event:', insertError);
   }
 
   try {
@@ -79,8 +100,8 @@ export async function POST(request: NextRequest) {
 
     console.log('[Webhook] Event processed successfully:', event.id);
 
-    // Oznacz jako przetworzony
-    await supabase
+    // Oznacz jako przetworzony (użyj service_role client)
+    await supabaseAdmin
       .from('stripe_webhook_events')
       .update({ processed: true })
       .eq('stripe_event_id', event.id);
@@ -94,8 +115,8 @@ export async function POST(request: NextRequest) {
       stack: error.stack,
     });
 
-    // Zwiększ retry_count
-    await supabase
+    // Zwiększ retry_count (użyj service_role client)
+    await supabaseAdmin
       .from('stripe_webhook_events')
       .update({
         retry_count: (existingEvent?.retry_count || 0) + 1,
@@ -185,9 +206,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     status: subscription.status,
   });
 
-  // Utwórz lub zaktualizuj subskrypcję w bazie
+  // Utwórz lub zaktualizuj subskrypcję w bazie (użyj service_role client)
   console.log('[Webhook] Creating/updating subscription in database...');
-  const { error, data } = await supabase
+  const supabaseAdmin = getSupabaseAdmin();
+  const { error, data } = await supabaseAdmin
     .from('subscriptions')
     .upsert({
       user_hash: userHash,
@@ -281,8 +303,11 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   const subscriptionId = subscription.id;
 
+  // Użyj service_role client
+  const supabaseAdmin = getSupabaseAdmin();
+
   // Oznacz subskrypcję jako anulowaną
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('subscriptions')
     .update({
       status: 'cancelled',
@@ -304,15 +329,18 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
+  // Użyj service_role client
+  const supabaseAdmin = getSupabaseAdmin();
+
   // Pobierz subskrypcję z bazy
-  const { data: dbSubscription } = await supabase
+  const { data: dbSubscription } = await supabaseAdmin
     .from('subscriptions')
     .select('user_hash, plan_id, billing_period')
     .eq('stripe_subscription_id', subscriptionId)
     .single();
 
   if (!dbSubscription) {
-    console.error('Subscription not found in database:', subscriptionId);
+    console.error('[Webhook] Subscription not found in database:', subscriptionId);
     return;
   }
 
@@ -330,7 +358,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   );
 
   // Zaktualizuj okres subskrypcji
-  await supabase
+  await supabaseAdmin
     .from('subscriptions')
     .update({
       current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
@@ -347,8 +375,11 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     return;
   }
 
+  // Użyj service_role client
+  const supabaseAdmin = getSupabaseAdmin();
+
   // Oznacz subskrypcję jako past_due
-  await supabase
+  await supabaseAdmin
     .from('subscriptions')
     .update({
       status: 'past_due',

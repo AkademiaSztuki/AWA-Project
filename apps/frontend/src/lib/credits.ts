@@ -1,7 +1,29 @@
 import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
+import { Database } from '@/types/supabase';
+import { PostgrestError } from '@supabase/supabase-js';
 
 const CREDITS_PER_GENERATION = 10;
 const FREE_GRANT_CREDITS = 600;
+
+// Supabase client z service_role key dla operacji które wymagają omijania RLS
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    // Fallback do zwykłego clienta jeśli service_role key nie jest dostępny
+    console.warn('[Credits] SUPABASE_SERVICE_ROLE_KEY not set, using regular client (may fail with RLS)');
+    return supabase;
+  }
+  
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
 
 export interface CreditBalance {
   balance: number;
@@ -181,8 +203,19 @@ export async function allocateSubscriptionCredits(
   expiresAt: Date,
   subscriptionId: string
 ): Promise<boolean> {
+  // Użyj service_role client dla operacji które wymagają omijania RLS
+  const supabaseAdmin = getSupabaseAdmin();
+
+  console.log('[Credits] Allocating subscription credits:', {
+    userHash,
+    planId,
+    billingPeriod,
+    credits,
+    subscriptionId,
+  });
+
   // Utwórz transakcję kredytową
-  const { error: transactionError } = await supabase
+  const { error: transactionError } = await supabaseAdmin
     .from('credit_transactions')
     .insert({
       user_hash: userHash,
@@ -194,19 +227,21 @@ export async function allocateSubscriptionCredits(
     });
 
   if (transactionError) {
-    console.error('Error allocating subscription credits:', transactionError);
+    console.error('[Credits] Error allocating subscription credits:', transactionError);
     return false;
   }
 
+  console.log('[Credits] Credit transaction created successfully');
+
   // Pobierz aktualną subskrypcję
-  const { data: currentSubscription } = await supabase
+  const { data: currentSubscription } = await supabaseAdmin
     .from('subscriptions')
     .select('credits_allocated, subscription_credits_remaining')
     .eq('stripe_subscription_id', subscriptionId)
     .single();
 
   // Aktualizuj subskrypcję
-  const { error: subscriptionError } = await supabase
+  const { error: subscriptionError } = await supabaseAdmin
     .from('subscriptions')
     .update({
       credits_allocated: (currentSubscription?.credits_allocated || 0) + credits,
@@ -215,10 +250,11 @@ export async function allocateSubscriptionCredits(
     .eq('stripe_subscription_id', subscriptionId);
 
   if (subscriptionError) {
-    console.error('Error updating subscription:', subscriptionError);
+    console.error('[Credits] Error updating subscription:', subscriptionError);
     return false;
   }
 
+  console.log('[Credits] Subscription updated successfully');
   return true;
 }
 
