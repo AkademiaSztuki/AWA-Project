@@ -165,17 +165,27 @@ export async function deductCredits(userHash: string, generationId: string): Pro
   }
 
   // Aktualizuj subscription_credits_remaining jeśli ma aktywną subskrypcję
+  // Użyj najnowszej subskrypcji (najwyższa current_period_start) jeśli jest wiele aktywnych
   try {
-    const { data: activeSubscription } = await supabaseAdmin
+    const { data: activeSubscriptions, error: subscriptionQueryError } = await supabaseAdmin
       .from('subscriptions')
-      .select('id, subscription_credits_remaining, credits_used')
+      .select('id, subscription_credits_remaining, credits_used, current_period_start')
       .eq('user_hash', userHash)
       .eq('status', 'active')
-      .maybeSingle();
+      .order('current_period_start', { ascending: false })
+      .limit(1);
+
+    if (subscriptionQueryError) {
+      console.warn('[Credits] Error querying subscriptions:', subscriptionQueryError);
+      // Nie rzucaj błędu - to nie jest krytyczne
+      return true;
+    }
+
+    const activeSubscription = activeSubscriptions && activeSubscriptions.length > 0 ? activeSubscriptions[0] : null;
 
     if (activeSubscription && activeSubscription.subscription_credits_remaining > 0) {
       const newRemaining = Math.max(0, activeSubscription.subscription_credits_remaining - CREDITS_PER_GENERATION);
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from('subscriptions')
         .update({
           subscription_credits_remaining: newRemaining,
@@ -183,7 +193,16 @@ export async function deductCredits(userHash: string, generationId: string): Pro
         })
         .eq('id', activeSubscription.id);
       
-      console.log('[Credits] Subscription credits updated:', { newRemaining, creditsUsed: activeSubscription.credits_used + CREDITS_PER_GENERATION });
+      if (updateError) {
+        console.warn('[Credits] Error updating subscription credits:', updateError);
+        // Nie rzucaj błędu - transakcja kredytowa już się udała
+      } else {
+        console.log('[Credits] Subscription credits updated:', { 
+          subscriptionId: activeSubscription.id,
+          newRemaining, 
+          creditsUsed: (activeSubscription.credits_used || 0) + CREDITS_PER_GENERATION 
+        });
+      }
     }
   } catch (subscriptionError) {
     // Jeśli tabela subscriptions nie istnieje, to nie jest błąd krytyczny

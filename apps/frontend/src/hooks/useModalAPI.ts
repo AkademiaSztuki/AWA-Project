@@ -520,14 +520,8 @@ export const useModalAPI = () => {
     setError(null);
     
     try {
-      let apiBase = process.env.NEXT_PUBLIC_MODAL_API_URL || 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
-
-      // Fix for incorrect dev URL in Vercel
-      if (apiBase.includes('-dev')) {
-        apiBase = 'https://akademiasztuki--aura-flux-api-renamed-fastapi-app.modal.run';
-      }
-      
-      const response = await fetch(`${apiBase}/llm-comment`, {
+      // Use Next.js API route as proxy to avoid CORS issues
+      const response = await fetch('/api/modal/llm-comment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -537,12 +531,11 @@ export const useModalAPI = () => {
           room_description: roomDescription,
           context: context
         }),
-        redirect: 'follow', // Follow redirects
-        mode: 'cors', // Explicitly enable CORS
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
