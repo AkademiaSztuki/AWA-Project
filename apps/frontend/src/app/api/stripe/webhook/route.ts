@@ -206,9 +206,39 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     status: subscription.status,
   });
 
-  // Utwórz lub zaktualizuj subskrypcję w bazie (użyj service_role client)
-  console.log('[Webhook] Creating/updating subscription in database...');
+  // Użyj service_role client
   const supabaseAdmin = getSupabaseAdmin();
+
+  // Sprawdź czy subskrypcja już istnieje (aby uniknąć duplikacji kredytów)
+  const { data: existingSubscription } = await supabaseAdmin
+    .from('subscriptions')
+    .select('id, credits_allocated, current_period_start')
+    .eq('stripe_subscription_id', subscriptionId)
+    .maybeSingle();
+
+  if (existingSubscription) {
+    // Sprawdź czy to ten sam okres rozliczeniowy
+    const newPeriodStart = new Date(subscription.current_period_start * 1000).toISOString();
+    const existingPeriodStart = existingSubscription.current_period_start;
+
+    if (existingPeriodStart && newPeriodStart === existingPeriodStart) {
+      console.log('[Webhook] Subscription already exists for this period - skipping credit allocation to prevent duplicates');
+      // Tylko zaktualizuj status i okres (bez przydzielania kredytów)
+      await supabaseAdmin
+        .from('subscriptions')
+        .update({
+          status: subscription.status === 'active' ? 'active' : 'unpaid',
+          current_period_start: newPeriodStart,
+          current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          cancel_at_period_end: subscription.cancel_at_period_end || false,
+        })
+        .eq('stripe_subscription_id', subscriptionId);
+      return; // Nie przydzielaj kredytów ponownie
+    }
+  }
+
+  // Utwórz lub zaktualizuj subskrypcję w bazie
+  console.log('[Webhook] Creating/updating subscription in database...');
   const { error, data } = await supabaseAdmin
     .from('subscriptions')
     .upsert({
@@ -235,7 +265,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   console.log('[Webhook] Subscription created/updated successfully');
 
-  // Przydziel kredyty
+  // Przydziel kredyty (tylko jeśli to nowa subskrypcja lub nowy okres)
   console.log('[Webhook] Allocating subscription credits...', {
     userHash,
     planId,
@@ -335,7 +365,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   // Pobierz subskrypcję z bazy
   const { data: dbSubscription } = await supabaseAdmin
     .from('subscriptions')
-    .select('user_hash, plan_id, billing_period')
+    .select('user_hash, plan_id, billing_period, current_period_start, current_period_end')
     .eq('stripe_subscription_id', subscriptionId)
     .single();
 
@@ -344,7 +374,28 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     return;
   }
 
-  // Przydziel nowe kredyty dla nowego okresu
+  // Sprawdź czy to nowy okres rozliczeniowy (czy current_period_start się zmienił)
+  const newPeriodStart = new Date(subscription.current_period_start * 1000).toISOString();
+  const existingPeriodStart = dbSubscription.current_period_start;
+
+  // Jeśli okres się nie zmienił, to znaczy że kredyty już zostały przydzielone przez checkout.session.completed
+  // Przydziel kredyty tylko dla nowego okresu (kolejne płatności)
+  if (existingPeriodStart && newPeriodStart === existingPeriodStart) {
+    console.log('[Webhook] Invoice payment succeeded but period unchanged - credits already allocated by checkout.session.completed');
+    // Tylko zaktualizuj okres (jeśli potrzebne)
+    await supabaseAdmin
+      .from('subscriptions')
+      .update({
+        current_period_start: newPeriodStart,
+        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        cancel_at_period_end: subscription.cancel_at_period_end || false,
+      })
+      .eq('stripe_subscription_id', subscriptionId);
+    return;
+  }
+
+  // To jest nowy okres - przydziel kredyty
+  console.log('[Webhook] New billing period detected - allocating credits for renewal');
   const planConfig = getPlanConfig(dbSubscription.plan_id, dbSubscription.billing_period);
   const expiresAt = new Date(subscription.current_period_end * 1000);
 
@@ -361,7 +412,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   await supabaseAdmin
     .from('subscriptions')
     .update({
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+      current_period_start: newPeriodStart,
       current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
       cancel_at_period_end: subscription.cancel_at_period_end || false,
     })

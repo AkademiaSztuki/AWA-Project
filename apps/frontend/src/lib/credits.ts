@@ -12,9 +12,9 @@ function getSupabaseAdmin() {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   
   if (!supabaseUrl || !supabaseServiceKey) {
-    // Fallback do zwykłego clienta jeśli service_role key nie jest dostępny
-    console.warn('[Credits] SUPABASE_SERVICE_ROLE_KEY not set, using regular client (may fail with RLS)');
-    return supabase;
+    // W API routes (server-side) musimy mieć service_role key, inaczej RLS zablokuje zapis
+    console.error('[Credits] SUPABASE_SERVICE_ROLE_KEY is not set - credit operations will fail with RLS');
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for credit operations. Please add it to Vercel environment variables.');
   }
   
   return createClient(supabaseUrl, supabaseServiceKey, {
