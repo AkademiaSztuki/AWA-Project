@@ -198,11 +198,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       // After radical refactor, link auth user on participants (source of truth)
+      // Upewnij się, że consent_timestamp zawsze jest ustawione (NOT NULL constraint)
+      // Najpierw sprawdź czy rekord istnieje, aby zachować istniejący consent_timestamp
+      const { data: existing } = await supabase
+        .from('participants')
+        .select('consent_timestamp')
+        .eq('user_hash', userHash)
+        .maybeSingle();
+
+      const consentTimestamp = existing?.consent_timestamp || new Date().toISOString();
+
       const { error } = await supabase
         .from('participants')
         .upsert({
           user_hash: userHash,
           auth_user_id: user.id,
+          consent_timestamp: consentTimestamp, // Zawsze ustaw consent_timestamp
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_hash' } as any);
 
