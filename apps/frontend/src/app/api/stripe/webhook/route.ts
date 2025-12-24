@@ -195,7 +195,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   const planId = session.metadata?.plan_id as 'basic' | 'pro' | 'studio';
   const billingPeriod = session.metadata?.billing_period as 'monthly' | 'yearly';
-  const credits = parseInt(session.metadata?.credits || '0');
+  // Użyj getPlanConfig zamiast metadata.credits - metadata może być niepoprawne lub podwójne
+  const planConfig = getPlanConfig(planId, billingPeriod);
+  const credits = planConfig.credits;
 
   console.log('[Webhook] Subscription details:', {
     subscriptionId,
