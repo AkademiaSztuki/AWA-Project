@@ -51,26 +51,55 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
             .select('*')
             .eq('user_hash', userHash)
             .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
             .maybeSingle(),
         ]);
 
         // Log subscription fetch result for debugging
         if (subscriptionResponse.error) {
-          console.log('[CreditBalance] Subscription fetch error:', {
-            error: subscriptionResponse.error.message,
-            code: subscriptionResponse.error.code,
-            userHash: userHash.substring(0, 8) + '...',
-          });
+          // PGRST116 means multiple rows or no rows - handle gracefully
+          if (subscriptionResponse.error.code === 'PGRST116') {
+            console.log('[CreditBalance] Multiple or no subscriptions found, fetching first active one:', {
+              userHash: userHash.substring(0, 8) + '...',
+            });
+            // Try to get the first active subscription
+            const { data: subscriptions, error: listError } = await supabase
+              .from('subscriptions')
+              .select('*')
+              .eq('user_hash', userHash)
+              .eq('status', 'active')
+              .order('created_at', { ascending: false })
+              .limit(1);
+            
+            if (!listError && subscriptions && subscriptions.length > 0) {
+              setSubscription(subscriptions[0]);
+              console.log('[CreditBalance] Using first active subscription:', {
+                planId: subscriptions[0].plan_id,
+                status: subscriptions[0].status,
+              });
+            } else {
+              setSubscription(null);
+              console.log('[CreditBalance] No active subscription found');
+            }
+          } else {
+            console.log('[CreditBalance] Subscription fetch error:', {
+              error: subscriptionResponse.error.message,
+              code: subscriptionResponse.error.code,
+              userHash: userHash.substring(0, 8) + '...',
+            });
+            setSubscription(null);
+          }
         } else {
           console.log('[CreditBalance] Subscription fetch result:', {
             hasSubscription: !!subscriptionResponse.data,
             status: subscriptionResponse.data?.status,
             planId: subscriptionResponse.data?.plan_id,
           });
+          setSubscription(subscriptionResponse.data);
         }
 
         setBalance(balanceData);
-        setSubscription(subscriptionResponse.data);
       } catch (error) {
         console.error('Error fetching credit balance:', error);
         setBalance({
