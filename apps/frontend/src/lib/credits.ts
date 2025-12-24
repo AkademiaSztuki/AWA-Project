@@ -166,6 +166,7 @@ export async function deductCredits(userHash: string, generationId: string): Pro
 
   // Aktualizuj subscription_credits_remaining jeśli ma aktywną subskrypcję
   // Użyj najnowszej subskrypcji (najwyższa current_period_start) jeśli jest wiele aktywnych
+  // Użyj RPC function dla atomowej aktualizacji, aby uniknąć race condition przy równoległych requestach
   try {
     const { data: activeSubscriptions, error: subscriptionQueryError } = await supabaseAdmin
       .from('subscriptions')
@@ -184,23 +185,43 @@ export async function deductCredits(userHash: string, generationId: string): Pro
     const activeSubscription = activeSubscriptions && activeSubscriptions.length > 0 ? activeSubscriptions[0] : null;
 
     if (activeSubscription && activeSubscription.subscription_credits_remaining > 0) {
-      const newRemaining = Math.max(0, activeSubscription.subscription_credits_remaining - CREDITS_PER_GENERATION);
-      const { error: updateError } = await supabaseAdmin
-        .from('subscriptions')
-        .update({
-          subscription_credits_remaining: newRemaining,
-          credits_used: (activeSubscription.credits_used || 0) + CREDITS_PER_GENERATION,
-        })
-        .eq('id', activeSubscription.id);
-      
+      // Użyj atomowej aktualizacji SQL, aby uniknąć race condition
+      // Zamiast odczytać -> zmienić -> zapisać, używamy SQL UPDATE z wyrażeniem
+      // To gwarantuje, że równoległe requesty nie nadpiszą się nawzajem
+      const { data: updateResult, error: updateError } = await supabaseAdmin.rpc('deduct_subscription_credits', {
+        p_subscription_id: activeSubscription.id,
+        p_amount: CREDITS_PER_GENERATION
+      });
+
       if (updateError) {
-        console.warn('[Credits] Error updating subscription credits:', updateError);
-        // Nie rzucaj błędu - transakcja kredytowa już się udała
+        // Fallback: jeśli RPC nie istnieje, użyj standardowego UPDATE
+        // UWAGA: To może mieć race condition przy równoległych requestach!
+        // Najlepiej uruchomić migrację 20251224000002_atomic_credit_deduction.sql
+        console.warn('[Credits] RPC function not available, using standard update (may have race condition):', updateError);
+        console.warn('[Credits] Please run migration 20251224000002_atomic_credit_deduction.sql to fix this');
+        const newRemaining = Math.max(0, activeSubscription.subscription_credits_remaining - CREDITS_PER_GENERATION);
+        const { error: fallbackError } = await supabaseAdmin
+          .from('subscriptions')
+          .update({
+            subscription_credits_remaining: newRemaining,
+            credits_used: (activeSubscription.credits_used || 0) + CREDITS_PER_GENERATION,
+          })
+          .eq('id', activeSubscription.id);
+        
+        if (fallbackError) {
+          console.warn('[Credits] Error updating subscription credits:', fallbackError);
+        } else {
+          console.log('[Credits] Subscription credits updated (fallback - may have race condition):', { 
+            subscriptionId: activeSubscription.id,
+            newRemaining, 
+            creditsUsed: (activeSubscription.credits_used || 0) + CREDITS_PER_GENERATION 
+          });
+        }
       } else {
-        console.log('[Credits] Subscription credits updated:', { 
+        console.log('[Credits] Subscription credits updated atomically:', { 
           subscriptionId: activeSubscription.id,
-          newRemaining, 
-          creditsUsed: (activeSubscription.credits_used || 0) + CREDITS_PER_GENERATION 
+          amount: CREDITS_PER_GENERATION,
+          result: updateResult
         });
       }
     }
