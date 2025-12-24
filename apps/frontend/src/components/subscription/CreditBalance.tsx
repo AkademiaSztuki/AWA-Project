@@ -44,24 +44,33 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [balanceData, subscriptionData] = await Promise.all([
+        const [balanceData, subscriptionResponse] = await Promise.all([
           getCreditBalance(userHash),
           supabase
             .from('subscriptions')
             .select('*')
             .eq('user_hash', userHash)
             .eq('status', 'active')
-            .maybeSingle()
-            .then(({ data, error }) => {
-              if (error && !error.message?.includes('permission') && !error.message?.includes('RLS')) {
-                console.error('Error fetching subscription:', error);
-              }
-              return data;
-            }),
+            .maybeSingle(),
         ]);
 
+        // Log subscription fetch result for debugging
+        if (subscriptionResponse.error) {
+          console.log('[CreditBalance] Subscription fetch error:', {
+            error: subscriptionResponse.error.message,
+            code: subscriptionResponse.error.code,
+            userHash: userHash.substring(0, 8) + '...',
+          });
+        } else {
+          console.log('[CreditBalance] Subscription fetch result:', {
+            hasSubscription: !!subscriptionResponse.data,
+            status: subscriptionResponse.data?.status,
+            planId: subscriptionResponse.data?.plan_id,
+          });
+        }
+
         setBalance(balanceData);
-        setSubscription(subscriptionData);
+        setSubscription(subscriptionResponse.data);
       } catch (error) {
         console.error('Error fetching credit balance:', error);
         setBalance({

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage } from '@/lib/supabase';
-import { checkCreditsAvailable, deductCredits } from '@/lib/credits';
+import { checkCreditsAvailable } from '@/lib/credits';
 import { UpgradePrompt } from '@/components/subscription/UpgradePrompt';
 import { supabase } from '@/lib/supabase';
 import { assessAllSourcesQuality, getViableSources, type DataStatus } from '@/lib/prompt-synthesis/data-quality';
@@ -1872,12 +1872,23 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       try {
         if (jobId) {
           await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 });
-          // Odejmij kredyty po udanej generacji
+          // Odejmij kredyty po udanej generacji (użyj API route - działa po stronie serwera z service_role)
           if (userHash) {
             try {
-              await deductCredits(userHash, jobId);
+              const response = await fetch('/api/credits/deduct', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userHash, generationId: jobId }),
+              });
+              
+              if (!response.ok) {
+                const errorData = await response.json();
+                console.warn('[Credits] Failed to deduct credits:', errorData.error || 'Unknown error');
+              } else {
+                console.log('[Credits] Credits deducted successfully via API');
+              }
             } catch (creditError) {
-              console.warn('Error deducting credits (tables may not exist yet):', creditError);
+              console.warn('[Credits] Error deducting credits (tables may not exist yet):', creditError);
               // Nie blokuj aplikacji jeśli odejmowanie kredytów się nie powiodło
             }
           }
