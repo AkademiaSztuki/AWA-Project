@@ -1406,6 +1406,38 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         displayOrder: displayOrder
       });
       
+      // Odejmij kredyty za wszystkie wygenerowane obrazy (6 obrazków × 10 kredytów = 60 kredytów)
+      if (userHash && newMatrixImages.length > 0) {
+        try {
+          const totalCreditsToDeduct = newMatrixImages.length * 10; // 10 kredytów na obrazek
+          console.log(`[6-Image Matrix] Deducting ${totalCreditsToDeduct} credits for ${newMatrixImages.length} images`);
+          
+          // Odejmij kredyty dla każdego obrazka osobno (każdy ma swój generationId)
+          const deductPromises = newMatrixImages.map(async (image) => {
+            if (image.id) {
+              const response = await fetch('/api/credits/deduct', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userHash, generationId: image.id }),
+              });
+              
+              if (!response.ok) {
+                const errorData = await response.json();
+                console.warn(`[Credits] Failed to deduct credits for image ${image.id}:`, errorData.error || 'Unknown error');
+              } else {
+                console.log(`[Credits] Credits deducted successfully for image ${image.id}`);
+              }
+            }
+          });
+          
+          await Promise.all(deductPromises);
+          console.log(`[6-Image Matrix] All credits deducted successfully for ${newMatrixImages.length} images`);
+        } catch (creditError) {
+          console.warn('[6-Image Matrix] Error deducting credits (tables may not exist yet):', creditError);
+          // Nie blokuj aplikacji jeśli odejmowanie kredytów się nie powiodło
+        }
+      }
+      
     } catch (err: any) {
       // Check if it was an abort
       if (err.name === 'AbortError' || err.message === 'Generation cancelled') {

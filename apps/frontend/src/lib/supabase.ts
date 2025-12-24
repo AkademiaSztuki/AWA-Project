@@ -408,8 +408,13 @@ export const saveFullSessionToSupabase = async (sessionData: any) => {
     
     const participantRow = mapSessionDataToParticipant(sessionData, authUserId);
     
+    // Upewnij się, że consent_timestamp zawsze jest ustawione (NOT NULL constraint)
+    if (!participantRow.consent_timestamp) {
+      participantRow.consent_timestamp = new Date().toISOString();
+    }
+    
     // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-before-insert',message:'Before upsert to participants',data:{userHash:participantRow.user_hash,hasBigFive:!!(participantRow as any).bigfive_domains,hasImplicit:!!participantRow.implicit_style_1,hasExplicit:!!participantRow.explicit_style,hasInspirations:!!participantRow.inspiration_style_1},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-before-insert',message:'Before upsert to participants',data:{userHash:participantRow.user_hash,hasBigFive:!!(participantRow as any).bigfive_domains,hasImplicit:!!participantRow.implicit_style_1,hasExplicit:!!participantRow.explicit_style,hasInspirations:!!participantRow.inspiration_style_1,hasConsentTimestamp:!!participantRow.consent_timestamp},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
     // #endregion
     
     // #region agent log
