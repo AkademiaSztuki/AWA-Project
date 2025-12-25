@@ -772,7 +772,7 @@ export default function BigFivePage() {
       {/* Dialog IDA na dole */}
       <div className="w-full">
         <AwaDialogue 
-          currentStep="onboarding" 
+          currentStep="big_five" 
           fullWidth={true}
           autoHide={true}
         />

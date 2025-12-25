@@ -31,9 +31,9 @@ interface TextTypeProps {
 const TextType = ({
   text,
   as: Component = "div",
-  typingSpeed = 50,
-  initialDelay = 0,
-  pauseDuration = 2000,
+  typingSpeed = 20,
+  initialDelay = 10,
+  pauseDuration = 200,
   deletingSpeed = 30,
   loop = true,
   className = "",
@@ -56,6 +56,9 @@ const TextType = ({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const containerRef = useRef<HTMLElement>(null);
   const prevTextRef = useRef<string | string[]>(text);
+  const animationFrameRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
+  const currentIndexRef = useRef<number>(0);
 
   const textArray = useMemo(() => (Array.isArray(text) ? text : [text]), [text]);
   const currentFullText = textArray[currentTextIndex] || "";
@@ -67,16 +70,19 @@ const TextType = ({
       // Natychmiast ukryj tekst podczas przejścia
       setIsTransitioning(true);
       setCurrentIndex(0);
+      currentIndexRef.current = 0;
       setIsDeleting(false);
       setCurrentTextIndex(0);
-      // Krótkie opóźnienie przed rozpoczęciem nowej animacji
-      const timer = setTimeout(() => {
-        setIsTransitioning(false);
-      }, 50);
+      // Natychmiastowe rozpoczęcie nowej animacji (bez opóźnienia)
+      setIsTransitioning(false);
       prevTextRef.current = text;
-      return () => clearTimeout(timer);
     }
   }, [JSON.stringify(text)]);
+  
+  // Synchronizuj ref z currentIndex
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
 
   const getRandomSpeed = () => {
     if (!variableSpeed) return typingSpeed;
@@ -128,9 +134,63 @@ const TextType = ({
         }
       } else {
         if (currentIndex < currentLength) {
-          timeout = setTimeout(() => {
-            setCurrentIndex((prev) => prev + 1);
-          }, variableSpeed ? getRandomSpeed() : typingSpeed);
+          // Użyj requestAnimationFrame dla szybszej animacji pisania
+          const speed = variableSpeed ? getRandomSpeed() : typingSpeed;
+          
+          // Precyzyjny przelicznik: używa dokładnej wartości speed (obsługuje wartości dziesiętne)
+          // Dla małych wartości wyświetlaj więcej znaków na raz, dla większych mniej
+          let charsPerFrame: number;
+          let frameTime: number;
+          
+          if (speed <= 5) {
+            // Bardzo szybkie: wyświetlaj 4-8 znaków na raz, co 16ms (naturalne dla requestAnimationFrame)
+            charsPerFrame = Math.max(4, Math.floor(40 / speed));
+            frameTime = 16;
+          } else if (speed <= 14) {
+            // Średnie: wyświetlaj 2-3 znaki na raz, co dokładnie speed ms (obsługuje wartości dziesiętne)
+            charsPerFrame = Math.max(2, Math.floor(30 / speed));
+            frameTime = speed; // Dokładna wartość, może być np. 12.5ms
+          } else {
+            // Wolne i przejściowe: wyświetlaj po 1 znaku, co dokładnie speed ms (obsługuje wartości dziesiętne)
+            // Teraz możesz użyć np. 15.5, 16.3, 20.7 itp. dla precyzyjnej kontroli
+            charsPerFrame = 1;
+            frameTime = speed; // Dokładna wartość, może być np. 15.5ms, 16.3ms
+          }
+          
+          const animateTyping = (currentTime: number) => {
+            if (lastTimeRef.current === 0) {
+              lastTimeRef.current = currentTime;
+            }
+            
+            const elapsed = currentTime - lastTimeRef.current;
+            const currentIdx = currentIndexRef.current;
+            
+            if (elapsed >= frameTime && currentIdx < currentLength) {
+              // Wyświetl znaki zgodnie z przelicznikiem
+              const next = Math.min(currentIdx + charsPerFrame, currentLength);
+              lastTimeRef.current = currentTime;
+              setCurrentIndex(next);
+              currentIndexRef.current = next;
+              
+              // Kontynuuj animację jeśli jeszcze nie skończyliśmy
+              if (next < currentLength) {
+                animationFrameRef.current = requestAnimationFrame(animateTyping);
+              } else {
+                animationFrameRef.current = null;
+                lastTimeRef.current = 0;
+              }
+            } else if (currentIdx < currentLength) {
+              // Kontynuuj animację
+              animationFrameRef.current = requestAnimationFrame(animateTyping);
+            } else {
+              animationFrameRef.current = null;
+              lastTimeRef.current = 0;
+            }
+          };
+          
+          // Resetuj czas i rozpocznij animację
+          lastTimeRef.current = 0;
+          animationFrameRef.current = requestAnimationFrame(animateTyping);
         } else {
           // Tekst skończony
           timeout = setTimeout(() => {
@@ -153,7 +213,14 @@ const TextType = ({
         animate();
     }
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      lastTimeRef.current = 0;
+    };
   }, [
     currentIndex, 
     isDeleting, 

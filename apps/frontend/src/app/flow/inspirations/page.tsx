@@ -572,7 +572,7 @@ export default function InspirationsPage() {
       {/* Dialog IDA na dole */}
       <div className="w-full">
         <AwaDialogue 
-          currentStep="onboarding" 
+          currentStep="inspirations" 
           fullWidth={true}
           autoHide={true}
         />

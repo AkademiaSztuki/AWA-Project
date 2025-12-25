@@ -758,7 +758,7 @@ export function UserDashboard() {
           return (
       <div className="w-full">
         <AwaDialogue 
-                currentStep="room_analysis" 
+                currentStep="dashboard" 
           fullWidth={true}
                 autoHide={false}
                 customMessage={roomComment}

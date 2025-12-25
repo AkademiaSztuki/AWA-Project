@@ -23,17 +23,18 @@ interface AwaDialogueProps {
 const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   landing: {
     pl: [
-      "Cześć, jestem IDA - Interior Design Assistant.",
-      "Przeprowadzę Cię przez cały proces tworzenia spersonalizowanych wizualizacji wnętrz.",
-      "Dzięki, że testujesz tę aplikację! To pierwsza wersja testowa doktoratu Jakuba.",
-      "Bardzo proszę o feedback - jeśli coś jest niejasne lub znajdziesz błąd, daj znać. Każda uwaga jest bardzo cenna!"
+      "Cześć, jestem IDA.",
+      "Stwórzmy razem wizualizacje wnętrz dopasowane do Ciebie. ",
+      "Dziękuję za testy — to wczesna wersja aplikacji w ramach doktoratu Jakuba.",
+      "Masz uwagi lub znalazłeś błąd? Daj znać. Każda uwaga jest bardzo cenna!"
     ],
     en: [
-      "Hi, I'm IDA - Interior Design Assistant.",
-      "I'll guide you through the entire process of creating personalized interior visualizations.",
-      "Thanks for testing this app! This is the first test version of Jakub's PhD dissertation.",
-      "Please share your feedback - if anything is unclear or you find a bug, let me know. Every comment is very valuable!"
+      "Hi, I’m IDA.",
+      "Let’s create interior visualizations tailored to you together.",
+      "Thanks for testing — this is an early version of the app as part of Jakub’s PhD.",
+      "Have feedback or found a bug? Let me know. Every note is truly valuable!"
     ]
+    
   },
   path_selection: {
     pl: [
@@ -50,23 +51,21 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   onboarding: {
     pl: [
       "Zanim zaczniemy, muszę prosić Cię o formalną zgodę na udział w badaniu.",
-      "Przeczytaj informacje na ekranie i kliknij przycisk 'Zgadzam się i Dalej', aby przejść do profilowania."
+      "Przeczytaj informacje na ekranie i zaznacz checkbox 'Akceptuję wszystkie warunki i wyrażam zgodę', aby przejść dalej."
     ],
     en: [
       "Before we begin, I need to ask for your formal consent to participate in the study.",
-      "Read the information on the screen and click 'I Agree and Continue' to proceed to profiling."
+      "Read the information on the screen and check the 'I accept all terms and give consent' checkbox to continue."
     ]
   },
   
   // --- Wizard Steps ---
   wizard_demographics: {
     pl: [
-      "Zacznijmy od kilku pytań metryczkowych. Uzupełnij wiek, płeć i wykształcenie.",
-      "Te dane są anonimowe i pomogą mi dobrać rozwiązania ergonomiczne odpowiednie dla Twojej grupy."
+      "Uzupełnij wiek, płeć i wykształcenie - te dane pomogą mi lepiej dopasować wnętrze do Twoich potrzeb."
     ],
     en: [
-      "Let's start with a few demographic questions. Fill in your age, gender, and education.",
-      "This data is anonymous and helps me select ergonomic solutions suitable for your group."
+      "Fill in your age, gender, and education - this data will help me better tailor the interior to your needs."
     ]
   },
   wizard_lifestyle: {
@@ -110,6 +109,42 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
     ]
   },
 
+  // --- Additional Steps ---
+  inspirations: {
+    pl: [
+      "Wgraj zdjęcia wnętrz, które Cię inspirują.",
+      "Możesz dodać do 10 zdjęć - pomogą mi lepiej zrozumieć Twój gust."
+    ],
+    en: [
+      "Upload photos of interiors that inspire you.",
+      "You can add up to 10 photos - they will help me better understand your taste."
+    ]
+  },
+  big_five: {
+    pl: [
+      "Teraz wypełnimy test osobowości Big Five - to naukowo zweryfikowany model  wymiarów osobowości.",
+      "Test bada pięć obszarów: otwartość, sumienność, ekstrawersję, ugodowość i neurotyczność.",
+      
+    ],
+    en: [
+      "Now we'll complete the Big Five personality test - a scientifically validated model of  personality dimensions.",
+      "The test examines five areas: openness, conscientiousness, extraversion, agreeableness, and neuroticism.",
+      
+    ]
+  },
+  dashboard: {
+    pl: [
+      "Oto Twój panel użytkownika - centrum wszystkich Twoich danych i projektów.",
+      "Znajdziesz tu wszystkie odpowiedzi z ankiet, wygenerowane wizualizacje, inspiracje, profile przestrzeni i statystyki.",
+      "Możesz przeglądać historię, zarządzać projektami i wracać do dowolnego etapu procesu."
+    ],
+    en: [
+      "Here's your user panel - the center of all your data and projects.",
+      "You'll find all your survey responses, generated visualizations, inspirations, space profiles, and statistics.",
+      "You can browse history, manage projects, and return to any stage of the process."
+    ]
+  },
+
   // --- Fast Track ---
   style_selection: {
     pl: [
@@ -125,12 +160,10 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   // --- Room Setup ---
   upload: {
     pl: [
-      "Teraz zajmiemy się konkretnym pokojem.",
-      "Wgraj zdjęcie pomieszczenia - najlepiej wyraźne, pokazujące większość pokoju."
+      "Wgraj zdjęcie swojego wnętrza - najlepiej wyraźne, pokazujące większość przestrzeni."
     ],
     en: [
-      "Now let's focus on a specific room.",
-      "Upload a photo of the space - preferably clear, showing most of the room."
+      "Upload a photo of your interior - preferably clear, showing most of the space."
     ]
   },
   room_analysis: {
@@ -195,11 +228,11 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   },
   room_prs_target: {
     pl: [
-      "Teraz najważniejsze: jak chcesz się czuć w nowym wnętrzu?",
+      "Jak chcesz się czuć w nowym wnętrzu?",
       "Przesuń kropkę na wykresie w stronę pożądanego nastroju docelowego."
     ],
     en: [
-      "Now the most important part: how do you want to feel in the new interior?",
+      "How do you want to feel in the new interior?",
       "Move the dot on the chart towards the desired target mood."
     ]
   },
@@ -218,41 +251,43 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   generation: {
     pl: [
       "Generuję wizualizacje. To może chwilę potrwać.",
-      "Gdy będą gotowe, oceń każdą z nich, abyśmy mogły je dalej udoskonalać."
+      "Gdy będą gotowe, wybierz jedną z nich, którą chcesz dalej udoskonalać."
     ],
     en: [
       "Generating visualizations. This may take a moment.",
-      "When they are ready, rate each one so we can refine them further."
+      "When they are ready, choose one of them that you want to refine further."
     ]
   },
   survey_satisfaction: {
     pl: [
-      "To już koniec. Wypełnij krótką ankietę satysfakcji.",
-      "Twoja opinia jest dla mnie bardzo ważna."
+      "Oceń użyteczność systemu na skali 1-5.",
+      "Twoja opinia o aplikacji jest dla mnie bardzo ważna."
     ],
     en: [
-      "This is the end. Please fill out a short satisfaction survey.",
-      "Your opinion is very important to me."
+      "Rate the system usability on a scale of 1-5.",
+      "Your opinion about the application is very important to me."
     ]
   },
   survey_clarity: {
     pl: [
-      "Odpowiedz na ostatnie pytania dotyczące jasności procesu.",
-      "Dzięki temu będę mogła lepiej pomagać w przyszłości."
+      "Ostatnie pytania o krystalizację Twojego gustu estetycznego.",
+      "Odpowiedz, czy i jak proces pomógł Ci lepiej zrozumieć własne preferencje."
     ],
     en: [
-      "Answer the last questions regarding the clarity of the process.",
-      "This will help me assist better in the future."
+      "Final questions about the crystallization of your aesthetic taste.",
+      "Answer how the process helped you better understand your own preferences."
     ]
   },
   thanks: {
     pl: [
       "Dziękuję za udział w badaniu!",
-      "Twoje odpowiedzi zostały zapisane."
+      "Twoje odpowiedzi zostały zapisane.",
+      "W razie uwag lub pytań, proszę o kontakt"
     ],
     en: [
       "Thank you for participating in the study!",
-      "Your answers have been saved."
+      "Your answers have been saved.",
+      "If you have any feedback or questions, please contact."
     ]
   }
 };
@@ -262,6 +297,7 @@ const getAudioFile = (step: string, lang: 'pl' | 'en'): string => {
   const audioSteps = [
     'landing', 'path_selection', 'onboarding',
     'wizard_demographics', 'wizard_lifestyle', 'tinder', 'wizard_semantic', 'wizard_sensory',
+    'inspirations', 'big_five', 'dashboard',
     'style_selection',
     'upload', 'room_analysis', 'room_preference_source', 'room_prs_current',
     'room_usage', 'room_activities', 'room_pain_points', 'room_prs_target', 'room_summary',
@@ -283,6 +319,11 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   customMessage
 }) => {
   const { language } = useLanguage();
+  
+  // Ustawienia prędkości i pauz - wszystko w jednym miejscu
+  const TYPING_SPEED = 13.5; // Prędkość wyświetlania tekstu (ms między znakami)
+  const PAUSE_BETWEEN_SENTENCES = 200; // Pauza między zdaniami (ms)
+  const PAUSE_AFTER_TEXT = 800; // Pauza w TextType po zakończeniu tekstu (ms)
   
   // Zabezpieczenie przed undefined
   if (!currentStep) {
@@ -350,7 +391,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       setTimeout(() => {
         console.log(`[AwaDialogue] Moving to next sentence: ${currentSentenceIndex + 1} -> ${currentSentenceIndex + 2}`);
         setCurrentSentenceIndex(prev => prev + 1);
-      }, 800);
+      }, PAUSE_BETWEEN_SENTENCES);
     } else {
       console.log('[AwaDialogue] All sentences completed');
       setIsDone(true);
@@ -366,59 +407,84 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
         if (onDialogueEnd) {
           onDialogueEnd();
         }
-      }, 500);
+      }, 50);
     }
   };
 
+  // Track previous step to only reset on actual step change
+  const prevStepRef = useRef<string | FlowStep | undefined>(undefined);
+  const prevLanguageRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
-    // console.log('AwaDialogue: Resetting for new step:', currentStep);
-    setCurrentSentenceIndex(0);
-    setIsDone(false);
-    setHasStarted(false);
-    setAudioReady(false);
-    setIsVisible(true);
-    setShowClickPrompt(false);
-  }, [currentStep, language, audioManager]);
+    // Only reset if step or language actually changed
+    const stepChanged = prevStepRef.current !== currentStep;
+    const languageChanged = prevLanguageRef.current !== language;
+    
+    if (stepChanged || languageChanged) {
+      console.log('AwaDialogue: Resetting for new step:', { currentStep, language, stepChanged, languageChanged });
+      
+      // Reset all state
+      setCurrentSentenceIndex(0);
+      setIsDone(false);
+      setHasStarted(false);
+      setAudioReady(false);
+      setIsVisible(true);
+      setShowClickPrompt(false);
+      
+      // Update refs immediately
+      prevStepRef.current = currentStep;
+      prevLanguageRef.current = language;
+      
+      // Auto-start for non-landing steps after reset
+      if (currentStep !== 'landing') {
+        const timer = setTimeout(() => {
+          console.log('AwaDialogue: Auto-starting after reset for step:', currentStep);
+          setHasStarted(true);
+          setAudioReady(true);
+        }, 200);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentStep, language]);
   
   // Handle customMessage changes - reset dialogue when customMessage appears
   const prevCustomMessageRef = React.useRef<string | undefined>(undefined);
   useEffect(() => {
-    console.log('[AwaDialogue] customMessage effect triggered:', {
-      customMessage,
-      prevCustomMessage: prevCustomMessageRef.current,
-      hasStarted,
-      isDone,
-      currentSentenceIndex,
-      dialoguesLength: dialogues.length
-    });
-    
-    // Reset if customMessage changed from undefined/null to a value, OR if it changed to a different value
-    if (customMessage && customMessage !== prevCustomMessageRef.current) {
-      console.log('[AwaDialogue] customMessage changed, resetting dialogue:', {
+    // Only process if customMessage actually changed
+    if (customMessage !== prevCustomMessageRef.current) {
+      console.log('[AwaDialogue] customMessage changed:', {
         customMessage,
         prevCustomMessage: prevCustomMessageRef.current,
         hasStarted,
         isDone,
-        currentSentenceIndex,
-        dialoguesLength: dialogues.length,
-        allDialogues: dialogues
+        currentSentenceIndex
       });
-      // Force reset dialogue to show new customMessage (will be appended to base dialogues)
-      setCurrentSentenceIndex(0);
-      setIsDone(false);
-      setIsVisible(true);
-      // Reset audio state
-      setHasStarted(false);
-      setAudioReady(false);
-      // Auto-start the dialogue after reset
-      setTimeout(() => {
-        console.log('[AwaDialogue] Auto-starting dialogue after customMessage reset, dialogues:', dialogues);
-        setHasStarted(true);
-        setAudioReady(true);
-      }, 300);
+      
+      // Only reset if customMessage is new (not just undefined -> undefined)
+      if (customMessage && customMessage !== prevCustomMessageRef.current) {
+        console.log('[AwaDialogue] New customMessage detected, resetting dialogue');
+        // Reset dialogue state but don't interrupt if already started
+        setCurrentSentenceIndex(0);
+        setIsDone(false);
+        setIsVisible(true);
+        
+        // Only reset audio if dialogue hasn't started yet
+        if (!hasStarted) {
+          setHasStarted(false);
+          setAudioReady(false);
+          // Auto-start after a short delay
+          setTimeout(() => {
+            setHasStarted(true);
+            setAudioReady(true);
+          }, 200);
+        } else {
+          // If already started, just reset sentence index to show new message
+          // Dialogue will continue with updated dialogues from useMemo
+        }
+      }
+      prevCustomMessageRef.current = customMessage;
     }
-    prevCustomMessageRef.current = customMessage;
-  }, [customMessage, dialogues]);
+  }, [customMessage, hasStarted, currentSentenceIndex]);
 
   useEffect(() => {
     if (currentStep === 'landing' && !audioReady) {
@@ -448,15 +514,20 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     }
   };
 
+  // Fallback auto-start: only if step hasn't changed but dialogue hasn't started
+  // This handles edge cases where reset useEffect might not have triggered
   useEffect(() => {
-    // Auto-start for non-landing steps
     if (currentStep !== 'landing' && !hasStarted && !audioReady) {
-      console.log('Auto-starting dialogue for step:', currentStep);
-      // Small delay to ensure state is reset
+      // Only use fallback if step is stable (not during initial mount or step change)
       const timer = setTimeout(() => {
-        setHasStarted(true);
-        setAudioReady(true);
-      }, 100);
+        setHasStarted(prev => {
+          if (!prev) {
+            setAudioReady(true);
+            return true;
+          }
+          return prev;
+        });
+      }, 400);
       return () => clearTimeout(timer);
     }
   }, [currentStep, hasStarted, audioReady]);
@@ -529,15 +600,15 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       <TextType
         key={`${currentStep}-${currentSentenceIndex}`}
         as="div"
-        initialDelay={isLanding ? 300 : 0}
+        initialDelay={isLanding ? 0 : 0}
         className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center pointer-events-none ${
           isLanding 
             ? 'text-3xl md:text-4xl text-white' 
             : 'text-2xl md:text-3xl text-white/90'
         }`}
         text={dialogues?.[currentSentenceIndex] ?? ""}
-        typingSpeed={45}
-        pauseDuration={500}
+        typingSpeed={TYPING_SPEED}
+        pauseDuration={PAUSE_AFTER_TEXT}
         onSentenceComplete={handleSentenceComplete}
         loop={false}
       />

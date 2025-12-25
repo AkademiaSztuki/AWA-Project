@@ -1563,7 +1563,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
 
   if (showInstructions) {
   return (
-    <GlassCard className={`p-6 md:p-8 text-center min-h-[700px] max-h-[85vh] overflow-auto scrollbar-hide flex flex-col justify-center items-center`}>
+    <GlassCard className={`p-6 md:p-8 text-center min-h-[700px] max-h-[85vh] overflow-auto scrollbar-hide flex flex-col justify-center items-center relative`}>
       <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-3">
         {language === 'pl' ? 'Wnętrzarski Tinder' : 'Interior Design Tinder'}
       </h2>
@@ -1588,7 +1588,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
           </div>
         </div>
 
-        <div className="flex justify-between">
+        <div className="absolute bottom-6 left-6 right-6 flex justify-between">
           <GlassButton onClick={onBack} variant="secondary">
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
