@@ -137,8 +137,16 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const particleScale = 1.001; // SKALA MODELU CZĄSTECZEK - zmień (np. 1.1 = 10% większy, 0.9 = 10% mniejszy) żeby powiększyć/pomniejszyć cały model cząsteczek
   const particleOpacityMin = 0.7; // Minimalna przezroczystość cząsteczek (0-1)
   const particleOpacityMax = 1.0; // Maksymalna przezroczystość cząsteczek (0-1)
-  // Offset dla pozycji punktów - możesz zmienić te wartości żeby przesunąć punkty
-  const particleOffset: [number, number, number] = [1.4, 0.90, 0];
+  // Offset dla pozycji punktów - dostosowany do pozycji modelu
+  // Na mobile (pozycja [0, -0.9, 0]) - cząsteczki wyżej (dodatni offset Y), na desktop (pozycja [-1.4, -0.9, 0]) - z offsetem
+  const particleOffset: [number, number, number] = useMemo(() => {
+    // Jeśli pozycja jest wyśrodkowana (x === 0) - mobile, przesuwamy cząsteczki wyżej
+    if (position[0] === 0) {
+      return [0, 0.9, 0]; // Cząsteczki wyżej na mobile
+    }
+    // Dla desktop (pozycja po lewej), używamy offsetu do wyrównania
+    return [1.4, 0.90, 0];
+  }, [position]);
   // Dodatkowe parametry interakcji i rozmiaru
   const particleSizeMultiplier = 2.35;
   const particleMouseRadius = 0.35;

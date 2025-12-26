@@ -1,17 +1,58 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Environment, OrbitControls } from '@react-three/drei';
 import { AwaModel } from './AwaModel';
 import { AwaModelParticlesDiscs } from './AwaModelParticlesDiscs';
 import { AwaModelParticlesInstanced } from './AwaModelParticlesInstanced';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { usePathname } from 'next/navigation';
 
 // Szybki przełącznik testu partiklowego na landing
 const PARTICLE_MODE = 'disc' as 'off' | 'disc' | 'instanced';
 
 const AwaBackground: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
+  const [shouldRender, setShouldRender] = useState(true);
+  const isMobile = useIsMobile();
+  const pathname = usePathname();
+  
+  // Check if we're on landing page (root path)
+  const isLandingPage = pathname === '/';
+  
+  // Center position for mobile on landing page, left side for desktop or other pages
+  const modelPosition: [number, number, number] = isMobile && isLandingPage 
+    ? [0, -0.9, 0]  // Centered on mobile for landing page (cząsteczki będą wyżej przez offset)
+    : [-1.4, -0.9, 0];  // Left side for desktop or other pages
+
+  // Hide model after dialogue completes on mobile landing page
+  useEffect(() => {
+    if (!isMobile || !isLandingPage) return;
+
+    const handleDialogueComplete = () => {
+      // Small delay to allow animation to complete
+      setTimeout(() => {
+        setShouldRender(false);
+      }, 500);
+    };
+
+    window.addEventListener('awa-dialogue-complete', handleDialogueComplete);
+    
+    return () => {
+      window.removeEventListener('awa-dialogue-complete', handleDialogueComplete);
+    };
+  }, [isMobile, isLandingPage]);
+
+  // Reset shouldRender when navigating away from landing page
+  useEffect(() => {
+    if (!isLandingPage) {
+      setShouldRender(true);
+    }
+  }, [isLandingPage]);
+
+  if (!shouldRender) return null;
+
   return (
     <div className="fixed inset-0 z-0 pointer-events-none w-screen h-screen">
         <Canvas
@@ -28,7 +69,7 @@ const AwaBackground: React.FC = () => {
           <AwaModel 
             currentStep="landing" 
             onLoaded={() => setIsLoading(false)} 
-            position={[-1.4, -0.9, 0]}
+            position={modelPosition}
           />
           {/* Particles wyłączone – wracamy do samego teksturowanego modelu */}
           <OrbitControls enablePan={false} enableZoom={false} enableRotate={false} />

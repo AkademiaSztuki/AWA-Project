@@ -432,6 +432,11 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
           }, 4000); // Dodatkowa pauza przed ukryciem
         }
         
+        // Dispatch custom event for landing page to hide 3D model on mobile
+        if (currentStep === 'landing') {
+          window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
+        }
+        
         if (onDialogueEnd) {
           onDialogueEnd();
         }
