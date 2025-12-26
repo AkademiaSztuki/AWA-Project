@@ -143,6 +143,8 @@ export default function GeneratePage() {
   const [isModifying, setIsModifying] = useState(false); // Track if modification is in progress
   const [isUpscaling, setIsUpscaling] = useState(false); // Track upscale in progress
   const [upscaledImage, setUpscaledImage] = useState<GeneratedImage | null>(null); // Store upscaled version
+  const [originalRoomPhotoUrl, setOriginalRoomPhotoUrl] = useState<string | null>(null);
+  const [showOriginalRoomPhoto, setShowOriginalRoomPhoto] = useState(false);
   const [regenerateCount, setRegenerateCount] = useState(0); // Track regeneration count
   const [lastGenerationTime, setLastGenerationTime] = useState<number>(0); // For regeneration tracking
   const [qualityReport, setQualityReport] = useState<any>(null); // Store quality report for feedback
@@ -168,7 +170,7 @@ export default function GeneratePage() {
       setLoadingStage(1);
       setLoadingProgress(10);
       
-      // Since we use Google Nano Banana (Vertex AI), there is no "cold start" wait time like in Modal
+      // Since we use Google (Vertex AI), there is no "cold start" wait time like in Modal
       setIsApiReady(true);
       setLoadingProgress(30);
       setStatusMessage("Krok 2/3: Środowisko AI gotowe. Przygotowuję dane...");
@@ -244,6 +246,9 @@ export default function GeneratePage() {
 
     // Check if we have generated images in sessionData
     if (savedGeneratedImages.length > 0 && generatedImages.length === 0) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:restore-generatedImages',message:'Restoring generatedImages from sessionData into state',data:{savedCount:savedGeneratedImages.length,savedFirst:savedGeneratedImages[0]?.url?.substring(0,80)||null,hadStateGenerated:generatedImages.length>0,currentSpaceId:(typedSessionData?.currentSpaceId||null),pathname:(typeof window!=='undefined'?window.location.pathname:'ssr')},timestamp:Date.now(),sessionId:'debug-session',runId:'gen-'+Date.now(),hypothesisId:'G1'})}).catch(()=>{});
+      // #endregion
       console.log('[Generate] Restoring state from sessionData:', {
         savedImagesCount: savedGeneratedImages.length,
         savedGenerationsCount: savedGenerations.length,
@@ -323,32 +328,43 @@ export default function GeneratePage() {
 
       setGeneratedImages(restoredImages);
 
-      // Check if user has already selected an image (has ratings)
-      const ratedImageIds = Object.keys(imageRatings).filter(id => {
-        const ratings = imageRatings[id];
-        return ratings && (ratings.is_my_interior > 0 || ratings.aesthetic_match > 0);
-      });
+      // Restore selection state ONLY if explicitly present in sessionData.
+      // Do NOT infer "selection made" from any ratings, because that skips the 1-of-6 step.
+      const persistedSelected = typedSessionData?.selectedImage;
+      const persistedSelectedId: string | null =
+        typeof persistedSelected === 'string'
+          ? persistedSelected
+          : (persistedSelected?.id || null);
 
-      if (ratedImageIds.length > 0) {
-        // User has already selected and rated an image
-        const selectedImageId = ratedImageIds[0]; // Use first rated image
-        const selectedImage = restoredImages.find(img => img.id === selectedImageId);
-        
-        if (selectedImage) {
-          console.log('[Generate] Restoring selected image from sessionData:', selectedImageId);
-          setSelectedImage(selectedImage);
-          setBlindSelectionMade(true);
-          
-          // Check if interior question was answered
-          if (selectedImage.ratings.is_my_interior > 0) {
-            setHasAnsweredInteriorQuestion(true);
-          }
-          
-          // Check if all ratings are complete
-          if (selectedImage.ratings.aesthetic_match > 0) {
-            setHasCompletedRatings(true);
-          }
+      if (persistedSelectedId) {
+        // If selectedImage exists at all, it means user already finished the 1-of-6 step
+        setBlindSelectionMade(true);
+
+        const selectedFromRestored = restoredImages.find(img => img.id === persistedSelectedId);
+        if (selectedFromRestored) {
+          console.log('[Generate] Restoring selected image from restored images:', persistedSelectedId);
+          setSelectedImage(selectedFromRestored);
+        } else if (persistedSelected?.url) {
+          // Fallback: restore minimal selected image even if we don't have the full matrix cache
+          console.log('[Generate] Restoring selected image from sessionData.selectedImage.url:', persistedSelectedId);
+          setSelectedImage({
+            id: persistedSelectedId,
+            url: persistedSelected.url,
+            base64: persistedSelected.base64 || '',
+            prompt: 'Restored selected image from sessionData',
+            provider: persistedSelected.provider || 'google',
+            parameters: persistedSelected.parameters || { modificationType: 'initial', modifications: [], iterationCount: 0, usedOriginal: false },
+            ratings: imageRatings[persistedSelectedId] || { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+            isFavorite: false,
+            createdAt: Date.now(),
+            source: persistedSelected.source || GenerationSource.Implicit,
+            displayIndex: persistedSelected.displayIndex || 0,
+            isBlindSelected: true
+          } as any);
         }
+
+        // Prevent auto-generation on refresh when the user already selected a vision
+        setHasAttemptedGeneration(true);
       }
 
       // Restore matrix images (first 6 images that are matrix images, sorted by displayIndex)
@@ -439,14 +455,14 @@ export default function GeneratePage() {
   const buildInitialPrompt = () => buildOptimizedFluxPrompt(sessionData as any);
 
   /**
-   * Helper function to remove furniture from room image using Google Nano Banana
+   * Helper function to remove furniture from room image using AI
    * This creates an empty architectural shell (walls, windows, doors, ceiling, floor only)
    * Returns the processed image base64 string
    */
   const removeFurnitureFromImage = async (imageBase64: string): Promise<string> => {
     console.log('[Furniture Removal] Starting automatic furniture removal from room image...');
     
-    // Direct text prompt for Nano Banana removal - more explicit and direct
+    // Direct text prompt for removal - more explicit and direct
     // Improved to better fill empty spaces after removal
     const removeFurniturePrompt = `EMPTY ARCHITECTURAL SHELL: Remove ALL furniture and objects, then seamlessly fill the empty spaces.
 
@@ -544,14 +560,23 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
   const handleMatrixGeneration = async () => {
     console.log("[6-Image Matrix] handleMatrixGeneration called", { isApiReady, isGenerating });
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-entry',message:'Entered handleMatrixGeneration',data:{isApiReady,wasGenerating:isGenerating,sessionHasRoomImage:!!(sessionData as any)?.roomImage,sessionHasRoomImageEmpty:!!(sessionData as any)?.roomImageEmpty,sessionInspirationsCount:((sessionData as any)?.inspirations||[]).length,sessionGeneratedImagesCount:((sessionData as any)?.generatedImages||[]).length,currentSpaceId:(sessionData as any)?.currentSpaceId||null,pathname:(typeof window!=='undefined'?window.location.pathname:'ssr')},timestamp:Date.now(),sessionId:'debug-session',runId:'gen-'+Date.now(),hypothesisId:'G2'})}).catch(()=>{});
+    // #endregion
     if (!isApiReady) {
       console.log("[6-Image Matrix] API not ready, generation cancelled.");
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-not-ready',message:'Generation cancelled because API not ready',data:{isApiReady},timestamp:Date.now(),sessionId:'debug-session',runId:'gen-'+Date.now(),hypothesisId:'G3'})}).catch(()=>{});
+      // #endregion
       return;
     }
     
     // Prevent duplicate generations
     if (isGenerating) {
       console.log("[6-Image Matrix] Generation already in progress, skipping.");
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-already-generating',message:'Generation skipped because already in progress',data:{isGenerating},timestamp:Date.now(),sessionId:'debug-session',runId:'gen-'+Date.now(),hypothesisId:'G4'})}).catch(()=>{});
+      // #endregion
       return;
     }
     
@@ -618,10 +643,25 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     }
     
     // Use roomImageEmpty from sessionData if available, otherwise try sessionStorage
-    const finalRoomImageEmpty = roomImageEmpty || roomImageEmptyFromStorage || null;
+    const makeImageSig = (img?: string | null): string => {
+      if (!img) return 'none';
+      const len = img.length;
+      const head = img.slice(0, 64);
+      const tail = len > 64 ? img.slice(-64) : '';
+      return `${len}:${head}:${tail}`;
+    };
+
+    const emptySourceSigKey = 'aura_session_room_image_empty_source_sig';
+    const emptySourceSig = typeof window !== 'undefined' ? sessionStorage.getItem(emptySourceSigKey) : null;
+    const currentRoomSig = makeImageSig(roomImage);
+    const sigMatches = !!emptySourceSig && emptySourceSig === currentRoomSig;
+
+    // Use roomImageEmpty from sessionData if available.
+    // Only use sessionStorage fallback if it matches the current roomImage signature (prevents stale wrong-room usage).
+    const finalRoomImageEmpty = roomImageEmpty || (sigMatches ? roomImageEmptyFromStorage : null);
     
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:room-image-selection',message:'Checking which room image to use',data:{hasRoomImageEmpty:!!roomImageEmpty,roomImageEmptyLength:roomImageEmpty?.length||0,hasRoomImageEmptyFromStorage:!!roomImageEmptyFromStorage,roomImageEmptyFromStorageLength:roomImageEmptyFromStorage?.length||0,hasFinalRoomImageEmpty:!!finalRoomImageEmpty,finalRoomImageEmptyLength:finalRoomImageEmpty?.length||0,roomImageLength:roomImage?.length||0,willUseEmpty:!!finalRoomImageEmpty,source:finalRoomImageEmpty?(roomImageEmpty===finalRoomImageEmpty?'sessionData':'sessionStorage'):'none',storageReadError},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecbb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:room-image-selection',message:'Checking which room image to use',data:{hasRoomImageEmpty:!!roomImageEmpty,roomImageEmptyLength:roomImageEmpty?.length||0,hasRoomImageEmptyFromStorage:!!roomImageEmptyFromStorage,roomImageEmptyFromStorageLength:roomImageEmptyFromStorage?.length||0,hasFinalRoomImageEmpty:!!finalRoomImageEmpty,finalRoomImageEmptyLength:finalRoomImageEmpty?.length||0,roomImageLength:roomImage?.length||0,willUseEmpty:!!finalRoomImageEmpty,source:finalRoomImageEmpty?(roomImageEmpty===finalRoomImageEmpty?'sessionData':'sessionStorage'):'none',storageReadError,hasEmptySourceSig:!!emptySourceSig,sigMatches},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
     // #endregion
     
     if (finalRoomImageEmpty) {
@@ -652,7 +692,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     const generationStartTime = Date.now();
     setMatrixGenerationStartTime(generationStartTime);
     setLastGenerationTime(generationStartTime);
-    setStatusMessage("Przygotowuję 6 różnych wizji dla Twojego wnętrza (Google Nano Banana)...");
+    setStatusMessage("Przygotowuję 6 różnych wizji dla Twojego wnętrza (AI)...");
     setLoadingStage(2);
     setLoadingProgress(30);
     setEstimatedTime(150);
@@ -734,6 +774,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       const qualityReports = assessAllSourcesQuality(inputs, tinderSwipes);
       setQualityReport(qualityReports);
       
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:quality-reports',message:'Quality reports for all sources',data:{reportsCount:qualityReports.length,reports:qualityReports.map(r=>({source:r.source,shouldGenerate:r.shouldGenerate,status:r.status,dataPoints:r.dataPoints,confidence:r.confidence,warningsCount:r.warnings.length,warnings:r.warnings})),shouldGenerateCount:qualityReports.filter(r=>r.shouldGenerate).length,skippedCount:qualityReports.filter(r=>!r.shouldGenerate).length},timestamp:Date.now(),sessionId:'debug-session',runId:'description-flow',hypothesisId:'H6'})}).catch(()=>{});
+      // #endregion
+      
       // DEBUG: Log quality reports with full details
       console.log("[6-Image Matrix] DEBUG - Quality reports:");
       qualityReports.forEach(r => {
@@ -760,6 +804,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       // Store synthesis result for UI display
       setSynthesisResult(synthesisResult);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:synthesis-result',message:'Synthesis result after synthesizeSixPrompts',data:{generatedSourcesCount:synthesisResult.generatedSources.length,generatedSources:synthesisResult.generatedSources,skippedSourcesCount:synthesisResult.skippedSources.length,skippedSources:synthesisResult.skippedSources,displayOrder:synthesisResult.displayOrder,hasInspirationImages:!!synthesisResult.inspirationImages,resultsKeys:Object.keys(synthesisResult.results||{})},timestamp:Date.now(),sessionId:'debug-session',runId:'description-flow',hypothesisId:'H6'})}).catch(()=>{});
+      // #endregion
       
       console.log("[6-Image Matrix] Synthesis complete:", {
         generatedSources: synthesisResult.generatedSources,
@@ -1129,7 +1177,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       });
       console.log("=".repeat(80));
       
-      // Generate same 6 prompts with Google/Nano Banana
+      // Generate same 6 prompts with Google (Vertex AI)
       const googleGenerationResponse = await generateSixImagesParallelWithGoogle(
         {
           prompts,
@@ -1491,8 +1539,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         imageBase64 = imageBase64.split(',')[1];
       }
       
-      // Upscale the image using Google Nano Banana Pro (FORCED)
-      console.log('[Upscale] Using Google Nano Banana Pro (forced)');
+      // Upscale the image using Google (Vertex AI) (FORCED)
+      console.log('[Upscale] Using Google (forced)');
       const upscaledBase64 = await upscaleImageWithGoogle(
         imageBase64,
         seed,
@@ -1535,6 +1583,21 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     setSelectedImage(image);
     setBlindSelectionMade(true);
     setSelectedSourceIndex(image.displayIndex || 0);
+
+    // Persist minimal selection so refresh doesn't skip/regen unexpectedly
+    try {
+      await updateSessionData({
+        selectedImage: {
+          id: image.id,
+          url: image.url,
+          source: image.source,
+          provider: image.provider
+        },
+        blindSelectionMade: true
+      } as any);
+    } catch (e) {
+      console.warn('[Generate] Failed to persist selectedImage/blindSelectionMade to session:', e);
+    }
     
     // Update the image as selected
     setMatrixImages(prev => prev.map(img => ({
@@ -1649,6 +1712,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       const historyNode = generationHistory[index];
       const image = generatedImages.find(img => img.id === historyNode.id);
       if (image) {
+        // If user is previewing original room photo, switch back to the generated image when navigating history
+        if (showOriginalRoomPhoto) {
+          setShowOriginalRoomPhoto(false);
+        }
         setSelectedImage(image);
         setCurrentHistoryIndex(index);
         setIdaComment(null); // Reset comment for historical image
@@ -1746,8 +1813,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       height: 512,
     };
     
-    console.log("Google Nano Banana Structured Prompt:", prompt);
-    console.log("Google Nano Banana Parameters:", parameters);
+    console.log("Google Structured Prompt:", prompt);
+    console.log("Google Parameters:", parameters);
 
     try {
       const userHash = (sessionData as any).userHash;
@@ -1766,8 +1833,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setStatusMessage("Generowanie w toku...");
       setEstimatedTime(45);
       
-      // Use Google Nano Banana for initial generation with processed (empty) room image
-      console.log("[Generation] Using Google Nano Banana for initial generation (with furniture removed)");
+      // Use Google for initial generation with processed (empty) room image
+      console.log("[Generation] Using Google for initial generation (with furniture removed)");
       const response = await generateSixImagesParallelWithGoogle({
         prompts: [{ source: 'implicit' as GenerationSource, prompt }],
         base_image: processedRoomImage,
@@ -2219,7 +2286,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       return;
     }
     
-    // JSON prompt for Nano Banana removal
+    // JSON prompt for removal
     const removeFurniturePrompt = JSON.stringify({
       instruction: "EMPTY ARCHITECTURAL SHELL: Remove ALL furniture, rugs, curtains, and decorations. Keep only the structural elements of the room.",
       preserve: [
@@ -2244,8 +2311,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     // Set loading state for removal
     setLoadingStage(2);
     setLoadingProgress(30);
-    setStatusMessage("Usuwam meble (Google Nano Banana)...");
+    setStatusMessage("Usuwam meble (AI)...");
     setEstimatedTime(25);
+    setIsModifying(true);
 
     try {
       // Use Google API for furniture removal
@@ -2326,6 +2394,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     } catch (err) {
       console.error('Remove furniture failed:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas usuwania mebli.');
+    } finally {
+      setIsModifying(false);
     }
   };
 
@@ -2360,24 +2430,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     // Create data URL for display
     const dataUrl = `data:image/jpeg;base64,${base64Image}`;
 
-    const originalImg: GeneratedImage = {
-      id: 'original-uploaded-image',
-      url: dataUrl,
-      base64: base64Image,
-      prompt: 'Oryginalne zdjęcie przesłane przez użytkownika',
-      provider: 'google' as const,
-      parameters: { 
-        modificationType: 'original',
-        modifications: [],
-        iterationCount: 0,
-        usedOriginal: true
-      },
-      ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 5 },
-      isFavorite: false,
-      createdAt: 0,
-      source: GenerationSource.Implicit // Mark as original user upload
-    };
-
     console.log("[Show Original] Showing original user-uploaded image:", {
       hasImage: !!roomImage,
       length: roomImage.length,
@@ -2385,11 +2437,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       urlLength: dataUrl.length
     });
 
-    setSelectedImage(originalImg);
+    // Do NOT overwrite selectedImage (it breaks the 1/6 flow + UI conditions).
+    // Just toggle the display to show original room photo.
+    setOriginalRoomPhotoUrl(dataUrl);
+    setShowOriginalRoomPhoto(true);
     setShowModifications(false);
-    
-    // Don't reset hasAnsweredInteriorQuestion - user already answered this question
-    setHasCompletedRatings(false);
   };
 
   const buildMacroPrompt = (modification: ModificationOption) => {
@@ -2610,26 +2662,45 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             </GlassCard>
           )}
 
-          {/* 6-Image Matrix (Google Nano Banana) with Loading Placeholders */}
+          {/* 6-Image Matrix with Loading Placeholders */}
           {/* Show grid if: matrix mode enabled OR generation in progress OR we have images */}
           {(isMatrixMode || isGenerating || matrixImages.length > 0) && !blindSelectionMade && (
             <div className="space-y-8">
+              {/*
+                If some sources are skipped due to insufficient data (e.g. no inspirations),
+                we should require completeness only for the sources that actually generate.
+              */}
+              {(() => {
+                const targetCount = synthesisResult?.generatedSources?.length || 6;
+                const readyCount = matrixImages.filter(img => img.provider === 'google').length;
+                const isCompleteForGeneratedSources =
+                  !!synthesisResult?.generatedSources &&
+                  synthesisResult.generatedSources.every(src =>
+                    matrixImages.some(img => img.provider === 'google' && img.source === src)
+                  );
+                // Expose as locals via closure-returned null; used below via duplicated expressions to avoid refactor.
+                return null;
+              })()}
               {/* Header */}
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-graphite mb-2">
-                  {isGenerating ? 'Generowanie wizji...' : `Porównaj wizje (${matrixImages.length}/6)`}
+                  {isGenerating
+                    ? 'Generowanie wizji...'
+                    : `Porównaj wizje (${matrixImages.length}/${synthesisResult?.generatedSources?.length || 6})`}
                 </h2>
                 <p className="text-silver-dark text-sm">
                   {isGenerating 
-                    ? 'Twoje wizje są generowane przez Google Nano Banana. Obrazy pojawią się poniżej gdy będą gotowe.' 
+                    ? 'Twoje wizje są generowane przez AI. Obrazy pojawią się poniżej gdy będą gotowe.'
                     : 'Wybierz wizję, która najbardziej Ci odpowiada'}
                 </p>
+
+                {/* (removed) explicit regeneration button */}
               </div>
               
               <div className="space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-                  {/* Generate 6 slots for Modal - show placeholders for missing images */}
-                  {Array.from({ length: 6 }).map((_, index) => {
+                  {/* Generate slots for the sources that actually generate */}
+                  {Array.from({ length: synthesisResult?.displayOrder?.length || 6 }).map((_, index) => {
                   const expectedSource = synthesisResult?.displayOrder[index] || null;
                   // Only show Google images
                   const image = matrixImages.find(img => img.source === expectedSource && img.provider === 'google');
@@ -2887,8 +2958,17 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 </GlassCard>
               )}
               
-              {/* Select Button - Only show when images are ready */}
-              {matrixImages.length > 0 && !isGenerating && (
+              {/* Select Button - Allow when all generated sources are ready (may be <6 if some sources are skipped) */}
+              {(() => {
+                const targetCount = synthesisResult?.generatedSources?.length || 6;
+                const isCompleteForGeneratedSources =
+                  !!synthesisResult?.generatedSources &&
+                  synthesisResult.generatedSources.every(src =>
+                    matrixImages.some(img => img.provider === 'google' && img.source === src)
+                  );
+                const readyCount = matrixImages.filter(img => img.provider === 'google').length;
+                return readyCount >= targetCount && isCompleteForGeneratedSources && !isGenerating;
+              })() && (
                 <div className="flex justify-center">
                   <GlassButton
                     onClick={() => {
@@ -2937,8 +3017,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 <div className="space-y-4">
                   <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
                     <Image 
-                      src={selectedImage.url} 
-                      alt="Wybrane wnętrze" 
+                      src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url} 
+                      alt={showOriginalRoomPhoto ? "Oryginalne zdjęcie pokoju" : "Wybrane wnętrze"} 
                       fill 
                       className="object-cover" 
                     />
@@ -3207,9 +3287,19 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       <span className="truncate">Usuń meble</span>
                     </GlassButton>
 
-                    <GlassButton onClick={handleShowOriginal} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                    <GlassButton
+                      onClick={() => {
+                        if (showOriginalRoomPhoto) {
+                          setShowOriginalRoomPhoto(false);
+                        } else {
+                          handleShowOriginal();
+                        }
+                      }}
+                      variant="secondary"
+                      className="flex-1 h-12 text-xs sm:text-sm"
+                    >
                       <Eye size={16} className="mr-2 flex-shrink-0" />
-                      <span className="truncate">Pokaż oryginalne</span>
+                      <span className="truncate">{showOriginalRoomPhoto ? 'Pokaż wybraną wizję' : 'Pokaż oryginalne'}</span>
                     </GlassButton>
                   </motion.div>
 
@@ -3324,7 +3414,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     <div className="space-y-4">
                       <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
                         <Image
-                          src={selectedImage.url}
+                          src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url}
                           alt="Generated interior"
                           fill
                           sizes="100vw"
@@ -3494,34 +3584,22 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               <span className="truncate">Usuń meble</span>
                             </GlassButton>
 
-                            <GlassButton onClick={handleShowOriginal} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
-                              <Eye size={16} className="mr-2 flex-shrink-0" />
-                              <span className="truncate">Pokaż oryginalne</span>
-                            </GlassButton>
-
-                            <GlassButton 
+                            <GlassButton
                               onClick={() => {
-                                const roomImage = (sessionData as any)?.roomImage;
-                                if (roomImage) {
-                                  const originalImg: GeneratedImage = {
-                                    id: 'original-uploaded-image',
-                                    url: roomImage.startsWith('data:') ? roomImage : `data:image/jpeg;base64,${roomImage}`,
-                                    base64: roomImage,
-                                    prompt: 'Oryginalne zdjęcie',
-                                    parameters: { modificationType: 'original' },
-                                    ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 5 },
-                                    isFavorite: false,
-                                    createdAt: 0
-                                  };
-                                  handleImageSelect(originalImg);
+                                if (showOriginalRoomPhoto) {
+                                  setShowOriginalRoomPhoto(false);
+                                } else {
+                                  handleShowOriginal();
                                 }
-                              }} 
-                              variant="secondary" 
+                              }}
+                              variant="secondary"
                               className="flex-1 h-12 text-xs sm:text-sm"
                             >
-                              <Home size={16} className="mr-2 flex-shrink-0" />
-                              <span className="truncate">Oryginalny</span>
+                              <Eye size={16} className="mr-2 flex-shrink-0" />
+                              <span className="truncate">{showOriginalRoomPhoto ? 'Pokaż wybraną wizję' : 'Pokaż oryginalne'}</span>
                             </GlassButton>
+
+                            {/* (removed) old "Oryginalny" button that overwrote selectedImage and broke UI */}
                           </motion.div>
                         )}
                       </AnimatePresence>

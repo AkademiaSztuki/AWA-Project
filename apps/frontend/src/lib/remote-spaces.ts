@@ -97,6 +97,7 @@ export async function saveParticipantImages(
     type: 'generated' | 'inspiration' | 'room_photo' | 'room_photo_empty';
     space_id?: string;
     tags?: any;
+    description?: string;
     is_favorite?: boolean;
     source?: string;
     generation_id?: string;
@@ -182,8 +183,10 @@ export async function saveParticipantImages(
       const tagsMaterials = Array.isArray(tags.materials) ? tags.materials : [];
       const tagsBiophilia = typeof tags.biophilia === 'number' ? tags.biophilia : null;
       
+      const descriptionToSave = img.description || tags.description || null;
+      
       // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-before-save',message:'About to call saveParticipantImage',data:{imageType:img.type,hasStoragePath:!!storagePath,hasPublicUrl:!!publicUrl,storagePathLength:storagePath.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-before-save',message:'About to call saveParticipantImage with description',data:{imageType:img.type,hasImgDescription:!!img.description,hasTagsDescription:!!tags.description,descriptionToSave:descriptionToSave?.substring(0,50)||null,descriptionLength:descriptionToSave?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'description-flow',hypothesisId:'H3'})}).catch(()=>{});
       // #endregion
       
       const imageId = await saveParticipantImage(userHash, {
@@ -197,13 +200,13 @@ export async function saveParticipantImages(
         tags_colors: tagsColors,
         tags_materials: tagsMaterials,
         tags_biophilia: tagsBiophilia,
-        description: tags.description || null,
+        description: descriptionToSave,
         source: img.source || undefined,
         generation_id: img.generation_id || undefined
       });
       
       // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-after-save',message:'After saveParticipantImage call',data:{imageId,imageType:img.type,hasImageId:!!imageId},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H5'})}).catch(()=>{});
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:saveParticipantImages-after-save',message:'After saveParticipantImage call',data:{imageId,imageType:img.type,hasImageId:!!imageId,descriptionSaved:descriptionToSave?.substring(0,50)||null,descriptionLength:descriptionToSave?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'description-flow',hypothesisId:'H3'})}).catch(()=>{});
       // #endregion
       
       if (imageId) {
@@ -290,6 +293,7 @@ export async function fetchParticipantImages(userHash: string): Promise<Array<{
   isFavorite: boolean;
   spaceId?: string | null;
   tags?: any;
+  description?: string;
   source?: string;
   createdAt: string;
 }>> {
@@ -326,15 +330,21 @@ export async function fetchParticipantImages(userHash: string): Promise<Array<{
       thumbnailUrl: img.thumbnail_url,
       isFavorite: img.is_favorite || false,
       spaceId: img.space_id || null,
-      tags: {
-        styles: img.tags_styles || [],
-        colors: img.tags_colors || [],
-        materials: img.tags_materials || [],
-        biophilia: img.tags_biophilia
-      },
-      source: img.source,
-      createdAt: img.created_at
-    }));
+        tags: {
+          styles: img.tags_styles || [],
+          colors: img.tags_colors || [],
+          materials: img.tags_materials || [],
+          biophilia: img.tags_biophilia
+        },
+        description: img.description || undefined,
+        source: img.source,
+        createdAt: img.created_at
+      }));
+      
+      // #region agent log
+      const inspirationImages = mapped.filter(img => img.type === 'inspiration');
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:fetchParticipantImages-mapped',message:'Fetched and mapped participant images',data:{totalCount:mapped.length,inspirationCount:inspirationImages.length,inspirationDescriptions:inspirationImages.map((img:any)=>({id:img.id,hasDescription:!!img.description,descriptionLength:img.description?.length||0,descriptionPreview:img.description?.substring(0,50)||null}))},timestamp:Date.now(),sessionId:'debug-session',runId:'description-flow',hypothesisId:'H4'})}).catch(()=>{});
+      // #endregion
     
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'remote-spaces.ts:fetchParticipantImages-success',message:'Successfully fetched images',data:{imageCount:mapped.length,generatedCount:mapped.filter(i=>i.type==='generated').length,inspirationCount:mapped.filter(i=>i.type==='inspiration').length,roomPhotoCount:mapped.filter(i=>i.type==='room_photo').length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H6'})}).catch(()=>{});
@@ -515,6 +525,20 @@ export async function deleteSpace(userHash: string, spaceId: string): Promise<bo
   if (!userHash || !spaceId) return false;
   
   try {
+    // Best-effort: delete images belonging to this space first to avoid orphaned images being remapped elsewhere
+    try {
+      const { error: imgError } = await supabase
+        .from('participant_images')
+        .delete()
+        .eq('user_hash', userHash)
+        .eq('space_id', spaceId);
+      if (imgError) {
+        console.warn('[remote-spaces] deleteSpace: failed to delete participant_images for space', imgError);
+      }
+    } catch (e) {
+      console.warn('[remote-spaces] deleteSpace: error deleting participant_images for space', e);
+    }
+
     const { error } = await supabase
       .from('participant_spaces')
       .delete()
@@ -584,6 +608,53 @@ export async function deleteParticipantImage(
     return true;
   } catch (e) {
     console.warn('[remote-spaces] deleteParticipantImage error', e);
+    return false;
+  }
+}
+
+export async function updateParticipantImageMetadata(
+  userHash: string,
+  imageId: string,
+  patch: {
+    tags?: any;
+    description?: string | null;
+    space_id?: string | null;
+  }
+): Promise<boolean> {
+  if (!userHash || !imageId) return false;
+
+  try {
+    const tags = patch.tags || {};
+    const tagsStyles = Array.isArray(tags.styles) ? tags.styles : (tags.style ? [tags.style] : []);
+    const tagsColors = Array.isArray(tags.colors) ? tags.colors : [];
+    const tagsMaterials = Array.isArray(tags.materials) ? tags.materials : [];
+    const tagsBiophilia = typeof tags.biophilia === 'number' ? tags.biophilia : null;
+    const descriptionToSave = patch.description ?? (tags.description || null);
+
+    const updatePayload: any = {
+      tags_styles: tagsStyles,
+      tags_colors: tagsColors,
+      tags_materials: tagsMaterials,
+      tags_biophilia: tagsBiophilia,
+      description: descriptionToSave
+    };
+    if (patch.space_id !== undefined) {
+      updatePayload.space_id = patch.space_id;
+    }
+
+    const { error } = await supabase
+      .from('participant_images')
+      .update(updatePayload)
+      .eq('id', imageId)
+      .eq('user_hash', userHash);
+
+    if (error) {
+      console.warn('[remote-spaces] updateParticipantImageMetadata failed', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('[remote-spaces] updateParticipantImageMetadata error', e);
     return false;
   }
 }

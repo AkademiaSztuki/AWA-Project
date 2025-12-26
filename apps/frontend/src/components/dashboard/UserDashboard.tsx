@@ -373,6 +373,22 @@ export function UserDashboard() {
         ]);
 
         // #region agent log
+        try {
+          const inspirations = (participantImages || []).filter((img: any) => img.type === 'inspiration');
+          const generated = (participantImages || []).filter((img: any) => img.type === 'generated');
+          const missingSpaceId = (participantImages || []).filter((img: any) => !img.spaceId);
+          const dupByUrl = new Map<string, number>();
+          inspirations.forEach((img: any) => {
+            const u = img.url || '';
+            if (!u) return;
+            dupByUrl.set(u, (dupByUrl.get(u) || 0) + 1);
+          });
+          const dupUrls = Array.from(dupByUrl.entries()).filter(([, c]) => c > 1).slice(0, 20);
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-images-diagnostics',message:'Participant_images diagnostics (duplicates/missing spaceId)',data:{userHash,total:(participantImages||[]).length,inspirations:inspirations.length,generated:generated.length,missingSpaceId:missingSpaceId.length,dupInspirationUrls:dupUrls.length,dupSamples:dupUrls.map(([u,c])=>({count:c,urlPrefix:u.substring(0,60)}))},timestamp:Date.now(),sessionId:'debug-session',runId:'dash-debug',hypothesisId:'DB1'})}).catch(()=>{});
+        } catch {}
+        // #endregion
+
+        // #region agent log
         void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-fetched',message:'Fetched participant spaces+images',data:{userHash,spaceCount:participantSpaces?.length||0,imageCount:participantImages?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H11'})}).catch(()=>{});
         // #endregion
 
@@ -420,6 +436,33 @@ export function UserDashboard() {
             updatedAt: imgs.length > 0 ? imgs[0].addedAt : s.updatedAt
           };
         });
+
+        // Automatyczne usuwanie pustych przestrzeni (bez obrazów, ale nie domyślnych)
+        const emptySpaces = mappedSpaces.filter(space => {
+          const sourceSpace = spacesSource.find(s => s.id === space.id);
+          return space.images.length === 0 && !sourceSpace?.isDefault;
+        });
+
+        if (emptySpaces.length > 0) {
+          console.log(`[Dashboard] Found ${emptySpaces.length} empty spaces, cleaning up...`);
+          for (const emptySpace of emptySpaces) {
+            try {
+              const deleted = await deleteSpace(userHash, emptySpace.id);
+              if (deleted) {
+                console.log(`[Dashboard] Deleted empty space: ${emptySpace.name} (${emptySpace.id})`);
+              }
+            } catch (e) {
+              console.warn(`[Dashboard] Failed to delete empty space ${emptySpace.id}:`, e);
+            }
+          }
+          // Filtruj puste przestrzenie z listy wyświetlanych
+          const spacesWithImages = mappedSpaces.filter(space => {
+            const sourceSpace = spacesSource.find(s => s.id === space.id);
+            return space.images.length > 0 || sourceSpace?.isDefault;
+          });
+          mappedSpaces.length = 0;
+          mappedSpaces.push(...spacesWithImages);
+        }
 
         // #region agent log
         void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:spaces-grouped',message:'Grouped participant_images into participant_spaces',data:{userHash,spaceCount:mappedSpaces.length,imageCount:participantImages?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SP1'})}).catch(()=>{});
@@ -542,6 +585,30 @@ export function UserDashboard() {
 
     setActionSpaceId(spaceId);
     try {
+      // Delete all images currently shown in this space (by id), even if their participant_images.space_id is NULL.
+      // Otherwise they would "migrate" to another space due to fallback grouping logic.
+      const targetSpace = spaces.find(s => s.id === spaceId);
+      const candidateImageIds = (targetSpace?.images || [])
+        .map((img: any) => img?.id)
+        .filter((id: any) => typeof id === 'string');
+
+      const isUuid = (str: string | undefined): boolean =>
+        !!str && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(str);
+
+      const imageIdsToDelete = candidateImageIds.filter((id: string) => isUuid(id));
+
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:handleDeleteSpace:pre-delete-images',message:'Deleting images for space before deleting space',data:{userHash,spaceId,spaceImageCount:(targetSpace?.images||[]).length,uuidImageIds:imageIdsToDelete.length},timestamp:Date.now(),sessionId:'debug-session',runId:'dash-delete',hypothesisId:'DB2'})}).catch(()=>{});
+      // #endregion
+
+      for (const imageId of imageIdsToDelete) {
+        try {
+          await deleteParticipantImage(userHash, imageId);
+        } catch (e) {
+          console.warn('[Dashboard] Failed to delete image while deleting space', { spaceId, imageId, e });
+        }
+      }
+
       const removed = await deleteSpace(userHash, spaceId);
       if (removed) {
         const updatedSpaces = sortSpacesDescending(spaces.filter(space => space.id !== spaceId));
@@ -657,73 +724,12 @@ export function UserDashboard() {
       // NOTE: After radical refactor inspirations are persisted only in participant_images.
     }
 
-    // Reload data from Supabase to ensure sync (especially important after deletion)
-    if (deletedFromSupabase || userHash) {
+    // Reload via the normal dashboard source-of-truth path to avoid corrupting space grouping.
+    if (userHash) {
       try {
-        // Reload images from Supabase to sync
-        const participantImages = await fetchParticipantImages(userHash!);
-        const remoteSpaces: Space[] = participantImages ? [{
-          id: 'all-images',
-          name: 'Moja Przestrzeń',
-          type: 'personal',
-          images: participantImages.map(img => ({
-            id: img.id,
-            url: img.url,
-            type: img.type === 'generated' ? 'generated' : 'inspiration',
-            addedAt: img.createdAt,
-            isFavorite: img.isFavorite,
-            thumbnailUrl: img.thumbnailUrl,
-            tags: img.tags
-          })),
-          createdAt: participantImages[0]?.createdAt || new Date().toISOString(),
-          updatedAt: participantImages[0]?.createdAt || new Date().toISOString()
-        }] : [];
-        if (remoteSpaces && Array.isArray(remoteSpaces)) {
-          const mapped: Space[] = remoteSpaces.map((entry: any) => {
-            const s = entry.space || entry;
-            const imgs = (entry.images || []).map((img: any) => ({
-              id: img.id,
-              url: img.url,
-              type: img.type,
-              addedAt: img.created_at || img.added_at || img.addedAt || new Date().toISOString(),
-              isFavorite: img.is_favorite ?? img.isFavorite,
-              thumbnailUrl: img.thumbnail_url || img.thumbnailUrl,
-              tags: img.tags
-            }));
-            return {
-              id: s.id,
-              name: s.name,
-              type: s.type || 'personal',
-              images: imgs,
-              createdAt: s.created_at || s.createdAt,
-              updatedAt: s.updated_at || s.updatedAt
-            };
-          });
-          const ordered = sortSpacesDescending(mapped);
-          setSpaces(ordered);
-          updateSessionData({ spaces: ordered } as any);
-          
-          // Also update inspirations from spaces
-          const inspirationImages = ordered
-            .flatMap(space => space.images || [])
-            .filter(img => img.type === 'inspiration')
-            .map(img => ({
-              id: img.id,
-              url: img.url,
-              imageBase64: img.url,
-              tags: img.tags || {},
-              description: undefined,
-              addedAt: img.addedAt
-            }));
-          
-          // Only update inspirations if we got data from Supabase
-          if (inspirationImages.length !== currentInspirations.length || deletedFromSupabase) {
-            updateSessionData({ inspirations: inspirationImages } as any);
-          }
-        }
+        await loadUserData();
       } catch (error) {
-        console.warn('[Dashboard] Failed to reload data from Supabase after deletion:', error);
-        // Don't revert local changes if reload fails
+        console.warn('[Dashboard] Failed to reload data after deletion:', error);
       }
     }
   };

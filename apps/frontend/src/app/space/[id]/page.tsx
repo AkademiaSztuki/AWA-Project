@@ -9,7 +9,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { ArrowLeft, Heart, Sparkles, Trash2, Download, X } from 'lucide-react';
 import Image from 'next/image';
-import { deleteParticipantImage, fetchParticipantImages } from '@/lib/remote-spaces';
+import { deleteParticipantImage, fetchParticipantImages, fetchParticipantSpaces } from '@/lib/remote-spaces';
 import { safeLocalStorage } from '@/lib/supabase';
 
 interface SpaceImage {
@@ -62,7 +62,16 @@ export default function SpaceDetailPage() {
         void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:load-space-entry',message:'Loading space detail',data:{spaceId,hasUserHash:!!userHash,userHash:userHash||null,sessionSpaceCount:((sessionData as any)?.spaces||[]).length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD1'})}).catch(()=>{});
         // #endregion
 
-        const participantImages = userHash ? await fetchParticipantImages(userHash) : [];
+        const [participantImages, participantSpaces] = await Promise.all([
+          userHash ? fetchParticipantImages(userHash) : Promise.resolve([]),
+          userHash ? fetchParticipantSpaces(userHash) : Promise.resolve([])
+        ]);
+
+        const defaultSpaceId =
+          (participantSpaces || []).find((s: any) => s.isDefault)?.id ||
+          (participantSpaces || [])[0]?.id ||
+          null;
+        const normalizedDefaultSpaceId = defaultSpaceId?.startsWith('space_') ? defaultSpaceId.substring(6) : defaultSpaceId;
 
         // Normalize spaceId: remove "space_" prefix if present, for matching
         const normalizedSpaceId = spaceId?.startsWith('space_') ? spaceId.substring(6) : spaceId;
@@ -101,9 +110,8 @@ export default function SpaceDetailPage() {
                 const imgSpaceId = img.spaceId?.startsWith('space_') ? img.spaceId.substring(6) : img.spaceId;
                 return imgSpaceId === normalizedSpaceId;
               }
-              // If image has no spaceId, only include if this is the default space (fallback for old data)
-              // For now, exclude images without spaceId to avoid showing all images in every space
-              return false;
+              // If image has no spaceId, include only if this is the default space (fallback for old data)
+              return !!normalizedDefaultSpaceId && normalizedSpaceId === normalizedDefaultSpaceId;
             })
             .forEach((img: any) =>
               add({

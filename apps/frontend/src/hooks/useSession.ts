@@ -7,10 +7,19 @@ const SESSION_STORAGE_KEY = 'aura_session';
 const USER_HASH_STORAGE_KEY = 'aura_user_hash';
 const ROOM_IMAGE_SESSION_KEY = 'aura_session_room_image';
 const ROOM_IMAGE_EMPTY_SESSION_KEY = 'aura_session_room_image_empty';
+const ROOM_IMAGE_EMPTY_SOURCE_SIG_KEY = 'aura_session_room_image_empty_source_sig';
 const STORAGE_SIZE_THRESHOLD = 4_500_000; // ~4,5MB
 const MAX_INLINE_DATA_LENGTH = 120_000; // ~120KB
 const MAX_GENERATIONS_HISTORY = 120;
 const MAX_TINDER_SWIPES = 250;
+
+const makeImageSig = (img?: string | null): string => {
+  if (!img) return 'none';
+  const len = img.length;
+  const head = img.slice(0, 64);
+  const tail = len > 64 ? img.slice(-64) : '';
+  return `${len}:${head}:${tail}`;
+};
 
 const isLargeDataUrl = (value?: string | null): boolean => {
   if (!value) return false;
@@ -54,7 +63,13 @@ const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
   sanitized.roomImage = undefined;
   sanitized.roomImageEmpty = undefined; // Also cached in sessionStorage
   sanitized.uploadedImage = undefined;
-  sanitized.selectedImage = null;
+  // Preserve minimal selected image reference so refresh doesn't jump steps/regenerate
+  (sanitized as any).selectedImage = data.selectedImage
+    ? (typeof (data as any).selectedImage === 'string'
+        ? { id: (data as any).selectedImage }
+        : { id: (data as any).selectedImage?.id, url: (data as any).selectedImage?.url, source: (data as any).selectedImage?.source, provider: (data as any).selectedImage?.provider })
+    : null;
+  (sanitized as any).blindSelectionMade = (data as any).blindSelectionMade || false;
 
   // Trim swipe history
   if (sanitized.tinderData?.swipes && sanitized.tinderData.swipes.length > MAX_TINDER_SWIPES) {
@@ -64,9 +79,12 @@ const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
     };
   }
 
-  // Remove generated images (already persisted remotely)
-  if (sanitized.generatedImages) {
-    sanitized.generatedImages = undefined;
+  // Keep only lightweight generatedImages (id + http url) to allow restore without regeneration
+  if (Array.isArray((sanitized as any).generatedImages)) {
+    (sanitized as any).generatedImages = (sanitized as any).generatedImages
+      .map((g: any) => ({ id: g.id, url: g.url }))
+      .filter((g: any) => typeof g.url === 'string' && g.url.startsWith('http'))
+      .slice(-12);
   }
 
   // Strip heavy base64 from inspirations but keep tags/descriptions/URLs
@@ -176,17 +194,21 @@ const manageRoomImageCache = (roomImage?: string) => {
   }
 };
 
-const manageRoomImageEmptyCache = (roomImageEmpty?: string) => {
+const manageRoomImageEmptyCache = (roomImageEmpty?: string, roomImage?: string) => {
   if (typeof window === 'undefined') return;
 
   // #region agent log
   const existingInStorage = safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
+  const existingSig = safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SOURCE_SIG_KEY);
+  const currentSig = makeImageSig(roomImage);
   fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:entry',message:'Managing roomImageEmpty cache - entry',data:{hasRoomImageEmpty:!!roomImageEmpty,roomImageEmptyLength:roomImageEmpty?.length||0,hasExistingInStorage:!!existingInStorage,existingInStorageLength:existingInStorage?.length||0,willSave:!!roomImageEmpty,action:roomImageEmpty?'save':(existingInStorage?'preserve':'remove')},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
   // #endregion
 
   if (roomImageEmpty) {
     try {
       safeSessionStorage.setItem(ROOM_IMAGE_EMPTY_SESSION_KEY, roomImageEmpty);
+      // Store signature of the roomImage this empty-room cache belongs to (prevents stale cross-space reuse)
+      safeSessionStorage.setItem(ROOM_IMAGE_EMPTY_SOURCE_SIG_KEY, currentSig);
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:after-save',message:'roomImageEmpty saved to sessionStorage',data:{savedLength:roomImageEmpty.length,key:ROOM_IMAGE_EMPTY_SESSION_KEY,verifyExists:!!safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
       // #endregion
@@ -196,12 +218,11 @@ const manageRoomImageEmptyCache = (roomImageEmpty?: string) => {
       // #endregion
     }
   } else {
-    // CRITICAL: Don't remove roomImageEmpty from sessionStorage if it exists there
-    // It might not be in the current data object, but it should be preserved in sessionStorage
-    // Only remove if explicitly set to undefined/null AND it doesn't exist in sessionStorage
+    // If there's nothing in storage, ensure both keys are removed
     if (!existingInStorage) {
       try {
         safeSessionStorage.removeItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
+        safeSessionStorage.removeItem(ROOM_IMAGE_EMPTY_SOURCE_SIG_KEY);
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:after-remove',message:'roomImageEmpty removed from sessionStorage (was not in storage)',data:{key:ROOM_IMAGE_EMPTY_SESSION_KEY,verifyRemoved:!safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
         // #endregion
@@ -211,6 +232,23 @@ const manageRoomImageEmptyCache = (roomImageEmpty?: string) => {
         // #endregion
       }
     } else {
+      // Existing cache present: only preserve if it matches current roomImage signature.
+      // Otherwise, it belongs to an older room image (often from another space) and must be discarded.
+      const sigMatches = !!existingSig && existingSig === currentSig;
+      if (roomImage && existingSig && !sigMatches) {
+        try {
+          safeSessionStorage.removeItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
+          safeSessionStorage.removeItem(ROOM_IMAGE_EMPTY_SOURCE_SIG_KEY);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:discard-mismatch',message:'Discarded stale roomImageEmpty cache (signature mismatch)',data:{hadExisting:true,hadSig:!!existingSig,sigMatches:false,currentSigPrefix:currentSig.substring(0,24),existingSigPrefix:(existingSig||'').substring(0,24)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+          // #endregion
+        } catch (e) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:discard-mismatch-error',message:'Failed to discard stale roomImageEmpty cache',data:{error:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
+          // #endregion
+        }
+        return;
+      }
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:manageRoomImageEmptyCache:preserve',message:'Preserving roomImageEmpty in sessionStorage (exists in storage but not in data)',data:{key:ROOM_IMAGE_EMPTY_SESSION_KEY,existingInStorageLength:existingInStorage.length},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
       // #endregion
@@ -271,7 +309,7 @@ const persistSessionData = (data: SessionData): SessionData => {
   // #endregion
 
   manageRoomImageCache(data.roomImage);
-  manageRoomImageEmptyCache(data.roomImageEmpty);
+  manageRoomImageEmptyCache(data.roomImageEmpty, data.roomImage);
   
   // #region agent log
   fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:persistSessionData:after-cache',message:'After calling manageRoomImageEmptyCache',data:{hasRoomImageEmpty:!!data.roomImageEmpty,roomImageEmptyLength:data.roomImageEmpty?.length||0,verifyInStorage:!!safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY),storageLength:safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY)?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
@@ -408,6 +446,7 @@ export const useSession = (): UseSessionReturn => {
   useEffect(() => {
     if (sessionStoreInitStarted) return;
     sessionStoreInitStarted = true;
+    let isMounted = true;
 
     const initializeSession = async () => {
       if (typeof window === 'undefined') return;
@@ -873,6 +912,9 @@ export const useSession = (): UseSessionReturn => {
     };
 
     void initializeSession();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const updateSession = (updates: Partial<SessionData>) => {
@@ -888,7 +930,7 @@ export const useSession = (): UseSessionReturn => {
       };
       
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:updateSession:entry',message:'updateSession called',data:{hasRoomImageEmptyInUpdates,updatesHasRoomImageEmpty:!!updates.roomImageEmpty,updatesRoomImageEmptyLength:updates.roomImageEmpty?.length||0,prevHasRoomImageEmpty:!!prev.roomImageEmpty,prevRoomImageEmptyLength:prev.roomImageEmpty?.length||0,newDataHasRoomImageEmpty:!!newData.roomImageEmpty,newDataRoomImageEmptyLength:newData.roomImageEmpty?.length||0,updatesKeys:Object.keys(updates)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H4'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:updateSession:entry',message:'updateSession called',data:{hasRoomImageEmptyInUpdates,updatesHasRoomImageEmpty:!!updates.roomImageEmpty,updatesRoomImageEmptyLength:updates.roomImageEmpty?.length||0,prevHasRoomImageEmpty:!!prevData.roomImageEmpty,prevRoomImageEmptyLength:prevData.roomImageEmpty?.length||0,newDataHasRoomImageEmpty:!!newData.roomImageEmpty,newDataRoomImageEmptyLength:newData.roomImageEmpty?.length||0,updatesKeys:Object.keys(updates)},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H4'})}).catch(()=>{});
       // #endregion
       
       const persisted = persistSessionData(newData);

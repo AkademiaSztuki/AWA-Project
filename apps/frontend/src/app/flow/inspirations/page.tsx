@@ -335,24 +335,70 @@ export default function InspirationsPage() {
         // #region agent log
         void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:handleSave',message:'Saving inspirations to participant_images',data:{userHash,inspirationCount:finalInspirations.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H9'})}).catch(()=>{});
         // #endregion
-        if (userHash && finalInspirations.length > 0) {
-          // Map inspirations to participant_images format
-          const imagesForParticipant = finalInspirations.map(p => ({
-            url: p.url || p.imageBase64 || '',
-            thumbnail_url: undefined,
-            type: 'inspiration' as const,
-            tags: p.tags,
-            is_favorite: false,
-            source: undefined,
-            generation_id: undefined
-          })).filter(img => !!img.url);
-          
-          if (imagesForParticipant.length > 0) {
-            await saveParticipantImages(userHash, imagesForParticipant);
-            // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:handleSave-complete',message:'Inspirations saved successfully',data:{userHash,savedCount:imagesForParticipant.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H9'})}).catch(()=>{});
-            // #endregion
+        if (userHash) {
+          const { fetchParticipantImages, deleteParticipantImage, updateParticipantImageMetadata } = await import('@/lib/remote-spaces');
+          const existing = await fetchParticipantImages(userHash);
+          const existingInspirations = (existing || []).filter(img => img.type === 'inspiration');
+
+          const desiredUrls = new Set(finalInspirations.map(p => p.url || p.imageBase64 || '').filter(Boolean));
+
+          // Delete inspirations that are no longer present (source-of-truth sync)
+          const toDelete = existingInspirations.filter(img => img.url && !desiredUrls.has(img.url));
+          for (const img of toDelete) {
+            await deleteParticipantImage(userHash, img.id);
           }
+
+          // Dedup existing inspirations by URL (keep newest)
+          const byUrl = new Map<string, typeof existingInspirations>();
+          for (const img of existingInspirations) {
+            if (!img.url) continue;
+            if (!byUrl.has(img.url)) byUrl.set(img.url, []);
+            byUrl.get(img.url)!.push(img);
+          }
+          for (const [url, imgs] of byUrl.entries()) {
+            if (imgs.length <= 1) continue;
+            const sorted = [...imgs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            const keep = sorted[0];
+            for (const extra of sorted.slice(1)) {
+              await deleteParticipantImage(userHash, extra.id);
+            }
+            // Ensure map points to kept image
+            byUrl.set(url, [keep]);
+          }
+
+          // Upsert-like behavior: update existing rows, insert only missing URLs
+          const imagesForInsert = finalInspirations
+            .map(p => ({
+              url: p.url || p.imageBase64 || '',
+              thumbnail_url: undefined,
+              type: 'inspiration' as const,
+              tags: p.tags,
+              description: p.description,
+              is_favorite: false,
+              source: undefined,
+              generation_id: undefined
+            }))
+            .filter(img => !!img.url)
+            .filter(img => !byUrl.has(img.url));
+
+          for (const insp of finalInspirations) {
+            const url = insp.url || insp.imageBase64 || '';
+            const existingOne = url ? byUrl.get(url)?.[0] : undefined;
+            if (existingOne) {
+              await updateParticipantImageMetadata(userHash, existingOne.id, {
+                tags: insp.tags,
+                description: insp.description ?? null
+              });
+            }
+          }
+
+          if (imagesForInsert.length > 0) {
+            await saveParticipantImages(userHash, imagesForInsert);
+          }
+
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:handleSave-sync-complete',message:'Inspirations synced to participant_images (delete+dedup+insert/update)',data:{userHash,desiredCount:desiredUrls.size,existingBefore:existingInspirations.length,deletedCount:toDelete.length,insertedCount:imagesForInsert.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H9'})}).catch(()=>{});
+          // #endregion
         }
       } catch (e) {
         // #region agent log
