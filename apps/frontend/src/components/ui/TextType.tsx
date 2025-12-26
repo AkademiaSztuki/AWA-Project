@@ -59,14 +59,34 @@ const TextType = ({
   const animationFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
   const currentIndexRef = useRef<number>(0);
+  const instanceIdRef = useRef<string>(
+    `tt_${Date.now()}_${Math.random().toString(16).slice(2)}`
+  );
 
   const textArray = useMemo(() => (Array.isArray(text) ? text : [text]), [text]);
   const currentFullText = textArray[currentTextIndex] || "";
+
+  // #region agent log
+  useEffect(() => {
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H5',location:'TextType.tsx:mount',message:'TextType mounted',data:{instanceId:instanceIdRef.current,textType:Array.isArray(text)?'array':'string',textArrayLen:textArray.length,currentTextIndex,fullLen:currentFullText.length,typingSpeed,initialDelay,pauseDuration,loop,startOnVisible,reverseMode},timestamp:Date.now()})}).catch(()=>{});
+    return () => {
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H5',location:'TextType.tsx:unmount',message:'TextType unmounted',data:{instanceId:instanceIdRef.current,currentTextIndex,fullLen:currentFullText.length,currentIndex:currentIndexRef.current,isDeleting,isVisible,isTransitioning},timestamp:Date.now()})}).catch(()=>{});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // #endregion
 
   // Resetuj stan gdy zmienia się tekst wejściowy (np. z zewnątrz)
   useEffect(() => {
     const textChanged = JSON.stringify(text) !== JSON.stringify(prevTextRef.current);
     if (textChanged) {
+      // #region agent log
+      const prevWasArray = Array.isArray(prevTextRef.current);
+      const nextIsArray = Array.isArray(text);
+      const prevLen = prevWasArray ? (prevTextRef.current as string[]).join('\n').length : String(prevTextRef.current ?? '').length;
+      const nextLen = nextIsArray ? (text as string[]).join('\n').length : String(text ?? '').length;
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H6',location:'TextType.tsx:text-changed',message:'TextType input text changed -> resetting',data:{instanceId:instanceIdRef.current,prevWasArray,nextIsArray,prevLen,nextLen,beforeCurrentIndex:currentIndexRef.current,beforeCurrentTextIndex:currentTextIndex,isDeleting,isVisible,isTransitioning},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       // Natychmiast ukryj tekst podczas przejścia
       setIsTransitioning(true);
       setCurrentIndex(0);
@@ -194,6 +214,9 @@ const TextType = ({
         } else {
           // Tekst skończony
           timeout = setTimeout(() => {
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H7',location:'TextType.tsx:finished',message:'TextType finished currentFullText',data:{instanceId:instanceIdRef.current,currentTextIndex,fullLen:currentFullText.length,finalIndex:currentIndexRef.current,loop,textArrayLen:textArray.length},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             if (onSentenceComplete) {
               onSentenceComplete(currentFullText, currentTextIndex);
             }

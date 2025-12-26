@@ -383,6 +383,16 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
   const { playAnimation } = useAnimation();
 
+  // #region agent log
+  useEffect(() => {
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2',location:'AwaDialogue.tsx:mount',message:'AwaDialogue mounted',data:{currentStep,language,hasCustomMessage:!!customMessage,customMessageLen:customMessage?.length||0,dialoguesLen:dialogues?.length||0,audioFile:audioFile||null,voiceEnabled},timestamp:Date.now()})}).catch(()=>{});
+    return () => {
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2',location:'AwaDialogue.tsx:unmount',message:'AwaDialogue unmounted',data:{currentStep,language,hasCustomMessage:!!customMessage,customMessageLen:customMessage?.length||0,dialoguesLen:dialogues?.length||0,audioFile:audioFile||null},timestamp:Date.now()})}).catch(()=>{});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // #endregion
+
   // console.log('AwaDialogue: useDialogueVoice hook returned:', { voiceVolume, voiceEnabled });
 
   const handleSentenceComplete = () => {
@@ -503,6 +513,9 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   useEffect(() => {
     // Only process if customMessage actually changed
     if (customMessage !== prevCustomMessageRef.current) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2',location:'AwaDialogue.tsx:customMessage-effect',message:'customMessage changed',data:{currentStep,language,prevCustomMessageLen:prevCustomMessageRef.current?.length||0,nextCustomMessageLen:customMessage?.length||0,hasStarted,isDone,currentSentenceIndex,dialoguesLen:dialogues?.length||0},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       console.log('[AwaDialogue] customMessage changed:', {
         customMessage,
         prevCustomMessage: prevCustomMessageRef.current,

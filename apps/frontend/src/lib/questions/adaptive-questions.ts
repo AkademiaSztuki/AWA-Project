@@ -494,6 +494,60 @@ export const SOCIAL_DYNAMICS_QUESTIONS: FollowUpQuestion[] = [
 ];
 
 // =========================
+// ROOM TYPE NORMALIZATION
+// =========================
+
+/**
+ * Maps detected room types from AI to normalized room types used in the app
+ * This ensures consistency between AI detection and UI/DB
+ */
+export const ROOM_TYPE_MAPPING: Record<string, string> = {
+  // AI detected types -> normalized types
+  'office': 'home_office',
+  'home_office': 'home_office',
+  'kitchen': 'kitchen',
+  'bedroom': 'bedroom',
+  'living_room': 'living_room',
+  'bathroom': 'bathroom',
+  'dining_room': 'dining_room',
+  'kids_room': 'kids_room',
+  'empty_room': 'empty_room',
+  // Fallback
+  'other': 'other'
+};
+
+/**
+ * Normalizes detected room type from AI to app's internal format
+ * @param detectedType - Raw type from AI (e.g., "office")
+ * @returns Normalized type (e.g., "home_office")
+ */
+export function normalizeDetectedRoomType(detectedType: string | null | undefined): string {
+  if (!detectedType) return 'other';
+  const normalized = ROOM_TYPE_MAPPING[detectedType.toLowerCase()];
+  return normalized || 'other';
+}
+
+/**
+ * Normalizes room type to key used in ACTIVITY_QUESTIONS
+ * This ensures we always get the right questions for the room type
+ * @param roomType - Room type (can be raw or already normalized)
+ * @returns Key for ACTIVITY_QUESTIONS
+ */
+export function normalizeRoomTypeForQuestions(roomType: string | null | undefined): string {
+  if (!roomType) return 'default';
+  
+  // First normalize if needed
+  const normalized = normalizeDetectedRoomType(roomType);
+  
+  // Check if we have questions for this type
+  if (ACTIVITY_QUESTIONS[normalized]) {
+    return normalized;
+  }
+  
+  return 'default';
+}
+
+// =========================
 // QUESTION ROUTER
 // =========================
 
@@ -501,7 +555,8 @@ export function getQuestionsForRoom(
   roomType: string,
   socialContext: 'solo' | 'shared'
 ): ActivityOption[] {
-  const baseActivities = ACTIVITY_QUESTIONS[roomType] || ACTIVITY_QUESTIONS.default;
+  const normalizedType = normalizeRoomTypeForQuestions(roomType);
+  const baseActivities = ACTIVITY_QUESTIONS[normalizedType] || ACTIVITY_QUESTIONS.default;
   
   // Return base activities - social dynamics questions come later if needed
   return baseActivities;

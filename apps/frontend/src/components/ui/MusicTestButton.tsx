@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAmbientMusic } from '@/hooks/useAmbientMusic';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import GlassSurface from './GlassSurface';
@@ -8,10 +9,17 @@ import { Volume2, VolumeX, Volume1, MessageCircle, MessageCircleOff } from 'luci
 
 export const MusicTestButton: React.FC = () => {
   const { volume: musicVolume, setVolume: setMusicVolume, isPlaying, togglePlay } = useAmbientMusic();
+  
+  // Debug: log isPlaying state
+  useEffect(() => {
+    console.log('MusicTestButton: isPlaying changed to:', isPlaying);
+  }, [isPlaying]);
   const dialogueVoice = useDialogueVoice();
   const { volume: voiceVolume, setVolume: setVoiceVolume, isEnabled: voiceEnabled, toggleEnabled: toggleVoiceEnabled } = dialogueVoice || { volume: 0.8, setVolume: () => {}, isEnabled: true, toggleEnabled: () => {} };
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [panelPosition, setPanelPosition] = useState({ top: 0, right: 0 });
 
   console.log('MusicTestButton: dialogueVoice hook result:', dialogueVoice);
   console.log('MusicTestButton: voiceVolume:', voiceVolume, 'voiceEnabled:', voiceEnabled);
@@ -59,36 +67,132 @@ export const MusicTestButton: React.FC = () => {
     });
   }, [voiceVolume]);
 
+  // Update panel position when expanded
+  useEffect(() => {
+    if (isExpanded && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPanelPosition({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
+  }, [isExpanded]);
+
+  // Close panel when clicking outside
+  useEffect(() => {
+    if (!isExpanded) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const button = buttonRef.current;
+      const panel = document.querySelector('[data-music-panel]');
+      
+      if (button && panel && !button.contains(target) && !panel.contains(target)) {
+        setIsExpanded(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isExpanded]);
+
   return (
     <div 
-      className="relative z-50 pointer-events-auto"
+      className="relative z-[200] pointer-events-auto"
+      style={{ position: 'relative' }}
       onMouseEnter={() => {
         if (window.innerWidth >= 1024) setIsExpanded(true);
       }}
-      onMouseLeave={() => {
-        if (window.innerWidth >= 1024) setIsExpanded(false);
-      }}
+      // Usunięto onMouseLeave - panel zamyka się tylko przez handleClickOutside lub gdy mysz opuszcza sam panel
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 relative">
         {/* Główny przycisk */}
         <button
+          ref={buttonRef}
           type="button"
-          className="w-10 h-10 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full cursor-pointer select-none transition-all duration-300 hover:scale-110 active:scale-95 shadow-lg flex items-center justify-center hover:bg-white/20 text-graphite touch-target relative z-[120] pointer-events-auto"
+          data-music-button
+          disabled={false}
+          className="w-10 h-10 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full cursor-pointer select-none transition-all duration-300 hover:scale-110 active:scale-95 shadow-lg flex items-center justify-center hover:bg-white/20 text-graphite touch-target relative z-[210] pointer-events-auto"
+          style={{ pointerEvents: 'auto', cursor: 'pointer' }}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            // Toggle expansion on click for both mobile and desktop
-            setIsExpanded(prev => !prev);
+            console.log('MusicTestButton: button clicked, isExpanded:', isExpanded, 'isPlaying:', isPlaying, 'voiceEnabled:', voiceEnabled);
+            
+            // Wyłącz/włącz oba dźwięki jednocześnie
+            const shouldMute = isPlaying || voiceEnabled; // Jeśli którykolwiek jest włączony, wyłącz oba
+            
+            if (shouldMute) {
+              // Wyłącz ambient
+              if (isPlaying) {
+                try {
+                  togglePlay();
+                  console.log('MusicTestButton: togglePlay() called to mute');
+                } catch (error) {
+                  console.error('MusicTestButton: Error calling togglePlay():', error);
+                }
+              }
+              
+              // Wyłącz dialog
+              if (voiceEnabled) {
+                try {
+                  toggleVoiceEnabled();
+                  console.log('MusicTestButton: toggleVoiceEnabled() called to mute');
+                } catch (error) {
+                  console.error('MusicTestButton: Error calling toggleVoiceEnabled():', error);
+                }
+              }
+            } else {
+              // Włącz oba dźwięki
+              if (!isPlaying) {
+                try {
+                  togglePlay();
+                  console.log('MusicTestButton: togglePlay() called to unmute');
+                } catch (error) {
+                  console.error('MusicTestButton: Error calling togglePlay():', error);
+                }
+              }
+              
+              if (!voiceEnabled) {
+                try {
+                  toggleVoiceEnabled();
+                  console.log('MusicTestButton: toggleVoiceEnabled() called to unmute');
+                } catch (error) {
+                  console.error('MusicTestButton: Error calling toggleVoiceEnabled():', error);
+                }
+              }
+            }
+            
+            // Then toggle panel
+            setIsExpanded(prev => {
+              console.log('MusicTestButton: setting isExpanded to:', !prev);
+              return !prev;
+            });
           }}
         >
-          <Volume2 className="w-5 h-5" />
+          {(isPlaying || voiceEnabled) ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 opacity-60" />}
         </button>
 
-        {/* Panel kontroli głośności */}
-        {isExpanded && (
-          <div className="absolute top-full right-0 mt-2 pt-2 animate-in fade-in zoom-in-95 duration-200 origin-top-right z-[130]">
+        {/* Panel kontroli głośności - renderowany przez portal poza headerem */}
+        {isExpanded && typeof window !== 'undefined' && document.body && createPortal(
+          <div 
+            data-music-panel
+            className="fixed z-[300] pointer-events-auto"
+            style={{ 
+              top: `${panelPosition.top}px`,
+              right: `${panelPosition.right}px`,
+            }}
+            onMouseEnter={() => {
+              if (window.innerWidth >= 1024) setIsExpanded(true);
+            }}
+            onMouseLeave={() => {
+              // Only close on desktop when mouse leaves panel
+              // Panel zamyka się tylko przez handleClickOutside lub gdy mysz opuszcza panel
+              // Nie zamykaj natychmiast - pozwól użytkownikowi wrócić
+            }}
+          >
             <div
-              className="flex flex-col gap-3 p-4 shadow-2xl bg-[#c7b07a]/95 backdrop-blur-md border border-white/25 ring-1 ring-gold/35 rounded-[20px] w-[240px] sm:w-[280px]"
+              className="flex flex-col gap-3 p-4 shadow-2xl bg-[#c7b07a]/95 backdrop-blur-md border border-white/25 ring-1 ring-gold/35 rounded-[20px] w-[240px] sm:w-[280px] pointer-events-auto animate-in fade-in zoom-in-95 duration-200"
             >
               {/* Muzyka - górny rząd */}
               <div className="flex items-center gap-3">
@@ -195,7 +299,8 @@ export const MusicTestButton: React.FC = () => {
                 </span>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>

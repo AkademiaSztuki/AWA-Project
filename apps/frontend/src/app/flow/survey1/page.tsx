@@ -164,7 +164,7 @@ function calculateSUSScore(answers: Record<string, number>): number {
     // Walidacja - powinno być między 1-5
     if (answer < 1 || answer > 5) {
       console.warn(`Invalid answer for ${q.key}: ${answer}`);
-      return;
+      return; // Skip this question, continue with next
     }
 
     if (q.isPositive) {
@@ -184,7 +184,14 @@ export default function Survey1Page() {
   const router = useRouter();
   const { updateSessionData, sessionData } = useSessionData();
   const { t, language } = useLanguage();
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  // Initialize answers with default value of 3 for all questions
+  const [answers, setAnswers] = useState<Record<string, number>>(() => {
+    const initialAnswers: Record<string, number> = {};
+    SUS_QUESTIONS.forEach(q => {
+      initialAnswers[q.key] = 3; // Default value
+    });
+    return initialAnswers;
+  });
 
   const handleAnswerChange = (key: string, value: number) => {
     setAnswers(prev => ({ ...prev, [key]: value }));
@@ -253,7 +260,7 @@ export default function Survey1Page() {
                   <GlassSlider
                     min={1}
                     max={5}
-                    value={answers[question.key] || 3}
+                    value={answers[question.key]}
                     onChange={(value) => handleAnswerChange(question.key, value)}
                     className="mb-2"
                   />

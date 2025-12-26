@@ -31,7 +31,7 @@ export function GlassHeader() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="w-full sticky top-2 sm:top-4 z-[100] mb-2"
         >
-          <div className="glass-panel rounded-[16px] sm:rounded-[24px] md:rounded-[32px] border border-white/20 bg-white/10 backdrop-blur-2xl shadow-2xl px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hide min-w-0 relative z-[110] pointer-events-auto">
+          <div className="glass-panel rounded-[16px] sm:rounded-[24px] md:rounded-[32px] border border-white/20 bg-white/10 backdrop-blur-2xl shadow-2xl px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hide min-w-0 relative z-[110] pointer-events-auto" style={{ overflowY: 'visible' }}>
             
             {/* Home Button */}
             <button 
@@ -45,7 +45,7 @@ export function GlassHeader() {
 
             <div className="w-px h-5 sm:h-6 bg-white/20 mx-0.5 sm:mx-1 flex-shrink-0" />
 
-            <div className="flex-shrink-0 relative z-10">
+            <div className="flex-shrink-0 relative z-[200]">
               <MusicTestButton />
             </div>
 

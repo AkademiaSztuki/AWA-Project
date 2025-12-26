@@ -70,7 +70,7 @@ export default function RootLayout({
               <AnimationProvider>
                 <LandscapeGuard>
                   <ResponsiveLayoutWrapper>
-                    <AmbientMusic volume={0.4} audioFile="/audio/ambient.mp3" />
+                    <AmbientMusic volume={0.1} audioFile="/audio/ambient.mp3" />
                     
                     <GlobalProtectedRoute>
                       <main className="relative z-10 min-h-screen w-full px-2 sm:px-4 pt-4 sm:pt-8 pb-8 sm:pb-12 md:px-8">

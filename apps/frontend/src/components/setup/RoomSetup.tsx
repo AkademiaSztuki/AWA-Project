@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -136,6 +136,33 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     activities: []
   });
   const [isSaving, setIsSaving] = useState(false);
+
+  // #region agent log
+  const prevStepRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevStepRef.current;
+    prevStepRef.current = currentStep;
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H5',location:'RoomSetup.tsx:step-change',message:'RoomSetup step changed',data:{prevStep:prev,nextStep:currentStep,language},timestamp:Date.now()})}).catch(()=>{});
+  }, [currentStep, language]);
+
+  const prevRoomAnalysisSigRef = useRef<string | null>(null);
+  useEffect(() => {
+    const ra = (sessionData as any)?.roomAnalysis;
+    const sigObj = {
+      hasRA: !!ra,
+      humanLen: ra?.human_comment?.length || 0,
+      commentLen: ra?.comment?.length || 0,
+      descLen: ra?.room_description?.length || 0,
+      detected: ra?.detected_room_type || null,
+      hasEmpty: !!(sessionData as any)?.roomImageEmpty
+    };
+    const sig = JSON.stringify(sigObj);
+    if (sig !== prevRoomAnalysisSigRef.current) {
+      prevRoomAnalysisSigRef.current = sig;
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H6',location:'RoomSetup.tsx:roomAnalysis-sig',message:'roomAnalysis/customMessage inputs changed',data:{sig:sigObj,currentStep},timestamp:Date.now()})}).catch(()=>{});
+    }
+  }, [sessionData, currentStep]);
+  // #endregion
 
   const shouldShowPreferenceQuestions = roomData.preferenceSource === 'complete';
   const steps = useMemo(
@@ -715,6 +742,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
   const [pendingAnalysisFile, setPendingAnalysisFile] = useState<File | null>(null);
   const [pendingAnalysisLabel, setPendingAnalysisLabel] = useState<string | null>(null);
   const { generateSixImagesParallelWithGoogle } = useGoogleAI();
+  const lastUploadIdRef = useRef<string | null>(null);
   
   // Basic room data
   const [roomName, setRoomName] = useState('');
@@ -768,6 +796,9 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
     setIsAnalyzing(true);
     try {
       console.log('Starting room analysis for file:', file.name);
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8',location:'RoomSetup.tsx:PhotoUploadStep:analyzeImage:start',message:'Room analysis started',data:{uploadId:lastUploadIdRef.current||null,fileName:file?.name||null,fileType:file?.type||null,fileSize:file?.size||null,step:'photo_upload'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       
       // Convert file to base64
       const base64 = await toBase64(file);
@@ -788,6 +819,12 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         hasComment: !!analysis.comment,
         comment: analysis.comment
       });
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8',location:'RoomSetup.tsx:PhotoUploadStep:analyzeImage:before-updateSessionData',message:'About to update sessionData.roomAnalysis',data:{uploadId:lastUploadIdRef.current||null,detectedRoomType:analysis?.detected_room_type||null,commentLen:analysis?.comment?.length||0,humanCommentLen:analysis?.human_comment?.length||0,descLen:analysis?.room_description?.length||0},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2',location:'RoomSetup.tsx:PhotoUploadStep:analyzeImage',message:'Room analysis ready -> saving to sessionData',data:{detectedRoomType:analysis?.detected_room_type||null,hasHumanComment:!!analysis?.human_comment,humanCommentLen:analysis?.human_comment?.length||0,hasComment:!!analysis?.comment,commentLen:analysis?.comment?.length||0,hasRoomDescription:!!analysis?.room_description,roomDescriptionLen:analysis?.room_description?.length||0},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       updateSessionData({ roomAnalysis: analysis } as any);
       
       // Auto-generate room name from detected type
@@ -940,6 +977,10 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
 
   const handleExampleSelect = async (imageUrl: string) => {
     try {
+      lastUploadIdRef.current = `example_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8',location:'RoomSetup.tsx:PhotoUploadStep:handleExampleSelect',message:'Example image selected',data:{uploadId:lastUploadIdRef.current,imageUrl,step:'photo_upload'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       // Pre-computed metadata for example images - NO ANALYSIS NEEDED!
       const exampleMetadata: { [key: string]: any } = {
         '/images/tinder/Living Room (1).jpg': {
@@ -1076,6 +1117,10 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
 
     try {
       console.log(`Przetwarzam plik: ${file.name}, typ: ${file.type}, rozmiar: ${file.size} bytes`);
+      lastUploadIdRef.current = `upload_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8',location:'RoomSetup.tsx:PhotoUploadStep:handleFileUpload',message:'User uploaded file selected',data:{uploadId:lastUploadIdRef.current,fileName:file?.name||null,fileType:file?.type||null,fileSize:file?.size||null,step:'photo_upload'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       
       // Convert to base64 for API
       const base64 = await toBase64(file);

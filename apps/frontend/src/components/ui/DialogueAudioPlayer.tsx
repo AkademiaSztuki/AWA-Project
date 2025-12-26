@@ -9,6 +9,7 @@ interface DialogueAudioPlayerProps {
 
 const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, autoPlay = true, onEnded }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const prevSrcRef = useRef<string | null>(null);
 
   // console.log('DialogueAudioPlayer: Rendering with props:', { src, volume, autoPlay });
 
@@ -16,6 +17,8 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
   useEffect(() => {
     // console.log('DialogueAudioPlayer: audioRef.current exists:', !!audioRef.current);
     if (audioRef.current) {
+      const prevSrc = prevSrcRef.current;
+      prevSrcRef.current = src;
       // console.log('DialogueAudioPlayer: Setting src and volume:', { src, volume });
       
       // Stop current playback before changing src
@@ -31,7 +34,13 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
         // Wait for load before playing
         audioRef.current.addEventListener('canplay', () => {
           if (audioRef.current && autoPlay) {
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3',location:'DialogueAudioPlayer.tsx:canplay->play',message:'Attempting dialogue play after canplay',data:{src,prevSrc,paused:audioRef.current?.paused,readyState:audioRef.current?.readyState,currentTime:audioRef.current?.currentTime,volume:audioRef.current?.volume},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             audioRef.current.play().catch((error) => {
+              // #region agent log
+              void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4',location:'DialogueAudioPlayer.tsx:play:catch',message:'Dialogue play() rejected',data:{src,prevSrc,name:(error as any)?.name,message:(error as any)?.message},timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
               console.error('DialogueAudioPlayer: Failed to play audio:', error);
             });
           }
@@ -47,6 +56,31 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
       audioRef.current.volume = volume;
     }
   }, [volume]);
+
+  // Event telemetry (pause/ended/error)
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const report = (event: string, extra?: Record<string, unknown>) => {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1',location:'DialogueAudioPlayer.tsx:audio-event',message:`Dialogue audio event: ${event}`,data:{src:audio.currentSrc||src,paused:audio.paused,ended:audio.ended,readyState:audio.readyState,currentTime:audio.currentTime,duration:audio.duration,volume:audio.volume,...(extra||{})},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    };
+
+    const onPause = () => report('pause');
+    const onEndedInternal = () => report('ended');
+    const onError = () => report('error');
+
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('ended', onEndedInternal);
+    audio.addEventListener('error', onError);
+    return () => {
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('ended', onEndedInternal);
+      audio.removeEventListener('error', onError);
+    };
+  }, [src]);
 
   // Obsługa zakończenia
   useEffect(() => {

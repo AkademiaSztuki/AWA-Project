@@ -13,7 +13,7 @@ interface AmbientMusicControls {
 }
 
 export const useAmbientMusic = (): AmbientMusicControls => {
-  const [volume, setVolumeState] = useState(0.8);
+  const [volume, setVolumeState] = useState(0.4); // Zmniejszone z 0.8 do 0.4 (połowa)
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Zapisz głośność w localStorage i synchronizuj z audio
@@ -32,26 +32,66 @@ export const useAmbientMusic = (): AmbientMusicControls => {
     }
   }, []);
 
-  // Nasłuchuj zmian w audio elemencie
+  // Nasłuchuj zmian w audio elemencie - czekaj aż element będzie dostępny
   useEffect(() => {
-    const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
-    if (!audioElement) return;
+    let retryCount = 0;
+    const maxRetries = 10;
+    let cleanup: (() => void) | undefined;
+    let retryTimeout: NodeJS.Timeout | undefined;
+    
+    const setupAudioListeners = (): (() => void) | undefined => {
+      const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+      if (!audioElement) {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          retryTimeout = setTimeout(setupAudioListeners, 100);
+        } else {
+          console.warn('useAmbientMusic: Audio element not found after retries');
+        }
+        return undefined;
+      }
 
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-    const handleEnded = () => setIsPlaying(false);
+      console.log('useAmbientMusic: Audio element found, setting up listeners');
+      
+      const handlePlay = () => {
+        console.log('useAmbientMusic: play event');
+        setIsPlaying(true);
+      };
+      const handlePause = () => {
+        console.log('useAmbientMusic: pause event');
+        setIsPlaying(false);
+      };
+      const handleEnded = () => {
+        console.log('useAmbientMusic: ended event');
+        setIsPlaying(false);
+      };
 
-    audioElement.addEventListener('play', handlePlay);
-    audioElement.addEventListener('pause', handlePause);
-    audioElement.addEventListener('ended', handleEnded);
+      audioElement.addEventListener('play', handlePlay);
+      audioElement.addEventListener('pause', handlePause);
+      audioElement.addEventListener('ended', handleEnded);
 
-    // Sprawdź początkowy stan
-    setIsPlaying(!audioElement.paused);
+      // Sprawdź początkowy stan
+      setIsPlaying(!audioElement.paused);
+      console.log('useAmbientMusic: Initial playing state:', !audioElement.paused);
 
+      // Zwróć cleanup function
+      return () => {
+        audioElement.removeEventListener('play', handlePlay);
+        audioElement.removeEventListener('pause', handlePause);
+        audioElement.removeEventListener('ended', handleEnded);
+      };
+    };
+    
+    cleanup = setupAudioListeners();
+    
+    // Zwróć cleanup function dla useEffect
     return () => {
-      audioElement.removeEventListener('play', handlePlay);
-      audioElement.removeEventListener('pause', handlePause);
-      audioElement.removeEventListener('ended', handleEnded);
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+      if (cleanup) {
+        cleanup();
+      }
     };
   }, []);
 
@@ -73,15 +113,66 @@ export const useAmbientMusic = (): AmbientMusicControls => {
   };
 
   const togglePlay = () => {
-    const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
-    if (audioElement) {
-      if (audioElement.paused) {
-        audioElement.play().catch(error => {
-          console.error('Failed to play ambient music:', error);
-        });
-      } else {
-        audioElement.pause();
+    // Spróbuj znaleźć element audio - może być tworzony asynchronicznie
+    let audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+    
+    // Jeśli nie znaleziono, spróbuj znaleźć przez wszystkie audio elementy
+    if (!audioElement) {
+      const allAudio = document.querySelectorAll('audio');
+      console.log('useAmbientMusic: Found audio elements:', allAudio.length);
+      for (const audio of Array.from(allAudio)) {
+        if (audio.dataset.type === 'ambient') {
+          audioElement = audio as HTMLAudioElement;
+          break;
+        }
       }
+    }
+    
+    console.log('useAmbientMusic: togglePlay called, audioElement found:', !!audioElement);
+    
+    if (!audioElement) {
+      console.warn('useAmbientMusic: Audio element not found! Trying to find it...');
+      // Spróbuj jeszcze raz po krótkim opóźnieniu
+      setTimeout(() => {
+        const retryElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+        if (retryElement) {
+          console.log('useAmbientMusic: Audio element found on retry');
+          if (retryElement.paused) {
+            retryElement.play().then(() => setIsPlaying(true)).catch(err => console.error(err));
+          } else {
+            retryElement.pause();
+            setIsPlaying(false);
+          }
+        } else {
+          console.error('useAmbientMusic: Audio element still not found after retry');
+        }
+      }, 100);
+      return;
+    }
+    
+    console.log('useAmbientMusic: Current state - paused:', audioElement.paused, 'readyState:', audioElement.readyState);
+    
+    if (audioElement.paused) {
+      console.log('useAmbientMusic: Attempting to play...');
+      // Oznacz, że użytkownik ręcznie włączył muzykę
+      if (typeof window !== 'undefined') {
+        (window as any).ambientMusicUserManuallyPaused = false;
+      }
+      audioElement.play().then(() => {
+        console.log('useAmbientMusic: Play successful');
+        setIsPlaying(true);
+      }).catch(error => {
+        console.error('useAmbientMusic: Failed to play ambient music:', error);
+        setIsPlaying(false);
+      });
+    } else {
+      console.log('useAmbientMusic: Pausing...');
+      // Oznacz, że użytkownik ręcznie wyłączył muzykę
+      if (typeof window !== 'undefined') {
+        (window as any).ambientMusicUserManuallyPaused = true;
+      }
+      audioElement.pause();
+      setIsPlaying(false);
     }
   };
 
@@ -90,7 +181,7 @@ export const useAmbientMusic = (): AmbientMusicControls => {
   };
 
   const unmute = () => {
-    setVolume(0.8); // Przywróć domyślną głośność
+    setVolume(0.4); // Przywróć domyślną głośność (zmniejszone z 0.8)
   };
 
   return {

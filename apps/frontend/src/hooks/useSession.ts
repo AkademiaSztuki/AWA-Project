@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { SessionData, FlowStep } from '@/types';
 import { fetchLatestSessionSnapshot, supabase, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
 import { uploadSpaceImage, saveSpaceImagesMetadata } from '@/lib/remote-spaces';
@@ -399,12 +399,15 @@ interface UseSessionReturn {
 }
 
 export const useSession = (): UseSessionReturn => {
-  const [sessionData, setSessionData] = useState<SessionData>(createEmptySession());
-
-  const [isInitialized, setIsInitialized] = useState(false);
+  // NOTE: this hook is used in many components. It must share ONE session state.
+  // Previously, each call created an independent useState() session store, causing UI desync
+  // (e.g. RoomSetup not seeing roomAnalysis updates done inside PhotoUploadStep).
+  const sessionData = useSyncExternalStore(subscribeSessionStore, getSessionStoreSnapshot, getSessionStoreSnapshot);
+  const isInitialized = useSyncExternalStore(subscribeSessionStore, getSessionStoreInitSnapshot, getSessionStoreInitSnapshot);
 
   useEffect(() => {
-    let isMounted = true;
+    if (sessionStoreInitStarted) return;
+    sessionStoreInitStarted = true;
 
     const initializeSession = async () => {
       if (typeof window === 'undefined') return;
@@ -448,10 +451,7 @@ export const useSession = (): UseSessionReturn => {
       }
 
       // Set initial session immediately (for fast render)
-      if (isMounted) {
-        setSessionData(initialSession);
-        setIsInitialized(true);
-      }
+      setSessionStoreState({ sessionData: initialSession, isInitialized: true });
 
       // STEP 2: Load from Supabase in background (async, can take time)
       let authUserId: string | undefined;
@@ -865,8 +865,7 @@ export const useSession = (): UseSessionReturn => {
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:initializeSession:before-setState',message:'About to call setSessionData in initializeSession',data:{hasPersistedRoomImageEmpty:!!persisted.roomImageEmpty,persistedRoomImageEmptyLength:persisted.roomImageEmpty?.length||0,isMounted},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
         // #endregion
-        setSessionData(persisted);
-        setIsInitialized(true);
+        setSessionStoreState({ sessionData: persisted, isInitialized: true });
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:initializeSession:after-setState',message:'After calling setSessionData in initializeSession',data:{hasPersistedRoomImageEmpty:!!persisted.roomImageEmpty,persistedRoomImageEmptyLength:persisted.roomImageEmpty?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H3'})}).catch(()=>{});
         // #endregion
@@ -874,21 +873,18 @@ export const useSession = (): UseSessionReturn => {
     };
 
     void initializeSession();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   const updateSession = (updates: Partial<SessionData>) => {
-    setSessionData(prev => {
+    setSessionStoreState((prev) => {
+      const prevData = prev.sessionData;
       // Preserve roomImageEmpty from previous state if not explicitly provided in updates
       const hasRoomImageEmptyInUpdates = 'roomImageEmpty' in updates;
       const newData = { 
-        ...prev, 
+        ...prevData, 
         ...updates,
         // CRITICAL: Preserve roomImageEmpty from previous state if not explicitly in updates
-        roomImageEmpty: hasRoomImageEmptyInUpdates ? updates.roomImageEmpty : prev.roomImageEmpty
+        roomImageEmpty: hasRoomImageEmptyInUpdates ? updates.roomImageEmpty : prevData.roomImageEmpty
       };
       
       // #region agent log
@@ -902,7 +898,7 @@ export const useSession = (): UseSessionReturn => {
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:updateSession:after-persist',message:'After persistSessionData',data:{persistedHasRoomImageEmpty:!!persisted.roomImageEmpty,persistedRoomImageEmptyLength:persisted.roomImageEmpty?.length||0,storageHasRoomImageEmpty:!!persistedStorageCheck,storageRoomImageEmptyLength:persistedStorageCheck?.length||0,storageMatches:persisted.roomImageEmpty===persistedStorageCheck},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H4'})}).catch(()=>{});
       // #endregion
       
-      return persisted;
+      return { ...prev, sessionData: persisted };
     });
   };
 
@@ -919,6 +915,36 @@ export const useSession = (): UseSessionReturn => {
     isInitialized
   };
 };
+
+// ====== Shared session store (singleton) ======
+type SessionStoreState = { sessionData: SessionData; isInitialized: boolean };
+type SessionStoreListener = () => void;
+
+let sessionStoreState: SessionStoreState = { sessionData: createEmptySession(), isInitialized: false };
+const sessionStoreListeners = new Set<SessionStoreListener>();
+let sessionStoreInitStarted = false;
+
+function subscribeSessionStore(listener: SessionStoreListener) {
+  sessionStoreListeners.add(listener);
+  return () => sessionStoreListeners.delete(listener);
+}
+
+function getSessionStoreSnapshot() {
+  return sessionStoreState.sessionData;
+}
+
+function getSessionStoreInitSnapshot() {
+  return sessionStoreState.isInitialized;
+}
+
+function setSessionStoreState(
+  next:
+    | SessionStoreState
+    | ((prev: SessionStoreState) => SessionStoreState)
+) {
+  sessionStoreState = typeof next === 'function' ? (next as any)(sessionStoreState) : next;
+  sessionStoreListeners.forEach((l) => l());
+}
 
 function generateUserHash(): string {
   return 'user_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
