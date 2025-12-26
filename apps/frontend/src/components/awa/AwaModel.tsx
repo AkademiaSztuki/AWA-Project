@@ -1,15 +1,15 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { useFrame, useLoader, useThree } from '@react-three/fiber';
-import { useGLTF, useAnimations, useEnvironment } from '@react-three/drei';
+import { useGLTF, useAnimations } from '@react-three/drei';
 import * as THREE from 'three';
 import { FlowStep } from '@/types';
+import { useAnimation, AnimationType } from '@/contexts/AnimationContext';
 
-// Shadery dla okrągłych cząsteczek z kolorami z tekstury + miękką maską i interakcją z myszą
+// Shadery dla okrągłych cząsteczek z żółtymi kolorami + miękką maską i interakcją z myszą
 const particleVertexShader = `
   attribute float aSize;
   attribute vec3 aColor;
   attribute float aOpacity;
-  attribute vec2 aUv;
   attribute float aAnimOffset; // Offset dla animacji - różny dla każdej cząsteczki
   uniform float uTime; // Czas dla animacji
   uniform vec3 uMouseWorld;
@@ -18,11 +18,9 @@ const particleVertexShader = `
   uniform float uSize;
   varying vec3 vColor;
   varying float vOpacity;
-  varying vec2 vUv;
   void main() {
     vColor = aColor;
     vOpacity = aOpacity;
-    vUv = aUv;
     
     // Żywa animacja pozycji - naturalny ruch jak w partiklach
     vec3 animPos = position;
@@ -66,11 +64,8 @@ const particleVertexShader = `
 `;
 
 const particleFragmentShader = `
-  uniform sampler2D mapTex;
-  uniform int useMap;
   varying vec3 vColor;
   varying float vOpacity;
-  varying vec2 vUv;
   void main() {
     vec2 pc = gl_PointCoord - vec2(0.5);
     float d = length(pc);
@@ -80,36 +75,10 @@ const particleFragmentShader = `
     float alpha = (core * 0.7 + fringe * 0.6) * vOpacity;
     if (alpha < 0.01) discard;
 
+    // Użyj koloru z palety - miękkie, ciepłe odcienie
     vec3 baseColor = vColor;
-    if (useMap == 1) {
-      vec3 texColor = texture2D(mapTex, vUv).rgb;
-      texColor = clamp(texColor, vec3(0.4), vec3(0.85)); // ogranicz biel/czerń
-      baseColor = mix(vColor, texColor, 0.8);
-    }
-    float brightness = dot(baseColor, vec3(0.299, 0.587, 0.114));
-    float maxChannel = max(max(baseColor.r, baseColor.g), baseColor.b);
-    float minChannel = min(min(baseColor.r, baseColor.g), baseColor.b);
-    float saturation = (maxChannel - minChannel) / max(maxChannel, 0.001);
-    bool isWhite = brightness > 0.65 && saturation < 0.35;
-    bool isLight = maxChannel > 0.75;
-
-    if (brightness > 0.5 || isWhite || isLight || (brightness > 0.55 && saturation < 0.5)) {
-      vec3 goldenYellow = vec3(1.0, 0.84, 0.0);
-      vec3 warmYellow = vec3(1.0, 0.9, 0.6);
-      vec3 deepGold = vec3(0.95, 0.75, 0.2);
-      float whiteAmount = (brightness - 0.5) / 0.55;
-      whiteAmount = clamp(whiteAmount, 0.0, 1.0);
-      vec3 yellowTint = mix(deepGold, mix(warmYellow, goldenYellow, whiteAmount * 0.5), whiteAmount);
-      baseColor = mix(baseColor, yellowTint, 0.9);
-    }
-
-    if (brightness < 0.4) {
-      baseColor = mix(baseColor, vColor, 0.7);
-    }
-
-    baseColor = clamp(baseColor, vec3(0.35), vec3(0.95));
-    // Podbicie, ale łagodniejsze (na szerokiej poświacie)
-    baseColor *= mix(0.95, 1.2, fringe);
+    // Delikatne podbicie jasności na szerokiej poświacie (bardziej subtelne)
+    baseColor *= mix(0.9, 1.1, fringe);
     gl_FragColor = vec4(baseColor, alpha);
   }
 `;
@@ -160,6 +129,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const meshDataRef = useRef<MeshVertexData[]>([]);
   const [particlesGeometry, setParticlesGeometry] = useState<THREE.BufferGeometry | null>(null);
   const baseColorMapRef = useRef<THREE.Texture | null>(null);
+  // Cache skinned meshes for performance (avoid traverse every frame)
+  const skinnedMeshesRef = useRef<THREE.SkinnedMesh[]>([]);
   // Włączenie cząsteczek – diagnostycznie (duże, widoczne)
   const particleDensity = 0.20;
   const particleSize = 0.45; // Zmień tę wartość żeby zwiększyć/zmniejszyć rozmiar pojedynczych cząsteczek
@@ -173,23 +144,44 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const particleMouseRadius = 0.35;
   const particleMouseStrength = 0.05;
 
-  // Pobierz envMap z preset "sunset" - lepszy dla metalu (więcej kontrastu i refleksów)
-  const envMap = useEnvironment({ preset: 'studio' });
   const { scene: threeScene, camera } = useThree();
+  const { currentAnimation, onAnimationEnd } = useAnimation();
 
-  // Load Quinn model
-  const { scene } = useGLTF('/models/SKM_Quinn.gltf');
-  // Load idle animation
-  const { animations: idleAnimations } = useGLTF('/models/Idle.gltf');
+  // Load idle1 model ONCE - use both scene and animations from same load (optimization)
+  const { scene, animations: idle1Animations } = useGLTF('/model/idle1.gltf');
+  
+  // Load other animations (only animations, not full models - drei handles this efficiently)
+  const { animations: loadingAnimations } = useGLTF('/model/loading_anim.gltf');
+  const { animations: talk1Animations } = useGLTF('/model/talk1.gltf');
+  const { animations: talk2Animations } = useGLTF('/model/talk2.gltf');
+  const { animations: talk3Animations } = useGLTF('/model/talk3.gltf');
+  
+  // Combine all animations
+  const allAnimations = useMemo(() => {
+    return [
+      ...idle1Animations,
+      ...loadingAnimations,
+      ...talk1Animations,
+      ...talk2Animations,
+      ...talk3Animations,
+    ];
+  }, [idle1Animations, loadingAnimations, talk1Animations, talk2Animations, talk3Animations]);
+
+  // Load texture tylko dla alphaMap (kontrola przezroczystości)
+  const textureLoader = useMemo(() => new THREE.TextureLoader(), []);
+  const [texturesLoaded, setTexturesLoaded] = useState(false);
+  
+  // Tylko emissive texture dla alphaMap (kontrola przezroczystości)
+  const alphaTexture = useMemo(() => {
+    const tex = textureLoader.load('/model/FLORA-Gold_Texture_Design-5b19ac78_Mat_Emissive.png');
+    tex.flipY = false;
+    return tex;
+  }, [textureLoader]);
 
   useEffect(() => {
-    if (scene && envMap) {
-      // Ustaw envMap globalnie na scenie (dla lepszej kompatybilności)
-      if (threeScene) {
-        threeScene.environment = envMap;
-      }
+    if (scene) {
 
-      // Find head bone for mouse tracking and apply metallic materials
+      // Find head bone for mouse tracking and apply materials with textures
       let foundHead: THREE.Object3D | null = null;
       scene.traverse((child: THREE.Object3D) => {
         // Find head bone
@@ -200,34 +192,33 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
           foundHead = child;
         }
         
-        // Apply metallic materials to meshes (both Mesh and SkinnedMesh)
+        // Apply materials with textures to meshes (both Mesh and SkinnedMesh)
         if (child.type === 'Mesh' || child.type === 'SkinnedMesh') {
           const mesh = child as THREE.Mesh | THREE.SkinnedMesh;
-          const modelOpacity = 0.0; // PRZEZROCZYSTOŚĆ MODELU 3D - zmień (0-1) aby regulować przezroczystość samego modelu z teksturami
+          const modelOpacity = 1; // PRZEZROCZYSTOŚĆ MODELU 3D - zmień (0-1) aby regulować przezroczystość samego modelu z teksturami
           
           if (mesh.material) {
             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             
             const newMaterials = materials.map((material) => {
-              // Create new metallic material with HDRI environment map
+              // Create simplified material - miękkie, ciepłe złote światełka
               const metallicMaterial = new THREE.MeshStandardMaterial({
-                color: new THREE.Color(0xE0E0E0), // Srebrzysty kolor
-                metalness: 0.95, // Bardzo wysoka metaliczność (prawie 1.0)
-                roughness: 0.05, // Bardzo niska chropowatość = bardzo wysoki połysk
-                envMap: envMap, // Ustaw envMap z HDRI preset "sunset"
-                envMapIntensity: 3.5, // Znacznie zwiększona intensywność dla wyraźnego efektu
-                transparent: true, // Włącz przezroczystość
-                opacity: modelOpacity, // Ustaw przezroczystość
-                depthWrite: modelOpacity < 0.1, // Wyłącz zapisywanie głębi dla przezroczystych obiektów
+                color: new THREE.Color(0xFFD700), // Ciepły złoty kolor
+                emissive: new THREE.Color(0xFFD700), // Ciepły złoty kolor emisji
+                emissiveIntensity: 2.5, // Zmniejszona intensywność - miękkie światełka
+                transparent: true,
+                opacity: modelOpacity,
+                depthWrite: modelOpacity < 0.1,
               });
               
-              // Zachowaj oryginalne tekstury jeśli istnieją
+              // Użyj tekstury tylko dla alphaMap (kontrola przezroczystości)
+              if (alphaTexture) {
+                metallicMaterial.alphaMap = alphaTexture;
+              }
+              
+              // Zachowaj tylko podstawowe tekstury jeśli istnieją (jako fallback)
               if (material instanceof THREE.MeshStandardMaterial) {
-                if (material.map) metallicMaterial.map = material.map;
-                if (material.normalMap) metallicMaterial.normalMap = material.normalMap;
-                if (material.roughnessMap) metallicMaterial.roughnessMap = material.roughnessMap;
-                if (material.metalnessMap) metallicMaterial.metalnessMap = material.metalnessMap;
-                if (material.aoMap) metallicMaterial.aoMap = material.aoMap;
+                if (!metallicMaterial.map && material.map) metallicMaterial.map = material.map;
               }
               
               return metallicMaterial;
@@ -244,6 +235,16 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
         }
       });
       
+      setTexturesLoaded(true);
+      
+      // Cache skinned meshes for performance optimization (avoid traverse every frame)
+      skinnedMeshesRef.current = [];
+      scene.traverse((child) => {
+        if (child.type === 'SkinnedMesh') {
+          skinnedMeshesRef.current.push(child as THREE.SkinnedMesh);
+        }
+      });
+      
       if (foundHead && (foundHead as THREE.Bone).rotation) {
         (foundHead as THREE.Bone).rotation.order = 'YXZ';
         (foundHead as THREE.Bone).rotation.y += Math.PI / 2;
@@ -253,12 +254,13 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
       if (onLoaded) onLoaded();
 
       // Przygotuj dane do cząsteczek jako overlay
-      // Paleta kolorów pasująca do ciepłego, złotego otoczenia - tylko ciepłe odcienie, żadnych białych
+      // Paleta kolorów - żółte odcienie (bez ciemnych pomarańczowych)
       const colorPalette = [
-        new THREE.Color(0xFFD700), // Złoty - pasuje do oświetlenia
-        new THREE.Color(0xFFC850), // Ciemniejszy złoty - bardziej nasycony
-        new THREE.Color(0xFFE5B4), // Ciepły beż - pasuje do point light (bez białego)
-        new THREE.Color(0xF5DEB3), // Ciepły beżowo-złoty - subtelny
+        new THREE.Color(0xFFD700), // Ciepły złoty - główny kolor
+        new THREE.Color(0xFFE87C), // Jasny złoty - delikatny
+        new THREE.Color(0xFFE5B4), // Ciepły beżowo-złoty - miękkie światełko
+        new THREE.Color(0xF5DEB3), // Ciepły beż - subtelny
+        new THREE.Color(0xFFFFAA), // Jasny żółty - najjaśniejszy
       ];
       const meshData: MeshVertexData[] = [];
       scene.traverse((child: THREE.Object3D) => {
@@ -423,8 +425,6 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
             vertexShader: particleVertexShader,
             fragmentShader: particleFragmentShader,
             uniforms: {
-              mapTex: { value: baseColorMapRef.current },
-              useMap: { value: baseColorMapRef.current ? 1 : 0 },
               uTime: { value: 0 }, // Czas dla animacji żywego ruchu
               uMouseWorld: { value: mouseLocalRef.current },
               uMouseRadius: { value: particleMouseRadius },
@@ -435,7 +435,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
             depthWrite: false,
             depthTest: true,
             blending: THREE.AdditiveBlending,
-            vertexColors: false,
+            vertexColors: true, // Używamy kolorów z vertexów (paleta żółtych)
           });
           
           const pointsObj = new THREE.Points(geom, shaderMaterial);
@@ -460,7 +460,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
         pointsRef.current = null;
       }
     };
-  }, [scene, envMap, threeScene, onLoaded, particleDensity, particleSize, particleScale]);
+  }, [scene, threeScene, onLoaded, particleDensity, particleSize, particleScale]);
 
   useEffect(() => {
     // Mouse tracking setup
@@ -490,22 +490,91 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, [camera]);
 
-  const { actions, mixer } = useAnimations(idleAnimations, scene);
+  const { actions, mixer } = useAnimations(allAnimations, scene);
+  
+  // Track current animation action
+  const currentActionRef = useRef<THREE.AnimationAction | null>(null);
+  const previousAnimationRef = useRef<AnimationType>('idle1');
 
-  useEffect(() => {
-    if (!mixer) return;
-    mixer.stopAllAction();
-    if (actions && actions['idle']) {
-      actions['idle'].reset().play();
-    } else {
-      const keys = actions ? Object.keys(actions) : [];
-      if (keys.length > 0 && actions) {
-        actions[keys[0]]?.reset().play();
-      } else if (idleAnimations && idleAnimations.length > 0 && scene) {
-        mixer.clipAction(idleAnimations[0], scene).reset().play();
+  // Find animation clip by name pattern
+  const findAnimationClip = useCallback((animationName: AnimationType): THREE.AnimationClip | null => {
+    // Try exact match first
+    let clip = allAnimations.find(clip => 
+      clip.name.toLowerCase() === animationName.toLowerCase() ||
+      clip.name.toLowerCase().includes(animationName.toLowerCase())
+    );
+    
+    // If not found, try pattern matching
+    if (!clip) {
+      if (animationName === 'idle1') {
+        clip = allAnimations.find(c => c.name.toLowerCase().includes('idle'));
+      } else if (animationName === 'loading_anim') {
+        clip = allAnimations.find(c => c.name.toLowerCase().includes('loading'));
+      } else if (animationName.startsWith('talk')) {
+        clip = allAnimations.find(c => c.name.toLowerCase().includes(animationName));
       }
     }
-  }, [actions, idleAnimations, mixer, scene]);
+    
+    // Fallback: use first animation if nothing found
+    if (!clip && allAnimations.length > 0) {
+      clip = allAnimations[0];
+    }
+    
+    return clip || null;
+  }, [allAnimations]);
+
+  // Track if we need to return to idle after animation ends
+  const shouldReturnToIdleRef = useRef(false);
+  const animationEndCallbackRef = useRef<(() => void) | null>(null);
+
+  // Handle animation switching with smooth crossfade
+  useEffect(() => {
+    if (!mixer || !scene || allAnimations.length === 0) return;
+    
+    // Only switch if animation actually changed
+    if (currentAnimation === previousAnimationRef.current && currentActionRef.current?.isRunning()) {
+      return;
+    }
+    
+    console.log('[AwaModel] Switching animation:', currentAnimation);
+    
+    // Find and play the requested animation
+    const clip = findAnimationClip(currentAnimation);
+    if (clip) {
+      const newAction = mixer.clipAction(clip, scene);
+      newAction.reset();
+      
+      // Set up loop behavior
+      if (currentAnimation === 'idle1') {
+        newAction.setLoop(THREE.LoopRepeat, Infinity);
+        shouldReturnToIdleRef.current = false;
+      } else {
+        // loading_anim and talk animations play once then return to idle
+        newAction.setLoop(THREE.LoopOnce, 1);
+        newAction.clampWhenFinished = true;
+        shouldReturnToIdleRef.current = true;
+        animationEndCallbackRef.current = onAnimationEnd;
+      }
+      
+      // Smooth crossfade between animations (0.3 seconds)
+      const fadeDuration = 0.3;
+      if (currentActionRef.current && currentActionRef.current.isRunning()) {
+        // Fade out old animation and fade in new one
+        currentActionRef.current.fadeOut(fadeDuration);
+        newAction.fadeIn(fadeDuration);
+      } else {
+        // If no current action, just play the new one
+        newAction.weight = 1;
+      }
+      
+      newAction.play();
+      currentActionRef.current = newAction;
+    } else {
+      console.warn('[AwaModel] Animation clip not found for:', currentAnimation);
+    }
+    
+    previousAnimationRef.current = currentAnimation;
+  }, [currentAnimation, mixer, scene, allAnimations, findAnimationClip, onAnimationEnd]);
 
   // Animation loop
   useFrame((state) => {
@@ -513,17 +582,49 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
     if (mixer) {
       const delta = state.clock.getDelta();
       mixer.update(delta > 0.1 ? 0.016 : delta);
-    }
-
-    // 2. POTEM aktualizuj skeleton dla wszystkich meshy (tylko raz!)
-    scene.traverse((child) => {
-      if (child.type === 'SkinnedMesh') {
-        const skinnedMesh = child as THREE.SkinnedMesh;
-        if (skinnedMesh.skeleton) {
-          skinnedMesh.skeleton.update();
+      
+      // Check if non-looping animation has finished
+      if (shouldReturnToIdleRef.current && currentActionRef.current) {
+        const action = currentActionRef.current;
+        const clip = action.getClip();
+        if (action.time >= clip.duration) {
+          console.log('[AwaModel] Animation finished in useFrame:', currentAnimation);
+          shouldReturnToIdleRef.current = false;
+          
+          // Call callback
+          if (animationEndCallbackRef.current) {
+            animationEndCallbackRef.current();
+            animationEndCallbackRef.current = null;
+          }
+          
+          // Switch back to idle1 with smooth crossfade
+          const idleClip = findAnimationClip('idle1');
+          if (idleClip && mixer && scene) {
+            const idleAction = mixer.clipAction(idleClip, scene);
+            idleAction.reset().setLoop(THREE.LoopRepeat, Infinity);
+            
+            // Fade from current action to idle
+            if (currentActionRef.current && currentActionRef.current.isRunning()) {
+              currentActionRef.current.fadeOut(0.3);
+              idleAction.fadeIn(0.3);
+            }
+            idleAction.weight = 1;
+            idleAction.play();
+            currentActionRef.current = idleAction;
+            previousAnimationRef.current = 'idle1';
+          }
         }
       }
-    });
+    }
+
+    // 2. POTEM aktualizuj skeleton dla wszystkich meshy (używamy cache zamiast traverse - szybsze!)
+    const skinnedMeshes = skinnedMeshesRef.current;
+    for (let i = 0; i < skinnedMeshes.length; i++) {
+      const skinnedMesh = skinnedMeshes[i];
+      if (skinnedMesh.skeleton) {
+        skinnedMesh.skeleton.update();
+      }
+    }
 
     // 3. TERAZ manipuluj głową (po aktualizacji animacji)
     if (headBone) {
@@ -664,6 +765,9 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   );
 };
 
-// Preload model
-useGLTF.preload('/models/SKM_Quinn.gltf');
-useGLTF.preload('/models/SKM_Quinn.gltf');
+// Preload models and animations
+useGLTF.preload('/model/idle1.gltf');
+useGLTF.preload('/model/loading_anim.gltf');
+useGLTF.preload('/model/talk1.gltf');
+useGLTF.preload('/model/talk2.gltf');
+useGLTF.preload('/model/talk3.gltf');

@@ -750,24 +750,14 @@ export function UserDashboard() {
         </div>
       )}
       
-      {/* Dialog IDA na dole - cała szerokość - pokazuje komentarz IDA jeśli dostępny */}
-      {(() => {
-        const roomComment = (sessionData as any)?.roomAnalysis?.human_comment;
-        if (roomComment) {
-          console.log('[Dashboard] Room comment found, showing in dialogue:', roomComment);
-          return (
+      {/* Dialog IDA na dole - tylko standardowe teksty z DIALOGUE_MAP */}
       <div className="w-full">
         <AwaDialogue 
-                currentStep="dashboard" 
+          currentStep="dashboard" 
           fullWidth={true}
-                autoHide={false}
-                customMessage={roomComment}
+          autoHide={true}
         />
       </div>
-          );
-        }
-        return null;
-      })()}
 
       <div className="flex-1 p-4 lg:p-8 pb-32">
         <div className="max-w-3xl lg:max-w-none mx-auto">
@@ -793,12 +783,13 @@ export function UserDashboard() {
               const roomCount = typedSession?.roomType ? 1 : 0;
               const spacesCount = Math.max(spaces.length, roomCount);
               
-              // Generated images - check multiple sources
+              // Generated images - count only actual images from spaces (source of truth)
+              // Don't use generations.length as it counts sessions, not images
               const generatedFromSpaces = spaces.reduce((sum, s) => 
                 sum + (s.images?.filter(img => img.type === 'generated').length || 0), 0);
-              const generatedFromSession = typedSession?.generatedImages?.length || 0;
-              const generatedFromGenerations = typedSession?.generations?.length || 0;
-              const generatedCount = Math.max(generatedFromSpaces, generatedFromSession, generatedFromGenerations);
+              // Fallback to session data only if no spaces exist yet
+              const generatedFromSession = spaces.length === 0 ? (typedSession?.generatedImages?.length || 0) : 0;
+              const generatedCount = generatedFromSpaces > 0 ? generatedFromSpaces : generatedFromSession;
               
               // Inspirations - check multiple sources
               const inspirationsFromSpaces = spaces.reduce((sum, s) => 

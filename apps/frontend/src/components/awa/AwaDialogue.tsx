@@ -7,6 +7,7 @@ import GlassSurface from 'src/components/ui/GlassSurface';
 import { useAudioManager } from '@/hooks/useAudioManager';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAnimation } from '@/contexts/AnimationContext';
 import DialogueAudioPlayer from '../ui/DialogueAudioPlayer';
 import { ArrowRight } from 'lucide-react';
 
@@ -321,9 +322,10 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const { language } = useLanguage();
   
   // Ustawienia prędkości i pauz - wszystko w jednym miejscu
-  const TYPING_SPEED = 13.5; // Prędkość wyświetlania tekstu (ms między znakami)
-  const PAUSE_BETWEEN_SENTENCES = 200; // Pauza między zdaniami (ms)
-  const PAUSE_AFTER_TEXT = 800; // Pauza w TextType po zakończeniu tekstu (ms)
+  const TYPING_SPEED = 14.8; // Prędkość wyświetlania tekstu (ms między znakami)
+  const PAUSE_BETWEEN_SENTENCES = 1500; // Pauza między zdaniami (ms) - używane w handleSentenceComplete
+  const PAUSE_AFTER_ALL_SENTENCES = 3000; // Pauza po zakończeniu całego fragmentu (wszystkich zdań) (ms)
+  const PAUSE_AFTER_TEXT = 0; // Pauza w TextType po zakończeniu tekstu (ms) - wyłączona, bo mamy PAUSE_BETWEEN_SENTENCES
   
   // Zabezpieczenie przed undefined
   if (!currentStep) {
@@ -367,6 +369,9 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const [isVisible, setIsVisible] = useState(true);
   const [showClickPrompt, setShowClickPrompt] = useState(false);
   
+  // Track transitioning state to prevent double-triggering
+  const isTransitioningRef = useRef<boolean>(false);
+  
   // Zabezpieczenie przed pustą tablicą
   if (!dialogues || dialogues.length === 0) {
     console.error('AwaDialogue: No dialogues found for step:', currentStep);
@@ -376,10 +381,17 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // console.log('AwaDialogue render:', { currentStep, language, dialogues, audioFile, fullWidth, autoHide, audioReady, hasStarted, currentSentenceIndex });
   const audioManager = useAudioManager();
   const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
+  const { playAnimation } = useAnimation();
 
   // console.log('AwaDialogue: useDialogueVoice hook returned:', { voiceVolume, voiceEnabled });
 
   const handleSentenceComplete = () => {
+    // Prevent double-triggering
+    if (isTransitioningRef.current) {
+      console.log('[AwaDialogue] Already transitioning, ignoring completion');
+      return;
+    }
+
     console.log(`[AwaDialogue] Completed sentence ${currentSentenceIndex + 1}/${dialogues.length}`, {
       currentSentenceIndex,
       dialoguesLength: dialogues.length,
@@ -387,43 +399,62 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       nextText: dialogues[currentSentenceIndex + 1]
     });
     
+    // Mark as transitioning to prevent double calls
+    isTransitioningRef.current = true;
+    
     if (currentSentenceIndex < dialogues.length - 1) {
       setTimeout(() => {
         console.log(`[AwaDialogue] Moving to next sentence: ${currentSentenceIndex + 1} -> ${currentSentenceIndex + 2}`);
+        // Reset transitioning flag for next sentence
+        isTransitioningRef.current = false;
         setCurrentSentenceIndex(prev => prev + 1);
       }, PAUSE_BETWEEN_SENTENCES);
     } else {
       console.log('[AwaDialogue] All sentences completed');
       setIsDone(true);
       
-      if (autoHide) {
-        setTimeout(() => {
-          console.log('AwaDialogue: Hiding dialogue after completion');
-          setIsVisible(false);
-        }, 5000); // Increased from 2000 to 5000ms to give more time to read
-      }
-      
+      // Pauza po zakończeniu całego fragmentu przed ukryciem/wywołaniem callback
       setTimeout(() => {
+        if (autoHide) {
+          setTimeout(() => {
+            console.log('AwaDialogue: Hiding dialogue after completion');
+            setIsVisible(false);
+          }, 4000); // Dodatkowa pauza przed ukryciem
+        }
+        
         if (onDialogueEnd) {
           onDialogueEnd();
         }
-      }, 50);
+      }, PAUSE_AFTER_ALL_SENTENCES);
     }
   };
+
+  // Reset transitioning flag when sentence changes
+  useEffect(() => {
+    isTransitioningRef.current = false;
+  }, [currentSentenceIndex]);
 
   // Track previous step to only reset on actual step change
   const prevStepRef = useRef<string | FlowStep | undefined>(undefined);
   const prevLanguageRef = useRef<string | undefined>(undefined);
+  const isResettingRef = useRef<boolean>(false);
+  const hasInitializedRef = useRef<boolean>(false);
 
   useEffect(() => {
     // Only reset if step or language actually changed
     const stepChanged = prevStepRef.current !== currentStep;
     const languageChanged = prevLanguageRef.current !== language;
     
-    if (stepChanged || languageChanged) {
-      console.log('AwaDialogue: Resetting for new step:', { currentStep, language, stepChanged, languageChanged });
+    // On first mount, always initialize
+    const isFirstMount = !hasInitializedRef.current;
+    
+    if (stepChanged || languageChanged || isFirstMount) {
+      console.log('AwaDialogue: Resetting for new step:', { currentStep, language, stepChanged, languageChanged, isFirstMount });
       
-      // Reset all state
+      // Mark as resetting to prevent fallback auto-start
+      isResettingRef.current = true;
+      
+      // Reset all state immediately
       setCurrentSentenceIndex(0);
       setIsDone(false);
       setHasStarted(false);
@@ -431,21 +462,41 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       setIsVisible(true);
       setShowClickPrompt(false);
       
+      // Reset transitioning flag
+      isTransitioningRef.current = false;
+      
       // Update refs immediately
       prevStepRef.current = currentStep;
       prevLanguageRef.current = language;
+      hasInitializedRef.current = true;
       
-      // Auto-start for non-landing steps after reset
+      // Auto-start for non-landing steps - use requestAnimationFrame to ensure state is set
       if (currentStep !== 'landing') {
-        const timer = setTimeout(() => {
-          console.log('AwaDialogue: Auto-starting after reset for step:', currentStep);
-          setHasStarted(true);
-          setAudioReady(true);
-        }, 200);
-        return () => clearTimeout(timer);
+        const stepToStart = currentStep;
+        console.log('AwaDialogue: Auto-starting for step:', stepToStart);
+        
+        // Use requestAnimationFrame to ensure state updates are processed
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            // Double RAF to ensure state is fully updated
+            if (prevStepRef.current === stepToStart) {
+              console.log('AwaDialogue: Starting dialogue for step:', stepToStart);
+              isResettingRef.current = false;
+              setHasStarted(true);
+              setAudioReady(true);
+              // Play random talk animation when dialogue starts on other pages
+              const talkAnimations: Array<'talk1' | 'talk2' | 'talk3'> = ['talk1', 'talk2', 'talk3'];
+              const randomTalk = talkAnimations[Math.floor(Math.random() * talkAnimations.length)];
+              playAnimation(randomTalk);
+            }
+          });
+        });
+      } else {
+        // For landing, clear resetting flag immediately
+        isResettingRef.current = false;
       }
     }
-  }, [currentStep, language]);
+  }, [currentStep, language, playAnimation]);
   
   // Handle customMessage changes - reset dialogue when customMessage appears
   const prevCustomMessageRef = React.useRef<string | undefined>(undefined);
@@ -503,6 +554,10 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     console.log('User clicked to start dialogue');
     setHasStarted(true);
     setAudioReady(true);
+    // Play loading animation when user clicks on landing page
+    if (currentStep === 'landing') {
+      playAnimation('loading_anim');
+    }
   };
 
   const handleSkip = () => {
@@ -516,55 +571,62 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
 
   // Fallback auto-start: only if step hasn't changed but dialogue hasn't started
   // This handles edge cases where reset useEffect might not have triggered
+  // But don't run if we're currently resetting
   useEffect(() => {
-    if (currentStep !== 'landing' && !hasStarted && !audioReady) {
-      // Only use fallback if step is stable (not during initial mount or step change)
+    if (currentStep !== 'landing' && !hasStarted && !audioReady && !isResettingRef.current) {
+      // Wait a bit to see if main reset will trigger
       const timer = setTimeout(() => {
-        setHasStarted(prev => {
-          if (!prev) {
-            setAudioReady(true);
-            return true;
-          }
-          return prev;
-        });
-      }, 400);
+        // Double-check we're still not resetting and haven't started
+        // Also check that step hasn't changed
+        if (!isResettingRef.current && !hasStarted && !audioReady && prevStepRef.current === currentStep) {
+          console.log('AwaDialogue: Fallback auto-start for step:', currentStep);
+          setHasStarted(true);
+          setAudioReady(true);
+          // Play random talk animation
+          const talkAnimations: Array<'talk1' | 'talk2' | 'talk3'> = ['talk1', 'talk2', 'talk3'];
+          const randomTalk = talkAnimations[Math.floor(Math.random() * talkAnimations.length)];
+          playAnimation(randomTalk);
+        }
+      }, 300); // Shorter delay - main reset should happen in 100ms
       return () => clearTimeout(timer);
     }
-  }, [currentStep, hasStarted, audioReady]);
+  }, [currentStep, hasStarted, audioReady, playAnimation]);
 
   const isLanding = currentStep === 'landing';
   
-  if (!audioReady) {
-    if (currentStep === 'landing') {
-      return (
-        <div 
-          className={`z-10 flex flex-col items-center justify-start w-full text-center pointer-events-auto ${
-            fullWidth ? 'fixed bottom-0 left-0 right-0' : ''
-          } ${
-            isLanding 
-              ? 'min-h-[380px] p-8' 
-              : 'min-h-[260px] p-6 pb-8'
-          } cursor-pointer`}
-          onClick={handleClickToStart}
-        >
-          <span className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center hover:text-champagne transition-opacity duration-300 ${
-            showClickPrompt ? 'opacity-100' : 'opacity-0'
-          } ${
-            isLanding 
-              ? 'text-3xl md:text-4xl text-white' 
-              : 'text-2xl md:text-3xl text-white/90'
-          }`}>
-            {language === 'pl' ? 'Kliknij gdziekolwiek, aby rozpocząć...' : 'Click anywhere to start...'}
-          </span>
-        </div>
-      );
-    }
-    return null;
+  // For landing, show click prompt if not ready
+  if (!audioReady && currentStep === 'landing') {
+    return (
+      <div 
+        className={`z-10 flex flex-col items-center justify-start w-full text-center pointer-events-auto ${
+          fullWidth ? 'fixed bottom-0 left-0 right-0' : ''
+        } ${
+          isLanding 
+            ? 'min-h-[380px] p-8' 
+            : 'min-h-[260px] p-6 pb-8'
+        } cursor-pointer`}
+        onClick={handleClickToStart}
+      >
+        <span className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center hover:text-champagne transition-opacity duration-300 ${
+          showClickPrompt ? 'opacity-100' : 'opacity-0'
+        } ${
+          isLanding 
+            ? 'text-3xl md:text-4xl text-white' 
+            : 'text-2xl md:text-3xl text-white/90'
+        }`}>
+          {language === 'pl' ? 'Kliknij gdziekolwiek, aby rozpocząć...' : 'Click anywhere to start...'}
+        </span>
+      </div>
+    );
   }
 
   if (autoHide && !isVisible) {
     return null;
   }
+  
+  // For non-landing steps, render dialogue even if audioReady is false
+  // useEffect will set audioReady to true automatically, and dialogue will start
+  // This ensures the component is always mounted and visible
 
   // console.log('AwaDialogue rendering with:', { currentSentenceIndex, dialogues, audioReady, hasStarted });
   
@@ -597,27 +659,42 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
           </div>
         </button>
       )}
-      <TextType
-        key={`${currentStep}-${currentSentenceIndex}`}
-        as="div"
-        initialDelay={isLanding ? 0 : 0}
-        className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center pointer-events-none ${
+      {hasStarted && audioReady ? (
+        <TextType
+          key={`${currentStep}-${currentSentenceIndex}`}
+          as="div"
+          initialDelay={isLanding ? 0 : 0}
+          className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center pointer-events-none ${
+            isLanding 
+              ? 'text-3xl md:text-4xl text-white' 
+              : 'text-2xl md:text-3xl text-white/90'
+          }`}
+          text={dialogues?.[currentSentenceIndex] ?? ""}
+          typingSpeed={TYPING_SPEED}
+          pauseDuration={PAUSE_AFTER_TEXT}
+          onSentenceComplete={handleSentenceComplete}
+          loop={false}
+        />
+      ) : (
+        // Show placeholder while waiting for auto-start
+        <div className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center pointer-events-none ${
           isLanding 
-            ? 'text-3xl md:text-4xl text-white' 
-            : 'text-2xl md:text-3xl text-white/90'
-        }`}
-        text={dialogues?.[currentSentenceIndex] ?? ""}
-        typingSpeed={TYPING_SPEED}
-        pauseDuration={PAUSE_AFTER_TEXT}
-        onSentenceComplete={handleSentenceComplete}
-        loop={false}
-      />
+            ? 'text-3xl md:text-4xl text-white opacity-0' 
+            : 'text-2xl md:text-3xl text-white/90 opacity-0'
+        }`}>
+          {/* Invisible placeholder to maintain layout */}
+        </div>
+      )}
       {audioFile && voiceEnabled && audioReady && (
         <DialogueAudioPlayer
           src={audioFile}
           volume={voiceVolume}
           autoPlay={true}
-          onEnded={handleSentenceComplete}
+          onEnded={() => {
+            // Audio completion doesn't trigger sentence transitions
+            // Audio plays in background for entire dialogue
+            console.log('[AwaDialogue] Audio completed for entire dialogue');
+          }}
         />
       )}
     </div>

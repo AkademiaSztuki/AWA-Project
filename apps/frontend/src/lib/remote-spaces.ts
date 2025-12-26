@@ -511,10 +511,26 @@ export async function updateSpaceName(
   return { id: spaceId, user_hash: userHash, name: name.trim() } as any;
 }
 
-export async function deleteSpace(userHash: string, spaceId: string) {
-  // Legacy table removed after radical refactor (spaces are local-only).
+export async function deleteSpace(userHash: string, spaceId: string): Promise<boolean> {
   if (!userHash || !spaceId) return false;
-  return true;
+  
+  try {
+    const { error } = await supabase
+      .from('participant_spaces')
+      .delete()
+      .eq('id', spaceId)
+      .eq('user_hash', userHash);
+    
+    if (error) {
+      console.warn('[remote-spaces] deleteSpace failed', error);
+      return false;
+    }
+    
+    return true;
+  } catch (e) {
+    console.warn('[remote-spaces] deleteSpace error', e);
+    return false;
+  }
 }
 
 // NEW: Delete image from participant_images

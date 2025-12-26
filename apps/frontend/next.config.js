@@ -13,17 +13,50 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   swcMinify: true,
   
-  webpack: (config) => {
-    config.module.rules.push({
-      test: /\.(gltf|glb)$/,
-      use: {
-        loader: 'file-loader',
-        options: {
-          publicPath: '/_next/static/models/',
-          outputPath: 'static/models/',
-        },
+  // Headers dla plików binarnych i GLTF
+  async headers() {
+    return [
+      {
+        source: '/model/:path*.bin',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/octet-stream',
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+        ],
       },
-    });
+      {
+        source: '/model/:path*.gltf',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'model/gltf+json',
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+        ],
+      },
+    ];
+  },
+  
+  webpack: (config) => {
+    // Usuń reguły dla GLTF/GLB - pliki w public/ są serwowane bezpośrednio
+    // config.module.rules.push({
+    //   test: /\.(gltf|glb)$/,
+    //   use: {
+    //     loader: 'file-loader',
+    //     options: {
+    //       publicPath: '/_next/static/models/',
+    //       outputPath: 'static/models/',
+    //     },
+    //   },
+    // });
     
     return config;
   },

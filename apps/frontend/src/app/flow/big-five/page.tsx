@@ -468,7 +468,7 @@ export default function BigFivePage() {
     }));
 
     return (
-      <div className="flex flex-col w-full">
+      <div className="min-h-screen flex flex-col w-full">
         <div className="flex-1 flex justify-center items-start">
           <div className="w-full max-w-6xl mx-auto space-y-6">
             <motion.div
@@ -626,7 +626,7 @@ export default function BigFivePage() {
         {/* Dialog IDA na dole */}
         <div className="w-full">
           <AwaDialogue 
-            currentStep="onboarding" 
+            currentStep="big_five" 
             fullWidth={true}
             autoHide={true}
           />
@@ -636,7 +636,7 @@ export default function BigFivePage() {
   }
 
   return (
-    <div className="flex flex-col w-full">
+    <div className="min-h-screen flex flex-col w-full">
       <div className="flex-1 flex justify-center items-start">
         <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
           <motion.div

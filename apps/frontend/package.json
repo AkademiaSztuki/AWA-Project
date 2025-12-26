@@ -13,6 +13,7 @@
     "db:link": "supabase link",
     "db:cleanup": "node scripts/cleanup-db.js",
     "export:csv": "node scripts/export-to-csv.js",
+    "export:single": "node scripts/export-single-csv.js",
     "storage:create-bucket": "node scripts/create-storage-bucket.js",
     "storage:create-bucket-api": "node scripts/create-bucket-via-api.js"
   },

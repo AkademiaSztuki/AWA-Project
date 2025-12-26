@@ -13,6 +13,7 @@ import { LandscapeGuard } from '@/components/ui/LandscapeGuard';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LayoutProvider } from '@/contexts/LayoutContext';
+import { AnimationProvider } from '@/contexts/AnimationContext';
 import { GlassHeader } from '@/components/ui/GlassHeader';
 import { GlobalProtectedRoute } from '@/components/auth/GlobalProtectedRoute';
 import type { Language } from '@/lib/questions/validated-scales';
@@ -70,8 +71,9 @@ export default function RootLayout({
         <LanguageProvider initialLanguage={initialLanguage}>
           <AuthProvider>
             <LayoutProvider>
-              <LandscapeGuard>
-                <AwaBackground />
+              <AnimationProvider>
+                <LandscapeGuard>
+                  <AwaBackground />
                 <AuroraBackgroundClient />
                 <AuroraBubbles />
                 <ParticlesBackground />
@@ -91,6 +93,7 @@ export default function RootLayout({
                 </GlobalProtectedRoute>
                 <SpeedInsights />
               </LandscapeGuard>
+              </AnimationProvider>
             </LayoutProvider>
           </AuthProvider>
         </LanguageProvider>

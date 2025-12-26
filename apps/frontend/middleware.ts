@@ -44,6 +44,11 @@ const isPublicPath = (pathname: string): boolean => {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
+  // Skip middleware for static model files (GLTF, GLB, BIN)
+  if (pathname.startsWith('/model/')) {
+    return NextResponse.next();
+  }
+  
   // Sprawdź autoryzację - wszystkie ścieżki oprócz publicznych są chronione
   // Note: Supabase używa localStorage, nie cookies, więc szczegółowe sprawdzenie
   // odbywa się w GlobalProtectedRoute po stronie klienta. Middleware tylko przekierowuje
@@ -78,6 +83,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|robots.txt|site.webmanifest|icon.png|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|site.webmanifest|icon.png|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|gltf|glb|bin)$).*)',
   ],
 };

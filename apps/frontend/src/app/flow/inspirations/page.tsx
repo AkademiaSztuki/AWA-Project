@@ -393,7 +393,7 @@ export default function InspirationsPage() {
   const canProceed = items.length >= 1 && items.length <= 10;
 
   return (
-    <div className="flex flex-col w-full">
+    <div className="min-h-screen flex flex-col w-full">
       <div className="flex-1 flex justify-center items-start">
         <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
           <motion.div
