@@ -68,7 +68,7 @@ const MICRO_MODIFICATIONS: ModificationOption[] = [
   { id: 'natural_materials', label: 'Naturalne materiały', icon: null, category: 'micro' },
   { id: 'more_plants', label: 'Więcej roślin', icon: null, category: 'micro' },
   { id: 'less_plants', label: 'Mniej roślin', icon: null, category: 'micro' },
-  { id: 'textured_walls', label: 'Ściany z fakturą', icon: null, category: 'micro' },
+  { id: 'change_furniture', label: 'Zmień meble', icon: null, category: 'micro' },
   { id: 'add_decorations', label: 'Dodaj dekoracje', icon: null, category: 'micro' },
   { id: 'change_flooring', label: 'Zmień podłogę', icon: null, category: 'micro' },
 ];
@@ -434,17 +434,25 @@ export default function FastGeneratePage() {
     const parameters = getGenerationParameters(isMacro ? 'macro' : 'micro', generationCount);
 
     try {
-      const modificationPrompt = JSON.stringify({
-        instruction: `Apply ${modification.label} modification to the interior`,
-        style: modification.category === 'macro' ? modification.id : (sessionData as any)?.visualDNA?.dominantStyle || 'modern',
-        modification_type: modification.category,
-        preserve: [
-          'room structure',
-          'camera perspective',
-          'overall layout'
-        ],
-        modify: [modification.label]
-      });
+      const currentStyle = (sessionData as any)?.visualDNA?.dominantStyle || 'modern';
+      
+      // Special handling for change_furniture
+      let modificationPrompt: string;
+      if (modification.id === 'change_furniture') {
+        modificationPrompt = `SYSTEM INSTRUCTION: Image-to-image furniture replacement. KEEP: walls, windows, doors, floor, ceiling, lighting, decorations, camera angle, room layout - IDENTICAL. CHANGE: REPLACE all furniture with new furniture pieces that perfectly match the ${currentStyle} style. The new furniture must be stylistically appropriate, harmonize with the existing color palette and materials, maintain similar scale and proportions, and be placed in the same positions. Only furniture changes - everything else remains exactly the same.`;
+      } else {
+        modificationPrompt = JSON.stringify({
+          instruction: `Apply ${modification.label} modification to the interior`,
+          style: modification.category === 'macro' ? modification.id : currentStyle,
+          modification_type: modification.category,
+          preserve: [
+            'room structure',
+            'camera perspective',
+            'overall layout'
+          ],
+          modify: [modification.label]
+        });
+      }
 
       const baseImage = generatedImage.base64.includes(',') 
         ? generatedImage.base64.split(',')[1] 
@@ -656,12 +664,9 @@ export default function FastGeneratePage() {
                           }}
                           transition={{ duration: 0.5, ease: "easeOut" }}
                         >
-                          <GlassCard variant="highlighted" className="p-5">
-                            <div className="space-y-4">
-                              <h3 className="font-semibold text-graphite text-lg text-center mb-3">
-                                Czy to moje wnętrze?
-                              </h3>
-                              
+                          <div className="space-y-6">
+                            <h4 className="font-semibold text-graphite text-lg">Czy to Twoje wnętrze?</h4>
+                            <div className="border-b border-gray-200/50 pb-4 last:border-b-0">
                               <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
                                 <span>To nie moje wnętrze (1)</span>
                                 <span>To moje wnętrze (5)</span>
@@ -681,7 +686,7 @@ export default function FastGeneratePage() {
                                 className="mb-2"
                               />
                             </div>
-                          </GlassCard>
+                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>

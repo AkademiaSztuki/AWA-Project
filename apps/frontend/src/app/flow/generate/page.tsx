@@ -31,6 +31,8 @@ import {
   Palette,
   Home,
   CheckCircle2,
+  CheckCircle,
+  Sparkles,
   Eye,
   ChevronLeft,
   ChevronRight,
@@ -87,7 +89,7 @@ const MICRO_MODIFICATIONS: ModificationOption[] = [
   { id: 'natural_materials', label: 'Naturalne materiały', icon: null, category: 'micro' },
   { id: 'more_plants', label: 'Więcej roślin', icon: null, category: 'micro' },
   { id: 'less_plants', label: 'Mniej roślin', icon: null, category: 'micro' },
-  { id: 'textured_walls', label: 'Ściany z fakturą', icon: null, category: 'micro' },
+  { id: 'change_furniture', label: 'Zmień meble', icon: null, category: 'micro' },
   { id: 'add_decorations', label: 'Dodaj dekoracje', icon: null, category: 'micro' },
   { id: 'change_flooring', label: 'Zmień podłogę', icon: null, category: 'micro' },
 ];
@@ -138,6 +140,7 @@ export default function GeneratePage() {
   const [carouselIndex, setCarouselIndex] = useState(0); // Current carousel position
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [isGenerating, setIsGenerating] = useState(false); // Prevent duplicate generations
+  const [isModifying, setIsModifying] = useState(false); // Track if modification is in progress
   const [isUpscaling, setIsUpscaling] = useState(false); // Track upscale in progress
   const [upscaledImage, setUpscaledImage] = useState<GeneratedImage | null>(null); // Store upscaled version
   const [regenerateCount, setRegenerateCount] = useState(0); // Track regeneration count
@@ -1973,6 +1976,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     const parameters = getOptimalParameters(isMacro ? 'macro' : 'micro', generationCount);
 
     // Update loading state for modifications
+    setIsGenerating(true);
+    setIsModifying(true);
     setLoadingStage(2);
     setLoadingProgress(40);
     setStatusMessage(`Modyfikuję obraz: ${modification.label}...`);
@@ -1995,6 +2000,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:start',message:'Starting modification with Google API',data:{modificationLabel:modification.label,isMacro,modificationPrompt,hasBaseImage:!!baseImageSource,baseImageLength:baseImageSource?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
       // #endregion
 
+      // Update progress during API call
+      setLoadingProgress(60);
+      setStatusMessage(`Przetwarzam modyfikację: ${modification.label}...`);
+      
       // Use Google API for modifications (instead of Modal/FLUX)
       const response = await generateSixImagesParallelWithGoogle({
         prompts: [{ source: 'implicit' as GenerationSource, prompt: modificationPrompt }],
@@ -2005,6 +2014,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           strength: parameters.strength ?? (isMacro ? 0.75 : 0.25)
         }
       });
+      
+      // Update progress after API response
+      setLoadingProgress(85);
+      setStatusMessage("Finalizuję zmodyfikowany obraz...");
 
       // #region prompt debug
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:response',message:'Modification response received',data:{hasResponse:!!response,hasImages:!!response?.results,imagesCount:response?.results?.length||0,successfulCount:response?.successful_count,failedCount:response?.failed_count},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
@@ -2013,6 +2026,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Check for errors in response
       if (!response) {
         console.error("[Modification] No response from API");
+        setIsGenerating(false);
+        setIsModifying(false);
         setLastFailedModification(modification);
         setError("Nie udało się zmodyfikować obrazu. Brak odpowiedzi z serwera.");
         return;
@@ -2022,6 +2037,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       if (response.failed_count > 0 && response.successful_count === 0) {
         console.error("[Modification] All generation attempts failed:", response.results);
         const errorMessage = response.results.find(r => r.error)?.error || "Nieznany błąd";
+        setIsGenerating(false);
+        setIsModifying(false);
         setLastFailedModification(modification);
         setError(`Nie udało się zmodyfikować obrazu: ${errorMessage}`);
         return;
@@ -2030,6 +2047,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Check if we have any successful results
       if (!response.results || response.results.length === 0) {
         console.error("[Modification] Empty results array");
+        setIsGenerating(false);
+        setIsModifying(false);
         setLastFailedModification(modification);
         setError("Nie udało się zmodyfikować obrazu. Otrzymano pustą odpowiedź z serwera.");
         return;
@@ -2039,6 +2058,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       const successfulResult = response.results.find(r => r.success && r.image);
       if (!successfulResult || !successfulResult.image) {
         console.error("[Modification] No successful results with image:", response.results);
+        setIsGenerating(false);
+        setIsModifying(false);
         setLastFailedModification(modification);
         setError("Nie udało się zmodyfikować obrazu. Wszystkie próby zakończyły się niepowodzeniem.");
         return;
@@ -2082,6 +2103,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       setHasAnsweredInteriorQuestion(false);
       setHasCompletedRatings(false);
+      setShowSourceReveal(true);
       
       // Save modified image to sessionData (but not to generatedImages array to avoid showing in matrix)
       const generatedImagePayload = {
@@ -2126,6 +2148,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setLoadingStage(3);
       setStatusMessage("Modyfikacja zakończona!");
       setEstimatedTime(0);
+      setIsGenerating(false);
+      setIsModifying(false);
       
       // Add to history
       const historyNode = {
@@ -2167,6 +2191,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       try { if (jobId) await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 }); } catch {}
     } catch (err) {
       console.error('Modification failed:', err);
+      setIsGenerating(false);
+      setIsModifying(false);
       setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas modyfikacji.');
       try {
         const userHash = (sessionData as any).userHash;
@@ -2304,17 +2330,41 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   };
 
   const handleShowOriginal = () => {
-    const roomImage = (sessionData as any)?.roomImage;
+    // Try to get roomImage from sessionData first
+    let roomImage = (sessionData as any)?.roomImage;
+    
+    // Fallback to sessionStorage if not in sessionData (like in generation)
+    if (!roomImage && typeof window !== 'undefined') {
+      try {
+        const sessionRoomImage = safeSessionStorage.getItem('aura_session_room_image');
+        if (sessionRoomImage) {
+          console.log("[Show Original] Found roomImage in sessionStorage, using it");
+          roomImage = sessionRoomImage;
+        }
+      } catch (e) {
+        console.warn('[Show Original] Failed to read roomImage from sessionStorage', e);
+      }
+    }
+    
     if (!roomImage) {
-      setError("Nie znaleziono oryginalnego zdjęcia z room setup.");
+      setError("Nie znaleziono oryginalnego zdjęcia z room setup. Proszę wrócić do kroku uploadu zdjęcia.");
       return;
     }
 
+    // Ensure we have the base64 part (remove data URI prefix if present)
+    let base64Image = roomImage;
+    if (roomImage.includes(',')) {
+      base64Image = roomImage.split(',')[1];
+    }
+    
+    // Create data URL for display
+    const dataUrl = `data:image/jpeg;base64,${base64Image}`;
+
     const originalImg: GeneratedImage = {
       id: 'original-uploaded-image',
-      url: roomImage.startsWith('data:') ? roomImage : `data:image/jpeg;base64,${roomImage}`,
-      base64: roomImage.includes(',') ? roomImage.split(',')[1] : roomImage,
-      prompt: 'Oryginalne zdjęcie',
+      url: dataUrl,
+      base64: base64Image,
+      prompt: 'Oryginalne zdjęcie przesłane przez użytkownika',
       provider: 'google' as const,
       parameters: { 
         modificationType: 'original',
@@ -2324,8 +2374,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       },
       ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 5 },
       isFavorite: false,
-      createdAt: 0
+      createdAt: 0,
+      source: GenerationSource.Implicit // Mark as original user upload
     };
+
+    console.log("[Show Original] Showing original user-uploaded image:", {
+      hasImage: !!roomImage,
+      length: roomImage.length,
+      base64Length: base64Image.length,
+      urlLength: dataUrl.length
+    });
 
     setSelectedImage(originalImg);
     setShowModifications(false);
@@ -2364,7 +2422,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       natural_materials: `SYSTEM INSTRUCTION: Image-to-image material replacement. KEEP: walls, windows, doors, furniture layout, camera angle - IDENTICAL. CHANGE: REPAINT materials to natural wood, stone, and organic textures. Replace synthetic materials with natural ones (wood furniture, stone surfaces, organic fabrics) while maintaining exact furniture positions and room structure.`,
       more_plants: `SYSTEM INSTRUCTION: Image-to-image plant addition. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: ADD potted plants, hanging greenery, and natural elements throughout this ${currentStyle} interior. Place plants strategically around furniture and in empty spaces while maintaining exact furniture positions and room structure.`,
       less_plants: `SYSTEM INSTRUCTION: Image-to-image plant removal. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: ERASE all plants, flowers, and greenery. Remove all botanical elements and inpaint the surfaces behind them seamlessly while maintaining exact furniture positions and room structure.`,
-      textured_walls: `SYSTEM INSTRUCTION: Image-to-image wall modification. KEEP: windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: REPAINT walls with textures, panels, or wallpaper. Add wall treatments while maintaining exact furniture positions and room structure.`,
+      change_furniture: `SYSTEM INSTRUCTION: Image-to-image furniture replacement. KEEP: walls, windows, doors, floor, ceiling, lighting, decorations, camera angle, room layout - IDENTICAL. CHANGE: REPLACE all furniture with new furniture pieces that perfectly match the ${currentStyle} style. The new furniture must be stylistically appropriate, harmonize with the existing color palette and materials, maintain similar scale and proportions, and be placed in the same positions. Only furniture changes - everything else remains exactly the same.`,
       add_decorations: `SYSTEM INSTRUCTION: Image-to-image decoration addition. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: ADD artwork, decorative accessories, and styling elements to this ${currentStyle} interior. Place decorative items on walls, surfaces, and shelves while maintaining exact furniture positions and room structure.`,
       change_flooring: `SYSTEM INSTRUCTION: Image-to-image floor modification. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: REPAINT floor material to different texture or pattern. Replace existing flooring with new material (wood, tile, carpet, etc.) while keeping everything else exactly the same. Maintain exact furniture positions and room structure.`
     };
@@ -2884,6 +2942,123 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       fill 
                       className="object-cover" 
                     />
+                    {/* Loading Overlay for Modifications */}
+                    <AnimatePresence>
+                      {isModifying && blindSelectionMade && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-10"
+                        >
+                          <div className="text-center space-y-4 px-6">
+                            {/* Stage indicator */}
+                            <div className="flex justify-center items-center gap-3">
+                              {[1, 2, 3].map((stage) => {
+                                const isActive = stage === loadingStage;
+                                const isCompleted = stage < loadingStage;
+                                
+                                return (
+                                  <div key={stage} className="flex items-center">
+                                    <motion.div
+                                      animate={{
+                                        scale: isActive ? [1, 1.1, 1] : 1,
+                                      }}
+                                      transition={{
+                                        duration: 1.5,
+                                        repeat: isActive ? Infinity : 0,
+                                      }}
+                                      className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                        isCompleted 
+                                          ? 'bg-gradient-to-r from-gold-500 to-gold-600' 
+                                          : isActive
+                                          ? 'bg-gradient-to-r from-gold-500/20 to-champagne/20'
+                                          : 'bg-white/10'
+                                      }`}
+                                    >
+                                      {isCompleted && <CheckCircle size={20} className="text-white" />}
+                                      {isActive && stage === 1 && <Wand2 size={20} className="text-white" />}
+                                      {isActive && stage === 2 && <Sparkles size={20} className="text-white" />}
+                                      {isActive && stage === 3 && <CheckCircle size={20} className="text-white" />}
+                                      {!isActive && !isCompleted && <div className="w-4 h-4 rounded-full bg-white/40" />}
+                                    </motion.div>
+                                    
+                                    {stage < 3 && (
+                                      <div className={`w-12 h-1 mx-2 rounded-full ${
+                                        isCompleted ? 'bg-gold-500' : 'bg-white/20'
+                                      }`} />
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Message */}
+                            <motion.p
+                              key={statusMessage}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="text-white font-modern text-lg font-semibold"
+                            >
+                              {statusMessage}
+                            </motion.p>
+
+                            {/* Progress bar */}
+                            <div className="relative w-64 h-2 bg-white/20 rounded-full overflow-hidden mx-auto">
+                              <motion.div
+                                className="absolute inset-y-0 left-0 bg-gradient-to-r from-gold-400 to-champagne rounded-full"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${loadingProgress}%` }}
+                                transition={{ duration: 0.5 }}
+                              />
+                              
+                              {/* Animated shimmer effect */}
+                              <motion.div
+                                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                                animate={{
+                                  x: ['-100%', '200%'],
+                                }}
+                                transition={{
+                                  duration: 2,
+                                  repeat: Infinity,
+                                  ease: "linear",
+                                }}
+                                style={{ width: '50%' }}
+                              />
+                            </div>
+
+                            {/* Progress percentage */}
+                            <div className="flex justify-center items-center gap-4 text-sm text-white/90">
+                              <span className="font-modern">{Math.round(loadingProgress)}%</span>
+                              {estimatedTime !== undefined && estimatedTime > 0 && (
+                                <span className="font-modern">
+                                  ~{estimatedTime}s pozostało
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Particles animation */}
+                            <div className="flex justify-center gap-2">
+                              {[...Array(5)].map((_, i) => (
+                                <motion.div
+                                  key={i}
+                                  animate={{
+                                    y: [0, -8, 0],
+                                    opacity: [0.3, 1, 0.3],
+                                  }}
+                                  transition={{
+                                    duration: 1.5,
+                                    repeat: Infinity,
+                                    delay: i * 0.2,
+                                  }}
+                                  className="w-2 h-2 rounded-full bg-gold-500"
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                     <div className="absolute top-4 left-4">
                       <motion.div
                         initial={{ opacity: 0, x: -20 }}
@@ -2941,12 +3116,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         }}
                         transition={{ duration: 0.5, ease: "easeOut" }}
                       >
-                        <GlassCard variant="highlighted" className="p-5">
-                          <div className="space-y-4">
-                            <h3 className="font-semibold text-graphite text-lg text-center mb-3">
-                              Czy to moje wnętrze?
-                            </h3>
-                            
+                        <div className="space-y-6">
+                          <h4 className="font-semibold text-graphite text-lg">Czy to Twoje wnętrze?</h4>
+                          <div className="border-b border-gray-200/50 pb-4 last:border-b-0">
                             <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
                               <span>To nie moje wnętrze (1)</span>
                               <span>To moje wnętrze (5)</span>
@@ -2966,15 +3138,57 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               className="mb-2"
                             />
                           </div>
-                        </GlassCard>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Second Rating Question */}
+                  <AnimatePresence>
+                    {hasAnsweredInteriorQuestion && !hasCompletedRatings && selectedImage?.id !== 'original-uploaded-image' && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.8, ease: "easeInOut" }}
+                        className="space-y-6"
+                      >
+                        <h4 className="font-semibold text-graphite text-lg">Oceń to wnętrze:</h4>
+                        {[
+                          {
+                            key: 'aesthetic_match',
+                            left: 'Nietrafiona',
+                            mid: 'Zgodność z gustem',
+                            right: 'Idealna',
+                          },
+                        ].map(({ key, left, mid, right }) => (
+                          <div key={key} className="border-b border-gray-200/50 pb-4 last:border-b-0">
+                            <p className="text-base text-graphite font-modern leading-relaxed mb-3">
+                              {mid}
+                            </p>
+
+                            <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
+                              <span>{left} (1)</span>
+                              <span>{right} (7)</span>
+                            </div>
+
+                            <GlassSlider
+                              min={1}
+                              max={7}
+                              value={(selectedImage.ratings as any)[key] || 4}
+                              onChange={(value) => handleImageRating(selectedImage.id, key as any, value)}
+                              className="mb-2"
+                            />
+                          </div>
+                        ))}
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
               </GlassCard>
               
-              {/* Modifications and History - Show after selection and after answering interior question */}
-              {selectedImage && blindSelectionMade && hasAnsweredInteriorQuestion && (
+              {/* Modifications and History - Show after selection and after completing all questions */}
+              {selectedImage && blindSelectionMade && hasCompletedRatings && (
                 <>
                   {/* Modifications Button */}
                   <motion.div
@@ -3001,7 +3215,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
                   {/* Modifications Panel */}
                   <AnimatePresence>
-                    {showModifications && hasAnsweredInteriorQuestion && (
+                    {showModifications && (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}

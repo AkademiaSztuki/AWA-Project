@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
+import { addWatermarkToImage } from '@/lib/watermark';
 
 interface GenerationRequest {
   prompt: string;
@@ -198,9 +199,22 @@ export const useGoogleAI = () => {
 
             console.log(`[Google AI] Source ${source} completed in ${processingTime}ms`);
 
+            // Add subtle watermark to generated image
+            let watermarkedImage = result.images[0];
+            try {
+              watermarkedImage = await addWatermarkToImage(result.images[0]);
+              // Extract base64 if it's a data URL
+              if (watermarkedImage.startsWith('data:')) {
+                watermarkedImage = watermarkedImage.split(',')[1];
+              }
+            } catch (watermarkError) {
+              console.warn('[Google AI] Failed to add watermark, using original:', watermarkError);
+              // Continue with original image if watermark fails
+            }
+
             const successResult: SourceGenerationResult = {
               source,
-              image: result.images[0],
+              image: watermarkedImage,
               prompt,
               processing_time: processingTime,
               success: true
@@ -294,7 +308,21 @@ export const useGoogleAI = () => {
 
       const result = await response.json();
       setIsLoading(false);
-      return result.image;
+      
+      // Add subtle watermark to upscaled image
+      let watermarkedImage = result.image;
+      try {
+        watermarkedImage = await addWatermarkToImage(result.image);
+        // Extract base64 if it's a data URL
+        if (watermarkedImage.startsWith('data:')) {
+          watermarkedImage = watermarkedImage.split(',')[1];
+        }
+      } catch (watermarkError) {
+        console.warn('[Google AI] Failed to add watermark to upscaled image, using original:', watermarkError);
+        // Continue with original image if watermark fails
+      }
+      
+      return watermarkedImage;
 
     } catch (err: any) {
       console.error('[Google AI] Error upscaling image:', err);

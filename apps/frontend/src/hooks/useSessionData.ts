@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useSession } from './useSession';
 import { SessionData } from '@/types';
 import { saveFullSessionToSupabase, DISABLE_SESSION_SYNC } from '@/lib/supabase';
@@ -12,7 +13,7 @@ interface UseSessionDataReturn {
 export const useSessionData = (): UseSessionDataReturn => {
   const { sessionData, updateSession, isInitialized } = useSession();
 
-  const updateSessionData = (updates: Partial<SessionData>) => {
+  const updateSessionData = useCallback((updates: Partial<SessionData>) => {
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSessionData.ts:updateSessionData',message:'Updating session data',data:{hasUserHash:!!sessionData?.userHash,updateKeys:Object.keys(updates),hasBigFive:!!updates.bigFive,hasVisualDNA:!!updates.visualDNA,hasColorsAndMaterials:!!updates.colorsAndMaterials,hasInspirations:!!updates.inspirations},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H13'})}).catch(()=>{});
     // #endregion
@@ -38,7 +39,7 @@ export const useSessionData = (): UseSessionDataReturn => {
       void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSessionData.ts:updateSessionData-sync-disabled',message:'Session sync is disabled',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H13'})}).catch(()=>{});
       // #endregion
     }
-  };
+  }, [sessionData, updateSession]);
 
   const exportSessionData = () => {
     try {

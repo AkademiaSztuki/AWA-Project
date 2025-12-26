@@ -1,6 +1,52 @@
 # 📊 Eksport danych z Supabase do CSV
 
-## Sposób 1: Automatyczny skrypt (NAJŁATWIEJSZY) ⭐
+## ⭐ NOWY: Eksport do JEDNEGO pliku CSV (dla Google Looker Studio)
+
+**Najlepsze rozwiązanie do wizualizacji w Google Looker Studio!**
+
+### Krok 1: Upewnij się, że masz zmienne środowiskowe
+
+W pliku `.env.local` musisz mieć:
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://twoj-projekt.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=twoj-service-role-key
+```
+
+### Krok 2: Uruchom skrypt
+
+```bash
+cd apps/frontend
+npm run export:single
+```
+
+Lub bezpośrednio:
+```bash
+node scripts/export-single-csv.js
+```
+
+### Krok 3: Import do Google Looker Studio
+
+1. Otwórz [Google Looker Studio](https://lookerstudio.google.com)
+2. Kliknij **Create** → **Data Source**
+3. Wybierz **Upload file**
+4. Wybierz plik `all_data.csv` z folderu `apps/frontend/exports/YYYY-MM-DDTHH-MM-SS/`
+5. Gotowe! Możesz tworzyć wykresy
+
+**Co zawiera plik:**
+- ✅ Wszystkie dane z tabel: `participants`, `participant_swipes`, `participant_images`, `participant_generations`
+- ✅ Jeden plik CSV z kolumną `record_type` do filtrowania
+- ✅ Format gotowy do Looker Studio
+- ✅ Wszystkie kolumny w jednym pliku (puste dla rekordów innych typów)
+
+**Filtrowanie w Looker Studio:**
+- `record_type = 'participant'` - dane uczestników
+- `record_type = 'swipe'` - swipe'y
+- `record_type = 'image'` - obrazy
+- `record_type = 'generation'` - generacje
+
+---
+
+## Sposób 1: Automatyczny skrypt (wiele plików) ⭐
 
 ### Krok 1: Upewnij się, że masz zmienne środowiskowe
 
