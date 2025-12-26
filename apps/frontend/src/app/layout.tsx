@@ -3,13 +3,9 @@ import { cookies, headers } from 'next/headers';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Inter, Audiowide, Exo_2 } from 'next/font/google';
 import './globals.css';
-import AuroraBackgroundClient from '@/components/ui/AuroraBackgroundClient';
-import ParticlesBackground from '@/components/ui/ParticlesBackground';
-import AuroraBubbles from '@/components/ui/AuroraBubbles';
 import AmbientMusic from '@/components/ui/AmbientMusic';
-import MusicTestButton from '@/components/ui/MusicTestButton';
-import { AwaBackground } from '@/components/awa';
 import { LandscapeGuard } from '@/components/ui/LandscapeGuard';
+import { ResponsiveLayoutWrapper } from '@/components/ui/ResponsiveLayoutWrapper';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LayoutProvider } from '@/contexts/LayoutContext';
@@ -73,26 +69,24 @@ export default function RootLayout({
             <LayoutProvider>
               <AnimationProvider>
                 <LandscapeGuard>
-                  <AwaBackground />
-                <AuroraBackgroundClient />
-                <AuroraBubbles />
-                <ParticlesBackground />
-                <AmbientMusic volume={0.4} audioFile="/audio/ambient.mp3" />
-                
-                <GlobalProtectedRoute>
-                  <main className="relative z-10 min-h-screen w-full px-4 pt-8 pb-12 md:px-8">
-                    <div className="mx-auto w-full max-w-[1600px] grid gap-10 lg:grid-cols-[minmax(420px,0.3fr)_minmax(480px,0.7fr)] items-start">
-                      {/* Reserved column for IDA narrator - keeps content from overlapping */}
-                      <div className="hidden lg:block min-h-[720px]" aria-hidden="true" />
-                      <div className="w-full max-w-3xl lg:max-w-none lg:ml-auto space-y-4">
-                        <GlassHeader />
-                        {children}
-                      </div>
-                    </div>
-                  </main>
-                </GlobalProtectedRoute>
-                <SpeedInsights />
-              </LandscapeGuard>
+                  <ResponsiveLayoutWrapper>
+                    <AmbientMusic volume={0.4} audioFile="/audio/ambient.mp3" />
+                    
+                    <GlobalProtectedRoute>
+                      <main className="relative z-10 min-h-screen w-full px-2 sm:px-4 pt-4 sm:pt-8 pb-8 sm:pb-12 md:px-8">
+                        <div className="mx-auto w-full max-w-[1600px] grid gap-4 sm:gap-6 md:gap-10 lg:grid-cols-[minmax(420px,0.3fr)_minmax(480px,0.7fr)] items-start">
+                          {/* Reserved column for IDA narrator - keeps content from overlapping */}
+                          <div className="hidden lg:block min-h-[720px]" aria-hidden="true" />
+                          <div className="w-full max-w-3xl lg:max-w-none lg:ml-auto space-y-2 sm:space-y-4">
+                            <GlassHeader />
+                            {children}
+                          </div>
+                        </div>
+                      </main>
+                    </GlobalProtectedRoute>
+                    <SpeedInsights />
+                  </ResponsiveLayoutWrapper>
+                </LandscapeGuard>
               </AnimationProvider>
             </LayoutProvider>
           </AuthProvider>

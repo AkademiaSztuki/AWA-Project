@@ -162,24 +162,24 @@ const LandingScreen: React.FC = () => {
         </div>
       )}
       {showAuraSection && (
-        <div className="flex-1 ml-[0px] flex flex-col items-center justify-center h-screen p-8 pt-0">
-          <div className="w-full max-w-4xl z-30 -mt-80">
+        <div className="flex-1 ml-[0px] flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 pt-4 sm:pt-8">
+          <div className="w-full max-w-4xl z-30 -mt-0 sm:-mt-20 md:-mt-40 lg:-mt-80">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-center mb-8"
+              className="text-center mb-4 sm:mb-6 md:mb-8"
             >
-              <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-3">
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-nasalization text-graphite mb-2 sm:mb-3">
                 {language === 'pl' ? 'Wybierz Swoją Ścieżkę' : 'Choose Your Path'}
               </h2>
-              <p className="text-base lg:text-lg text-silver-dark font-modern">
+              <p className="text-sm sm:text-base lg:text-lg text-silver-dark font-modern">
                 {language === 'pl' ? 'Jak chcesz doświadczyć IDA?' : 'How do you want to experience IDA?'}
               </p>
             </motion.div>
 
             {/* Two path buttons - EQUAL HEIGHT */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
               {/* FAST TRACK */}
               <motion.button
                 initial={{ opacity: 0, x: -20 }}
@@ -332,23 +332,23 @@ const LandingScreen: React.FC = () => {
               >
                 <GlassCard 
                   variant="highlighted"
-                  className="p-6 lg:p-8 h-full hover:border-gold/50 transition-all group relative overflow-hidden flex flex-col"
+                  className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-gold/50 transition-all group relative overflow-hidden flex flex-col rounded-xl sm:rounded-2xl"
                 >
-                  <div className="absolute top-3 right-3 bg-gradient-to-r from-gold to-champagne text-white px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap z-10">
+                  <div className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-gradient-to-r from-gold to-champagne text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-bold whitespace-nowrap z-10">
                     ✨ {language === 'pl' ? 'Polecane' : 'Recommended'}
                   </div>
-                  <div className="flex items-center gap-3 mb-4 pr-20">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                      <Heart size={28} className="text-white" fill="currentColor" />
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 pr-16 sm:pr-20">
+                    <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                      <Heart size={20} className="sm:w-7 sm:h-7 text-white" fill="currentColor" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-gold-700 transition-colors">
+                      <h3 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-gold-700 transition-colors">
                         {language === 'pl' ? 'Pełne Doświadczenie' : 'Full Experience'}
                       </h3>
                       <p className="text-xs text-silver-dark font-modern">20-30 min • {language === 'pl' ? 'Nieograniczone' : 'Unlimited'}</p>
                     </div>
                   </div>
-                  <p className="text-sm text-graphite font-modern leading-relaxed flex-1">
+                  <p className="text-xs sm:text-sm text-graphite font-modern leading-relaxed flex-1">
                     {language === 'pl' 
                       ? 'Poznaj siebie głęboko, stwórz wnętrze które jest TWOJE' 
                       : 'Deep dive, create interior that is truly YOURS'}

@@ -372,26 +372,26 @@ export default function PathSelectionScreen() {
   return (
     <div className="min-h-screen flex relative">
       {/* Main content area - centered like landing page */}
-      <div className="flex-1 ml-[0px] flex flex-col items-center justify-center h-screen p-8">
-        <div className="w-full max-w-4xl z-30 mb-32"> {/* Added margin bottom for dialogue */}
+      <div className="flex-1 ml-[0px] flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8">
+        <div className="w-full max-w-4xl z-30 mb-8 sm:mb-16 md:mb-24 lg:mb-32">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="space-y-8"
+            className="space-y-4 sm:space-y-6 md:space-y-8"
           >
             {/* Header */}
-            <div className="text-center mb-8">
-              <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-3">
+            <div className="text-center mb-4 sm:mb-6 md:mb-8">
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-nasalization text-graphite mb-2 sm:mb-3">
                 {texts.title}
               </h2>
-              <p className="text-base lg:text-lg text-silver-dark font-modern">
+              <p className="text-sm sm:text-base lg:text-lg text-silver-dark font-modern">
                 {texts.subtitle} <span className="font-semibold text-gold">{texts.ida}</span>{texts.subtext}
               </p>
             </div>
 
             {/* Two path buttons - EQUAL HEIGHT like landing page */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
               
               {/* FAST TRACK */}
               <motion.button
@@ -402,19 +402,19 @@ export default function PathSelectionScreen() {
                 className="text-left w-full"
                 onClick={() => handlePathSelection('fast')}
               >
-                <GlassCard className="p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-2xl">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center">
-                      <Zap size={28} className="text-graphite" />
+                <GlassCard className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-xl sm:rounded-2xl">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center flex-shrink-0">
+                      <Zap size={20} className="sm:w-7 sm:h-7 text-graphite" />
                     </div>
-                    <div>
-                      <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                         {texts.fastTrack}
                       </h3>
                       <p className="text-xs text-silver-dark font-modern">3-5 min • 10 {language === 'pl' ? 'generacji' : 'generations'}</p>
                     </div>
                   </div>
-                  <p className="text-sm text-graphite font-modern">
+                  <p className="text-xs sm:text-sm text-graphite font-modern">
                     {texts.fastDesc}
                   </p>
                 </GlassCard>
@@ -431,23 +431,23 @@ export default function PathSelectionScreen() {
               >
                 <GlassCard 
                   variant="highlighted"
-                  className="p-6 lg:p-8 h-full hover:border-gold/50 transition-all group rounded-2xl"
+                  className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-gold/50 transition-all group rounded-xl sm:rounded-2xl relative overflow-hidden"
                 >
-                  <div className="absolute top-3 right-3 bg-gradient-to-r from-gold to-champagne text-white px-3 py-1 rounded-full text-xs font-bold">
+                  <div className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-gradient-to-r from-gold to-champagne text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-bold whitespace-nowrap z-10">
                     ✨ {texts.recommended}
                   </div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-                      <Heart size={28} className="text-white" fill="currentColor" />
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 pr-16 sm:pr-20">
+                    <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                      <Heart size={20} className="sm:w-7 sm:h-7 text-white" fill="currentColor" />
                     </div>
-                    <div>
-                      <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                         {texts.fullExp}
                       </h3>
                       <p className="text-xs text-silver-dark font-modern">20-30 min • 50 {language === 'pl' ? 'generacji' : 'generations'}</p>
                     </div>
                   </div>
-                  <p className="text-sm text-graphite font-modern">
+                  <p className="text-xs sm:text-sm text-graphite font-modern">
                     {texts.fullDesc}
                   </p>
                 </GlassCard>
