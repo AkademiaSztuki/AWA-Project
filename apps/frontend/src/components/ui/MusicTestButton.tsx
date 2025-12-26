@@ -61,25 +61,34 @@ export const MusicTestButton: React.FC = () => {
 
   return (
     <div 
-      className="relative z-50"
-      onMouseEnter={() => setIsExpanded(true)}
-      onMouseLeave={() => setIsExpanded(false)}
+      className="relative z-50 pointer-events-auto"
+      onMouseEnter={() => {
+        if (window.innerWidth >= 1024) setIsExpanded(true);
+      }}
+      onMouseLeave={() => {
+        if (window.innerWidth >= 1024) setIsExpanded(false);
+      }}
     >
       <div className="flex items-center gap-3">
         {/* Główny przycisk */}
-        <div
-          className="w-10 h-10 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full cursor-pointer select-none transition-all duration-300 hover:scale-110 shadow-lg flex items-center justify-center hover:bg-white/20 text-graphite"
-          onClick={togglePlay}
+        <button
+          type="button"
+          className="w-10 h-10 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full cursor-pointer select-none transition-all duration-300 hover:scale-110 active:scale-95 shadow-lg flex items-center justify-center hover:bg-white/20 text-graphite touch-target relative z-[120] pointer-events-auto"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Toggle expansion on click for both mobile and desktop
+            setIsExpanded(prev => !prev);
+          }}
         >
           <Volume2 className="w-5 h-5" />
-        </div>
+        </button>
 
         {/* Panel kontroli głośności */}
         {isExpanded && (
-          <div className="absolute top-full right-0 pt-4 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+          <div className="absolute top-full right-0 mt-2 pt-2 animate-in fade-in zoom-in-95 duration-200 origin-top-right z-[130]">
             <div
-              style={{ width: 280 }}
-              className="flex flex-col gap-3 p-4 shadow-2xl bg-[#c7b07a]/95 backdrop-blur-sm border border-white/25 ring-1 ring-gold/35 rounded-[20px]"
+              className="flex flex-col gap-3 p-4 shadow-2xl bg-[#c7b07a]/95 backdrop-blur-md border border-white/25 ring-1 ring-gold/35 rounded-[20px] w-[240px] sm:w-[280px]"
             >
               {/* Muzyka - górny rząd */}
               <div className="flex items-center gap-3">
