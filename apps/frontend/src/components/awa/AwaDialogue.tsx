@@ -326,7 +326,8 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // Ustawienia prędkości i pauz - wszystko w jednym miejscu
   const TYPING_SPEED = 14.8; // Prędkość wyświetlania tekstu (ms między znakami)
   const PAUSE_BETWEEN_SENTENCES = 1500; // Pauza między zdaniami (ms) - używane w handleSentenceComplete
-  const PAUSE_AFTER_ALL_SENTENCES = 3000; // Pauza po zakończeniu całego fragmentu (wszystkich zdań) (ms)
+  const PAUSE_AFTER_ALL_SENTENCES = 500; // Pauza po zakończeniu całego fragmentu (wszystkich zdań) (ms)
+  const PAUSE_AFTER_LANDING = isMobile ? 1000 : 0; // Landing ma dodatkowe 1000ms przerwy tylko na mobile
   const PAUSE_AFTER_TEXT = 0; // Pauza w TextType po zakończeniu tekstu (ms) - wyłączona, bo mamy PAUSE_BETWEEN_SENTENCES
   
   // Zabezpieczenie przed undefined
@@ -370,6 +371,12 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const [audioReady, setAudioReady] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [showClickPrompt, setShowClickPrompt] = useState(false);
+  const [audioEnded, setAudioEnded] = useState(false);
+  const [allSentencesCompleted, setAllSentencesCompleted] = useState(false);
+  
+  // Refs to prevent multiple calls
+  const onDialogueEndCalledRef = useRef(false);
+  const hideScheduledRef = useRef(false);
   
   // Track transitioning state to prevent double-triggering
   const isTransitioningRef = useRef<boolean>(false);
@@ -398,9 +405,24 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // console.log('AwaDialogue: useDialogueVoice hook returned:', { voiceVolume, voiceEnabled });
 
   const handleSentenceComplete = () => {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D1',location:'AwaDialogue.tsx:handleSentenceComplete',message:'handleSentenceComplete called',data:{currentStep,currentSentenceIndex,dialoguesLength:dialogues.length,audioEnded,allSentencesCompleted,voiceEnabled,hasAudioFile:!!audioFile},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    
     // Prevent double-triggering
     if (isTransitioningRef.current) {
       console.log('[AwaDialogue] Already transitioning, ignoring completion');
+      return;
+    }
+    
+    // Safety check: ignore if currentSentenceIndex is out of bounds
+    // This can happen during step transitions when state hasn't reset yet
+    if (currentSentenceIndex >= dialogues.length) {
+      console.log('[AwaDialogue] currentSentenceIndex out of bounds, ignoring completion', {
+        currentSentenceIndex,
+        dialoguesLength: dialogues.length,
+        currentStep
+      });
       return;
     }
 
@@ -424,25 +446,61 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     } else {
       console.log('[AwaDialogue] All sentences completed');
       setIsDone(true);
+      setAllSentencesCompleted(true);
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D2',location:'AwaDialogue.tsx:handleSentenceComplete-last',message:'Last sentence completed',data:{currentStep,audioEnded,voiceEnabled,hasAudioFile:!!audioFile,hasOnDialogueEnd:!!onDialogueEnd,autoHide},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       
-      // Pauza po zakończeniu całego fragmentu przed ukryciem/wywołaniem callback
-      setTimeout(() => {
-        if (autoHide) {
+      // For landing: wait for audio to finish before calling onDialogueEnd
+      // For path_selection: if autoHide, hide after audio ends
+      if (currentStep === 'landing' && onDialogueEnd && !onDialogueEndCalledRef.current) {
+        // Wait for audio to end, or timeout after delay
+        if (audioEnded || !voiceEnabled || !audioFile) {
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D3',location:'AwaDialogue.tsx:handleSentenceComplete-landing-immediate',message:'Landing: calling onDialogueEnd immediately',data:{audioEnded,voiceEnabled,hasAudioFile:!!audioFile},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+          onDialogueEndCalledRef.current = true;
           setTimeout(() => {
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D4',location:'AwaDialogue.tsx:handleSentenceComplete-landing-call',message:'Landing: calling onDialogueEnd',data:{},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+            if (currentStep === 'landing') {
+              window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
+            }
+            onDialogueEnd();
+          }, PAUSE_AFTER_LANDING);
+        } else {
+          // #region agent log
+          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D5',location:'AwaDialogue.tsx:handleSentenceComplete-landing-wait',message:'Landing: waiting for audio to end',data:{audioEnded},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+        }
+        // If audio is still playing, onDialogueEnd will be called in handleAudioEnded
+      } else if (autoHide && !hideScheduledRef.current) {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D6',location:'AwaDialogue.tsx:handleSentenceComplete-auto-hide',message:'Scheduling hide',data:{autoHide,currentStep,audioEnded,voiceEnabled,hasAudioFile:!!audioFile},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        hideScheduledRef.current = true;
+        // For path_selection or other steps with autoHide, hide after delay
+        // But also wait for audio to end if it's still playing
+        if (audioEnded || !voiceEnabled || !audioFile) {
+          setTimeout(() => {
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D7',location:'AwaDialogue.tsx:handleSentenceComplete-hide-call',message:'Hiding dialogue',data:{currentStep},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             console.log('AwaDialogue: Hiding dialogue after completion');
             setIsVisible(false);
-          }, 4000); // Dodatkowa pauza przed ukryciem
+          }, PAUSE_AFTER_ALL_SENTENCES);
         }
-        
-        // Dispatch custom event for landing page to hide 3D model on mobile
-        if (currentStep === 'landing') {
-          window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
-        }
-        
-        if (onDialogueEnd) {
+        // If audio is still playing, hide will be called in handleAudioEnded
+      } else if (onDialogueEnd && !onDialogueEndCalledRef.current) {
+        onDialogueEndCalledRef.current = true;
+        setTimeout(() => {
+          if (currentStep === 'landing') {
+            window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
+          }
           onDialogueEnd();
-        }
-      }, PAUSE_AFTER_ALL_SENTENCES);
+        }, currentStep === 'landing' ? PAUSE_AFTER_LANDING : PAUSE_AFTER_ALL_SENTENCES);
+      }
     }
   };
 
@@ -450,6 +508,58 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   useEffect(() => {
     isTransitioningRef.current = false;
   }, [currentSentenceIndex]);
+
+  const handleAudioEnded = () => {
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D8',location:'AwaDialogue.tsx:handleAudioEnded',message:'Audio ended',data:{currentStep,allSentencesCompleted,hasOnDialogueEnd:!!onDialogueEnd,autoHide,onDialogueEndCalled:onDialogueEndCalledRef.current,hideScheduled:hideScheduledRef.current},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    console.log('[AwaDialogue] Audio completed for entire dialogue', { currentStep, allSentencesCompleted, autoHide });
+    setAudioEnded(true);
+    
+    // If all sentences completed and audio ended, call onDialogueEnd for landing
+    if (currentStep === 'landing' && allSentencesCompleted && onDialogueEnd && !onDialogueEndCalledRef.current) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D9',location:'AwaDialogue.tsx:handleAudioEnded-landing',message:'Landing: audio ended, calling onDialogueEnd',data:{},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      onDialogueEndCalledRef.current = true;
+      setTimeout(() => {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D10',location:'AwaDialogue.tsx:handleAudioEnded-landing-call',message:'Landing: calling onDialogueEnd after delay',data:{},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        if (currentStep === 'landing') {
+          window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
+        }
+        onDialogueEnd();
+      }, PAUSE_AFTER_LANDING);
+    }
+    
+    // For autoHide, hide after audio ends
+    if (autoHide && allSentencesCompleted && !hideScheduledRef.current) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D11',location:'AwaDialogue.tsx:handleAudioEnded-auto-hide',message:'Audio ended, hiding',data:{currentStep},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      hideScheduledRef.current = true;
+      setTimeout(() => {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D12',location:'AwaDialogue.tsx:handleAudioEnded-hide-call',message:'Hiding dialogue after delay',data:{currentStep},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        console.log('AwaDialogue: Hiding dialogue after audio ended');
+        setIsVisible(false);
+      }, PAUSE_AFTER_ALL_SENTENCES);
+    } else if (autoHide && allSentencesCompleted && hideScheduledRef.current) {
+      // If hide was already scheduled from handleSentenceComplete, execute it now after audio ends
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D13',location:'AwaDialogue.tsx:handleAudioEnded-already-scheduled',message:'Hide already scheduled, executing now',data:{currentStep},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setTimeout(() => {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D14',location:'AwaDialogue.tsx:handleAudioEnded-execute-hide',message:'Executing hide after audio ended',data:{currentStep},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        console.log('AwaDialogue: Executing hide after audio ended');
+        setIsVisible(false);
+      }, PAUSE_AFTER_ALL_SENTENCES);
+    }
+  };
 
   // Track previous step to only reset on actual step change
   const prevStepRef = useRef<string | FlowStep | undefined>(undefined);
@@ -478,6 +588,10 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       setAudioReady(false);
       setIsVisible(true);
       setShowClickPrompt(false);
+      setAudioEnded(false);
+      setAllSentencesCompleted(false);
+      onDialogueEndCalledRef.current = false;
+      hideScheduledRef.current = false;
       
       // Reset transitioning flag
       isTransitioningRef.current = false;
@@ -703,7 +817,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
           </div>
         </button>
       )}
-      {hasStarted && audioReady ? (
+      {hasStarted && audioReady && currentSentenceIndex < dialogues.length ? (
         <TextType
           key={`${currentStep}-${currentSentenceIndex}`}
           as="div"
@@ -734,11 +848,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
           src={audioFile}
           volume={voiceVolume}
           autoPlay={true}
-          onEnded={() => {
-            // Audio completion doesn't trigger sentence transitions
-            // Audio plays in background for entire dialogue
-            console.log('[AwaDialogue] Audio completed for entire dialogue');
-          }}
+          onEnded={handleAudioEnded}
         />
       )}
     </div>

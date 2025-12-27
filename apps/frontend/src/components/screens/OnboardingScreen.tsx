@@ -538,7 +538,7 @@ const OnboardingScreen: React.FC = () => {
       {/* Dialog IDA na dole - cała szerokość */}
       <div className="w-full">
         <AwaDialogue 
-          currentStep="onboarding" 
+          currentStep={step === 'demographics' ? 'wizard_demographics' : 'onboarding'} 
           fullWidth={true}
           autoHide={true}
         />

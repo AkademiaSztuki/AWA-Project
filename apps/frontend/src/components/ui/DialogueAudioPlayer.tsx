@@ -7,93 +7,154 @@ interface DialogueAudioPlayerProps {
   onEnded?: () => void;
 }
 
+let userHasInteracted = false;
+
+if (typeof window !== 'undefined') {
+  const enableAutoplay = () => {
+    userHasInteracted = true;
+    window.removeEventListener('click', enableAutoplay);
+    window.removeEventListener('touchstart', enableAutoplay);
+  };
+  
+  window.addEventListener('click', enableAutoplay, { once: true });
+  window.addEventListener('touchstart', enableAutoplay, { once: true });
+}
+
 const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, autoPlay = true, onEnded }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const prevSrcRef = useRef<string | null>(null);
+  const playAttemptedRef = useRef<boolean>(false);
+  const previousSrcRef = useRef<string>('');
 
-  // console.log('DialogueAudioPlayer: Rendering with props:', { src, volume, autoPlay });
-
-  // Ustaw src i volume na każdą zmianę
-  useEffect(() => {
-    // console.log('DialogueAudioPlayer: audioRef.current exists:', !!audioRef.current);
-    if (audioRef.current) {
-      const prevSrc = prevSrcRef.current;
-      prevSrcRef.current = src;
-      // console.log('DialogueAudioPlayer: Setting src and volume:', { src, volume });
-      
-      // Stop current playback before changing src
-      if (!audioRef.current.paused) {
-        audioRef.current.pause();
-      }
-      
-      audioRef.current.src = src;
-      audioRef.current.volume = volume;
-      
-      if (autoPlay) {
-        audioRef.current.currentTime = 0;
-        // Wait for load before playing
-        audioRef.current.addEventListener('canplay', () => {
-          if (audioRef.current && autoPlay) {
-            // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3',location:'DialogueAudioPlayer.tsx:canplay->play',message:'Attempting dialogue play after canplay',data:{src,prevSrc,paused:audioRef.current?.paused,readyState:audioRef.current?.readyState,currentTime:audioRef.current?.currentTime,volume:audioRef.current?.volume},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
-            audioRef.current.play().catch((error) => {
-              // #region agent log
-              void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4',location:'DialogueAudioPlayer.tsx:play:catch',message:'Dialogue play() rejected',data:{src,prevSrc,name:(error as any)?.name,message:(error as any)?.message},timestamp:Date.now()})}).catch(()=>{});
-              // #endregion
-              console.error('DialogueAudioPlayer: Failed to play audio:', error);
-            });
-          }
-        }, { once: true });
-      }
-    }
-  }, [src, autoPlay]);
-
-  // Synchronizuj volume na każdą zmianę
   useEffect(() => {
     if (audioRef.current) {
-      // console.log('DialogueAudioPlayer: Syncing volume to:', volume);
-      audioRef.current.volume = volume;
-    }
-  }, [volume]);
-
-  // Event telemetry (pause/ended/error)
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const report = (event: string, extra?: Record<string, unknown>) => {
+      const previousSrc = previousSrcRef.current;
+      const srcChanged = previousSrc !== src;
+      const wasPlaying = audioRef.current && !audioRef.current.paused && audioRef.current.currentTime > 0;
+      const isNearEnd = audioRef.current.duration > 0 && (audioRef.current.duration - audioRef.current.currentTime) < 0.5;
+      
       // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1',location:'DialogueAudioPlayer.tsx:audio-event',message:`Dialogue audio event: ${event}`,data:{src:audio.currentSrc||src,paused:audio.paused,ended:audio.ended,readyState:audio.readyState,currentTime:audio.currentTime,duration:audio.duration,volume:audio.volume,...(extra||{})},timestamp:Date.now()})}).catch(()=>{});
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'A20',location:'DialogueAudioPlayer.tsx:src-change',message:'Src change detected',data:{previousSrc,newSrc:src,srcChanged,wasPlaying,isNearEnd,currentTime:audioRef.current?.currentTime||0,duration:audioRef.current?.duration||0},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
-    };
+      
+      // If src changed and previous audio was playing and not near end, wait for it to finish
+      if (srcChanged && wasPlaying && !isNearEnd && previousSrc) {
+        console.log('[DialogueAudioPlayer] Previous audio still playing, waiting for it to finish before changing src');
+        const checkInterval = setInterval(() => {
+          if (audioRef.current && (audioRef.current.paused || audioRef.current.ended || audioRef.current.currentTime >= audioRef.current.duration - 0.1)) {
+            clearInterval(checkInterval);
+            // Now safe to change src
+            if (audioRef.current) {
+              audioRef.current.src = src;
+              audioRef.current.volume = volume;
+              previousSrcRef.current = src;
+              
+              if (autoPlay) {
+                audioRef.current.currentTime = 0;
+                playAttemptedRef.current = false;
+                const tryPlay = () => {
+                  if (audioRef.current && autoPlay && !playAttemptedRef.current) {
+                    playAttemptedRef.current = true;
+                    audioRef.current.play().catch((error) => {
+                      console.warn('DialogueAudioPlayer: Auto-play blocked, waiting for interaction', error);
+                      if (userHasInteracted) {
+                        setTimeout(() => audioRef.current?.play().catch(() => {}), 100);
+                      }
+                    });
+                  }
+                };
+                if (audioRef.current.readyState >= 2) {
+                  tryPlay();
+                } else {
+                  audioRef.current.addEventListener('canplay', tryPlay, { once: true });
+                }
+              }
+            }
+          }
+        }, 100);
+        
+        // Timeout after 30 seconds to prevent infinite waiting
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          if (audioRef.current && previousSrcRef.current !== src) {
+            console.warn('[DialogueAudioPlayer] Timeout waiting for previous audio, forcing src change');
+            audioRef.current.src = src;
+            audioRef.current.volume = volume;
+            previousSrcRef.current = src;
+            if (autoPlay) {
+              audioRef.current.currentTime = 0;
+              playAttemptedRef.current = false;
+              const tryPlay = () => {
+                if (audioRef.current && autoPlay && !playAttemptedRef.current) {
+                  playAttemptedRef.current = true;
+                  audioRef.current.play().catch((error) => {
+                    console.warn('DialogueAudioPlayer: Auto-play blocked', error);
+                    if (userHasInteracted) {
+                      setTimeout(() => audioRef.current?.play().catch(() => {}), 100);
+                    }
+                  });
+                }
+              };
+              if (audioRef.current.readyState >= 2) {
+                tryPlay();
+              } else {
+                audioRef.current.addEventListener('canplay', tryPlay, { once: true });
+              }
+            }
+          }
+        }, 30000);
+        
+        return () => clearInterval(checkInterval);
+      } else {
+        // Normal case: src didn't change or previous audio finished/near end
+        audioRef.current.src = src;
+        audioRef.current.volume = volume;
+        previousSrcRef.current = src;
 
-    const onPause = () => report('pause');
-    const onEndedInternal = () => report('ended');
-    const onError = () => report('error');
+        if (autoPlay) {
+          audioRef.current.currentTime = 0;
+          playAttemptedRef.current = false;
 
-    audio.addEventListener('pause', onPause);
-    audio.addEventListener('ended', onEndedInternal);
-    audio.addEventListener('error', onError);
-    return () => {
-      audio.removeEventListener('pause', onPause);
-      audio.removeEventListener('ended', onEndedInternal);
-      audio.removeEventListener('error', onError);
-    };
-  }, [src]);
+          const tryPlay = () => {
+            if (audioRef.current && autoPlay && !playAttemptedRef.current) {
+              playAttemptedRef.current = true;
+              audioRef.current.play().catch((error) => {
+                console.warn('DialogueAudioPlayer: Auto-play blocked, waiting for interaction', error);
+                // Retry on interaction if blocked
+                if (userHasInteracted) {
+                  setTimeout(() => audioRef.current?.play().catch(() => {}), 100);
+                }
+              });
+            }
+          };
 
-  // Obsługa zakończenia
+          if (audioRef.current.readyState >= 2) {
+            tryPlay();
+          } else {
+            audioRef.current.addEventListener('canplay', tryPlay, { once: true });
+          }
+        } else {
+          audioRef.current.pause();
+        }
+      }
+    }
+  }, [src, autoPlay, volume]);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !onEnded) return;
-    audio.addEventListener('ended', onEnded);
-    return () => {
-      audio.removeEventListener('ended', onEnded);
+    
+    const handleEnded = () => {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'A19',location:'DialogueAudioPlayer.tsx:audio-ended',message:'Audio ended event fired',data:{src,currentTime:audio.currentTime,duration:audio.duration,ended:audio.ended},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      onEnded();
     };
+    audio.addEventListener('ended', handleEnded);
+    return () => audio.removeEventListener('ended', handleEnded);
   }, [onEnded, src]);
 
   return (
-    <audio ref={audioRef} style={{ display: 'none' }} data-type="dialogue" />
+    <audio ref={audioRef} style={{ display: 'none' }} />
   );
 };
 

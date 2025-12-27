@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { GlassCard, GlassButton } from '@/components/ui';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
+import { FlowStep } from '@/types';
 import { Zap, Heart, Palette, Home, Sparkles } from 'lucide-react';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useModalAPI } from '@/hooks/useModalAPI';
@@ -16,403 +17,167 @@ import { LoginModal } from '@/components/auth/LoginModal';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { language } = useLanguage();
   const { checkHealth } = useModalAPI();
   const { updateSessionData } = useSessionData();
   const { user, isLoading: authLoading } = useAuth();
   const { setHeaderVisible } = useLayout();
   const [showAuraSection, setShowAuraSection] = useState(false);
-  const [isPrewarming, setIsPrewarming] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [pendingPath, setPendingPath] = useState<'fast' | 'full' | null>(null);
-  const [redirectPath, setRedirectPath] = useState<string | null>(null);
-
-  // Store function references in refs to prevent effect re-runs when they change
-  const updateSessionDataRef = React.useRef(updateSessionData);
-  const routerRef = React.useRef(router);
-  const checkHealthRef = React.useRef(checkHealth);
-
-  // Keep refs up to date
-  React.useEffect(() => {
-    updateSessionDataRef.current = updateSessionData;
-    routerRef.current = router;
-    checkHealthRef.current = checkHealth;
-  }, [updateSessionData, router, checkHealth]);
-
-  useEffect(() => {
-    // Hide header initially
-    setHeaderVisible(false);
-    return () => setHeaderVisible(true);
-  }, [setHeaderVisible]);
-
-  // Check for auth redirect from middleware
-  useEffect(() => {
-    const authRequired = searchParams.get('auth') === 'required';
-    const redirect = searchParams.get('redirect');
-    
-    if (authRequired && redirect) {
-      setRedirectPath(redirect);
-      // If user is already logged in, redirect immediately
-      if (!authLoading && user) {
-        router.push(redirect);
-      } else if (!authLoading && !user) {
-        // Show login modal
-        setShowLoginModal(true);
-      }
-    }
-  }, [searchParams, authLoading, user, router]);
-
-  const landingTexts = {
-    pl: {
-      title: 'AURA',
-      subtitle: 'Poznaj swoją futurystyczną asystentkę projektowania wnętrz',
-      description: 'Razem odkryjemy Twoje preferencje designerskie i stworzymy wizualizacje Twoich marzeń. IDA wykorzystuje najnowsze technologie AI, aby pomóc Ci zrozumieć własny gust estetyczny.',
-      whatYouLearn: 'Czego się dowiesz?',
-      dna: 'Twoje wizualne DNA',
-      ideal: 'Idealne wnętrze',
-      hidden: 'Ukryte preferencje',
-      ready: 'Gotowy/a?',
-      readyText: 'Rozpocznij swoją podróż z IDA już teraz!',
-      button: 'Rozpocznij Badanie',
-      time: 'Czas trwania: ~20 minut'
-    },
-    en: {
-      title: 'AURA',
-      subtitle: 'Meet your futuristic interior design assistant',
-      description: 'Together we\'ll discover your design preferences and create visualizations of your dreams. IDA uses the latest AI technologies to help you understand your aesthetic taste.',
-      whatYouLearn: 'What will you learn?',
-      dna: 'Your visual DNA',
-      ideal: 'Perfect interior',
-      hidden: 'Hidden preferences',
-      ready: 'Ready?',
-      readyText: 'Start your journey with IDA now!',
-      button: 'Begin Study',
-      time: 'Duration: ~20 minutes'
-    }
-  };
-
-  const texts = landingTexts[language];
 
   const handleDialogueEnd = () => {
-    // Dodaj opóźnienie 1 sekundy przed pokazaniem okna AURA
+    // #region agent log
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'L1',location:'LandingScreen.tsx:handleDialogueEnd',message:'handleDialogueEnd called',data:{showAuraSection},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    // 500ms delay for quick transition
     setTimeout(() => {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'L2',location:'LandingScreen.tsx:handleDialogueEnd-setShow',message:'Setting showAuraSection to true',data:{},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setShowAuraSection(true);
       setHeaderVisible(true);
-    }, 1500);
+    }, 500);
   };
 
-  // Watch for auth state changes - if user logs in while modal is open, continue
-  useEffect(() => {
-    if (user && showLoginModal && pendingPath) {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'auth-check',
-          hypothesisId: 'L5',
-          location: 'LandingScreen.tsx:useEffect-auth-change',
-          message: 'User authenticated while modal open - auto-continuing',
-          data: {
-            pendingPath
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
-
-      setShowLoginModal(false);
-      
-      // Small delay to ensure auth state is updated
-      const pathToContinue = pendingPath;
-      const timeoutId = setTimeout(async () => {
-        if (pathToContinue === 'fast') {
-          setIsPrewarming(true);
-          checkHealthRef.current().catch(() => {});
-          await updateSessionDataRef.current({ pathType: 'fast', currentStep: 'onboarding' });
-          console.log('[Landing] Fast track selected after login');
-          routerRef.current.push('/flow/onboarding');
-        } else {
-          setIsPrewarming(true);
-          checkHealthRef.current().catch(() => {});
-          await updateSessionDataRef.current({ pathType: 'full' });
-          console.log('[Landing] Full experience selected after login');
-          routerRef.current.push('/setup/profile');
-        }
-        setPendingPath(null);
-      }, 500);
-
-      // Cleanup: clear timeout if effect re-runs before timeout completes
-      return () => {
-        clearTimeout(timeoutId);
-      };
-    }
-  }, [user, showLoginModal, pendingPath]); // Only include state dependencies - function refs stored in refs to prevent unnecessary re-runs
-
   return (
-    <div className="min-h-screen flex relative">
-
-      {!showAuraSection && (
-        <div className="flex-1 ml-[0px] flex items-center justify-center h-screen">
-          <div className="w-full min-h-[380px] flex items-center justify-center">
-            <AwaDialogue currentStep="landing" onDialogueEnd={handleDialogueEnd} />
+    <div className="min-h-screen flex flex-col relative overflow-x-hidden">
+      {/* Dialogue Area - Always Mounted */}
+      <div 
+        className={`z-50 transition-all duration-1000 ${
+          showAuraSection 
+            ? 'fixed bottom-0 left-0 right-0 w-full h-[260px]' 
+            : 'fixed inset-0 flex items-center justify-center pointer-events-none'
+        }`}
+      >
+        <div className={`w-full max-w-4xl mx-auto ${showAuraSection ? 'p-4' : ''}`}>
+          <div className="pointer-events-auto w-full">
+            <AwaDialogue 
+              key="landing-dialogue"
+              currentStep={showAuraSection ? "path_selection" : "landing"}
+              onDialogueEnd={!showAuraSection ? handleDialogueEnd : undefined}
+              fullWidth={showAuraSection}
+              autoHide={showAuraSection}
+            />
           </div>
         </div>
-      )}
-      {showAuraSection && (
-        <div className="flex-1 ml-[0px] flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 pt-4 sm:pt-8">
-          <div className="w-full max-w-4xl z-30 -mt-0 sm:-mt-20 md:-mt-40 lg:-mt-80">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-center mb-4 sm:mb-6 md:mb-8"
-            >
-              <h2 className="text-xl sm:text-2xl lg:text-3xl font-nasalization text-graphite mb-2 sm:mb-3">
-                {language === 'pl' ? 'Wybierz Swoją Ścieżkę' : 'Choose Your Path'}
-              </h2>
-              <p className="text-sm sm:text-base lg:text-lg text-silver-dark font-modern">
-                {language === 'pl' ? 'Jak chcesz współpracować z IDA?' : 'How do you want to experience IDA?'}
-              </p>
-            </motion.div>
+      </div>
 
-            {/* Two path buttons - EQUAL HEIGHT */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
-              {/* FAST TRACK */}
-              <motion.button
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="text-left w-full"
-                onClick={async () => {
-                  stopAllDialogueAudio();
-                  
-                  // #region agent log
-                  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      sessionId: 'debug-session',
-                      runId: 'auth-check',
-                      hypothesisId: 'L1',
-                      location: 'LandingScreen.tsx:fast-track-click',
-                      message: 'Fast track clicked',
-                      data: {
-                        isAuthenticated: !!user,
-                        authLoading
-                      },
-                      timestamp: Date.now()
-                    })
-                  }).catch(() => {});
-                  // #endregion
-
-                  // Wait for auth to finish loading
-                  if (authLoading) {
-                    return;
-                  }
-
-                  // Check if user is authenticated
-                  if (!user) {
-                    // #region agent log
-                    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        sessionId: 'debug-session',
-                        runId: 'auth-check',
-                        hypothesisId: 'L2',
-                        location: 'LandingScreen.tsx:fast-track-click',
-                        message: 'User not authenticated - showing login modal',
-                        data: {},
-                        timestamp: Date.now()
-                      })
-                    }).catch(() => {});
-                    // #endregion
-
-                    setPendingPath('fast');
-                    setShowLoginModal(true);
-                    return;
-                  }
-
-                  // User is authenticated, proceed
-                  setIsPrewarming(true);
-                  checkHealth().catch(() => {});
-                  
-                  console.log('[Landing] Navigating to FAST TRACK');
-                  await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
-                  router.push('/flow/onboarding');
-                }}
+      {/* Path Selection Buttons */}
+      <div className={`flex-1 transition-opacity duration-1000 ${showAuraSection ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        {showAuraSection && (
+          <div className="flex flex-col items-center justify-center min-h-screen p-4 pb-[280px]">
+            <div className="w-full max-w-4xl z-30">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                className="space-y-4 sm:space-y-6 md:space-y-8"
               >
-                <GlassCard className="p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-2xl flex flex-col">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center flex-shrink-0">
-                      <Zap size={28} className="text-graphite" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
-                        {language === 'pl' ? 'Szybka Ścieżka' : 'Fast Track'}
-                      </h3>
-                      <p className="text-xs text-silver-dark font-modern">3-5 min • 5 {language === 'pl' ? 'generacji' : 'generations'}</p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-graphite font-modern leading-relaxed flex-1">
-                    {language === 'pl' 
-                      ? 'Prześlij zdjęcie i generuj od razu!' 
-                      : 'Upload photo and generate right away!'}
+                {/* Header */}
+                <div className="text-center mb-4 sm:mb-6 md:mb-8">
+                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-nasalization text-graphite mb-2 sm:mb-3">
+                    {language === 'pl' ? 'Wybierz Swoją Ścieżkę' : 'Choose Your Path'}
+                  </h2>
+                  <p className="text-sm sm:text-base lg:text-lg text-silver-dark font-modern">
+                    {language === 'pl' ? 'Zdecyduj jak chcesz doświadczyć ' : 'Decide how you want to experience '}
+                    <span className="font-semibold text-gold">IDA</span>
+                    {language === 'pl' ? ' - szybko czy dogłębnie' : ' - quick or deep'}
                   </p>
-                </GlassCard>
-              </motion.button>
+                </div>
 
-              {/* FULL EXPERIENCE */}
-              <motion.button
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.6, delay: 0.6 }}
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="text-left w-full"
-                onClick={async () => {
-                  stopAllDialogueAudio();
+                {/* Two path buttons - EQUAL HEIGHT like PathSelectionScreen */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
                   
-                  // #region agent log
-                  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      sessionId: 'debug-session',
-                      runId: 'auth-check',
-                      hypothesisId: 'L3',
-                      location: 'LandingScreen.tsx:full-experience-click',
-                      message: 'Full experience clicked',
-                      data: {
-                        isAuthenticated: !!user,
-                        authLoading
-                      },
-                      timestamp: Date.now()
-                    })
-                  }).catch(() => {});
-                  // #endregion
+                  {/* FAST TRACK */}
+                  <motion.button
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.6, delay: 0.4 }}
+                    whileHover={{ scale: 1.05, y: -5 }}
+                    className="text-left w-full"
+                    onClick={async () => {
+                      stopAllDialogueAudio();
+                      if (!user) { setPendingPath('fast'); setShowLoginModal(true); return; }
+                      await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
+                      router.push('/flow/onboarding');
+                    }}
+                  >
+                    <GlassCard className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-xl sm:rounded-2xl">
+                      <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                        <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center flex-shrink-0">
+                          <Zap size={20} className="sm:w-7 sm:h-7 text-graphite" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
+                            {language === 'pl' ? 'Szybka Ścieżka' : 'Fast Track'}
+                          </h3>
+                          <p className="text-xs text-silver-dark font-modern">3-5 min • 10 {language === 'pl' ? 'generacji' : 'generations'}</p>
+                        </div>
+                      </div>
+                      <p className="text-xs sm:text-sm text-graphite font-modern">
+                        {language === 'pl' ? 'Wypróbuj IDA szybko - prześlij zdjęcie, przesuń kilka inspiracji i generuj!' : 'Try IDA quickly - upload photo, swipe a few inspirations and generate!'}
+                      </p>
+                    </GlassCard>
+                  </motion.button>
 
-                  // Wait for auth to finish loading
-                  if (authLoading) {
-                    return;
-                  }
-
-                  // Check if user is authenticated
-                  if (!user) {
-                    // #region agent log
-                    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        sessionId: 'debug-session',
-                        runId: 'auth-check',
-                        hypothesisId: 'L4',
-                        location: 'LandingScreen.tsx:full-experience-click',
-                        message: 'User not authenticated - showing login modal',
-                        data: {},
-                        timestamp: Date.now()
-                      })
-                    }).catch(() => {});
-                    // #endregion
-
-                    setPendingPath('full');
-                    setShowLoginModal(true);
-                    return;
-                  }
-
-                  // User is authenticated, proceed
-                  setIsPrewarming(true);
-                  checkHealth().catch(() => {});
-                  await updateSessionData({ pathType: 'full' });
-                  router.push('/setup/profile');
-                }}
-              >
-                <GlassCard 
-                  variant="highlighted"
-                  className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-gold/50 transition-all group relative overflow-hidden flex flex-col rounded-xl sm:rounded-2xl"
-                >
-                  <div className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-gradient-to-r from-gold to-champagne text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-bold whitespace-nowrap z-10">
-                    ✨ {language === 'pl' ? 'Polecane' : 'Recommended'}
-                  </div>
-                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 pr-16 sm:pr-20">
-                    <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                      <Heart size={20} className="sm:w-7 sm:h-7 text-white" fill="currentColor" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-gold-700 transition-colors">
-                        {language === 'pl' ? 'Pełne Doświadczenie' : 'Full Experience'}
-                      </h3>
-                      <p className="text-xs text-silver-dark font-modern">20-30 min • {language === 'pl' ? 'Nieograniczone' : 'Unlimited'}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs sm:text-sm text-graphite font-modern leading-relaxed flex-1">
-                    {language === 'pl' 
-                      ? 'Poznaj siebie głęboko, stwórz wnętrze które jest TWOJE' 
-                      : 'Deep dive, create interior that is truly YOURS'}
-                  </p>
-                </GlassCard>
-              </motion.button>
+                  {/* FULL EXPERIENCE */}
+                  <motion.button
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.6, delay: 0.6 }}
+                    whileHover={{ scale: 1.05, y: -5 }}
+                    className="text-left w-full"
+                    onClick={async () => {
+                      stopAllDialogueAudio();
+                      if (!user) { setPendingPath('full'); setShowLoginModal(true); return; }
+                      await updateSessionData({ pathType: 'full' });
+                      router.push('/setup/profile');
+                    }}
+                  >
+                    <GlassCard 
+                      variant="highlighted"
+                      className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-gold/50 transition-all group rounded-xl sm:rounded-2xl relative overflow-hidden"
+                    >
+                      <div className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-gradient-to-r from-gold to-champagne text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-bold whitespace-nowrap z-10">
+                        ✨ {language === 'pl' ? 'Polecane' : 'Recommended'}
+                      </div>
+                      <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 pr-16 sm:pr-20">
+                        <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                          <Heart size={20} className="sm:w-7 sm:h-7 text-white" fill="currentColor" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
+                            {language === 'pl' ? 'Pełne Doświadczenie' : 'Full Experience'}
+                          </h3>
+                          <p className="text-xs text-silver-dark font-modern">20-30 min • 50 {language === 'pl' ? 'generacji' : 'generations'}</p>
+                        </div>
+                      </div>
+                      <p className="text-xs sm:text-sm text-graphite font-modern">
+                        {language === 'pl' ? 'Poznaj siebie głęboko, stwórz wnętrze które jest TWOJE' : 'Let IDA get to know you deeply - create an interior that truly reflects WHO you are'}
+                      </p>
+                    </GlassCard>
+                  </motion.button>
+                </div>
+              </motion.div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Dialog IDA dla path_selection - pokazuje się gdy showAuraSection jest true */}
-      {showAuraSection && (
-        <div className="fixed bottom-0 left-0 right-0 w-full z-50">
-          <AwaDialogue 
-            currentStep="path_selection"
-            fullWidth={true}
-            autoHide={true}
-          />
-        </div>
-      )}
-
-      {/* Login Modal */}
       <LoginModal
         isOpen={showLoginModal}
-        onClose={() => {
-          setShowLoginModal(false);
-          setPendingPath(null);
-        }}
+        onClose={() => setShowLoginModal(false)}
         onSuccess={async () => {
           setShowLoginModal(false);
-          
-          // If there's a redirect path from middleware, use it
-          if (redirectPath) {
-            setTimeout(() => {
-              router.push(redirectPath);
-              setRedirectPath(null);
-            }, 500);
-            return;
-          }
-          
           if (pendingPath) {
-            // Small delay to ensure auth state is updated
-            setTimeout(async () => {
-              if (pendingPath === 'fast') {
-                setIsPrewarming(true);
-                checkHealth().catch(() => {});
-                await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
-                console.log('[Landing] Fast track selected after login');
-                router.push('/flow/onboarding');
-              } else {
-                setIsPrewarming(true);
-                checkHealth().catch(() => {});
-                await updateSessionData({ pathType: 'full' });
-                console.log('[Landing] Full experience selected after login');
-                router.push('/setup/profile');
-              }
-              setPendingPath(null);
-            }, 500);
+            await updateSessionData({ 
+              pathType: pendingPath, 
+              currentStep: 'onboarding' as FlowStep 
+            });
+            router.push(pendingPath === 'fast' ? '/flow/onboarding' : '/setup/profile');
           }
         }}
-        message={language === 'pl' 
-          ? 'Aby kontynuować, musisz się zalogować.' 
-          : 'Please sign in to continue.'}
       />
     </div>
   );
