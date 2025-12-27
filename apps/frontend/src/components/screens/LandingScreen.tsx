@@ -174,7 +174,7 @@ const LandingScreen: React.FC = () => {
                 {language === 'pl' ? 'Wybierz Swoją Ścieżkę' : 'Choose Your Path'}
               </h2>
               <p className="text-sm sm:text-base lg:text-lg text-silver-dark font-modern">
-                {language === 'pl' ? 'Jak chcesz doświadczyć IDA?' : 'How do you want to experience IDA?'}
+                {language === 'pl' ? 'Jak chcesz współpracować z IDA?' : 'How do you want to experience IDA?'}
               </p>
             </motion.div>
 
@@ -357,6 +357,17 @@ const LandingScreen: React.FC = () => {
               </motion.button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Dialog IDA dla path_selection - pokazuje się gdy showAuraSection jest true */}
+      {showAuraSection && (
+        <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+          <AwaDialogue 
+            currentStep="path_selection"
+            fullWidth={true}
+            autoHide={true}
+          />
         </div>
       )}
 

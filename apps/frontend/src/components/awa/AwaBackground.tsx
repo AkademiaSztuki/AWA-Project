@@ -26,21 +26,22 @@ const AwaBackground: React.FC = () => {
     ? [0, -0.9, 0]  // Centered on mobile for landing page (cząsteczki będą wyżej przez offset)
     : [-1.4, -0.9, 0];  // Left side for desktop or other pages
 
-  // Hide model after dialogue completes on mobile landing page
+  // Hide model after wyjsciewlewo animation completes on mobile landing page
   useEffect(() => {
     if (!isMobile || !isLandingPage) return;
 
-    const handleDialogueComplete = () => {
+    const handleWyjsciewlewoComplete = () => {
       // Small delay to allow animation to complete
       setTimeout(() => {
+        console.log('[AwaBackground] Wyłączanie renderowania modelu po animacji wyjsciewlewo');
         setShouldRender(false);
       }, 500);
     };
 
-    window.addEventListener('awa-dialogue-complete', handleDialogueComplete);
+    window.addEventListener('awa-wyjsciewlewo-complete', handleWyjsciewlewoComplete);
     
     return () => {
-      window.removeEventListener('awa-dialogue-complete', handleDialogueComplete);
+      window.removeEventListener('awa-wyjsciewlewo-complete', handleWyjsciewlewoComplete);
     };
   }, [isMobile, isLandingPage]);
 
@@ -51,7 +52,10 @@ const AwaBackground: React.FC = () => {
     }
   }, [isLandingPage]);
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    // Model nie jest renderowany - całkowite wyłączenie renderowania
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 z-0 pointer-events-none w-screen h-screen">

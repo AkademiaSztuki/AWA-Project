@@ -119,6 +119,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const meshRef = useRef<THREE.Group>(null);
   const [headBone, setHeadBone] = useState<THREE.Bone | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [particlesDisabled, setParticlesDisabled] = useState(false);
   const mouseWorldRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const mouseLocalRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
@@ -160,6 +161,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   
   // Load other animations (only animations, not full models - drei handles this efficiently)
   const { animations: loadingAnimations } = useGLTF('/model/loading_anim.gltf');
+  const { animations: wyjsciewlewoAnimations } = useGLTF('/model/wyjsciewlewo.gltf');
   const { animations: talk1Animations } = useGLTF('/model/talk1.gltf');
   const { animations: talk2Animations } = useGLTF('/model/talk2.gltf');
   const { animations: talk3Animations } = useGLTF('/model/talk3.gltf');
@@ -169,11 +171,12 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
     return [
       ...idle1Animations,
       ...loadingAnimations,
+      ...wyjsciewlewoAnimations,
       ...talk1Animations,
       ...talk2Animations,
       ...talk3Animations,
     ];
-  }, [idle1Animations, loadingAnimations, talk1Animations, talk2Animations, talk3Animations]);
+  }, [idle1Animations, loadingAnimations, wyjsciewlewoAnimations, talk1Animations, talk2Animations, talk3Animations]);
 
   // Load texture tylko dla alphaMap (kontrola przezroczystości)
   const textureLoader = useMemo(() => new THREE.TextureLoader(), []);
@@ -518,6 +521,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
         clip = allAnimations.find(c => c.name.toLowerCase().includes('idle'));
       } else if (animationName === 'loading_anim') {
         clip = allAnimations.find(c => c.name.toLowerCase().includes('loading'));
+      } else if (animationName === 'wyjsciewlewo') {
+        clip = allAnimations.find(c => c.name.toLowerCase().includes('wyjsciewlewo') || c.name.toLowerCase().includes('exit') || c.name.toLowerCase().includes('left'));
       } else if (animationName.startsWith('talk')) {
         clip = allAnimations.find(c => c.name.toLowerCase().includes(animationName));
       }
@@ -558,10 +563,15 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
         shouldReturnToIdleRef.current = false;
       } else {
         // loading_anim and talk animations play once then return to idle
+        // On mobile, loading_anim will transition to wyjsciewlewo instead
         newAction.setLoop(THREE.LoopOnce, 1);
         newAction.clampWhenFinished = true;
         shouldReturnToIdleRef.current = true;
-        animationEndCallbackRef.current = onAnimationEnd;
+        // Don't set callback for loading_anim on mobile - it will transition to wyjsciewlewo
+        const isMobile = position[0] === 0;
+        if (!(isMobile && currentAnimation === 'loading_anim')) {
+          animationEndCallbackRef.current = onAnimationEnd;
+        }
       }
       
       // Smooth crossfade between animations (0.3 seconds)
@@ -599,13 +609,56 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
           console.log('[AwaModel] Animation finished in useFrame:', currentAnimation);
           shouldReturnToIdleRef.current = false;
           
-          // Call callback
+          // Check if we're on mobile (position[0] === 0 means centered/mobile)
+          const isMobile = position[0] === 0;
+          
+          // Special handling for mobile: loading_anim -> wyjsciewlewo sequence
+          if (isMobile && currentAnimation === 'loading_anim') {
+            // After loading_anim, play wyjsciewlewo
+            const wyjsciewlewoClip = findAnimationClip('wyjsciewlewo');
+            if (wyjsciewlewoClip && mixer && scene) {
+              const wyjsciewlewoAction = mixer.clipAction(wyjsciewlewoClip, scene);
+              wyjsciewlewoAction.reset().setLoop(THREE.LoopOnce, 1);
+              wyjsciewlewoAction.clampWhenFinished = true;
+              
+              // Fade from loading_anim to wyjsciewlewo
+              if (currentActionRef.current && currentActionRef.current.isRunning()) {
+                currentActionRef.current.fadeOut(0.3);
+                wyjsciewlewoAction.fadeIn(0.3);
+              }
+              wyjsciewlewoAction.weight = 1;
+              wyjsciewlewoAction.play();
+              currentActionRef.current = wyjsciewlewoAction;
+              previousAnimationRef.current = 'wyjsciewlewo';
+              shouldReturnToIdleRef.current = true;
+              // Set callback to hide model after wyjsciewlewo
+              animationEndCallbackRef.current = () => {
+                window.dispatchEvent(new CustomEvent('awa-wyjsciewlewo-complete'));
+              };
+              return; // Don't call onAnimationEnd or switch to idle yet
+            }
+          }
+          
+          // After wyjsciewlewo on mobile, hide model and disable particles (don't return to idle)
+          if (isMobile && currentAnimation === 'wyjsciewlewo') {
+            // Disable particles on mobile after wyjsciewlewo
+            setParticlesDisabled(true);
+            // Call callback which will dispatch event to hide model
+            if (animationEndCallbackRef.current) {
+              animationEndCallbackRef.current();
+              animationEndCallbackRef.current = null;
+            }
+            // Don't return to idle - model will be hidden
+            return;
+          }
+          
+          // Call callback for other animations
           if (animationEndCallbackRef.current) {
             animationEndCallbackRef.current();
             animationEndCallbackRef.current = null;
           }
           
-          // Switch back to idle1 with smooth crossfade
+          // Switch back to idle1 with smooth crossfade (only for non-mobile or non-wyjsciewlewo)
           const idleClip = findAnimationClip('idle1');
           if (idleClip && mixer && scene) {
             const idleAction = mixer.clipAction(idleClip, scene);
@@ -659,7 +712,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
    
 
     // Aktualizacja czasu dla animacji cząsteczek (żywotność)
-    if (pointsRef.current && pointsRef.current.material instanceof THREE.ShaderMaterial) {
+    // Wyłącz aktualizację cząsteczek na mobile po zakończeniu wyjsciewlewo
+    if (!particlesDisabled && pointsRef.current && pointsRef.current.material instanceof THREE.ShaderMaterial) {
       const material = pointsRef.current.material as THREE.ShaderMaterial;
       if (material.uniforms) {
         if (material.uniforms.uTime) {
@@ -681,7 +735,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
     }
 
     // Aktualizacja cząsteczek - ręczny skinning z animacją, pozycje w przestrzeni lokalnej sceny
-    if (pointsRef.current && pointsRef.current.geometry && meshDataRef.current.length > 0) {
+    // Wyłącz aktualizację cząsteczek na mobile po zakończeniu wyjsciewlewo
+    if (!particlesDisabled && pointsRef.current && pointsRef.current.geometry && meshDataRef.current.length > 0) {
       // Aktualizuj skalę jeśli potrzeba
       pointsRef.current.scale.set(particleScale, particleScale, particleScale);
       const particlePositions = pointsRef.current.geometry.attributes.position;
@@ -766,7 +821,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   return (
     <group ref={meshRef} position={position}>
       <primitive object={scene} />
-      {pointsRef.current && (
+      {/* Wyłącz renderowanie cząsteczek na mobile po zakończeniu wyjsciewlewo */}
+      {pointsRef.current && !particlesDisabled && (
         <primitive object={pointsRef.current} />
       )}
     </group>
@@ -776,6 +832,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
 // Preload models and animations
 useGLTF.preload('/model/idle1.gltf');
 useGLTF.preload('/model/loading_anim.gltf');
+useGLTF.preload('/model/wyjsciewlewo.gltf');
 useGLTF.preload('/model/talk1.gltf');
 useGLTF.preload('/model/talk2.gltf');
 useGLTF.preload('/model/talk3.gltf');

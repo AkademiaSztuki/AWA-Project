@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
-export type AnimationType = 'idle1' | 'loading_anim' | 'talk1' | 'talk2' | 'talk3';
+export type AnimationType = 'idle1' | 'loading_anim' | 'wyjsciewlewo' | 'talk1' | 'talk2' | 'talk3';
 
 interface AnimationContextType {
   currentAnimation: AnimationType;
