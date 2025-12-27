@@ -120,6 +120,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const [headBone, setHeadBone] = useState<THREE.Bone | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [particlesDisabled, setParticlesDisabled] = useState(false);
+  const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>(position);
   const mouseWorldRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const mouseLocalRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
@@ -138,16 +139,23 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const particleScale = 1.001; // SKALA MODELU CZĄSTECZEK - zmień (np. 1.1 = 10% większy, 0.9 = 10% mniejszy) żeby powiększyć/pomniejszyć cały model cząsteczek
   const particleOpacityMin = 0.7; // Minimalna przezroczystość cząsteczek (0-1)
   const particleOpacityMax = 1.0; // Maksymalna przezroczystość cząsteczek (0-1)
-  // Offset dla pozycji punktów - dostosowany do pozycji modelu
+  // Offset dla pozycji punktów - dostosowany do pozycji modelu i animacji wyjsciewlewo
   // Na mobile (pozycja [0, -0.9, 0]) - cząsteczki wyżej (dodatni offset Y), na desktop (pozycja [-1.4, -0.9, 0]) - z offsetem
+  // Podczas animacji wyjsciewlewo interpolujemy offset
   const particleOffset: [number, number, number] = useMemo(() => {
-    // Jeśli pozycja jest wyśrodkowana (x === 0) - mobile, przesuwamy cząsteczki wyżej
-    if (position[0] === 0) {
-      return [0, 0.9, 0]; // Cząsteczki wyżej na mobile
-    }
-    // Dla desktop (pozycja po lewej), używamy offsetu do wyrównania
-    return [1.4, 0.90, 0];
-  }, [position]);
+    // Używamy animatedPosition zamiast position, aby uwzględnić animację wyjsciewlewo
+    const currentPos = animatedPosition;
+    // Oblicz postęp animacji wyjsciewlewo (0 gdy x=0, 1 gdy x=-1.4)
+    const progress = Math.abs(currentPos[0]) / 1.4;
+    // Interpoluj offset: od [0, 0.6, 0] (mobile) do [1.4, 0.90, 0] (desktop)
+    const startOffset: [number, number, number] = [0, 0.9, 0];
+    const endOffset: [number, number, number] = [1.4, 0.90, 0];
+    return [
+      startOffset[0] + (endOffset[0] - startOffset[0]) * progress,
+      startOffset[1] + (endOffset[1] - startOffset[1]) * progress,
+      startOffset[2] + (endOffset[2] - startOffset[2]) * progress,
+    ];
+  }, [animatedPosition]);
   // Dodatkowe parametry interakcji i rozmiaru
   const particleSizeMultiplier = 2.35;
   const particleMouseRadius = 0.35;
@@ -155,6 +163,11 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
 
   const { scene: threeScene, camera } = useThree();
   const { currentAnimation, onAnimationEnd } = useAnimation();
+  
+  // Inicjalizuj animatedPosition z pozycją początkową
+  useEffect(() => {
+    setAnimatedPosition(position);
+  }, [position]);
 
   // Load idle1 model ONCE - use both scene and animations from same load (optimization)
   const { scene, animations: idle1Animations } = useGLTF('/model/idle1.gltf');
@@ -601,6 +614,26 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
       const delta = state.clock.getDelta();
       mixer.update(delta > 0.1 ? 0.016 : delta);
       
+      // Interpoluj pozycję podczas animacji wyjsciewlewo na mobile
+      const isMobile = position[0] === 0;
+      if (isMobile && currentAnimation === 'wyjsciewlewo' && currentActionRef.current) {
+        const action = currentActionRef.current;
+        const clip = action.getClip();
+        if (clip && action.time < clip.duration) {
+          // Oblicz postęp animacji (0-1)
+          const progress = Math.min(action.time / clip.duration, 1);
+          // Interpoluj pozycję liniowo od [0, -0.9, 0] do [-1.4, -0.9, 0]
+          const startPos: [number, number, number] = [0, -0.9, 0];
+          const endPos: [number, number, number] = [-1.4, -0.9, 0];
+          const interpolatedPos: [number, number, number] = [
+            startPos[0] + (endPos[0] - startPos[0]) * progress,
+            startPos[1] + (endPos[1] - startPos[1]) * progress,
+            startPos[2] + (endPos[2] - startPos[2]) * progress,
+          ];
+          setAnimatedPosition(interpolatedPos);
+        }
+      }
+      
       // Check if non-looping animation has finished
       if (shouldReturnToIdleRef.current && currentActionRef.current) {
         const action = currentActionRef.current;
@@ -641,6 +674,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
           
           // After wyjsciewlewo on mobile, hide model and disable particles (don't return to idle)
           if (isMobile && currentAnimation === 'wyjsciewlewo') {
+            // Ustaw końcową pozycję po zakończeniu animacji
+            setAnimatedPosition([-1.4, -0.9, 0]);
             // Disable particles on mobile after wyjsciewlewo
             setParticlesDisabled(true);
             // Call callback which will dispatch event to hide model
@@ -818,8 +853,13 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
     return null;
   }
 
+  // Użyj interpolowanej pozycji podczas animacji wyjsciewlewo, w przeciwnym razie użyj oryginalnej pozycji
+  const finalPosition = (position[0] === 0 && currentAnimation === 'wyjsciewlewo') 
+    ? animatedPosition 
+    : position;
+
   return (
-    <group ref={meshRef} position={position}>
+    <group ref={meshRef} position={finalPosition}>
       <primitive object={scene} />
       {/* Wyłącz renderowanie cząsteczek na mobile po zakończeniu wyjsciewlewo */}
       {pointsRef.current && !particlesDisabled && (
