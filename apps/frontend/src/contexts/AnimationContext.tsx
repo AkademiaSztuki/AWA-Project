@@ -38,6 +38,21 @@ export const AnimationProvider: React.FC<AnimationProviderProps> = ({ children }
   const [isPlaying, setIsPlaying] = useState(false);
 
   const playAnimation = useCallback((animation: AnimationType) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'animation-check',
+        hypothesisId: 'H1',
+        location: 'AnimationContext.tsx:playAnimation',
+        message: 'playAnimation called',
+        data: { animation },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
     console.log('[AnimationContext] Playing animation:', animation);
     setCurrentAnimation(animation);
     setIsPlaying(true);

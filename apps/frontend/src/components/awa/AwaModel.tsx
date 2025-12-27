@@ -120,7 +120,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const [headBone, setHeadBone] = useState<THREE.Bone | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [particlesDisabled, setParticlesDisabled] = useState(false);
-  const [animatedPosition, setAnimatedPosition] = useState<[number, number, number]>(position);
+  const initialPositionRef = useRef<[number, number, number]>(position);
+  const currentPosRef = useRef<[number, number, number]>(position);
   const mouseWorldRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const mouseLocalRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
@@ -134,39 +135,39 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   // Cache skinned meshes for performance (avoid traverse every frame)
   const skinnedMeshesRef = useRef<THREE.SkinnedMesh[]>([]);
   // Włączenie cząsteczek – diagnostycznie (duże, widoczne)
-  const particleDensity = 0.20;
+  const isMobileView = Math.abs(position[0]) < 0.01;
+  const particleDensity = isMobileView ? 0.13 : 0.20; // Zmniejszono o ~1/3 na mobile
   const particleSize = 0.45; // Zmień tę wartość żeby zwiększyć/zmniejszyć rozmiar pojedynczych cząsteczek
   const particleScale = 1.001; // SKALA MODELU CZĄSTECZEK - zmień (np. 1.1 = 10% większy, 0.9 = 10% mniejszy) żeby powiększyć/pomniejszyć cały model cząsteczek
   const particleOpacityMin = 0.7; // Minimalna przezroczystość cząsteczek (0-1)
   const particleOpacityMax = 1.0; // Maksymalna przezroczystość cząsteczek (0-1)
   // Offset dla pozycji punktów - dostosowany do pozycji modelu i animacji wyjsciewlewo
-  // Na mobile (pozycja [0, -0.9, 0]) - cząsteczki wyżej (dodatni offset Y), na desktop (pozycja [-1.4, -0.9, 0]) - z offsetem
-  // Podczas animacji wyjsciewlewo interpolujemy offset
-  const particleOffset: [number, number, number] = useMemo(() => {
-    // Używamy animatedPosition zamiast position, aby uwzględnić animację wyjsciewlewo
-    const currentPos = animatedPosition;
-    // Oblicz postęp animacji wyjsciewlewo (0 gdy x=0, 1 gdy x=-1.4)
-    const progress = Math.abs(currentPos[0]) / 1.4;
-    // Interpoluj offset: od [0, 0.6, 0] (mobile) do [1.4, 0.90, 0] (desktop)
-    const startOffset: [number, number, number] = [0, 0.9, 0];
-    const endOffset: [number, number, number] = [1.4, 0.90, 0];
-    return [
-      startOffset[0] + (endOffset[0] - startOffset[0]) * progress,
-      startOffset[1] + (endOffset[1] - startOffset[1]) * progress,
-      startOffset[2] + (endOffset[2] - startOffset[2]) * progress,
-    ];
-  }, [animatedPosition]);
+  const particleOffsetRef = useRef<[number, number, number]>([0, 0.9, 0]);
+  
+  // Initialize offset based on starting position
+  useEffect(() => {
+    if (position[0] === 0) {
+      particleOffsetRef.current = [0, 0.9, 0];
+    } else {
+      particleOffsetRef.current = [1.4, 0.9, 0];
+    }
+  }, [position]);
+
   // Dodatkowe parametry interakcji i rozmiaru
   const particleSizeMultiplier = 2.35;
   const particleMouseRadius = 0.35;
   const particleMouseStrength = 0.05;
 
   const { scene: threeScene, camera } = useThree();
-  const { currentAnimation, onAnimationEnd } = useAnimation();
+  const { currentAnimation, onAnimationEnd, playAnimation } = useAnimation();
   
-  // Inicjalizuj animatedPosition z pozycją początkową
+  // Sync refs when position changes
   useEffect(() => {
-    setAnimatedPosition(position);
+    initialPositionRef.current = position;
+    currentPosRef.current = position;
+    if (meshRef.current) {
+      meshRef.current.position.set(position[0], position[1], position[2]);
+    }
   }, [position]);
 
   // Load idle1 model ONCE - use both scene and animations from same load (optimization)
@@ -557,6 +558,26 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   useEffect(() => {
     if (!mixer || !scene || allAnimations.length === 0) return;
     
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'animation-check',
+        hypothesisId: 'H2',
+        location: 'AwaModel.tsx:useEffect-animation',
+        message: 'Animation effect triggered',
+        data: { 
+          currentAnimation, 
+          previousAnimation: previousAnimationRef.current,
+          isRunning: currentActionRef.current?.isRunning()
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+
     // Only switch if animation actually changed
     if (currentAnimation === previousAnimationRef.current && currentActionRef.current?.isRunning()) {
       return;
@@ -581,7 +602,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
         newAction.clampWhenFinished = true;
         shouldReturnToIdleRef.current = true;
         // Don't set callback for loading_anim on mobile - it will transition to wyjsciewlewo
-        const isMobile = position[0] === 0;
+        const isMobile = Math.abs(initialPositionRef.current[0]) < 0.01;
         if (!(isMobile && currentAnimation === 'loading_anim')) {
           animationEndCallbackRef.current = onAnimationEnd;
         }
@@ -615,22 +636,50 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
       mixer.update(delta > 0.1 ? 0.016 : delta);
       
       // Interpoluj pozycję podczas animacji wyjsciewlewo na mobile
-      const isMobile = position[0] === 0;
-      if (isMobile && currentAnimation === 'wyjsciewlewo' && currentActionRef.current) {
+      const isMobile = Math.abs(initialPositionRef.current[0]) < 0.01;
+      if (isMobile && currentAnimation === 'wyjsciewlewo' && currentActionRef.current && meshRef.current) {
         const action = currentActionRef.current;
         const clip = action.getClip();
         if (clip && action.time < clip.duration) {
           // Oblicz postęp animacji (0-1)
           const progress = Math.min(action.time / clip.duration, 1);
+          
+          // #region agent log
+          if (Math.random() < 0.05) { // Loguj co ~20 klatek żeby nie zapchać pliku
+            fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: 'debug-session',
+                runId: 'animation-check',
+                hypothesisId: 'H6',
+                location: 'AwaModel.tsx:useFrame-interpolation',
+                message: 'Interpolation progress',
+                data: { 
+                  time: action.time, 
+                  duration: clip.duration, 
+                  progress,
+                  currentX: meshRef.current.position.x
+                },
+                timestamp: Date.now()
+              })
+            }).catch(() => {});
+          }
+          // #endregion
+
           // Interpoluj pozycję liniowo od [0, -0.9, 0] do [-1.4, -0.9, 0]
-          const startPos: [number, number, number] = [0, -0.9, 0];
-          const endPos: [number, number, number] = [-1.4, -0.9, 0];
-          const interpolatedPos: [number, number, number] = [
-            startPos[0] + (endPos[0] - startPos[0]) * progress,
-            startPos[1] + (endPos[1] - startPos[1]) * progress,
-            startPos[2] + (endPos[2] - startPos[2]) * progress,
+          const startX = 0;
+          const endX = -1.4;
+          meshRef.current.position.x = startX + (endX - startX) * progress;
+          
+          // Interpoluj offset: od [0, 0.9, 0] (mobile) do [1.4, 0.90, 0] (desktop)
+          const startOffX = 0;
+          const endOffX = 1.4;
+          particleOffsetRef.current = [
+            startOffX + (endOffX - startOffX) * progress,
+            0.9,
+            0
           ];
-          setAnimatedPosition(interpolatedPos);
         }
       }
       
@@ -640,42 +689,51 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
         const clip = action.getClip();
         if (action.time >= clip.duration) {
           console.log('[AwaModel] Animation finished in useFrame:', currentAnimation);
+          
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'animation-check',
+              hypothesisId: 'H5',
+              location: 'AwaModel.tsx:useFrame-completion-check',
+              message: 'Animation reached duration',
+              data: { currentAnimation, isMobile: position[0] === 0 },
+              timestamp: Date.now()
+            })
+          }).catch(() => {});
+          // #endregion
+
           shouldReturnToIdleRef.current = false;
           
-          // Check if we're on mobile (position[0] === 0 means centered/mobile)
-          const isMobile = position[0] === 0;
+          // Check if we're on mobile (Math.abs(x) < 0.01 means centered/mobile)
+          const isMobile = Math.abs(initialPositionRef.current[0]) < 0.01;
           
           // Special handling for mobile: loading_anim -> wyjsciewlewo sequence
           if (isMobile && currentAnimation === 'loading_anim') {
-            // After loading_anim, play wyjsciewlewo
-            const wyjsciewlewoClip = findAnimationClip('wyjsciewlewo');
-            if (wyjsciewlewoClip && mixer && scene) {
-              const wyjsciewlewoAction = mixer.clipAction(wyjsciewlewoClip, scene);
-              wyjsciewlewoAction.reset().setLoop(THREE.LoopOnce, 1);
-              wyjsciewlewoAction.clampWhenFinished = true;
-              
-              // Fade from loading_anim to wyjsciewlewo
-              if (currentActionRef.current && currentActionRef.current.isRunning()) {
-                currentActionRef.current.fadeOut(0.3);
-                wyjsciewlewoAction.fadeIn(0.3);
-              }
-              wyjsciewlewoAction.weight = 1;
-              wyjsciewlewoAction.play();
-              currentActionRef.current = wyjsciewlewoAction;
-              previousAnimationRef.current = 'wyjsciewlewo';
-              shouldReturnToIdleRef.current = true;
-              // Set callback to hide model after wyjsciewlewo
-              animationEndCallbackRef.current = () => {
-                window.dispatchEvent(new CustomEvent('awa-wyjsciewlewo-complete'));
-              };
-              return; // Don't call onAnimationEnd or switch to idle yet
-            }
+            console.log('[AwaModel] Triggering wyjsciewlewo on mobile');
+            playAnimation('wyjsciewlewo');
+            return;
           }
           
           // After wyjsciewlewo on mobile, hide model and disable particles (don't return to idle)
           if (isMobile && currentAnimation === 'wyjsciewlewo') {
-            // Ustaw końcową pozycję po zakończeniu animacji
-            setAnimatedPosition([-1.4, -0.9, 0]);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: 'debug-session',
+                runId: 'animation-check',
+                hypothesisId: 'H5',
+                location: 'AwaModel.tsx:useFrame-completion',
+                message: 'Wyjsciewlewo completed',
+                timestamp: Date.now()
+              })
+            }).catch(() => {});
+            // #endregion
             // Disable particles on mobile after wyjsciewlewo
             setParticlesDisabled(true);
             // Call callback which will dispatch event to hide model
@@ -838,9 +896,9 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
           }
 
           // Dodaj offset do pozycji punktów
-          particlePositions.array[p3] = pos.x + particleOffset[0];
-          particlePositions.array[p3 + 1] = pos.y + particleOffset[1];
-          particlePositions.array[p3 + 2] = pos.z + particleOffset[2];
+          particlePositions.array[p3] = pos.x + particleOffsetRef.current[0];
+          particlePositions.array[p3 + 1] = pos.y + particleOffsetRef.current[1];
+          particlePositions.array[p3 + 2] = pos.z + particleOffsetRef.current[2];
         });
         offset += data.vertexIndices.length;
       });
@@ -853,13 +911,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
     return null;
   }
 
-  // Użyj interpolowanej pozycji podczas animacji wyjsciewlewo, w przeciwnym razie użyj oryginalnej pozycji
-  const finalPosition = (position[0] === 0 && currentAnimation === 'wyjsciewlewo') 
-    ? animatedPosition 
-    : position;
-
   return (
-    <group ref={meshRef} position={finalPosition}>
+    <group ref={meshRef}>
       <primitive object={scene} />
       {/* Wyłącz renderowanie cząsteczek na mobile po zakończeniu wyjsciewlewo */}
       {pointsRef.current && !particlesDisabled && (

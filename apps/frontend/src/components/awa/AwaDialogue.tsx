@@ -7,7 +7,8 @@ import GlassSurface from 'src/components/ui/GlassSurface';
 import { useAudioManager } from '@/hooks/useAudioManager';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAnimation } from '@/contexts/AnimationContext';
+import { useAnimation, AnimationType } from '@/contexts/AnimationContext';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import DialogueAudioPlayer from '../ui/DialogueAudioPlayer';
 import { ArrowRight } from 'lucide-react';
 
@@ -320,6 +321,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   customMessage
 }) => {
   const { language } = useLanguage();
+  const isMobile = useIsMobile();
   
   // Ustawienia prędkości i pauz - wszystko w jednym miejscu
   const TYPING_SPEED = 14.8; // Prędkość wyświetlania tekstu (ms między znakami)
@@ -499,6 +501,29 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
               isResettingRef.current = false;
               setHasStarted(true);
               setAudioReady(true);
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: 'debug-session',
+                  runId: 'animation-check',
+                  hypothesisId: 'H1',
+                  location: 'AwaDialogue.tsx:useEffect-auto-start',
+                  message: 'AwaDialogue considering talk animation',
+                  data: { currentStep, isMobile },
+                  timestamp: Date.now()
+                })
+              }).catch(() => {});
+              // #endregion
+
+              // Skip talk animation on mobile for non-landing steps 
+              // (because model is exiting or already gone)
+              if (isMobile && currentStep !== 'landing') {
+                console.log('[AwaDialogue] Skipping talk animation on mobile for non-landing step');
+                return;
+              }
+
               // Play random talk animation when dialogue starts on other pages
               const talkAnimations: Array<'talk1' | 'talk2' | 'talk3'> = ['talk1', 'talk2', 'talk3'];
               const randomTalk = talkAnimations[Math.floor(Math.random() * talkAnimations.length)];
@@ -569,6 +594,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   }, [audioManager]);
 
   const handleClickToStart = () => {
+    if (hasStarted) return; // Prevent multiple triggers
     console.log('User clicked to start dialogue');
     setHasStarted(true);
     setAudioReady(true);
