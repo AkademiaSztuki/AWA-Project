@@ -10,7 +10,7 @@ interface LayoutContextType {
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
 
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
-  const [isHeaderVisible, setHeaderVisible] = useState(true);
+  const [isHeaderVisible, setHeaderVisible] = useState(false);
 
   return (
     <LayoutContext.Provider value={{ isHeaderVisible, setHeaderVisible }}>

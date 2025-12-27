@@ -10,8 +10,8 @@ export function PathSelectionButton() {
   const pathname = usePathname();
   const { language } = useLanguage();
 
-  // Don't show on path selection page itself
-  if (pathname === '/flow/path-selection') {
+  // Don't show on path selection page itself or on landing page (where path selection is part of the flow)
+  if (pathname === '/flow/path-selection' || pathname === '/') {
     return null;
   }
 

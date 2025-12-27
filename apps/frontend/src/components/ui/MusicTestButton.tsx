@@ -19,7 +19,7 @@ export const MusicTestButton: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const [panelPosition, setPanelPosition] = useState({ top: 0, right: 0 });
+  const [panelPosition, setPanelPosition] = useState({ top: 0, left: 0 });
 
   console.log('MusicTestButton: dialogueVoice hook result:', dialogueVoice);
   console.log('MusicTestButton: voiceVolume:', voiceVolume, 'voiceEnabled:', voiceEnabled);
@@ -71,9 +71,22 @@ export const MusicTestButton: React.FC = () => {
   useEffect(() => {
     if (isExpanded && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
+      const isMobile = window.innerWidth < 640;
+      const panelWidth = isMobile ? 240 : 280;
+      
+      let left = rect.left;
+      
+      // If it would overflow on the right, shift it left
+      if (left + panelWidth > window.innerWidth - 12) {
+        left = window.innerWidth - panelWidth - 12;
+      }
+      
+      // Ensure it doesn't overflow on the left
+      left = Math.max(12, left);
+      
       setPanelPosition({
         top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
+        left: left,
       });
     }
   }, [isExpanded]);
@@ -180,7 +193,7 @@ export const MusicTestButton: React.FC = () => {
             className="fixed z-[300] pointer-events-auto"
             style={{ 
               top: `${panelPosition.top}px`,
-              right: `${panelPosition.right}px`,
+              left: `${panelPosition.left}px`,
             }}
             onMouseEnter={() => {
               if (window.innerWidth >= 1024) setIsExpanded(true);

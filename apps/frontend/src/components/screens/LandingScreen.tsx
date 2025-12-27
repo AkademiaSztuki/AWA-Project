@@ -26,6 +26,11 @@ const LandingScreen: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [pendingPath, setPendingPath] = useState<'fast' | 'full' | null>(null);
 
+  useEffect(() => {
+    // Hide header on landing mount - it should only appear after dialogue
+    setHeaderVisible(false);
+  }, [setHeaderVisible]);
+
   const handleDialogueEnd = () => {
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'L1',location:'LandingScreen.tsx:handleDialogueEnd',message:'handleDialogueEnd called',data:{showAuraSection},timestamp:Date.now()})}).catch(()=>{});

@@ -10,11 +10,16 @@ import { LanguageToggle } from '@/contexts/LanguageContext';
 import { MusicTestButton } from './MusicTestButton';
 import { Home } from 'lucide-react';
 import { useLayout } from '@/contexts/LayoutContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function GlassHeader() {
   const router = useRouter();
   const pathname = usePathname();
   const { isHeaderVisible } = useLayout();
+  const { user } = useAuth();
+
+  const showPathSelection = pathname !== '/flow/path-selection' && pathname !== '/';
+  const showDashboard = user && pathname !== '/dashboard';
 
   // Header is visible if:
   // 1. We are NOT on the home page ('/')
@@ -31,7 +36,7 @@ export function GlassHeader() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="w-full sticky top-2 sm:top-4 z-[100] mb-2"
         >
-          <div className="glass-panel rounded-[16px] sm:rounded-[24px] md:rounded-[32px] border border-white/20 bg-white/10 backdrop-blur-2xl shadow-2xl px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hide min-w-0 relative z-[110] pointer-events-auto" style={{ overflowY: 'visible' }}>
+          <div className="w-full glass-panel rounded-[16px] sm:rounded-[24px] md:rounded-[32px] border border-white/20 bg-white/10 backdrop-blur-2xl shadow-2xl px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hide min-w-0 relative z-[110] pointer-events-auto" style={{ overflowY: 'visible' }}>
             
             {/* Home Button */}
             <button 
@@ -49,7 +54,9 @@ export function GlassHeader() {
               <MusicTestButton />
             </div>
 
-            <div className="w-px h-5 sm:h-6 bg-white/20 mx-0.5 sm:mx-1 flex-shrink-0" />
+            {(showPathSelection || showDashboard) && (
+              <div className="w-px h-5 sm:h-6 bg-white/20 mx-0.5 sm:mx-1 flex-shrink-0" />
+            )}
 
             <div className="flex-shrink-0">
               <PathSelectionButton />
@@ -58,9 +65,9 @@ export function GlassHeader() {
               <DashboardButton />
             </div>
             
-            <div className="w-px h-5 sm:h-6 bg-white/20 mx-0.5 sm:mx-1 ml-auto flex-shrink-0" />
+            <div className="w-px h-5 sm:h-6 bg-white/20 mx-0.5 sm:mx-1 flex-shrink-0" />
             
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 ml-auto">
               <UserAuthButton />
             </div>
             <div className="flex-shrink-0">
