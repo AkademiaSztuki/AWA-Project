@@ -39,6 +39,9 @@ export interface ParticipantRow {
   implicit_material_1?: string;
   implicit_material_2?: string;
   implicit_material_3?: string;
+  implicit_warmth?: number;
+  implicit_brightness?: number;
+  implicit_complexity?: number;
   dna_accuracy_score?: number;
   
   // Explicit
@@ -166,6 +169,9 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     implicit_material_1: sessionData.visualDNA?.preferences?.materials?.[0],
     implicit_material_2: sessionData.visualDNA?.preferences?.materials?.[1],
     implicit_material_3: sessionData.visualDNA?.preferences?.materials?.[2],
+    implicit_warmth: sessionData.visualDNA?.preferences?.warmth ?? sessionData.visualDNA?.implicitScores?.warmth,
+    implicit_brightness: sessionData.visualDNA?.preferences?.brightness ?? sessionData.visualDNA?.implicitScores?.brightness,
+    implicit_complexity: sessionData.visualDNA?.preferences?.complexity ?? sessionData.visualDNA?.implicitScores?.complexity,
     dna_accuracy_score: sessionData.visualDNA?.accuracyScore ?? sessionData.dnaAccuracyScore,
     
     // Explicit
@@ -372,7 +378,15 @@ export function mapParticipantToSessionData(row: any): SessionData {
         styles: [row.implicit_style_1, row.implicit_style_2, row.implicit_style_3].filter(Boolean),
         colors: [row.implicit_color_1, row.implicit_color_2, row.implicit_color_3].filter(Boolean),
         materials: [row.implicit_material_1, row.implicit_material_2, row.implicit_material_3].filter(Boolean),
-        lighting: []
+        lighting: [],
+        warmth: row.implicit_warmth,
+        brightness: row.implicit_brightness,
+        complexity: row.implicit_complexity
+      },
+      implicitScores: {
+        warmth: row.implicit_warmth,
+        brightness: row.implicit_brightness,
+        complexity: row.implicit_complexity
       },
       accuracyScore: row.dna_accuracy_score || 0
     } : {

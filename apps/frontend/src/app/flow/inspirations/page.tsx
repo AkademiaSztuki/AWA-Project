@@ -146,7 +146,9 @@ export default function InspirationsPage() {
     if (mapped.length > 0) {
       // If user added some new items BEFORE this effect ran, merge them
       setItems(prev => {
-        const newItems = prev.filter(p => !p.persisted);
+        // Only keep local items that aren't already represented in the mapped session data
+        const mappedIds = new Set(mapped.map(m => m.id));
+        const newItems = prev.filter(p => !p.persisted && !mappedIds.has(p.id));
         return [...mapped, ...newItems];
       });
     }

@@ -57,10 +57,10 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
           dominantStyles: implicitStyles.length ? implicitStyles : (data.implicit_dominant_style ? [data.implicit_dominant_style] : []),
           colors: implicitColors,
           materials: implicitMaterials,
-          // We don't compute implicit warmth/brightness/complexity from swipes yet; keep neutral defaults
-          warmth: 0.5,
-          brightness: 0.5,
-          complexity: 0.5,
+          // Use values from database columns if available, fallback to neutral defaults
+          warmth: data.implicit_warmth ?? 0.5,
+          brightness: data.implicit_brightness ?? 0.5,
+          complexity: data.implicit_complexity ?? 0.5,
           swipePatterns: []
         },
         explicit: {

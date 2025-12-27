@@ -256,7 +256,8 @@ export function UserDashboard() {
           if (userProfile.aestheticDNA?.explicit) {
             mappedData.colorsAndMaterials = {
               selectedPalette: userProfile.aestheticDNA.explicit.selectedPalette,
-              topMaterials: userProfile.aestheticDNA.explicit.topMaterials || []
+              topMaterials: userProfile.aestheticDNA.explicit.topMaterials || [],
+              selectedStyle: (userProfile.aestheticDNA.explicit as any).selectedStyle
             };
             mappedData.semanticDifferential = (() => {
               const semantic = {
@@ -271,6 +272,7 @@ export function UserDashboard() {
             })();
             console.log('[Dashboard] Mapped explicit preferences:', {
               hasPalette: !!mappedData.colorsAndMaterials.selectedPalette,
+              hasStyle: !!mappedData.colorsAndMaterials.selectedStyle,
               materialsCount: mappedData.colorsAndMaterials.topMaterials?.length || 0,
               hasSemantic: !!mappedData.semanticDifferential
             });
@@ -283,7 +285,15 @@ export function UserDashboard() {
               preferences: {
                 colors: userProfile.aestheticDNA.implicit.colors || [],
                 materials: userProfile.aestheticDNA.implicit.materials || [],
-                styles: userProfile.aestheticDNA.implicit.dominantStyles || []
+                styles: userProfile.aestheticDNA.implicit.dominantStyles || [],
+                warmth: userProfile.aestheticDNA.implicit.warmth,
+                brightness: userProfile.aestheticDNA.implicit.brightness,
+                complexity: userProfile.aestheticDNA.implicit.complexity
+              },
+              implicitScores: {
+                warmth: userProfile.aestheticDNA.implicit.warmth,
+                brightness: userProfile.aestheticDNA.implicit.brightness,
+                complexity: userProfile.aestheticDNA.implicit.complexity
               }
             };
             
