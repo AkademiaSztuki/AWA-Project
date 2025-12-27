@@ -355,7 +355,7 @@ export default function InspirationsPage() {
             if (!byUrl.has(img.url)) byUrl.set(img.url, []);
             byUrl.get(img.url)!.push(img);
           }
-          for (const [url, imgs] of byUrl.entries()) {
+          for (const [url, imgs] of Array.from(byUrl.entries())) {
             if (imgs.length <= 1) continue;
             const sorted = [...imgs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             const keep = sorted[0];
