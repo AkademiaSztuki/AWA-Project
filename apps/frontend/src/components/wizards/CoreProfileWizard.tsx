@@ -704,7 +704,7 @@ export function CoreProfileWizard() {
               )}
 
               {currentStep === 'sensory_tests' && (
-                <GlassCard className={`p-3 sm:p-5 md:p-6 h-[82vh] sm:h-[64vh] flex flex-col overflow-y-auto scrollbar-hide`}>
+                <GlassCard className={`p-3 sm:p-5 md:p-6 h-[82vh] sm:h-[64vh] flex flex-col overflow-y-auto scrollbar-hide !shadow-none`}>
                   <div className="min-h-full flex flex-col">
                     <div className="flex-1">
                       <div className="mb-1 sm:mb-2">
@@ -946,7 +946,7 @@ function ConsentStep({
   const canProceedConsent = consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13;
 
   return (
-    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide`}>
+    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide !shadow-none`}>
       <div className="min-h-full flex flex-col">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
@@ -1209,7 +1209,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide`}>
+      <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide !shadow-none`}>
         <div className="min-h-full flex flex-col">
           <div className="flex-1">
             <h2 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
@@ -1355,7 +1355,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
   const canProceed = lifestyleData.livingSituation && lifestyleData.lifeVibe && lifestyleData.goals?.length > 0;
 
   return (
-    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide`}>
+    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide !shadow-none`}>
       <div className="min-h-full flex flex-col">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
@@ -1603,7 +1603,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
 
   if (showInstructions) {
     return (
-      <GlassCard className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} flex flex-col justify-center items-center relative overflow-y-auto scrollbar-hide`}>
+      <GlassCard className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} flex flex-col justify-center items-center relative overflow-y-auto scrollbar-hide !shadow-none`}>
         <div className="min-h-full flex flex-col justify-center items-center">
           <div className="flex-1 flex flex-col justify-center items-center">
             <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-3">
@@ -1647,7 +1647,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
   }
 
   return (
-    <GlassCard className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex flex-col overflow-y-auto scrollbar-hide`}>
+    <GlassCard className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex flex-col overflow-y-auto scrollbar-hide !shadow-none`}>
       <div className="min-h-full flex flex-col">
         <div className="flex-1 flex flex-col">
           {isLoading ? (
@@ -1810,7 +1810,7 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
   };
 
   return (
-    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex flex-col justify-center overflow-y-auto scrollbar-hide`}>
+    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex flex-col justify-center overflow-y-auto scrollbar-hide !shadow-none`}>
       <div className="min-h-full flex flex-col justify-center">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2 text-center">
