@@ -54,12 +54,20 @@ export const MusicTestButton: React.FC = () => {
     const target = e.currentTarget as HTMLInputElement;
     const newVolume = parseFloat(target.value);
     console.log('MusicTestButton: handleMusicVolumeChange called with:', newVolume);
-    setMusicVolume(newVolume);
     
-    // NATYCHMIASTOWA synchronizacja z audio elementem (działa w czasie rzeczywistym)
+    // NATYCHMIASTOWA synchronizacja z audio elementem PRZED aktualizacją state
     const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
     if (audioElement) {
       audioElement.volume = newVolume;
+      console.log('MusicTestButton: Directly set audio volume to:', newVolume);
+    }
+    
+    // Użyj funkcji z hooka, która też zaktualizuje localStorage
+    setMusicVolume(newVolume);
+    
+    // Użyj też funkcji z AmbientMusic komponentu jeśli dostępna
+    if (typeof window !== 'undefined' && (window as any).setAmbientMusicVolume) {
+      (window as any).setAmbientMusicVolume(newVolume);
     }
   };
 
@@ -76,14 +84,16 @@ export const MusicTestButton: React.FC = () => {
     const target = e.currentTarget as HTMLInputElement;
     const newVolume = parseFloat(target.value);
     console.log('MusicTestButton: handleVoiceVolumeChange called with:', newVolume, 'setVoiceVolume function exists:', !!setVoiceVolume);
-    setVoiceVolume(newVolume);
     
-    // NATYCHMIASTOWA synchronizacja z audio elementami (działa w czasie rzeczywistym)
-    // setVoiceVolume już to robi, ale dla pewności dodajemy też tutaj
+    // NATYCHMIASTOWA synchronizacja z audio elementami PRZED aktualizacją state
     const dialogueAudios = document.querySelectorAll('audio[data-type="dialogue"]') as NodeListOf<HTMLAudioElement>;
     dialogueAudios.forEach(audio => {
       audio.volume = newVolume;
+      console.log('MusicTestButton: Directly set dialogue audio volume to:', newVolume);
     });
+    
+    // Użyj funkcji z hooka, która też zaktualizuje localStorage
+    setVoiceVolume(newVolume);
   };
 
   // Synchronizuj głośność na żywo na wszystkich audio[data-type="dialogue"]
@@ -336,11 +346,21 @@ export const MusicTestButton: React.FC = () => {
                       value={musicVolume}
                       onChange={handleMusicVolumeChange}
                       onInput={handleMusicVolumeChange}
+                      onMouseMove={(e) => {
+                        if (isDragging) {
+                          const target = e.currentTarget as HTMLInputElement;
+                          const newVolume = parseFloat(target.value);
+                          handleMusicVolumeChange(e);
+                        }
+                      }}
                       onTouchStart={(e) => {
                         setIsDragging(true);
                         e.stopPropagation();
                       }}
                       onTouchMove={(e) => {
+                        const target = e.currentTarget as HTMLInputElement;
+                        const newVolume = parseFloat(target.value);
+                        handleMusicVolumeChange(e);
                         e.stopPropagation();
                       }}
                       onTouchEnd={(e) => {
@@ -351,7 +371,8 @@ export const MusicTestButton: React.FC = () => {
                       style={{ 
                         touchAction: 'pan-x',
                         WebkitTapHighlightColor: 'transparent',
-                        pointerEvents: 'auto'
+                        pointerEvents: 'auto',
+                        zIndex: 10
                       }}
                     />
                   </div>
@@ -417,11 +438,17 @@ export const MusicTestButton: React.FC = () => {
                       value={voiceVolume}
                       onChange={handleVoiceVolumeChange}
                       onInput={handleVoiceVolumeChange}
+                      onMouseMove={(e) => {
+                        if (isDragging) {
+                          handleVoiceVolumeChange(e);
+                        }
+                      }}
                       onTouchStart={(e) => {
                         setIsDragging(true);
                         e.stopPropagation();
                       }}
                       onTouchMove={(e) => {
+                        handleVoiceVolumeChange(e);
                         e.stopPropagation();
                       }}
                       onTouchEnd={(e) => {
@@ -432,7 +459,8 @@ export const MusicTestButton: React.FC = () => {
                       style={{ 
                         touchAction: 'pan-x',
                         WebkitTapHighlightColor: 'transparent',
-                        pointerEvents: 'auto'
+                        pointerEvents: 'auto',
+                        zIndex: 10
                       }}
                     />
                   </div>

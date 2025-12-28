@@ -265,9 +265,16 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     let hasStartedMusic = false;
     const handleUserInteraction = () => {
       if (hasStartedMusic) return; // Już próbowaliśmy włączyć muzykę
-      // console.log('AmbientMusic: User interaction detected, starting music');
+      console.log('AmbientMusic: User interaction detected, starting music');
       hasStartedMusic = true;
+      
+      // Resetuj flagę przed włączeniem
+      if (typeof window !== 'undefined') {
+        (window as any).ambientMusicUserManuallyPaused = false;
+      }
+      
       startMusic();
+      
       // Usuń event listenery po pierwszej interakcji
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('keydown', handleUserInteraction);
