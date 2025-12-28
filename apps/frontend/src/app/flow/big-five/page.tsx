@@ -692,8 +692,8 @@ export default function BigFivePage() {
               </div>
 
               {/* Question */}
-              <div className="mb-8">
-                <div className="text-center mb-6">
+              <div className="mb-8 min-h-[280px] sm:min-h-[300px] md:min-h-[320px] flex flex-col">
+                <div className="text-center mb-6 flex-shrink-0">
                   <h2 className="text-xl lg:text-2xl font-nasalization text-graphite mb-4">
                     {currentItem?.text[language] || 'Loading...'}
                   </h2>
@@ -703,7 +703,7 @@ export default function BigFivePage() {
                 </div>
 
                 {/* Response Options */}
-                <div className="grid grid-cols-5 gap-2 sm:gap-3 md:gap-4 max-w-2xl mx-auto">
+                <div className="grid grid-cols-5 gap-2 sm:gap-3 md:gap-4 max-w-2xl mx-auto flex-shrink-0 mt-auto">
                   {[1, 2, 3, 4, 5].map((value) => {
                     const isSelected = currentItem && responses[currentItem.id] === value;
                     return (

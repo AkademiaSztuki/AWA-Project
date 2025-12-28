@@ -583,11 +583,12 @@ export default function InspirationsPage() {
               )}
 
               {/* Actions */}
-              <div className="flex justify-between mt-auto pt-6">
-                <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-auto pt-6">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-1 sm:flex-initial">
                   <GlassButton
                     onClick={() => router.back()}
                     variant="secondary"
+                    className="w-full sm:w-auto"
                   >
                     <ArrowLeft size={18} />
                     {t("Wróć", "Back")}
@@ -596,6 +597,7 @@ export default function InspirationsPage() {
                   <GlassButton
                     onClick={handleSkip}
                     variant="secondary"
+                    className="w-full sm:w-auto"
                   >
                     {t("Pomiń", "Skip")}
                   </GlassButton>
@@ -604,6 +606,7 @@ export default function InspirationsPage() {
                 <GlassButton
                   onClick={handleSave}
                   disabled={!canProceed || isSubmitting}
+                  className="w-full sm:w-auto"
                 >
                   <span className="flex items-center gap-2">
                     {isSubmitting ? t("Zapisywanie…", "Saving…") : t("Kontynuuj", "Continue")}

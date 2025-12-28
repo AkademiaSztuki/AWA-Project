@@ -378,8 +378,12 @@ export function mapParticipantToSessionData(row: any): SessionData {
         styles: [row.implicit_style_1, row.implicit_style_2, row.implicit_style_3].filter(Boolean),
         colors: [row.implicit_color_1, row.implicit_color_2, row.implicit_color_3].filter(Boolean),
         materials: [row.implicit_material_1, row.implicit_material_2, row.implicit_material_3].filter(Boolean),
-        lighting: []
-      },
+        lighting: [],
+        // Keep these for backward compatibility (CoreProfileWizard writes them here)
+        warmth: row.implicit_warmth,
+        brightness: row.implicit_brightness,
+        complexity: row.implicit_complexity
+      } as any, // TypeScript doesn't allow these in preferences, but they exist at runtime
       implicitScores: {
         warmth: row.implicit_warmth,
         brightness: row.implicit_brightness,

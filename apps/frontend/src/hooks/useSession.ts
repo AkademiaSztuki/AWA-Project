@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { SessionData, FlowStep } from '@/types';
 import { fetchLatestSessionSnapshot, supabase, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
-import { uploadSpaceImage, saveSpaceImagesMetadata } from '@/lib/remote-spaces';
+import { uploadSpaceImage, saveSpaceImagesMetadata, fetchParticipantImages } from '@/lib/remote-spaces';
 
 const SESSION_STORAGE_KEY = 'aura_session';
 const USER_HASH_STORAGE_KEY = 'aura_user_hash';
@@ -847,6 +847,103 @@ export const useSession = (): UseSessionReturn => {
           }
         } catch (error) {
           console.warn('[useSession] Nie udało się pobrać danych profilu z user_profiles:', error);
+        }
+      }
+
+      // Load inspirations from participant_images (source of truth after radical refactor).
+      // This is crucial for cross-device behavior: dashboard and inspirations flow persist images there,
+      // while localStorage/session snapshot may not include them on a fresh device.
+      if (userHash) {
+        try {
+          const participantImages = await fetchParticipantImages(userHash);
+          const activeSpaceId = (mergedSession as any)?.currentSpaceId as string | undefined;
+
+          const allRemoteInspirations = participantImages
+            .filter((img) => img.type === 'inspiration')
+            .map((img) => ({
+              id: img.id,
+              url: img.url,
+              spaceId: img.spaceId || null,
+              tags: img.tags,
+              description: img.description,
+              addedAt: img.createdAt || new Date().toISOString(),
+            }));
+
+          // If session is scoped to a space, prefer inspirations from that space,
+          // but fall back to "all inspirations" if the space id doesn't match remote data
+          // (e.g. first load on a different device / stale local space id).
+          const remoteInspirations =
+            activeSpaceId
+              ? allRemoteInspirations.filter((img: any) => (img as any).spaceId === activeSpaceId)
+              : allRemoteInspirations;
+          const effectiveRemoteInspirations =
+            activeSpaceId && remoteInspirations.length === 0
+              ? allRemoteInspirations
+              : remoteInspirations;
+
+          const localInspirations = Array.isArray((mergedSession as any)?.inspirations)
+            ? ((mergedSession as any).inspirations as any[])
+            : [];
+
+          // Merge: prefer remote (participant_images), but keep any local inspirations missing remotely.
+          // Dedup by URL when possible, else by id.
+          const keyOf = (insp: any) => {
+            const url = typeof insp?.url === 'string' ? insp.url : '';
+            return url ? `url:${url}` : `id:${insp?.id || ''}`;
+          };
+          const seen = new Set<string>();
+          const merged: any[] = [];
+          for (const insp of effectiveRemoteInspirations) {
+            const k = keyOf(insp);
+            if (!k || seen.has(k)) continue;
+            seen.add(k);
+            merged.push(insp);
+          }
+          for (const insp of localInspirations) {
+            const k = keyOf(insp);
+            if (!k || seen.has(k)) continue;
+            seen.add(k);
+            merged.push(insp);
+          }
+
+          if (effectiveRemoteInspirations.length > 0) {
+            mergedSession = {
+              ...(mergedSession || {}),
+              inspirations: merged,
+            };
+          }
+
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              location: 'useSession.ts:participant_images-inspirations-merge',
+              message: 'Merged inspirations from participant_images into session',
+              data: {
+                userHash,
+                activeSpaceId: activeSpaceId || null,
+                remoteCount: effectiveRemoteInspirations.length,
+                localCount: localInspirations.length,
+                mergedCount: merged.length,
+                mergedHasTags: merged.some((i: any) => !!i?.tags),
+                mergedTagsSamples: merged.slice(0, 3).map((i: any) => ({
+                  id: i.id,
+                  stylesCount: i?.tags?.styles?.length || 0,
+                  colorsCount: i?.tags?.colors?.length || 0,
+                  materialsCount: i?.tags?.materials?.length || 0,
+                  hasDescription: !!i?.description,
+                })),
+              },
+              timestamp: Date.now(),
+              sessionId: 'debug-session',
+              runId: 'flow-debug',
+              hypothesisId: 'I-PARTICIPANT-IMAGES',
+            }),
+          }).catch(() => {});
+          // #endregion
+        } catch (e) {
+          console.warn('[useSession] Failed to load inspirations from participant_images:', e);
         }
       }
 

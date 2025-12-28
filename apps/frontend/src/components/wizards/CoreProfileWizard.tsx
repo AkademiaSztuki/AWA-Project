@@ -1230,7 +1230,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
                       key={range}
                       type="button"
                       onClick={() => onUpdate({ ...data, ageRange: range })}
-                      className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                      className={`rounded-lg p-3 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                         data.ageRange === range
                           ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
                           : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
@@ -1257,7 +1257,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
                       key={option.id}
                       type="button"
                       onClick={() => onUpdate({ ...data, gender: option.id })}
-                      className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                      className={`rounded-lg p-4 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                         data.gender === option.id
                           ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
                           : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
@@ -1284,7 +1284,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
                       key={option.id}
                       type="button"
                       onClick={() => onUpdate({ ...data, education: option.id })}
-                      className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                      className={`rounded-lg p-3 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                         data.education === option.id
                           ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
                           : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
@@ -1377,7 +1377,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
                     key={option.id}
                     type="button"
                     onClick={() => updateField('livingSituation', option.id)}
-                    className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                    className={`rounded-lg p-4 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                       lifestyleData.livingSituation === option.id
                         ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
                         : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
@@ -1400,7 +1400,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
                     key={option.id}
                     type="button"
                     onClick={() => updateField('lifeVibe', option.id)}
-                    className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                    className={`rounded-lg p-3 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                       lifestyleData.lifeVibe === option.id
                         ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
                         : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
@@ -1426,7 +1426,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
                     key={option.id}
                     type="button"
                     onClick={() => toggleGoal(option.id)}
-                    className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                    className={`rounded-lg p-4 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                       lifestyleData.goals?.includes(option.id)
                         ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
                         : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
