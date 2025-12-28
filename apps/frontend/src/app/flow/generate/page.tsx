@@ -2458,7 +2458,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     // Create a temporary modification object for custom text
     const customMod: ModificationOption = {
       id: 'custom_text',
-      label: customModificationText.trim(),
+      label: { pl: customModificationText.trim(), en: customModificationText.trim() },
       icon: null,
       category: 'micro' // Use 'micro' parameters for better fidelity to original
     };
