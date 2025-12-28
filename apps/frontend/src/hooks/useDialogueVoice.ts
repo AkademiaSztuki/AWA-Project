@@ -41,7 +41,12 @@ export const useDialogueVoice = (): DialogueVoiceControls => {
     // console.log('useDialogueVoice: setVolume called with:', newVolume, 'clamped to:', clampedVolume);
     setVolumeState(clampedVolume);
     safeLocalStorage.setItem('dialogue-voice-volume', clampedVolume.toString());
-    // Synchronizacja audio przeniesiona do useEffect poniżej
+    
+    // NATYCHMIASTOWA synchronizacja z audio elementami (działa w czasie rzeczywistym)
+    const dialogueAudios = document.querySelectorAll('audio[data-type="dialogue"]') as NodeListOf<HTMLAudioElement>;
+    dialogueAudios.forEach(audio => {
+      audio.volume = clampedVolume;
+    });
   };
 
   const toggleEnabled = () => {

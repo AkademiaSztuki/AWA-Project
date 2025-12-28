@@ -154,17 +154,37 @@ export const useAmbientMusic = (): AmbientMusicControls => {
     
     if (audioElement.paused) {
       console.log('useAmbientMusic: Attempting to play...');
-      // Oznacz, że użytkownik ręcznie włączył muzykę
+      // Oznacz, że użytkownik ręcznie włączył muzykę (resetuj flagę)
       if (typeof window !== 'undefined') {
         (window as any).ambientMusicUserManuallyPaused = false;
       }
-      audioElement.play().then(() => {
-        console.log('useAmbientMusic: Play successful');
-        setIsPlaying(true);
-      }).catch(error => {
-        console.error('useAmbientMusic: Failed to play ambient music:', error);
-        setIsPlaying(false);
-      });
+      
+      // Upewnij się, że audio jest gotowe
+      if (audioElement.readyState < 2) {
+        // Jeśli audio nie jest gotowe, poczekaj na załadowanie
+        audioElement.addEventListener('canplay', () => {
+          audioElement.play().then(() => {
+            console.log('useAmbientMusic: Play successful after canplay');
+            setIsPlaying(true);
+          }).catch(error => {
+            console.error('useAmbientMusic: Failed to play ambient music after canplay:', error);
+            setIsPlaying(false);
+          });
+        }, { once: true });
+      } else {
+        // Audio jest gotowe, odtwórz natychmiast
+        audioElement.play().then(() => {
+          console.log('useAmbientMusic: Play successful');
+          setIsPlaying(true);
+        }).catch(error => {
+          console.error('useAmbientMusic: Failed to play ambient music:', error);
+          setIsPlaying(false);
+          // Na mobile może być problem z autoplay policy - spróbuj jeszcze raz po krótkim opóźnieniu
+          if (error.name === 'NotAllowedError' || error.name === 'NotSupportedError') {
+            console.log('useAmbientMusic: Autoplay blocked, will retry after user interaction');
+          }
+        });
+      }
     } else {
       console.log('useAmbientMusic: Pausing...');
       // Oznacz, że użytkownik ręcznie wyłączył muzykę

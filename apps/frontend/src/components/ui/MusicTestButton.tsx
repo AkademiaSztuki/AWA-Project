@@ -55,6 +55,12 @@ export const MusicTestButton: React.FC = () => {
     const newVolume = parseFloat(target.value);
     console.log('MusicTestButton: handleMusicVolumeChange called with:', newVolume);
     setMusicVolume(newVolume);
+    
+    // NATYCHMIASTOWA synchronizacja z audio elementem (działa w czasie rzeczywistym)
+    const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+    if (audioElement) {
+      audioElement.volume = newVolume;
+    }
   };
 
   const musicPercentage = musicVolume * 100;
@@ -71,6 +77,13 @@ export const MusicTestButton: React.FC = () => {
     const newVolume = parseFloat(target.value);
     console.log('MusicTestButton: handleVoiceVolumeChange called with:', newVolume, 'setVoiceVolume function exists:', !!setVoiceVolume);
     setVoiceVolume(newVolume);
+    
+    // NATYCHMIASTOWA synchronizacja z audio elementami (działa w czasie rzeczywistym)
+    // setVoiceVolume już to robi, ale dla pewności dodajemy też tutaj
+    const dialogueAudios = document.querySelectorAll('audio[data-type="dialogue"]') as NodeListOf<HTMLAudioElement>;
+    dialogueAudios.forEach(audio => {
+      audio.volume = newVolume;
+    });
   };
 
   // Synchronizuj głośność na żywo na wszystkich audio[data-type="dialogue"]
@@ -235,7 +248,18 @@ export const MusicTestButton: React.FC = () => {
                       if (typeof window !== 'undefined') {
                         (window as any).ambientMusicUserManuallyPaused = false;
                       }
-                      if (!isPlaying) {
+                      // Bezpośrednio włącz audio (działa lepiej na mobile)
+                      const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+                      if (audioElement) {
+                        audioElement.volume = 0.5;
+                        try {
+                          await audioElement.play();
+                          console.log('MusicTestButton: Music started directly');
+                        } catch (error) {
+                          console.error('MusicTestButton: Failed to play directly, trying togglePlay:', error);
+                          togglePlay();
+                        }
+                      } else {
                         togglePlay();
                       }
                     } else {
