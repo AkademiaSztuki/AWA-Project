@@ -2463,7 +2463,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       category: 'micro' // Use 'micro' parameters for better fidelity to original
     };
 
-    const currentStyle = sessionData?.roomAnalysis?.style || selectedImage?.parameters?.style || 'modern';
+    const currentStyle = selectedImage?.parameters?.style || 'modern';
     
     // Construct prompt with system instruction to preserve room structure
     const modificationPrompt = `SYSTEM INSTRUCTION: Image-to-image modification. KEEP: walls, windows, doors, furniture layout, camera angle - IDENTICAL. CHANGE: ${customModificationText.trim()}. Apply this change while maintaining exact furniture positions and room structure where possible. Make sure the change looks natural in ${currentStyle} style.`;
@@ -3105,7 +3105,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
                             {/* Message */}
                             <motion.p
-                              key={statusMessage}
+                              key={`${statusMessage.pl}-${statusMessage.en}`}
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               className="text-white font-modern text-lg font-semibold"

@@ -202,6 +202,11 @@ export interface VisualDNA {
   materialsSummary?: string;
   lightingSummary?: string;
   moodSummary?: string;
+  implicitScores?: {
+    warmth?: number;
+    brightness?: number;
+    complexity?: number;
+  };
 }
 
 export interface LadderStep {
