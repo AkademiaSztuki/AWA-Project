@@ -26,6 +26,8 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     let isCancelled = false;
 
     let initialVolume = volume;
+    let shouldAutoStart = true; // Domyślnie próbuj włączyć automatycznie
+    
     if (typeof window !== 'undefined') {
       try {
         const savedVolume = safeLocalStorage.getItem('ambient-music-volume');
@@ -33,7 +35,17 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
           const parsed = parseFloat(savedVolume);
           if (!Number.isNaN(parsed)) {
             initialVolume = Math.max(0, Math.min(1, parsed));
+            // Jeśli głośność jest 0, użytkownik prawdopodobnie wyłączył muzykę ręcznie
+            if (parsed === 0) {
+              shouldAutoStart = false;
+            }
           }
+        }
+        
+        // Sprawdź czy użytkownik ręcznie wyłączył muzykę
+        const userManuallyPaused = (window as any).ambientMusicUserManuallyPaused === true;
+        if (userManuallyPaused) {
+          shouldAutoStart = false;
         }
       } catch (error) {
         console.warn('AmbientMusic: Nie udało się odczytać zapisanej głośności.', error);
@@ -51,7 +63,7 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
       if (audioRef.current && !isInitializedRef.current) {
         console.log('AmbientMusic: Audio element found in DOM, initializing...');
         isInitializedRef.current = true;
-        cleanup = createAudioElement(initialVolume);
+        cleanup = createAudioElement(initialVolume, shouldAutoStart);
       } else if (!audioRef.current) {
         console.warn('AmbientMusic: Audio element not found in DOM, retrying...');
         // Spróbuj jeszcze raz po krótkim opóźnieniu
@@ -92,7 +104,7 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioFile, volume]);
 
-  const createAudioElement = (startVolume: number) => {
+  const createAudioElement = (startVolume: number, autoStart: boolean = false) => {
     // Użyj elementu audio z DOM (audioRef.current powinien być już ustawiony)
     if (!audioRef.current) {
       console.error('AmbientMusic: audioRef.current is null!');
@@ -270,6 +282,46 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     document.addEventListener('touchstart', handleUserInteraction, { passive: true });
     document.addEventListener('touchend', handleUserInteraction, { passive: true });
     document.addEventListener('mousedown', handleUserInteraction, { passive: true });
+
+    // Jeśli powinno się włączyć automatycznie, spróbuj po załadowaniu audio
+    if (autoStart && startVolume > 0) {
+      const tryAutoStart = () => {
+        if (audioRef.current && audioRef.current.readyState >= 2) {
+          // Audio jest gotowe, spróbuj włączyć
+          // Resetuj flagę przed próbą włączenia
+          if (typeof window !== 'undefined') {
+            (window as any).ambientMusicUserManuallyPaused = false;
+          }
+          audioRef.current.play().then(() => {
+            console.log('AmbientMusic: Auto-started successfully at', startVolume * 100, '%');
+          }).catch(error => {
+            console.log('AmbientMusic: Auto-start blocked (autoplay policy), will start on user interaction:', error);
+            // Jeśli autoplay jest zablokowany, muzyka włączy się przy pierwszej interakcji
+          });
+        } else {
+          // Poczekaj na załadowanie audio
+          if (audioRef.current) {
+            const canPlayHandler = () => {
+              if (audioRef.current && audioRef.current.readyState >= 2) {
+                if (typeof window !== 'undefined') {
+                  (window as any).ambientMusicUserManuallyPaused = false;
+                }
+                audioRef.current.play().then(() => {
+                  console.log('AmbientMusic: Auto-started successfully after canplay at', startVolume * 100, '%');
+                }).catch(error => {
+                  console.log('AmbientMusic: Auto-start blocked after canplay:', error);
+                });
+              }
+            };
+            audioRef.current.addEventListener('canplay', canPlayHandler, { once: true });
+            audioRef.current.addEventListener('canplaythrough', canPlayHandler, { once: true });
+          }
+        }
+      };
+      
+      // Spróbuj po krótkim opóźnieniu, aby dać czas na inicjalizację
+      setTimeout(tryAutoStart, 500);
+    }
 
     // Cleanup dla pojedynczego audio elementu i listenerów
     return () => {
