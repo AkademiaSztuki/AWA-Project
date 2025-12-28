@@ -62,17 +62,19 @@ export function ThanksScreen() {
                   Pobierz swoje dane (JSON)
                 </GlassSurface>
 
-                <GlassSurface
-                  width={200}
-                  height={56}
-                  borderRadius={32}
-                  className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
-                  onClick={() => window.location.href = '/dashboard'}
-                  aria-label="Przejdź do dashboard"
-                  style={{ opacity: 1 }}
-                >
-                  Przejdź do Dashboard
-                </GlassSurface>
+                {sessionData?.coreProfileComplete && (
+                  <GlassSurface
+                    width={200}
+                    height={56}
+                    borderRadius={32}
+                    className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
+                    onClick={() => window.location.href = '/dashboard'}
+                    aria-label="Przejdź do dashboard"
+                    style={{ opacity: 1 }}
+                  >
+                    Przejdź do Dashboard
+                  </GlassSurface>
+                )}
               </div>
 
               <p className="text-xs text-gray-400 font-modern">

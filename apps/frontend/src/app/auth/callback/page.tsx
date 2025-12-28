@@ -12,11 +12,19 @@ function AuthCallbackContent() {
     let isMounted = true;
     
     // Guard: prevent multiple executions (React StrictMode in dev)
-    const callbackKey = `auth_callback_${window.location.hash}`;
+    // Use search and hash to make the key unique to this specific login attempt
+    const callbackKey = `auth_callback_${window.location.search}${window.location.hash}`;
     if (safeSessionStorage.getItem(callbackKey)) {
+      console.log('[AuthCallback] Already processing/completed for this URL');
       return; // Already processed
     }
     safeSessionStorage.setItem(callbackKey, 'processing');
+
+    console.log('[AuthCallback] URL Debug:', {
+      href: window.location.href,
+      search: window.location.search,
+      hash: window.location.hash
+    });
 
     (async () => {
       try {
@@ -92,7 +100,7 @@ function AuthCallbackContent() {
 
           if (!tokenPayload.access_token || !tokenPayload.refresh_token) {
             const err = encodeURIComponent('Missing tokens in fragment');
-            router.replace(`/dashboard?auth=error&msg=${err}`);
+            router.replace(`/?auth=error&msg=${err}`);
             return;
           }
 
@@ -121,21 +129,24 @@ function AuthCallbackContent() {
           }).catch(() => {});
           // #endregion
 
-          if (setSessionError) {
-            safeSessionStorage.removeItem(callbackKey); // Allow retry on error
-            const err = encodeURIComponent(setSessionError.message || 'auth_error');
-            router.replace(`/dashboard?auth=error&msg=${err}`);
-            return;
-          }
-
-          safeSessionStorage.setItem(callbackKey, 'completed');
-          const next = params.get('next') || '/dashboard';
-          router.replace(next);
+        if (setSessionError) {
+          console.error('[AuthCallback] setSession Error:', setSessionError);
+          safeSessionStorage.removeItem(callbackKey); // Allow retry on error
+          const err = encodeURIComponent(setSessionError.message || 'auth_error');
+          router.replace(`/?auth=error&msg=${err}`);
           return;
         }
 
-        if (!hasCode) {
-          const errMsg = 'Missing auth code in callback';
+        console.log('[AuthCallback] Session set successfully');
+        safeSessionStorage.setItem(callbackKey, 'completed');
+        const next = params.get('next') || '/';
+        router.replace(next);
+        return;
+      }
+
+      if (!hasCode) {
+        const errMsg = 'Missing auth code in callback';
+        console.warn('[AuthCallback]', errMsg);
 
           // #region agent log
           void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
@@ -154,56 +165,44 @@ function AuthCallbackContent() {
           // #endregion
 
           const err = encodeURIComponent(errMsg);
-          router.replace(`/dashboard?auth=error&msg=${err}`);
+          router.replace(`/?auth=error&msg=${err}`);
           return;
         }
 
-        // Handles PKCE code exchange
-        const exchangeResult = await supabase.auth.exchangeCodeForSession(href);
+      console.log('[AuthCallback] Exchanging code for session...');
+      const exchangeResult = await supabase.auth.exchangeCodeForSession(href);
 
-        if (!isMounted) return;
+      if (!isMounted) return;
 
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: 'debug-session',
-            runId: 'fix4',
-            hypothesisId: 'H1',
-            location: 'auth/callback/page.tsx:exchangeCodeForSession',
-            message: 'OAuth code exchange result',
-            data: {
-              hasSession: !!exchangeResult.data?.session,
-              hasUser: !!exchangeResult.data?.session?.user,
-              errorMessage: exchangeResult.error?.message || null,
-              typeParam: params.get('type')
-            },
-            timestamp: Date.now()
-          })
-        }).catch(() => {});
-        // #endregion
+      if (exchangeResult.error) {
+        console.error('[AuthCallback] Exchange Error:', exchangeResult.error);
+        safeSessionStorage.removeItem(callbackKey); // Allow retry on error
+        const err = encodeURIComponent(exchangeResult.error.message || 'auth_error');
+        router.replace(`/?auth=error&msg=${err}`);
+        return;
+      }
 
-        const { error } = exchangeResult;
+      console.log('[AuthCallback] Code exchange successful, verifying session...');
+      
+      // Double check session is actually established before redirecting
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        console.warn('[AuthCallback] Session not found after exchange, waiting briefly...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
 
-        if (error) {
-          safeSessionStorage.removeItem(callbackKey); // Allow retry on error
-          console.error('Supabase OAuth exchange error:', error);
-          const err = encodeURIComponent(error.message || 'auth_error');
-          router.replace(`/dashboard?auth=error&msg=${err}`);
-          return;
-        }
-
-        // If we got here via magic link (type=recovery or type=signup), still go dashboard
-        safeSessionStorage.setItem(callbackKey, 'completed');
-        const next = params.get('next') || '/dashboard';
-        router.replace(next);
+      console.log('[AuthCallback] Proceeding to destination');
+      // If we got here via magic link (type=recovery or type=signup), still go home
+      safeSessionStorage.setItem(callbackKey, 'completed');
+      const next = params.get('next') || '/';
+      router.replace(next);
       } catch (e) {
         if (!isMounted) return;
         safeSessionStorage.removeItem(callbackKey); // Allow retry on error
         console.error('Auth callback exception:', e);
         const err = e instanceof Error ? e.message : 'unknown';
-        router.replace(`/dashboard?auth=error&msg=${encodeURIComponent(err)}`);
+        router.replace(`/?auth=error&msg=${encodeURIComponent(err)}`);
       }
     })();
 

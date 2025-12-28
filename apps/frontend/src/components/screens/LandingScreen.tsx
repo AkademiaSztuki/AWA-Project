@@ -103,7 +103,14 @@ const LandingScreen: React.FC = () => {
                     className="text-left w-full"
                     onClick={async () => {
                       stopAllDialogueAudio();
-                      if (!user) { setPendingPath('fast'); setShowLoginModal(true); return; }
+                      if (!user) { 
+                        setPendingPath('fast'); 
+                        // Update URL with redirect param so LoginModal can pick it up for OAuth
+                        const destination = '/flow/onboarding';
+                        router.push(`/?redirect=${encodeURIComponent(destination)}&auth=required`, { scroll: false });
+                        setShowLoginModal(true); 
+                        return; 
+                      }
                       await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
                       router.push('/flow/onboarding');
                     }}
@@ -135,7 +142,14 @@ const LandingScreen: React.FC = () => {
                     className="text-left w-full"
                     onClick={async () => {
                       stopAllDialogueAudio();
-                      if (!user) { setPendingPath('full'); setShowLoginModal(true); return; }
+                      if (!user) { 
+                        setPendingPath('full'); 
+                        // Update URL with redirect param so LoginModal can pick it up for OAuth
+                        const destination = '/setup/profile';
+                        router.push(`/?redirect=${encodeURIComponent(destination)}&auth=required`, { scroll: false });
+                        setShowLoginModal(true); 
+                        return; 
+                      }
                       await updateSessionData({ pathType: 'full' });
                       router.push('/setup/profile');
                     }}
@@ -172,6 +186,7 @@ const LandingScreen: React.FC = () => {
 
       <LoginModal
         isOpen={showLoginModal}
+        redirectPath={pendingPath === 'fast' ? '/flow/onboarding' : pendingPath === 'full' ? '/setup/profile' : undefined}
         onClose={() => setShowLoginModal(false)}
         onSuccess={async () => {
           setShowLoginModal(false);

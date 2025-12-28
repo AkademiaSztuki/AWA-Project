@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSessionData } from '@/hooks/useSessionData';
 import { LoginModal } from './LoginModal';
 
 interface ProtectedRouteProps {
@@ -15,6 +16,7 @@ export function ProtectedRoute({
   requireAuth = true 
 }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
+  const { sessionData } = useSessionData();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -31,16 +33,22 @@ export function ProtectedRoute({
       // Sprawdź czy redirect jest w URL (może być ustawiony przez window.history.replaceState)
       const urlParams = new URLSearchParams(window.location.search);
       const redirect = urlParams.get('redirect') || searchParams.get('redirect') || pathname;
-      const authRequired = urlParams.get('auth') === 'required' || searchParams.get('auth') === 'required';
       
-      // Pokaż modal logowania tylko jeśli nie ma już innego modala na stronie
-      // (niektóre strony jak PathSelectionScreen mają własne modale)
+      // Pokaż modal logowania
       setShowLogin(true);
     } else {
-      // Użytkownik zalogowany - zamknij modal jeśli był otwarty
+      // Użytkownik zalogowany
       setShowLogin(false);
+
+      // DODATKOWA BLOKADA DASHBOARDU:
+      // Jeśli użytkownik jest zalogowany, ale nie ukończył pełnego profilu (long path),
+      // a próbuje wejść na dashboard, przekieruj go na stronę główną lub wybór ścieżki.
+      if (pathname === '/dashboard' && !sessionData?.coreProfileComplete) {
+        console.warn('[ProtectedRoute] Access to dashboard denied - core profile not complete');
+        router.replace('/');
+      }
     }
-  }, [user, isLoading, requireAuth, pathname, searchParams]);
+  }, [user, isLoading, requireAuth, pathname, searchParams, sessionData?.coreProfileComplete, router]);
 
   // Pokaż loading podczas sprawdzania autoryzacji
   if (isLoading) {
@@ -56,10 +64,14 @@ export function ProtectedRoute({
 
   // Jeśli wymagane logowanie i użytkownik nie zalogowany - pokaż modal
   if (requireAuth && !user) {
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const effectiveRedirect = urlParams?.get('redirect') || searchParams.get('redirect') || pathname;
+
     return (
       <>
         <LoginModal
           isOpen={showLogin}
+          redirectPath={effectiveRedirect}
           onClose={() => {
             setShowLogin(false);
             // Przekieruj na stronę główną jeśli zamknięto modal
@@ -73,14 +85,22 @@ export function ProtectedRoute({
             const redirect = urlParams.get('redirect') || searchParams.get('redirect');
             
             if (redirect && redirect !== pathname && redirect !== '/flow/path-selection') {
-              // Użyj redirect z URL (ustawiony przez PathSelectionScreen lub middleware)
-              router.push(redirect);
+              // Użytkownik nie może wejść na dashboard bez ukończonego profilu
+              if (redirect === '/dashboard' && !sessionData?.coreProfileComplete) {
+                router.push('/');
+              } else {
+                router.push(redirect);
+              }
             } else if (pathname !== '/flow/path-selection') {
-              // Jeśli nie ma redirect i nie jesteśmy na path-selection, użyj pathname
-              router.push(pathname);
+              // Jeśli jesteśmy na dashboardzie bez profilu, idź na landing
+              if (pathname === '/dashboard' && !sessionData?.coreProfileComplete) {
+                router.push('/');
+              } else {
+                router.push(pathname);
+              }
             } else {
-              // Fallback dla path-selection - dashboard
-              router.push('/dashboard');
+              // Fallback: jeśli ma ukończony profil to dashboard, jeśli nie to landing
+              router.push(sessionData?.coreProfileComplete ? '/dashboard' : '/');
             }
           }}
           message="Musisz się zalogować, aby uzyskać dostęp do tej strony."

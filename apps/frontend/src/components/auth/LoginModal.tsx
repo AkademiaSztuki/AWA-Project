@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { X, Mail, Sparkles } from 'lucide-react';
@@ -14,11 +15,13 @@ interface LoginModalProps {
   onClose: () => void;
   onSuccess?: () => void;
   message?: string;
+  redirectPath?: string;
 }
 
-export function LoginModal({ isOpen, onClose, onSuccess, message }: LoginModalProps) {
+export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }: LoginModalProps) {
   const { signInWithGoogle, signInWithEmail } = useAuth();
   const { language } = useLanguage();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -30,11 +33,15 @@ export function LoginModal({ isOpen, onClose, onSuccess, message }: LoginModalPr
     return () => setMounted(false);
   }, []);
 
+  const getEffectiveRedirectPath = () => {
+    return redirectPath || searchParams.get('redirect') || undefined;
+  };
+
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setError('');
     try {
-      await signInWithGoogle();
+      await signInWithGoogle(getEffectiveRedirectPath());
       onSuccess?.();
     } catch (err: any) {
       setError(err.message || 'Failed to sign in with Google');
@@ -49,7 +56,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, message }: LoginModalPr
     setError('');
     
     try {
-      const { error } = await signInWithEmail(email);
+      const { error } = await signInWithEmail(email, getEffectiveRedirectPath());
       if (error) {
         setError(error.message);
       } else {

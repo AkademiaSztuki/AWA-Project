@@ -49,19 +49,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // Sprawdź autoryzację - wszystkie ścieżki oprócz publicznych są chronione
-  // Note: Supabase używa localStorage, nie cookies, więc szczegółowe sprawdzenie
-  // odbywa się w GlobalProtectedRoute po stronie klienta. Middleware tylko przekierowuje
-  // niezalogowanych użytkowników na stronę główną, gdzie GlobalProtectedRoute pokaże modal.
-  if (!isPublicPath(pathname)) {
-    // Przekieruj na stronę główną z parametrem - GlobalProtectedRoute sprawdzi autoryzację
-    const url = request.nextUrl.clone();
-    url.pathname = '/';
-    url.searchParams.set('redirect', pathname);
-    url.searchParams.set('auth', 'required');
-    return NextResponse.redirect(url);
-  }
-
   // Obsługa języka
   const resolvedLanguage = resolveLanguage(request);
   const current = request.cookies.get(LANGUAGE_COOKIE)?.value;

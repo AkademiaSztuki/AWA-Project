@@ -4,6 +4,7 @@ import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSessionData } from '@/hooks/useSessionData';
 import { LayoutDashboard } from 'lucide-react';
 
 export function DashboardButton() {
@@ -11,9 +12,10 @@ export function DashboardButton() {
   const pathname = usePathname();
   const { language } = useLanguage();
   const { user } = useAuth();
+  const { sessionData } = useSessionData();
 
-  // Don't show if not logged in or on dashboard page
-  if (!user || pathname === '/dashboard') {
+  // Don't show if not logged in, core profile not complete, or already on dashboard
+  if (!user || !sessionData?.coreProfileComplete || pathname === '/dashboard') {
     return null;
   }
 

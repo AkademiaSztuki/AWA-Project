@@ -146,7 +146,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     storage: safeStorageAdapter,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: false // We handle this manually in /auth/callback/page.tsx to avoid race conditions
   }
 });
 

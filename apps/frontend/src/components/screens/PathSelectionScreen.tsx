@@ -469,6 +469,7 @@ export default function PathSelectionScreen() {
       {/* Login Modal */}
       <LoginModal
         isOpen={showLoginModal}
+        redirectPath={pendingPath === 'fast' ? '/flow/onboarding' : pendingPath === 'full' ? '/setup/profile' : undefined}
         onClose={() => {
           setShowLoginModal(false);
           setPendingPath(null);

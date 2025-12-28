@@ -8,8 +8,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
-  signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string) => Promise<{ error: any }>;
+  signInWithGoogle: (nextPath?: string) => Promise<void>;
+  signInWithEmail: (email: string, nextPath?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   linkUserHashToAuth: (userHash: string) => Promise<void>;
 }
@@ -49,81 +49,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // #endregion
     });
 
-    // Listen for auth changes with debounce to avoid multiple rapid calls
-    let authChangeTimeout: NodeJS.Timeout | null = null;
+    // Listen for auth changes without debounce to ensure immediate UI response
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Debounce rapid auth state changes (e.g., from React StrictMode double renders)
-      if (authChangeTimeout) {
-        clearTimeout(authChangeTimeout);
-      }
+      console.log('[AuthContext] Auth state change:', event, !!session);
       
-      authChangeTimeout = setTimeout(async () => {
-        setSession(session);
-        setUser(session?.user || null);
+      setSession(session);
+      setUser(session?.user || null);
 
-        // If user just signed in, restore user_hash from Supabase and grant free credits
-        if (event === 'SIGNED_IN' && session?.user?.id && typeof window !== 'undefined') {
-          try {
-            const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
-            const userHash = await getUserHashFromAuth(session.user.id);
-            if (userHash) {
-              safeLocalStorage.setItem('aura_user_hash', userHash);
-              console.log('[AuthContext] Restored user_hash from Supabase:', userHash);
-              
-              // Przyznaj darmowy grant kredytów (600 kredytów = 60 generacji)
-              try {
-                const { grantFreeCredits } = await import('@/lib/credits');
-                await grantFreeCredits(userHash);
-                console.log('[AuthContext] Granted free credits to new user:', userHash);
-              } catch (creditError) {
-                console.warn('[AuthContext] Failed to grant free credits:', creditError);
-                // Nie blokuj logowania jeśli grant się nie powiódł
-              }
+      // If user just signed in, restore user_hash from Supabase and grant free credits
+      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user?.id && typeof window !== 'undefined') {
+        try {
+          const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
+          const userHash = await getUserHashFromAuth(session.user.id);
+          if (userHash) {
+            safeLocalStorage.setItem('aura_user_hash', userHash);
+            console.log('[AuthContext] Restored user_hash from Supabase:', userHash);
+            
+            // Przyznaj darmowy grant kredytów (600 kredytów = 60 generacji)
+            try {
+              const { grantFreeCredits } = await import('@/lib/credits');
+              await grantFreeCredits(userHash);
+              console.log('[AuthContext] Granted free credits to user:', userHash);
+            } catch (creditError) {
+              console.warn('[AuthContext] Failed to grant free credits:', creditError);
             }
-          } catch (error) {
-            console.warn('[AuthContext] Failed to restore user_hash:', error);
           }
+        } catch (error) {
+          console.warn('[AuthContext] Failed to restore user_hash:', error);
         }
+      }
 
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: 'debug-session',
-            runId: 'pre-fix',
-            hypothesisId: 'H2',
-            location: 'AuthContext.tsx:onAuthStateChange',
-            message: 'Auth state change event',
-            data: {
-              event,
-              sessionExists: !!session,
-              hasUser: !!session?.user,
-              provider: session?.user?.app_metadata?.provider ?? null
-            },
-            timestamp: Date.now()
-          })
-        }).catch(() => {});
-        // #endregion
-      }, 100); // 100ms debounce
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'auth-fix-v2',
+          hypothesisId: 'H2',
+          location: 'AuthContext.tsx:onAuthStateChange',
+          message: 'Auth state change event',
+          data: {
+            event,
+            sessionExists: !!session,
+            hasUser: !!session?.user,
+            provider: session?.user?.app_metadata?.provider ?? null
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
     });
 
     return () => {
-      if (authChangeTimeout) {
-        clearTimeout(authChangeTimeout);
-      }
       subscription.unsubscribe();
     };
   }, []);
 
-  const signInWithGoogle = async () => {
-    const redirectTo = `${window.location.origin}/auth/callback`;
+  const signInWithGoogle = async (nextPath?: string) => {
+    let redirectTo = `${window.location.origin}/auth/callback`;
+    if (nextPath) {
+      redirectTo += `?next=${encodeURIComponent(nextPath)}`;
+    }
+
+    // Agent log: starting OAuth
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'oauth-fix',
+        hypothesisId: 'G1',
+        location: 'AuthContext.tsx:signInWithGoogle',
+        message: 'Calling signInWithOAuth',
+        data: { redirectTo, nextPath },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo,
-        skipBrowserRedirect: true,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
@@ -131,50 +138,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    const url = data?.url ?? null;
-    const hasUrl = !!url;
-    const parsedUrl = hasUrl ? new URL(url) : null;
-    const responseType = parsedUrl?.searchParams.get('response_type') ?? null;
-    const hasCodeChallenge = parsedUrl?.searchParams.has('code_challenge') ?? false;
-
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'fix4',
-        hypothesisId: 'H3',
-        location: 'AuthContext.tsx:signInWithGoogle',
-        message: 'OAuth sign-in call completed',
-        data: {
-          redirectTo,
-          hasError: !!error,
-          errorMessage: error?.message || null,
-          responseType,
-          hasCodeChallenge,
-          hasUrl
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
-
     if (error) {
       console.error('Error signing in with Google:', error);
       throw error;
     }
 
-    if (url) {
-      window.location.assign(url);
+    // Fallback: If for some reason auto-redirect fails, try manual redirect
+    if (data?.url) {
+      console.log('[AuthContext] Manual redirect fallback to:', data.url);
+      window.location.assign(data.url);
     }
   };
 
-  const signInWithEmail = async (email: string) => {
+  const signInWithEmail = async (email: string, nextPath?: string) => {
+    let emailRedirectTo = `${window.location.origin}/auth/callback`;
+    if (nextPath) {
+      emailRedirectTo += `?next=${encodeURIComponent(nextPath)}`;
+    }
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        emailRedirectTo
       }
     });
 
