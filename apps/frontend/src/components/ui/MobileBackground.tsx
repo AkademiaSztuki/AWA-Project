@@ -4,12 +4,8 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import Image from 'next/image';
 
 export function MobileBackground() {
-  const isMobile = useIsMobile();
-  
-  if (!isMobile) return null;
-  
   return (
-    <div className="fixed inset-0 z-0 pointer-events-none">
+    <div className="fixed inset-0 z-[1] pointer-events-none bg-[#1a1a1a]">
       <picture>
         <source
           srcSet="/images/background-mobile-720.webp 720w, /images/background-mobile-1080.webp 1080w"

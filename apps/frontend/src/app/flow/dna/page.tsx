@@ -212,7 +212,7 @@ export default function VisualDNAPage() {
                 Na podstawie {(sessionData.tinderData?.swipes?.filter((s: any) => s.direction === 'right').length) || 0} polubionych wnętrz
               </p>
             </div>
-            <div className="relative w-[320px] h-[320px] mx-auto mt-8">
+            <div className="relative w-full max-w-[320px] aspect-square mx-auto mt-8">
               {[
                 {
                   icon: <Home className="text-gold" size={32} />,
@@ -240,7 +240,7 @@ export default function VisualDNAPage() {
                   labelPrefix: 'Nastrój',
                 },
               ].map((item, i, arr) => {
-                const radius = 120;
+                const radius = window.innerWidth < 640 ? 100 : 120;
                 const angle = (i / arr.length) * 2 * Math.PI - Math.PI / 2;
                 const x = Math.cos(angle) * radius;
                 const y = Math.sin(angle) * radius;
@@ -258,7 +258,7 @@ export default function VisualDNAPage() {
                       whileHover={{ scale: 1.3, zIndex: 10 }}
                       transition={{ type: 'spring', stiffness: 400, damping: 20, duration: 0.18 }}
                     >
-                      <GlassCard className="group w-24 h-24 flex flex-col items-center justify-center rounded-full bg-gradient-to-br from-gold/20 to-silver/20 cursor-pointer transition-all overflow-hidden p-0">
+                      <GlassCard className="group w-20 h-24 sm:w-24 sm:h-24 flex flex-col items-center justify-center rounded-full bg-gradient-to-br from-gold/20 to-silver/20 cursor-pointer transition-all overflow-hidden p-0">
                         <span className="flex items-center justify-center mt-2">
                           {item.icon}
                         </span>

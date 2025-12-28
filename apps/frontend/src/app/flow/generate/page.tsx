@@ -8,6 +8,8 @@ import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavi
 import { checkCreditsAvailable } from '@/lib/credits';
 import { UpgradePrompt } from '@/components/subscription/UpgradePrompt';
 import { supabase } from '@/lib/supabase';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { LocalizedText } from '@/lib/questions/validated-scales';
 import { assessAllSourcesQuality, getViableSources, type DataStatus } from '@/lib/prompt-synthesis/data-quality';
 import { calculateImplicitQuality } from '@/lib/prompt-synthesis/implicit-quality';
 import { analyzeSourceConflict } from '@/lib/prompt-synthesis/conflict-analysis';
@@ -36,6 +38,7 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
 } from 'lucide-react';
 import Image from 'next/image';
 import { buildOptimizedFluxPrompt } from '@/lib/dna';
@@ -76,39 +79,40 @@ interface GeneratedImage {
 
 interface ModificationOption {
   id: string;
-  label: string;
+  label: LocalizedText;
   icon: React.ReactNode;
   category: 'micro' | 'macro';
 }
 
 const MICRO_MODIFICATIONS: ModificationOption[] = [
-  { id: 'warmer_colors', label: 'Cieplejsze kolory', icon: null, category: 'micro' },
-  { id: 'cooler_colors', label: 'Chłodniejsze kolory', icon: null, category: 'micro' },
-  { id: 'more_lighting', label: 'Więcej oświetlenia', icon: null, category: 'micro' },
-  { id: 'darker_mood', label: 'Ciemniejszy nastrój', icon: null, category: 'micro' },
-  { id: 'natural_materials', label: 'Naturalne materiały', icon: null, category: 'micro' },
-  { id: 'more_plants', label: 'Więcej roślin', icon: null, category: 'micro' },
-  { id: 'less_plants', label: 'Mniej roślin', icon: null, category: 'micro' },
-  { id: 'change_furniture', label: 'Zmień meble', icon: null, category: 'micro' },
-  { id: 'add_decorations', label: 'Dodaj dekoracje', icon: null, category: 'micro' },
-  { id: 'change_flooring', label: 'Zmień podłogę', icon: null, category: 'micro' },
+  { id: 'warmer_colors', label: { pl: 'Cieplejsze kolory', en: 'Warmer colors' }, icon: null, category: 'micro' },
+  { id: 'cooler_colors', label: { pl: 'Chłodniejsze kolory', en: 'Cooler colors' }, icon: null, category: 'micro' },
+  { id: 'more_lighting', label: { pl: 'Więcej oświetlenia', en: 'More lighting' }, icon: null, category: 'micro' },
+  { id: 'darker_mood', label: { pl: 'Ciemniejszy nastrój', en: 'Darker mood' }, icon: null, category: 'micro' },
+  { id: 'natural_materials', label: { pl: 'Naturalne materiały', en: 'Natural materials' }, icon: null, category: 'micro' },
+  { id: 'more_plants', label: { pl: 'Więcej roślin', en: 'More plants' }, icon: null, category: 'micro' },
+  { id: 'less_plants', label: { pl: 'Mniej roślin', en: 'Less plants' }, icon: null, category: 'micro' },
+  { id: 'change_furniture', label: { pl: 'Zmień meble', en: 'Change furniture' }, icon: null, category: 'micro' },
+  { id: 'add_decorations', label: { pl: 'Dodaj dekoracje', en: 'Add decorations' }, icon: null, category: 'micro' },
+  { id: 'change_flooring', label: { pl: 'Zmień podłogę', en: 'Change flooring' }, icon: null, category: 'micro' },
 ];
 
 const MACRO_MODIFICATIONS: ModificationOption[] = [
-  { id: 'scandinavian', label: 'Skandynawski', icon: null, category: 'macro' },
-  { id: 'minimalist', label: 'Minimalistyczny', icon: null, category: 'macro' },
-  { id: 'classic', label: 'Klasyczny', icon: null, category: 'macro' },
-  { id: 'industrial', label: 'Industrialny', icon: null, category: 'macro' },
-  { id: 'eclectic', label: 'Eklektyczny', icon: null, category: 'macro' },
-  { id: 'glamour', label: 'Glamour', icon: null, category: 'macro' },
-  { id: 'bohemian', label: 'Boho', icon: null, category: 'macro' },
-  { id: 'rustic', label: 'Rustykalny', icon: null, category: 'macro' },
-  { id: 'provencal', label: 'Prowansalski', icon: null, category: 'macro' },
-  { id: 'shabby_chic', label: 'Shabby Chic', icon: null, category: 'macro' },
+  { id: 'scandinavian', label: { pl: 'Skandynawski', en: 'Scandinavian' }, icon: null, category: 'macro' },
+  { id: 'minimalist', label: { pl: 'Minimalistyczny', en: 'Minimalist' }, icon: null, category: 'macro' },
+  { id: 'classic', label: { pl: 'Klasyczny', en: 'Classic' }, icon: null, category: 'macro' },
+  { id: 'industrial', label: { pl: 'Industrialny', en: 'Industrial' }, icon: null, category: 'macro' },
+  { id: 'eclectic', label: { pl: 'Eklektyczny', en: 'Eclectic' }, icon: null, category: 'macro' },
+  { id: 'glamour', label: { pl: 'Glamour', en: 'Glamour' }, icon: null, category: 'macro' },
+  { id: 'bohemian', label: { pl: 'Boho', en: 'Bohemian' }, icon: null, category: 'macro' },
+  { id: 'rustic', label: { pl: 'Rustykalny', en: 'Rustic' }, icon: null, category: 'macro' },
+  { id: 'provencal', label: { pl: 'Prowansalski', en: 'Provençal' }, icon: null, category: 'macro' },
+  { id: 'shabby_chic', label: { pl: 'Shabby Chic', en: 'Shabby Chic' }, icon: null, category: 'macro' },
 ];
 
 export default function GeneratePage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const { sessionData, updateSessionData, isInitialized: isSessionInitialized } = useSessionData();
   const { generateSixImagesParallelWithGoogle, upscaleImageWithGoogle, isLoading, error, setError } = useGoogleAI();
   const { generateLLMComment } = useModalAPI(); 
@@ -119,7 +123,7 @@ export default function GeneratePage() {
   const [generationCount, setGenerationCount] = useState(0);
   const [isApiReady, setIsApiReady] = useState(false);
   const [hasAttemptedGeneration, setHasAttemptedGeneration] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("Krok 1/3: Inicjalizacja środowiska AI...");
+  const [statusMessage, setStatusMessage] = useState<LocalizedText>({ pl: "Krok 1/3: Inicjalizacja środowiska AI...", en: "Step 1/3: Initializing AI environment..." });
   const [loadingStage, setLoadingStage] = useState<1 | 2 | 3>(1);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState<number | undefined>(undefined);
@@ -152,6 +156,7 @@ export default function GeneratePage() {
   const [imageProgress, setImageProgress] = useState<Record<string, number>>({}); // Track progress for each image source
   const [progressOffsets, setProgressOffsets] = useState<Record<string, number>>({}); // Per-source stagger for loading anims
   const [lastFailedModification, setLastFailedModification] = useState<ModificationOption | null>(null); // Track last failed modification for retry
+  const [customModificationText, setCustomModificationText] = useState(''); // Custom modification text input
   
   const [generationHistory, setGenerationHistory] = useState<Array<{
     id: string;
@@ -173,7 +178,7 @@ export default function GeneratePage() {
       // Since we use Google (Vertex AI), there is no "cold start" wait time like in Modal
       setIsApiReady(true);
       setLoadingProgress(30);
-      setStatusMessage("Krok 2/3: Środowisko AI gotowe. Przygotowuję dane...");
+      setStatusMessage({ pl: "Krok 2/3: Środowisko AI gotowe. Przygotowuję dane...", en: "Step 2/3: AI environment ready. Preparing data..." });
       setLoadingStage(2);
       setEstimatedTime(undefined);
     };
@@ -601,7 +606,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       console.error("[6-Image Matrix] Session data keys:", Object.keys(typedSessionData || {}));
       const storedRoomImage = safeSessionStorage.getItem('aura_session_room_image');
       console.error("[6-Image Matrix] sessionStorage roomImage:", storedRoomImage?.substring(0, 50) || 'N/A');
-      setError("Nie można rozpocząć generowania - brak zdjęcia pokoju w sesji. Proszę wrócić do kroku uploadu zdjęcia.");
+      setError(t({ pl: "Nie można rozpocząć generowania - brak zdjęcia pokoju w sesji. Proszę wrócić do kroku uploadu zdjęcia.", en: "Cannot start generation - no room photo in session. Please return to the photo upload step." }));
       return;
     }
     
@@ -692,7 +697,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     const generationStartTime = Date.now();
     setMatrixGenerationStartTime(generationStartTime);
     setLastGenerationTime(generationStartTime);
-    setStatusMessage("Przygotowuję 6 różnych wizji dla Twojego wnętrza (AI)...");
+    setStatusMessage({ pl: "Przygotowuję 6 różnych wizji dla Twojego wnętrza (AI)...", en: "Preparing 6 different visions for your interior (AI)..." });
     setLoadingStage(2);
     setLoadingProgress(30);
     setEstimatedTime(150);
@@ -822,13 +827,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         const errorDetails = qualityReports
           .map(r => `${r.source}: ${r.warnings.join(', ')}`)
           .join('; ');
-        setError(`Brak wystarczających danych do wygenerowania obrazów. Szczegóły: ${errorDetails}`);
+        setError(t({ pl: `Brak wystarczających danych do wygenerowania obrazów. Szczegóły: ${errorDetails}`, en: `Insufficient data to generate images. Details: ${errorDetails}` }));
         return;
       }
       
       // Step 2: Prepare prompts for parallel generation
       setLoadingProgress(45);
-      setStatusMessage(`Generuję ${synthesisResult.generatedSources.length} wizji równolegle...`);
+      setStatusMessage({ pl: `Generuję ${synthesisResult.generatedSources.length} wizji równolegle...`, en: `Generating ${synthesisResult.generatedSources.length} visions in parallel...` });
       setEstimatedTime(120);
       
       const prompts = synthesisResult.generatedSources.map(source => ({
@@ -1058,7 +1063,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           // Update progress
           const progressPercent = 55 + (completedCount / prompts.length) * 30;
           setLoadingProgress(progressPercent);
-          setStatusMessage(`Wygenerowano ${completedCount}/${prompts.length} wizji...`);
+          setStatusMessage({ pl: `Wygenerowano ${completedCount}/${prompts.length} wizji...`, en: `Generated ${completedCount}/${prompts.length} visions...` });
           
           // Cleanup interval when all images are done
           if (completedCount >= prompts.length && progressInterval) {
@@ -1109,7 +1114,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         // #endregion
       } else {
         console.error("[6-Image Matrix] ERROR: processedRoomImage is missing or empty!");
-        setError("Brak zdjęcia pokoju w sesji. Proszę wrócić do kroku uploadu zdjęcia.");
+        setError(t({ pl: "Brak zdjęcia pokoju w sesji. Proszę wrócić do kroku uploadu zdjęcia.", en: "No room photo in session. Please return to the photo upload step." }));
         setIsGenerating(false);
         return;
       }
@@ -1259,7 +1264,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             const totalExpected = prompts.length;
             const progressPercent = 55 + (completedCount / totalExpected) * 30;
             setLoadingProgress(progressPercent);
-            setStatusMessage(`Wygenerowano ${completedCount}/${totalExpected} wizji...`);
+            setStatusMessage({ pl: `Wygenerowano ${completedCount}/${totalExpected} wizji...`, en: `Generated ${completedCount}/${totalExpected} visions...` });
           }
         },
         controller.signal
@@ -1288,7 +1293,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       // Step 4: Process results
       setLoadingProgress(85);
-      setStatusMessage("Finalizuję obrazy...");
+      setStatusMessage({ pl: "Finalizuję obrazy...", en: "Finalizing images..." });
       setEstimatedTime(10);
       
       console.log("[6-Image Matrix] Generation response:", {
@@ -1298,7 +1303,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       });
       
       if (generationResponse.successful_count === 0) {
-        setError("Wszystkie generacje zakończyły się niepowodzeniem.");
+        setError(t({ pl: "Wszystkie generacje zakończyły się niepowodzeniem.", en: "All generations failed." }));
         if (jobId) await endParticipantGeneration(jobId, { status: 'error', latency_ms: Date.now() - matrixGenerationStartTime, error_message: 'All generations failed' });
         return;
       }
@@ -1345,7 +1350,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       if (newMatrixImages.length === 0) {
         console.error("[6-Image Matrix] ERROR: No images to display!");
-        setError("Nie udało się wygenerować żadnych obrazów.");
+        setError(t({ pl: "Nie udało się wygenerować żadnych obrazów.", en: "Failed to generate any images." }));
         return;
       }
       
@@ -1376,7 +1381,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Complete loading
       setLoadingProgress(100);
       setEstimatedTime(0);
-      setStatusMessage("Gotowe! Wybierz swoje ulubione wnętrze.");
+      setStatusMessage({ pl: "Gotowe! Wybierz swoje ulubione wnętrze.", en: "Ready! Choose your favorite interior." });
       
       // Save to session and Supabase
       try {
@@ -1493,10 +1498,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Check if it was an abort
       if (err.name === 'AbortError' || err.message === 'Generation cancelled') {
         console.log('[6-Image Matrix] Generation was cancelled by user');
-        setStatusMessage("Generacja została anulowana.");
+        setStatusMessage({ pl: "Generacja została anulowana.", en: "Generation was cancelled." });
       } else {
         console.error('[6-Image Matrix] Generation failed:', err);
-        setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas generacji.');
+        setError(err instanceof Error ? err.message : t({ pl: 'Wystąpił nieznany błąd podczas generacji.', en: 'An unknown error occurred during generation.' }));
       }
     } finally {
       // Always cleanup
@@ -1568,7 +1573,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       console.log('Image upscaled successfully');
     } catch (err: any) {
       console.error('Error upscaling image:', err);
-      setError(err.message || 'Nie udało się upscalować obrazu.');
+      setError(err.message || t({ pl: 'Nie udało się upscalować obrazu.', en: 'Failed to upscale image.' }));
     } finally {
       setIsUpscaling(false);
     }
@@ -1700,7 +1705,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     } catch (error) {
       console.error('Failed to generate IDA comment:', error);
       // Fallback comment
-      setIdaComment('Świetnie! To wygenerowane wnętrze wygląda naprawdę fantastycznie!');
+      setIdaComment(t({ pl: 'Świetnie! To wygenerowane wnętrze wygląda naprawdę fantastycznie!', en: 'Great! This generated interior looks really fantastic!' }));
     } finally {
       setIsGeneratingComment(false);
     }
@@ -1754,8 +1759,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       }
       
       if (!hasCredits) {
-        setError('Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jedną generację.');
-        setStatusMessage('Brak kredytów');
+        setError(t({ pl: 'Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jedną generację.', en: 'You do not have enough credits. You need 10 credits for one generation.' }));
+        setStatusMessage({ pl: 'Brak kredytów', en: 'No credits' });
         return;
       }
     }
@@ -1776,8 +1781,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       console.error("Dostępne klucze w sessionData:", Object.keys(typedSessionData || {}));
       console.error("Typ roomImage:", typeof typedSessionData?.roomImage);
       console.error("Wartość roomImage (pierwsze 100 znaków):", typedSessionData?.roomImage?.substring(0, 100));
-      setError("Nie można rozpocząć generowania, ponieważ w sesji brakuje zdjęcia Twojego pokoju.");
-      setStatusMessage("Błąd danych wejściowych.");
+      setError(t({ pl: "Nie można rozpocząć generowania, ponieważ w sesji brakuje zdjęcia Twojego pokoju.", en: "Cannot start generation because your room photo is missing from the session." }));
+      setStatusMessage({ pl: "Błąd danych wejściowych.", en: "Input data error." });
       return;
     }
 
@@ -1785,7 +1790,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     let processedRoomImage = typedSessionData.roomImage;
     if (!typedSessionData.roomImageEmpty) {
       console.log("[Legacy Generation] No empty room image found, processing original image to remove furniture...");
-      setStatusMessage("Przygotowuję puste pomieszczenie (usuwam meble)...");
+      setStatusMessage({ pl: "Przygotowuję puste pomieszczenie (usuwam meble)...", en: "Preparing empty room (removing furniture)..." });
       try {
         const emptyRoomBase64 = await removeFurnitureFromImage(typedSessionData.roomImage);
         await updateSessionData({ roomImageEmpty: emptyRoomBase64 } as any);
@@ -1800,7 +1805,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       processedRoomImage = typedSessionData.roomImageEmpty;
     }
 
-    setStatusMessage("Krok 3/3: Wysyłanie zadania do AI. To może potrwać kilka minut...");
+    setStatusMessage({ pl: "Krok 3/3: Wysyłanie zadania do AI. To może potrwać kilka minut...", en: "Step 3/3: Sending task to AI. This may take a few minutes..." });
     setLoadingStage(2);
     setLoadingProgress(35);
     setEstimatedTime(60);
@@ -1830,7 +1835,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       // Update progress during generation
       setLoadingProgress(50);
-      setStatusMessage("Generowanie w toku...");
+      setStatusMessage({ pl: "Generowanie w toku...", en: "Generation in progress..." });
       setEstimatedTime(45);
       
       // Use Google for initial generation with processed (empty) room image
@@ -1848,12 +1853,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Generation completed
       setLoadingProgress(80);
       setLoadingStage(3);
-      setStatusMessage("Finalizuję obrazy...");
+      setStatusMessage({ pl: "Finalizuję obrazy...", en: "Finalizing images..." });
       setEstimatedTime(10);
 
       if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
         console.error("Otrzymano pustą odpowiedź z API po generowaniu.");
-        setError("Nie udało się wygenerować obrazów. Otrzymano pustą odpowiedź z serwera.");
+        setError(t({ pl: "Nie udało się wygenerować obrazów. Otrzymano pustą odpowiedź z serwera.", en: "Failed to generate images. Received empty response from server." }));
         return;
       }
 
@@ -1934,7 +1939,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Complete loading
       setLoadingProgress(100);
       setEstimatedTime(0);
-      setStatusMessage("Gotowe!");
+      setStatusMessage({ pl: "Gotowe!", en: "Ready!" });
       
       // Add to history
       const historyNode = {
@@ -2014,7 +2019,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     }
   };
 
-  const handleModification = async (modification: ModificationOption) => {
+  const handleModification = async (modification: ModificationOption, customPrompt?: string) => {
     if (!selectedImage) return;
     
     // Prevent multiple simultaneous modifications
@@ -2025,7 +2030,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     
     // Require user to answer interior question before allowing modifications
     if (!hasAnsweredInteriorQuestion) {
-      setError("Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed modyfikacją obrazu.");
+      setError(t({ pl: "Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed modyfikacją obrazu.", en: "Please answer the question 'Is this my interior?' before modifying the image." }));
       return;
     }
 
@@ -2034,7 +2039,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
     let modificationPrompt: string;
     
-    if (isMacro) {
+    // If custom prompt provided, use it. Otherwise build standard prompt.
+    if (customPrompt) {
+      modificationPrompt = customPrompt;
+    } else if (isMacro) {
       modificationPrompt = buildMacroPrompt(modification);
     } else {
       modificationPrompt = buildMicroPrompt(modification);
@@ -2047,7 +2055,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     setIsModifying(true);
     setLoadingStage(2);
     setLoadingProgress(40);
-    setStatusMessage(`Modyfikuję obraz: ${modification.label}...`);
+    setStatusMessage({ pl: `Modyfikuję obraz: ${t(modification.label)}...`, en: `Modifying image: ${t(modification.label)}...` });
     setEstimatedTime(30);
     setIdaComment(null); // Reset comment for new generation
 
@@ -2060,16 +2068,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           prompt: modificationPrompt,
           parameters,
           has_base_image: true,
-          modification_label: modification.label,
+          modification_label: t(modification.label),
         });
       }
       // #region prompt debug
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:start',message:'Starting modification with Google API',data:{modificationLabel:modification.label,isMacro,modificationPrompt,hasBaseImage:!!baseImageSource,baseImageLength:baseImageSource?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:start',message:'Starting modification with Google API',data:{modificationLabel:t(modification.label),isMacro,modificationPrompt,hasBaseImage:!!baseImageSource,baseImageLength:baseImageSource?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
       // #endregion
 
       // Update progress during API call
       setLoadingProgress(60);
-      setStatusMessage(`Przetwarzam modyfikację: ${modification.label}...`);
+      setStatusMessage({ pl: `Przetwarzam modyfikację: ${t(modification.label)}...`, en: `Processing modification: ${t(modification.label)}...` });
       
       // Use Google API for modifications (instead of Modal/FLUX)
       const response = await generateSixImagesParallelWithGoogle({
@@ -2084,7 +2092,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       // Update progress after API response
       setLoadingProgress(85);
-      setStatusMessage("Finalizuję zmodyfikowany obraz...");
+      setStatusMessage({ pl: "Finalizuję zmodyfikowany obraz...", en: "Finalizing modified image..." });
 
       // #region prompt debug
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:response',message:'Modification response received',data:{hasResponse:!!response,hasImages:!!response?.results,imagesCount:response?.results?.length||0,successfulCount:response?.successful_count,failedCount:response?.failed_count},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
@@ -2096,18 +2104,18 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         setIsGenerating(false);
         setIsModifying(false);
         setLastFailedModification(modification);
-        setError("Nie udało się zmodyfikować obrazu. Brak odpowiedzi z serwera.");
+        setError(t({ pl: "Nie udało się zmodyfikować obrazu. Brak odpowiedzi z serwera.", en: "Failed to modify image. No response from server." }));
         return;
       }
 
       // Check if all results failed
       if (response.failed_count > 0 && response.successful_count === 0) {
         console.error("[Modification] All generation attempts failed:", response.results);
-        const errorMessage = response.results.find(r => r.error)?.error || "Nieznany błąd";
+        const errorMessage = response.results.find(r => r.error)?.error || t({ pl: "Nieznany błąd", en: "Unknown error" });
         setIsGenerating(false);
         setIsModifying(false);
         setLastFailedModification(modification);
-        setError(`Nie udało się zmodyfikować obrazu: ${errorMessage}`);
+        setError(t({ pl: `Nie udało się zmodyfikować obrazu: ${errorMessage}`, en: `Failed to modify image: ${errorMessage}` }));
         return;
       }
 
@@ -2117,7 +2125,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         setIsGenerating(false);
         setIsModifying(false);
         setLastFailedModification(modification);
-        setError("Nie udało się zmodyfikować obrazu. Otrzymano pustą odpowiedź z serwera.");
+        setError(t({ pl: "Nie udało się zmodyfikować obrazu. Otrzymano pustą odpowiedź z serwera.", en: "Failed to modify image. Received empty response from server." }));
         return;
       }
 
@@ -2128,7 +2136,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         setIsGenerating(false);
         setIsModifying(false);
         setLastFailedModification(modification);
-        setError("Nie udało się zmodyfikować obrazu. Wszystkie próby zakończyły się niepowodzeniem.");
+        setError(t({ pl: "Nie udało się zmodyfikować obrazu. Wszystkie próby zakończyły się niepowodzeniem.", en: "Failed to modify image. All attempts failed." }));
         return;
       }
 
@@ -2151,7 +2159,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         provider: 'google' as const,
         parameters: { 
           modificationType: isMacro ? 'macro' : 'micro',
-          modifications: [modification.label],
+          modifications: [t(modification.label)],
           iterationCount: generationCount,
           usedOriginal: false,
           parentImageId: selectedImage.id // Track which image this modification is based on
@@ -2213,7 +2221,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Complete modification
       setLoadingProgress(100);
       setLoadingStage(3);
-      setStatusMessage("Modyfikacja zakończona!");
+      setStatusMessage({ pl: "Modyfikacja zakończona!", en: "Modification completed!" });
       setEstimatedTime(0);
       setIsGenerating(false);
       setIsModifying(false);
@@ -2222,7 +2230,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       const historyNode = {
         id: newImage.id,
         type: isMacro ? ('macro' as const) : ('micro' as const),
-        label: modification.label,
+        label: t(modification.label),
         timestamp: Date.now(),
         imageUrl: newImage.url,
       };
@@ -2238,7 +2246,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             images: 1,
             timestamp: Date.now(),
             type: isMacro ? 'macro' : 'micro',
-            modification: modification.label,
+            modification: t(modification.label),
             iterationCount: generationCount,
             usedOriginal: false
           },
@@ -2260,7 +2268,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       console.error('Modification failed:', err);
       setIsGenerating(false);
       setIsModifying(false);
-      setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas modyfikacji.');
+      setError(err instanceof Error ? err.message : t({ pl: 'Wystąpił nieznany błąd podczas modyfikacji.', en: 'An unknown error occurred during modification.' }));
       try {
         const userHash = (sessionData as any).userHash;
         if (userHash) {
@@ -2269,7 +2277,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             prompt: 'n/a',
             parameters: getOptimalParameters(modification.category === 'macro' ? 'macro' : 'micro', generationCount),
             has_base_image: true,
-            modification_label: modification.label,
+            modification_label: t(modification.label),
           });
           if (jobId) await endParticipantGeneration(jobId, { status: 'error', latency_ms: 0, error_message: String(err) });
         }
@@ -2282,7 +2290,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     
     // Require user to answer interior question before allowing furniture removal
     if (!hasAnsweredInteriorQuestion) {
-      setError("Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed usunięciem mebli.");
+      setError(t({ pl: "Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed usunięciem mebli.", en: "Please answer the question 'Is this my interior?' before removing furniture." }));
       return;
     }
     
@@ -2311,7 +2319,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     // Set loading state for removal
     setLoadingStage(2);
     setLoadingProgress(30);
-    setStatusMessage("Usuwam meble (AI)...");
+    setStatusMessage({ pl: "Usuwam meble (AI)...", en: "Removing furniture (AI)..." });
     setEstimatedTime(25);
     setIsModifying(true);
 
@@ -2390,10 +2398,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
       // Complete removal
       setLoadingProgress(100);
-      setStatusMessage("Meble zostały usunięte!");
+      setStatusMessage({ pl: "Meble zostały usunięte!", en: "Furniture has been removed!" });
     } catch (err) {
       console.error('Remove furniture failed:', err);
-      setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas usuwania mebli.');
+      setError(err instanceof Error ? err.message : t({ pl: 'Wystąpił błąd podczas usuwania mebli.', en: 'An error occurred while removing furniture.' }));
     } finally {
       setIsModifying(false);
     }
@@ -2444,6 +2452,28 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     setShowModifications(false);
   };
 
+  const handleCustomModification = async () => {
+    if (!customModificationText.trim() || !selectedImage) return;
+    
+    // Create a temporary modification object for custom text
+    const customMod: ModificationOption = {
+      id: 'custom_text',
+      label: customModificationText.trim(),
+      icon: null,
+      category: 'micro' // Use 'micro' parameters for better fidelity to original
+    };
+
+    const currentStyle = sessionData?.roomAnalysis?.style || selectedImage?.parameters?.style || 'modern';
+    
+    // Construct prompt with system instruction to preserve room structure
+    const modificationPrompt = `SYSTEM INSTRUCTION: Image-to-image modification. KEEP: walls, windows, doors, furniture layout, camera angle - IDENTICAL. CHANGE: ${customModificationText.trim()}. Apply this change while maintaining exact furniture positions and room structure where possible. Make sure the change looks natural in ${currentStyle} style.`;
+
+    await handleModification(customMod, modificationPrompt);
+    
+    // Clear input after submission
+    setCustomModificationText('');
+  };
+
   const buildMacroPrompt = (modification: ModificationOption) => {
     const stylePrompts = {
       scandinavian: "Replace ALL furniture and accessories with Scandinavian style: white walls, light oak wooden floors, cozy beige sofa with cream throw pillows, minimalist coffee table, large windows with natural light, hygge atmosphere, neutral color palette of whites and warm grays, simple geometric patterns, potted green plants, clean lines, functional furniture, peaceful and bright space",
@@ -2479,7 +2509,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       change_flooring: `SYSTEM INSTRUCTION: Image-to-image floor modification. KEEP: walls, windows, doors, furniture, layout, camera angle - IDENTICAL. CHANGE: REPAINT floor material to different texture or pattern. Replace existing flooring with new material (wood, tile, carpet, etc.) while keeping everything else exactly the same. Maintain exact furniture positions and room structure.`
     };
     
-    return microPrompts[modification.id as keyof typeof microPrompts] || `${modification.label} in ${currentStyle} style`;
+    return microPrompts[modification.id as keyof typeof microPrompts] || `${t(modification.label)} in ${currentStyle} style`;
   };
 
   const buildOptimizedPrompt = (type: 'initial' | 'micro' | 'macro', modification?: ModificationOption) => {
@@ -2527,10 +2557,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         
         // Show feedback based on rating
         if (value === 1) {
-          setFeedbackMessage("Rozumiem, to zupełnie inne pomieszczenie. Spróbujmy zmodyfikować obraz aby był bliższy Twojemu wnętrzu.");
+          setFeedbackMessage(t({ pl: "Rozumiem, to zupełnie inne pomieszczenie. Spróbujmy zmodyfikować obraz aby był bliższy Twojemu wnętrzu.", en: "I understand, this is a completely different room. Let's try to modify the image to be closer to your interior." }));
           setFeedbackType('negative');
         } else if (value === 3) {
-          setFeedbackMessage("Świetnie! Widzę podobieństwa. Możemy to jeszcze dopracować.");
+          setFeedbackMessage(t({ pl: "Świetnie! Widzę podobieństwa. Możemy to jeszcze dopracować.", en: "Great! I see similarities. We can still refine this." }));
           setFeedbackType('neutral');
         } else if (value === 5) {
           setFeedbackMessage("Doskonale! Udało nam się odtworzyć Twoje wnętrze. Teraz oceń szczegóły.");
@@ -2551,13 +2581,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           const avgRating = updatedRatings.aesthetic_match;
           
           if (avgRating >= 6) {
-            setFeedbackMessage("Świetny wybór! Ten obraz ma doskonałe oceny. Możesz go zapisać lub spróbować drobnych modyfikacji.");
+            setFeedbackMessage(t({ pl: "Świetny wybór! Ten obraz ma doskonałe oceny. Możesz go zapisać lub spróbować drobnych modyfikacji.", en: "Great choice! This image has excellent ratings. You can save it or try minor modifications." }));
             setFeedbackType('positive');
           } else if (avgRating >= 4) {
-            setFeedbackMessage("Dobra ocena! Możemy jeszcze popracować nad szczegółami.");
+            setFeedbackMessage(t({ pl: "Dobra ocena! Możemy jeszcze popracować nad szczegółami.", en: "Good rating! We can still work on the details." }));
             setFeedbackType('neutral');
           } else {
-            setFeedbackMessage("Rozumiem, spróbujmy czegoś innego. Wybierz modyfikację makro dla zupełnie nowego kierunku.");
+            setFeedbackMessage(t({ pl: "Rozumiem, spróbujmy czegoś innego. Wybierz modyfikację makro dla zupełnie nowego kierunku.", en: "I understand, let's try something else. Choose a macro modification for a completely new direction." }));
             setFeedbackType('negative');
           }
           
@@ -2628,7 +2658,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             <div className="flex items-center justify-center py-12">
               <LoadingProgress
                 currentStage={loadingStage}
-                message={statusMessage}
+                message={t(statusMessage)}
                 progress={loadingProgress}
                 estimatedTimeRemaining={estimatedTime}
                 onCancel={isLoading ? () => {
@@ -2982,12 +3012,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     {isUpscaling ? (
                       <>
                         <RefreshCw size={20} className="animate-spin" />
-                        <span>Przetwarzanie wybranej wizji...</span>
+                        <span>{t({ pl: "Przetwarzanie wybranej wizji...", en: "Processing selected vision..." })}</span>
                       </>
                     ) : (
                       <>
                         <CheckCircle2 size={20} />
-                        <span>Wybieram tę wizję</span>
+                        <span>{t({ pl: "Wybieram tę wizję", en: "I choose this vision" })}</span>
                       </>
                     )}
                   </GlassButton>
@@ -3000,8 +3030,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   <div className="flex items-center gap-3">
                     <RefreshCw size={24} className="animate-spin text-gold" />
                     <div>
-                      <p className="font-semibold text-graphite">Przetwarzanie wybranej wizji...</p>
-                      <p className="text-sm text-silver-dark">Zwiększanie rozdzielczości do pełnej jakości</p>
+                      <p className="font-semibold text-graphite">{t({ pl: "Przetwarzanie wybranej wizji...", en: "Processing selected vision..." })}</p>
+                      <p className="text-sm text-silver-dark">{t({ pl: "Zwiększanie rozdzielczości do pełnej jakości", en: "Increasing resolution to full quality" })}</p>
                     </div>
                   </div>
                 </GlassCard>
@@ -3018,7 +3048,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
                     <Image 
                       src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url} 
-                      alt={showOriginalRoomPhoto ? "Oryginalne zdjęcie pokoju" : "Wybrane wnętrze"} 
+                      alt={showOriginalRoomPhoto ? t({ pl: "Oryginalne zdjęcie pokoju", en: "Original room photo" }) : t({ pl: "Wybrane wnętrze", en: "Selected interior" })} 
                       fill 
                       className="object-cover" 
                     />
@@ -3080,7 +3110,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               animate={{ opacity: 1, y: 0 }}
                               className="text-white font-modern text-lg font-semibold"
                             >
-                              {statusMessage}
+                              {t(statusMessage)}
                             </motion.p>
 
                             {/* Progress bar */}
@@ -3112,7 +3142,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               <span className="font-modern">{Math.round(loadingProgress)}%</span>
                               {estimatedTime !== undefined && estimatedTime > 0 && (
                                 <span className="font-modern">
-                                  ~{estimatedTime}s pozostało
+                                  {t({ pl: `~${estimatedTime}s pozostało`, en: `~${estimatedTime}s remaining` })}
                                 </span>
                               )}
                             </div>
@@ -3147,7 +3177,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         className="flex items-center gap-2 px-3 py-1.5 bg-gold/90 backdrop-blur-sm rounded-full"
                       >
                         <CheckCircle2 size={16} className="text-white" />
-                        <span className="text-sm font-medium text-white">Twój wybór</span>
+                        <span className="text-sm font-medium text-white">{t({ pl: "Twój wybór", en: "Your choice" })}</span>
                       </motion.div>
                     </div>
                     <button
@@ -3169,12 +3199,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                           {isUpscaling ? (
                             <>
                               <RefreshCw size={16} className="animate-spin" />
-                              <span>Upscalowanie...</span>
+                              <span>{t({ pl: "Upscalowanie...", en: "Upscaling..." })}</span>
                             </>
                           ) : (
                             <>
                               <ArrowRight size={16} />
-                              <span>Upscaluj do pełnej rozdzielczości</span>
+                              <span>{t({ pl: "Upscaluj do pełnej rozdzielczości", en: "Upscale to full resolution" })}</span>
                             </>
                           )}
                         </GlassButton>
@@ -3197,11 +3227,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         transition={{ duration: 0.5, ease: "easeOut" }}
                       >
                         <div className="space-y-6">
-                          <h4 className="font-semibold text-graphite text-lg">Czy to Twoje wnętrze?</h4>
+                          <h4 className="font-semibold text-graphite text-lg">{t({ pl: "Czy to Twoje wnętrze?", en: "Is this your interior?" })}</h4>
                           <div className="border-b border-gray-200/50 pb-4 last:border-b-0">
                             <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
-                              <span>To nie moje wnętrze (1)</span>
-                              <span>To moje wnętrze (5)</span>
+                              <span>{t({ pl: "To nie moje wnętrze (1)", en: "Not my interior (1)" })}</span>
+                              <span>{t({ pl: "To moje wnętrze (5)", en: "My interior (5)" })}</span>
                             </div>
 
                             <GlassSlider
@@ -3233,23 +3263,23 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         transition={{ duration: 0.8, ease: "easeInOut" }}
                         className="space-y-6"
                       >
-                        <h4 className="font-semibold text-graphite text-lg">Oceń to wnętrze:</h4>
+                        <h4 className="font-semibold text-graphite text-lg">{t({ pl: "Oceń to wnętrze:", en: "Rate this interior:" })}</h4>
                         {[
                           {
                             key: 'aesthetic_match',
-                            left: 'Nietrafiona',
-                            mid: 'Zgodność z gustem',
-                            right: 'Idealna',
+                            left: { pl: 'Nietrafiona', en: 'Missed' },
+                            mid: { pl: 'Zgodność z gustem', en: 'Taste match' },
+                            right: { pl: 'Idealna', en: 'Perfect' },
                           },
                         ].map(({ key, left, mid, right }) => (
                           <div key={key} className="border-b border-gray-200/50 pb-4 last:border-b-0">
                             <p className="text-base text-graphite font-modern leading-relaxed mb-3">
-                              {mid}
+                              {t(mid)}
                             </p>
 
                             <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
-                              <span>{left} (1)</span>
-                              <span>{right} (7)</span>
+                              <span>{t(left)} (1)</span>
+                              <span>{t(right)} (7)</span>
                             </div>
 
                             <GlassSlider
@@ -3275,16 +3305,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
-                    className="flex justify-center space-x-3"
+                    className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3"
                   >
-                    <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                    <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="w-full sm:flex-1 h-12 text-xs sm:text-sm">
                       <Settings size={16} className="mr-2 flex-shrink-0" />
-                      <span className="truncate">{showModifications ? 'Ukryj opcje' : 'Modyfikuj'}</span>
+                      <span className="truncate">{showModifications ? t({ pl: 'Ukryj opcje', en: 'Hide options' }) : t({ pl: 'Modyfikuj', en: 'Modify' })}</span>
                     </GlassButton>
 
-                    <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                    <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="w-full sm:flex-1 h-12 text-xs sm:text-sm">
                       <Home size={16} className="mr-2 flex-shrink-0" />
-                      <span className="truncate">Usuń meble</span>
+                      <span className="truncate">{t({ pl: 'Usuń meble', en: 'Remove furniture' })}</span>
                     </GlassButton>
 
                     <GlassButton
@@ -3296,10 +3326,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         }
                       }}
                       variant="secondary"
-                      className="flex-1 h-12 text-xs sm:text-sm"
+                      className="w-full sm:flex-1 h-12 text-xs sm:text-sm"
                     >
                       <Eye size={16} className="mr-2 flex-shrink-0" />
-                      <span className="truncate">{showOriginalRoomPhoto ? 'Pokaż wybraną wizję' : 'Pokaż oryginalne'}</span>
+                      <span className="truncate">{showOriginalRoomPhoto ? t({ pl: 'Pokaż wybraną wizję', en: 'Show selected vision' }) : t({ pl: 'Pokaż oryginalne', en: 'Show original' })}</span>
                     </GlassButton>
                   </motion.div>
 
@@ -3317,10 +3347,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             <div>
                               <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
                                 <Wand2 size={20} className="mr-3" />
-                                Drobne modyfikacje
+                                {t({ pl: 'Drobne modyfikacje', en: 'Minor modifications' })}
                               </h4>
                               <p className="text-sm text-silver-dark mb-4">
-                                Subtelne zmiany w kolorach i detalach
+                                {t({ pl: 'Subtelne zmiany w kolorach i detalach', en: 'Subtle changes in colors and details' })}
                               </p>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {MICRO_MODIFICATIONS.map((mod) => (
@@ -3332,7 +3362,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                     className="justify-start text-xs sm:text-sm h-12 px-3 overflow-hidden"
                                     disabled={isLoading}
                                   >
-                                    <span className="line-clamp-2 text-center w-full">{mod.label}</span>
+                                    <span className="line-clamp-2 text-center w-full">{t(mod.label)}</span>
                                   </GlassButton>
                                 ))}
                               </div>
@@ -3341,10 +3371,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             <div>
                               <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
                                 <RefreshCw size={20} className="mr-3" />
-                                Zupełnie inny kierunek
+                                {t({ pl: 'Zupełnie inny kierunek', en: 'Completely different direction' })}
                               </h4>
                               <p className="text-sm text-silver-dark mb-4">
-                                Zmiana całego stylu mebli i aranżacji
+                                {t({ pl: 'Zmiana całego stylu mebli i aranżacji', en: 'Change the entire style of furniture and arrangement' })}
                               </p>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {MACRO_MODIFICATIONS.map((mod) => (
@@ -3356,10 +3386,43 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                     className="justify-start text-xs sm:text-sm h-12 px-3 overflow-hidden"
                                     disabled={isLoading}
                                   >
-                                    <span className="line-clamp-2 text-center w-full">{mod.label}</span>
+                                    <span className="line-clamp-2 text-center w-full">{t(mod.label)}</span>
                                   </GlassButton>
                                 ))}
                               </div>
+                            </div>
+                          </div>
+                          
+                          {/* Custom Modification Section */}
+                          <div className="mt-8 pt-8 border-t border-silver/30">
+                            <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
+                              <MessageSquare size={20} className="mr-3 text-gold" />
+                              {t({ pl: 'Własna modyfikacja', en: 'Custom modification' })}
+                            </h4>
+                            <p className="text-sm text-silver-dark mb-4">
+                              {t({ pl: 'Opisz co dokładnie chciałbyś zmienić na obrazku', en: 'Describe exactly what you would like to change in the image' })}
+                            </p>
+                            <div className="flex flex-col sm:flex-row gap-3">
+                              <input
+                                type="text"
+                                value={customModificationText}
+                                onChange={(e) => setCustomModificationText(e.target.value)}
+                                placeholder={t({ pl: "np. dodaj rośliny doniczkowe, zmień kolor zasłon na granatowy...", en: "e.g. add potted plants, change curtain color to navy blue..." })}
+                                className="flex-1 bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gold/40 placeholder:text-silver-dark/50 text-graphite transition-all hover:bg-white/50"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && customModificationText.trim()) {
+                                    handleCustomModification();
+                                  }
+                                }}
+                                disabled={isLoading || isGenerating}
+                              />
+                              <GlassButton 
+                                onClick={handleCustomModification}
+                                disabled={isLoading || isGenerating || !customModificationText.trim()}
+                                className="px-8"
+                              >
+                                {t({ pl: 'Zmień', en: 'Change' })}
+                              </GlassButton>
                             </div>
                           </div>
                         </GlassCard>
@@ -3397,7 +3460,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     onClick={handleContinue}
                     className="px-8 py-3 flex items-center gap-2 whitespace-normal break-words"
                   >
-                    <span>Kontynuuj</span>
+                    <span>{t({ pl: "Kontynuuj", en: "Continue" })}</span>
                     <ArrowRight size={18} />
                   </GlassButton>
                 </motion.div>
@@ -3474,9 +3537,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               transition={{ duration: 0.3 }}
                             >
                               <GlassCard variant="highlighted" className="p-6">
-                                <h4 className="font-semibold text-graphite mb-3 text-lg">Czy to Twoje wnętrze?</h4>
+                                <h4 className="font-semibold text-graphite mb-3 text-lg">{t({ pl: "Czy to Twoje wnętrze?", en: "Is this your interior?" })}</h4>
                                 <p className="text-sm text-silver-dark mb-4">
-                                  Oceń, czy wygenerowany obraz rzeczywiście przedstawia Twoje wnętrze, czy jest to zupełnie inne pomieszczenie.
+                                  {t({ pl: "Oceń, czy wygenerowany obraz rzeczywiście przedstawia Twoje wnętrze, czy jest to zupełnie inne pomieszczenie.", en: "Rate whether the generated image actually represents your interior, or if it is a completely different room." })}
                                 </p>
                                 <div className="flex flex-col sm:flex-row gap-3">
                                   <button
@@ -3490,7 +3553,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                         : 'bg-white/10 border border-white/30 text-graphite hover:bg-white/20 hover:border-white/40 backdrop-blur-sm'
                                     }`}
                                   >
-                                    To nie moje wnętrze
+                                    {t({ pl: "To nie moje wnętrze", en: "Not my interior" })}
                                   </button>
                                   <button
                                     onClick={() => {
@@ -3503,7 +3566,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                         : 'bg-white/10 border border-white/30 text-graphite hover:bg-white/20 hover:border-white/40 backdrop-blur-sm'
                                     }`}
                                   >
-                                    Częściowo podobne
+                                    {t({ pl: "Częściowo podobne", en: "Partially similar" })}
                                   </button>
                                   <button
                                     onClick={() => {
@@ -3516,7 +3579,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                         : 'bg-white/10 border border-white/30 text-graphite hover:bg-white/20 hover:border-white/40 backdrop-blur-sm'
                                     }`}
                                   >
-                                    To moje wnętrze
+                                    {t({ pl: "To moje wnętrze", en: "My interior" })}
                                   </button>
                                 </div>
                               </GlassCard>
@@ -3572,16 +3635,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.5, delay: 0.2 }}
-                            className="flex space-x-3"
+                            className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3"
                           >
-                            <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                            <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="w-full sm:flex-1 h-12 text-xs sm:text-sm">
                               <Settings size={16} className="mr-2 flex-shrink-0" />
-                              <span className="truncate">{showModifications ? 'Ukryj opcje' : 'Modyfikuj'}</span>
+                              <span className="truncate">{showModifications ? t({ pl: 'Ukryj opcje', en: 'Hide options' }) : t({ pl: 'Modyfikuj', en: 'Modify' })}</span>
                             </GlassButton>
 
-                            <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="flex-1 h-12 text-xs sm:text-sm">
+                            <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="w-full sm:flex-1 h-12 text-xs sm:text-sm">
                               <Home size={16} className="mr-2 flex-shrink-0" />
-                              <span className="truncate">Usuń meble</span>
+                              <span className="truncate">{t({ pl: 'Usuń meble', en: 'Remove furniture' })}</span>
                             </GlassButton>
 
                             <GlassButton
@@ -3593,10 +3656,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                 }
                               }}
                               variant="secondary"
-                              className="flex-1 h-12 text-xs sm:text-sm"
+                              className="w-full sm:flex-1 h-12 text-xs sm:text-sm"
                             >
                               <Eye size={16} className="mr-2 flex-shrink-0" />
-                              <span className="truncate">{showOriginalRoomPhoto ? 'Pokaż wybraną wizję' : 'Pokaż oryginalne'}</span>
+                              <span className="truncate">{showOriginalRoomPhoto ? t({ pl: 'Pokaż wybraną wizję', en: 'Show selected vision' }) : t({ pl: 'Pokaż oryginalne', en: 'Show original' })}</span>
                             </GlassButton>
 
                             {/* (removed) old "Oryginalny" button that overwrote selectedImage and broke UI */}
@@ -3636,7 +3699,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                 className="justify-start text-sm h-12 px-4"
                                 disabled={isLoading}
                               >
-                                {mod.label}
+                                {t(mod.label)}
                               </GlassButton>
                             ))}
                           </div>
@@ -3660,10 +3723,43 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                 className="justify-start text-sm h-12 px-4"
                                 disabled={isLoading}
                               >
-                                {mod.label}
+                                {t(mod.label)}
                               </GlassButton>
                             ))}
                           </div>
+                        </div>
+                      </div>
+                      
+                      {/* Custom Modification Section */}
+                      <div className="mt-8 pt-8 border-t border-silver/30">
+                        <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
+                          <MessageSquare size={20} className="mr-3 text-gold" />
+                          Własna modyfikacja
+                        </h4>
+                        <p className="text-sm text-silver-dark mb-4">
+                          Opisz co dokładnie chciałbyś zmienić na obrazku
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <input
+                            type="text"
+                            value={customModificationText}
+                            onChange={(e) => setCustomModificationText(e.target.value)}
+                            placeholder="np. dodaj rośliny doniczkowe, zmień kolor zasłon na granatowy..."
+                            className="flex-1 bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gold/40 placeholder:text-silver-dark/50 text-graphite transition-all hover:bg-white/50"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && customModificationText.trim()) {
+                                handleCustomModification();
+                              }
+                            }}
+                            disabled={isLoading || isGenerating}
+                          />
+                          <GlassButton 
+                            onClick={handleCustomModification}
+                            disabled={isLoading || isGenerating || !customModificationText.trim()}
+                            className="px-8"
+                          >
+                            Zmień
+                          </GlassButton>
                         </div>
                       </div>
                     </GlassCard>
@@ -3682,7 +3778,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       >
                         <GlassButton onClick={handleContinue} className="px-8 py-4 font-semibold whitespace-normal break-words">
                           <span className="flex items-center space-x-2">
-                            <span>Przejdź do Ankiety</span>
+                            <span>{t({ pl: "Przejdź do Ankiety", en: "Go to Survey" })}</span>
                             <ArrowRight size={20} />
                           </span>
                         </GlassButton>

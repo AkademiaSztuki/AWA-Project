@@ -5,6 +5,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { getCreditBalance, CreditBalance as CreditBalanceType } from '@/lib/credits';
 import { supabase } from '@/lib/supabase';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface CreditBalanceProps {
   userHash: string;
@@ -30,6 +31,7 @@ const PLAN_NAMES: Record<string, string> = {
 };
 
 export function CreditBalance({ userHash, className }: CreditBalanceProps) {
+  const { t } = useLanguage();
   const [balance, setBalance] = useState<CreditBalanceType | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,7 +147,7 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
       }
     } catch (error: any) {
       console.error('Error creating portal session:', error);
-      alert(`Wystąpił błąd podczas otwierania portalu zarządzania: ${error.message || 'Spróbuj ponownie.'}`);
+      alert(t({ pl: `Wystąpił błąd podczas otwierania portalu zarządzania: ${error.message || 'Spróbuj ponownie.'}`, en: `An error occurred while opening the management portal: ${error.message || 'Please try again.'}` }));
     } finally {
       setPortalLoading(false);
     }
@@ -156,7 +158,7 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
       <GlassCard className={`p-6 ${className}`}>
         <div className="flex items-center gap-3">
           <div className="w-6 h-6 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
-          <span className="text-gray-700 font-exo2">Ładowanie...</span>
+          <span className="text-gray-700 font-exo2">{t({ pl: 'Ładowanie...', en: 'Loading...' })}</span>
         </div>
       </GlassCard>
     );
@@ -179,13 +181,13 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
     <GlassCard className={`p-6 ${className}`}>
       <div className="space-y-6">
         <div>
-          <h3 className="text-lg font-exo2 font-bold text-gray-800 mb-2">Twoje kredyty</h3>
+          <h3 className="text-lg font-exo2 font-bold text-gray-800 mb-2">{t({ pl: 'Twoje kredyty', en: 'Your credits' })}</h3>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-exo2 font-bold text-gray-900">
               {totalCredits.toLocaleString()}
             </span>
             <span className="text-base text-gray-600 font-modern">
-              kredytów ({balance.generationsAvailable} generacji)
+              {t({ pl: `kredytów (${balance.generationsAvailable} generacji)`, en: `credits (${balance.generationsAvailable} generations)` })}
             </span>
           </div>
         </div>
@@ -194,7 +196,7 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
           <>
             <div className="space-y-2">
               <div className="flex justify-between text-sm text-gray-600">
-                <span className="font-modern">Wykorzystane kredyty</span>
+                <span className="font-modern">{t({ pl: 'Wykorzystane kredyty', en: 'Credits used' })}</span>
                 <span className="font-exo2 font-semibold">
                   {creditsUsed.toLocaleString()} / {creditsAllocated.toLocaleString()}
                 </span>
@@ -206,26 +208,26 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
                 />
               </div>
               <div className="text-sm text-gray-600 font-modern">
-                Pozostało: <span className="font-exo2 font-semibold">{subscriptionCredits.toLocaleString()} kredytów</span>
+                {t({ pl: 'Pozostało:', en: 'Remaining:' })} <span className="font-exo2 font-semibold">{subscriptionCredits.toLocaleString()} {t({ pl: 'kredytów', en: 'credits' })}</span>
               </div>
             </div>
 
             <div className="p-4 bg-white/5 rounded-xl border border-white/10">
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-modern">Plan:</span>
+                  <span className="text-gray-600 font-modern">{t({ pl: 'Plan:', en: 'Plan:' })}</span>
                   <span className="font-exo2 font-semibold text-gray-800">
-                    {PLAN_NAMES[subscription.plan_id] || subscription.plan_id} ({subscription.billing_period === 'monthly' ? 'Miesięczna' : 'Roczna'})
+                    {PLAN_NAMES[subscription.plan_id] || subscription.plan_id} ({subscription.billing_period === 'monthly' ? t({ pl: 'Miesięczna', en: 'Monthly' }) : t({ pl: 'Roczna', en: 'Annual' })})
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-modern">Status:</span>
+                  <span className="text-gray-600 font-modern">{t({ pl: 'Status:', en: 'Status:' })}</span>
                   <span className="font-exo2 font-semibold text-white">
-                    {subscription.status === 'active' ? 'Aktywna' : subscription.status}
+                    {subscription.status === 'active' ? t({ pl: 'Aktywna', en: 'Active' }) : subscription.status}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-modern">Okres do:</span>
+                  <span className="text-gray-600 font-modern">{t({ pl: 'Okres do:', en: 'Period until:' })}</span>
                   <span className="font-exo2 font-semibold text-gray-800">
                     {new Date(subscription.current_period_end).toLocaleDateString('pl-PL')}
                   </span>
@@ -233,7 +235,7 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
                 {subscription.cancel_at_period_end && (
                   <div className="p-2 bg-amber-500/10 border border-amber-400/30 rounded-lg">
                     <p className="text-xs text-gray-700 font-modern">
-                      Subskrypcja zostanie anulowana na koniec okresu rozliczeniowego.
+                      {t({ pl: 'Subskrypcja zostanie anulowana na koniec okresu rozliczeniowego.', en: 'Subscription will be cancelled at the end of the billing period.' })}
                     </p>
                   </div>
                 )}
@@ -246,7 +248,7 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
               variant="primary"
               className="w-full"
             >
-              {portalLoading ? 'Otwieranie...' : 'Zarządzaj subskrypcją'}
+              {portalLoading ? t({ pl: 'Otwieranie...', en: 'Opening...' }) : t({ pl: 'Zarządzaj subskrypcją', en: 'Manage subscription' })}
             </GlassButton>
           </>
         )}
@@ -256,7 +258,7 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
             {totalCredits < 10 && (
               <div className="p-3 bg-amber-500/10 border border-amber-400/30 rounded-xl">
                 <p className="text-sm text-gray-700 font-modern">
-                  Masz mniej niż 10 kredytów. Rozważ zakup subskrypcji, aby kontynuować generowanie.
+                  {t({ pl: 'Masz mniej niż 10 kredytów. Rozważ zakup subskrypcji, aby kontynuować generowanie.', en: 'You have less than 10 credits. Consider purchasing a subscription to continue generating.' })}
                 </p>
               </div>
             )}
@@ -265,7 +267,7 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
               variant="primary"
               className="w-full"
             >
-              Wybierz plan
+              {t({ pl: 'Wybierz plan', en: 'Choose plan' })}
             </GlassButton>
           </>
         )}

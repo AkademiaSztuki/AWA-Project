@@ -28,7 +28,16 @@ const exo2 = Exo_2({
 export const metadata: Metadata = {
   title: 'Aura - AI Interior Design Dialogue',
   description: 'Aplikacja badawcza do eksploracji współpracy człowieka z AI w projektowaniu wnętrz',
-  keywords: ['AI', 'Interior Design', 'Research', 'Akademia Sztuk Pięknych'],
+  keywords: ['AI', 'Interior Design', 'Research', 'Akademia Sztuk Pełnych'],
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: 'cover',
+  themeColor: '#1a1a1a', // Dopasowane do ciemnego tła projektu
 };
 
 const LANGUAGE_COOKIE = 'app_language';
@@ -73,13 +82,15 @@ export default function RootLayout({
                     <AmbientMusic volume={0.1} audioFile="/audio/ambient.mp3" />
                     
                     <GlobalProtectedRoute>
-                      <main className="relative z-10 min-h-screen w-full px-2 sm:px-4 pt-4 sm:pt-8 pb-8 sm:pb-12 md:px-8">
-                        <div className="mx-auto w-full max-w-[1600px] grid gap-4 sm:gap-6 md:gap-10 lg:grid-cols-[minmax(420px,0.3fr)_minmax(480px,0.7fr)] items-start">
+                      <main className="relative z-10 min-h-screen w-full px-1.5 sm:px-4 pt-4 sm:pt-8 pb-8 sm:pb-12 md:px-8 overflow-x-hidden">
+                        <div className="mx-auto w-full max-w-[1600px] flex flex-col lg:grid lg:gap-10 lg:grid-cols-[minmax(420px,0.3fr)_minmax(480px,0.7fr)] items-start">
                           {/* Reserved column for IDA narrator - keeps content from overlapping */}
                           <div className="hidden lg:block min-h-[720px]" aria-hidden="true" />
-                          <div className="w-full max-w-3xl lg:max-w-none lg:ml-auto space-y-2 sm:space-y-4">
+                          <div className="w-full max-w-full lg:max-w-none lg:ml-auto space-y-2 sm:space-y-4">
                             <GlassHeader />
-                            {children}
+                            <div className="w-full">
+                              {children}
+                            </div>
                           </div>
                         </div>
                       </main>

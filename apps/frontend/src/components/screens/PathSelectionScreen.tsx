@@ -59,9 +59,9 @@ export default function PathSelectionScreen() {
   const pathTexts = {
     pl: {
       title: 'Wybierz Swoją Ścieżkę',
-      subtitle: 'Zdecyduj jak chcesz doświadczyć',
+      subtitle: 'Jak chcesz współpracować z',
       ida: 'IDA',
-      subtext: '- szybko czy dogłębnie',
+      subtext: ' – ekspresowo czy szczegółowo?',
       fastCompletedTitle: 'Ukończyłeś szybką ścieżkę! 🎉',
       fastCompletedMessage: 'Chcesz głębsze doświadczenie? Wypróbuj pełną ścieżkę, która bierze pod uwagę Twoje preferencje, styl życia i potrzeby, aby stworzyć jeszcze bardziej spersonalizowane wnętrze.',
       fastTrack: 'Szybka Ścieżka',
@@ -372,8 +372,8 @@ export default function PathSelectionScreen() {
   return (
     <div className="min-h-screen flex relative">
       {/* Main content area - centered like landing page */}
-      <div className="flex-1 ml-[0px] flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8">
-        <div className="w-full max-w-4xl z-30 mb-8 sm:mb-16 md:mb-24 lg:mb-32">
+      <div className="flex-1 ml-[0px] flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 pb-48 sm:pb-64 lg:pb-8">
+        <div className="w-full max-w-4xl z-30 mb-4 sm:mb-8 md:mb-16 lg:mb-32">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

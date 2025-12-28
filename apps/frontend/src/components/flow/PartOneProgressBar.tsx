@@ -25,7 +25,28 @@ export function PartOneProgressBar({ currentPath, className = '' }: PartOneProgr
 
   return (
     <div className={`w-full ${className}`}>
-      <div className="glass-panel rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl p-5 md:p-6 shadow-2xl">
+      {/* Mobile Slim Version (Sticky) */}
+      <div className="block sm:hidden sticky top-0 z-[60] -mx-2 px-2 pb-2 bg-transparent">
+        <div className="glass-panel rounded-xl border border-white/20 bg-white/10 backdrop-blur-xl p-2 shadow-lg">
+          <div className="flex items-center justify-between mb-1.5 px-1">
+            <span className="text-[10px] font-semibold tracking-wider uppercase text-silver-dark">
+              {stepInfo.index + 1} / {PART_ONE_TOTAL_STEPS}: {stepInfo.title[language]}
+            </span>
+            <span className="text-[10px] font-nasalization text-gold">{Math.round(progress)}%</span>
+          </div>
+          <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.4 }}
+              className="h-full bg-gradient-to-r from-gold to-platinum"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Version */}
+      <div className="hidden sm:block glass-panel rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl p-5 md:p-6 shadow-2xl">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold tracking-[0.2em] uppercase text-silver-dark">

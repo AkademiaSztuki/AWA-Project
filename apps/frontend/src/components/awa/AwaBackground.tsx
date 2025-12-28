@@ -58,7 +58,7 @@ const AwaBackground: React.FC = () => {
   }
 
   return (
-    <div className="fixed inset-0 z-0 pointer-events-none w-screen h-screen">
+    <div className="fixed inset-0 z-[2] pointer-events-none w-screen h-screen">
         <Canvas
           camera={{ position: [-1.2, 0.4, 2.2], fov: 70 }}
           className="w-screen h-screen bg-transparent"

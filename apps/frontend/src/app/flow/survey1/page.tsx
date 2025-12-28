@@ -237,7 +237,7 @@ export default function Survey1Page() {
       <div className="flex-1 flex items-center justify-center p-8">
         
 
-        <div className="w-full max-w-4xl mx-auto">
+        <div className="w-full max-w-full lg:max-w-4xl mx-auto">
         <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto py-6">
             <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">{t(SUS_TEXTS.title)}</h1>
             <p className="text-base md:text-lg text-gray-700 font-modern mb-6 leading-relaxed">
@@ -268,12 +268,12 @@ export default function Survey1Page() {
               ))}
             </div>
 
-            <div className="flex flex-col md:flex-row gap-6 justify-center">
+            <div className="flex flex-col md:flex-row gap-3 sm:gap-6 justify-center items-stretch md:items-center">
               <GlassSurface
                 width={220}
                 height={56}
                 borderRadius={32}
-                className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
+                className="w-full md:w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
                 onClick={() => router.push('/flow/generate')}
                 aria-label={t(SUS_TEXTS.ariaLabels.back)}
                 style={{ opacity: 1 }}
@@ -284,7 +284,7 @@ export default function Survey1Page() {
                 width={260}
                 height={56}
                 borderRadius={32}
-                className={`cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base md:text-base font-exo2 font-bold text-white rounded-2xl text-nowrap ${!allAnswered ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                className={`w-full md:w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base md:text-base font-exo2 font-bold text-white rounded-2xl text-nowrap ${!allAnswered ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                 onClick={handleContinue}
                 aria-label={t(SUS_TEXTS.ariaLabels.next)}
                 style={{ opacity: 1 }}

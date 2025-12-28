@@ -50,18 +50,15 @@ export function ResponsiveLayoutWrapper({ children }: { children: React.ReactNod
 
   return (
     <>
-      {/* Desktop: Render all animated backgrounds */}
-      {!isMobile && (
+      {/* Backgrounds - Conditional rendering for proper layering */}
+      {!isMobile ? (
         <>
           <AwaBackground />
           <AuroraBackgroundClient />
           <AuroraBubbles />
           <ParticlesBackground />
         </>
-      )}
-      
-      {/* Mobile: Render static background image and 3D model for landing page */}
-      {isMobile && (
+      ) : (
         <>
           <MobileBackground />
           {/* Render 3D model on mobile until it explicitly finishes its exit */}

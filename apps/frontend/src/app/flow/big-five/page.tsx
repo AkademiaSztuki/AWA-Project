@@ -703,7 +703,7 @@ export default function BigFivePage() {
                 </div>
 
                 {/* Response Options */}
-                <div className="grid grid-cols-5 gap-4 max-w-2xl mx-auto">
+                <div className="grid grid-cols-5 gap-2 sm:gap-3 md:gap-4 max-w-2xl mx-auto">
                   {[1, 2, 3, 4, 5].map((value) => {
                     const isSelected = currentItem && responses[currentItem.id] === value;
                     return (
@@ -712,14 +712,14 @@ export default function BigFivePage() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleResponse(value)}
-                      className={`p-4 rounded-xl font-modern transition-all duration-300 ${
+                      className={`p-2 sm:p-3 md:p-4 rounded-xl font-modern transition-all duration-300 ${
                         isSelected
                           ? 'bg-gradient-to-br from-gold to-champagne text-white shadow-lg'
                           : 'bg-white/50 backdrop-blur-sm border border-white/60 hover:bg-white/60 text-graphite'
                       }`}
                     >
-                      <div className="text-2xl font-bold mb-1">{value}</div>
-                      <div className="text-xs">
+                      <div className="text-lg sm:text-xl md:text-2xl font-bold mb-0.5 sm:mb-1">{value}</div>
+                      <div className="text-[10px] sm:text-xs leading-tight break-words">
                         {value === 1 ? t("Zdecydowanie nie", "Strongly disagree") :
                          value === 2 ? t("Nie", "Disagree") :
                          value === 3 ? t("Neutralnie", "Neutral") :
@@ -733,22 +733,22 @@ export default function BigFivePage() {
               </div>
 
               {/* Navigation */}
-              <div className="flex justify-between mt-auto pt-6">
-                <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-auto pt-6">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-1">
                   <GlassButton
                     onClick={handlePrevious}
                     disabled={currentQuestion === 0}
                     variant="secondary"
-                    className="px-6 py-3"
+                    className="px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base"
                   >
-                    <ArrowLeft size={18} className="mr-2" />
+                    <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px] mr-1.5 sm:mr-2" />
                     {t("Wstecz", "Back")}
                   </GlassButton>
 
                   <GlassButton
                     onClick={handleSkip}
                     variant="secondary"
-                    className="px-6 py-3"
+                    className="px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base"
                   >
                     {t("Pomiń test", "Skip test")}
                   </GlassButton>
@@ -757,10 +757,10 @@ export default function BigFivePage() {
                 {isAnswered && currentQuestion < IPIP_120_ITEMS.length - 1 && (
                   <GlassButton
                     onClick={handleNext}
-                    className="px-6 py-3"
+                    className="px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base"
                   >
                     {t("Dalej", "Next")}
-                    <ArrowRight size={18} className="ml-2" />
+                    <ArrowRight size={16} className="sm:w-[18px] sm:h-[18px] ml-1.5 sm:ml-2" />
                   </GlassButton>
                 )}
               </div>

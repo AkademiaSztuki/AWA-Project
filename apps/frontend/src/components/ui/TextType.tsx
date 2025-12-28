@@ -80,6 +80,21 @@ const TextType = ({
   useEffect(() => {
     const textChanged = JSON.stringify(text) !== JSON.stringify(prevTextRef.current);
     if (textChanged) {
+      // Sprawdź czy nowy tekst jest rozszerzeniem poprzedniego
+      const prevStr = Array.isArray(prevTextRef.current) ? prevTextRef.current.join('') : String(prevTextRef.current ?? '');
+      const nextStr = Array.isArray(text) ? text.join('') : String(text ?? '');
+      
+      const isExtension = prevStr && nextStr.startsWith(prevStr) && nextStr.length > prevStr.length;
+      
+      if (isExtension) {
+        // #region agent log
+        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H6',location:'TextType.tsx:text-extended',message:'TextType input text extended -> NOT resetting',data:{instanceId:instanceIdRef.current,prevLen:prevStr.length,nextLen:nextStr.length,currentIndex:currentIndexRef.current},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        // Nie resetujemy! Pozwalamy animacji kontynuować od obecnego miejsca
+        prevTextRef.current = text;
+        return;
+      }
+
       // #region agent log
       const prevWasArray = Array.isArray(prevTextRef.current);
       const nextIsArray = Array.isArray(text);

@@ -384,53 +384,53 @@ export function RoomSetup({ householdId }: { householdId: string }) {
       
       {/* Dialog IDA na dole - dynamiczny dla każdego kroku, pokazuje komentarz IDA jeśli dostępny */}
       {(() => {
-        // Wybierz komentarz w zależności od języka:
-        // - PL: human_comment (polski) lub comment (angielski) jako fallback
-        // - EN: comment (angielski) lub human_comment (polski) jako fallback
         const roomAnalysis = (sessionData as any)?.roomAnalysis;
         const roomComment = language === 'pl' 
           ? (roomAnalysis?.human_comment || roomAnalysis?.comment)
           : (roomAnalysis?.comment || roomAnalysis?.human_comment);
         
-        // Add furniture removal info after the room comment
         const hasProcessedImage = (sessionData as any)?.roomImageEmpty;
-        let fullMessage = roomComment;
+        const hasPhotos = roomData.photos && roomData.photos.length > 0;
         
-        if (roomComment) {
-          if (hasProcessedImage) {
-            const furnitureRemovalInfo = language === 'pl'
-              ? " Usunąłeś meble ze zdjęcia - to świetny pomysł! Dzięki temu generowane wizualizacje nie będą zbyt mocno trzymać się obecnego układu mebli."
-              : " You removed furniture from the photo - great idea! This will help generated visualizations not stick too closely to the current furniture layout.";
-            fullMessage = roomComment + furnitureRemovalInfo;
-          } else if ((sessionData as any)?.roomAnalysis) {
-            // Suggest furniture removal if not done yet and analysis is available
-            const suggestion = language === 'pl'
-              ? " Sugestia: Jeśli chcesz, możesz usunąć meble ze zdjęcia przyciskiem poniżej. Pomoże to IDA stworzyć zupełnie nową aranżację bez sugerowania się obecnym układem."
-              : " Pro Tip: You can remove furniture using the button below. This helps IDA create a completely new arrangement without being influenced by the current layout.";
-            fullMessage = roomComment + suggestion;
-          }
+        // Pokazuj komentarz analizy tylko w kroku photo_upload, jeśli zdjęcie zostało wgrane,
+        // komentarz jest dostępny i nie został jeszcze w pełni wyświetlony w tej sesji.
+        const isAlreadySeen = (sessionData as any)?.roomAnalysisCommentSeen === roomComment;
+        const showAnalysis = currentStep === 'photo_upload' && hasPhotos && roomComment && !isAlreadySeen;
+
+        if (showAnalysis) {
+          const extraInfo = hasProcessedImage
+            ? (language === 'pl'
+                ? "Usunąłeś meble ze zdjęcia - to świetny pomysł! Dzięki temu generowane wizualizacje nie będą zbyt mocno trzymać się obecnego układu mebli."
+                : "You removed furniture from the photo - great idea! This will help generated visualizations not stick too closely to the current furniture layout.")
+            : (language === 'pl'
+                ? "Sugestia: Jeśli chcesz, możesz usunąć meble ze zdjęcia przyciskiem poniżej. Pomoże to IDA stworzyć zupełnie nową aranżację bez sugerowania się obecnym układem."
+                : "Pro Tip: You can remove furniture using the button below. This helps IDA create a completely new arrangement without being influenced by the current layout.");
+          
+          return (
+            <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+              <AwaDialogue 
+                key="room-analysis-dialogue"
+                currentStep="room_analysis_ready" 
+                fullWidth={true}
+                autoHide={true}
+                customMessage={[roomComment, extraInfo]}
+                onDialogueEnd={() => {
+                  console.log('[RoomSetup] Analysis dialogue finished, marking as seen');
+                  updateSessionData({ roomAnalysisCommentSeen: roomComment } as any);
+                }}
+              />
+            </div>
+          );
         }
-        
-        const commentKey = fullMessage ? `comment-${fullMessage.substring(0, 20)}` : 'no-comment';
-        console.log('[RoomSetup] Checking for room comment:', {
-          language,
-          hasRoomAnalysis: !!roomAnalysis,
-          hasHumanComment: !!roomAnalysis?.human_comment,
-          hasComment: !!roomAnalysis?.comment,
-          roomComment,
-          hasProcessedImage,
-          fullMessage,
-          commentKey,
-          fullRoomAnalysis: roomAnalysis
-        });
+
+        // Standardowy dialog dla danego kroku
         return (
           <div className="fixed bottom-0 left-0 right-0 w-full z-50">
             <AwaDialogue 
-              key={commentKey}
+              key={`step-${currentStep}`}
               currentStep={STEP_TO_DIALOGUE[currentStep]} 
               fullWidth={true}
               autoHide={true}
-              customMessage={fullMessage || undefined}
             />
           </div>
         );
@@ -529,14 +529,15 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                     mode="current"
                   />
 
-                  <div className="flex justify-between mt-6">
-                    <GlassButton onClick={handleBack} variant="secondary">
+                  <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-6">
+                    <GlassButton onClick={handleBack} variant="secondary" className="w-full sm:w-auto">
                       <ArrowLeft size={18} />
                       {language === 'pl' ? 'Wstecz' : 'Back'}
                     </GlassButton>
                     <GlassButton 
                       onClick={handleNext}
                       disabled={!roomData.prsCurrent}
+                      className="w-full sm:w-auto"
                     >
                       {language === 'pl' ? 'Dalej' : 'Next'}
                       <ArrowRight size={18} />
@@ -599,14 +600,15 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                     mode="target"
                   />
 
-                  <div className="flex justify-between mt-6">
-                    <GlassButton onClick={handleBack} variant="secondary">
+                  <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-6">
+                    <GlassButton onClick={handleBack} variant="secondary" className="w-full sm:w-auto">
                       <ArrowLeft size={18} />
                       {language === 'pl' ? 'Wstecz' : 'Back'}
                     </GlassButton>
                     <GlassButton 
                       onClick={handleNext}
                       disabled={!roomData.prsTarget}
+                      className="w-full sm:w-auto"
                     >
                       {language === 'pl' ? 'Dalej' : 'Next'}
                       <ArrowRight size={18} />
@@ -676,7 +678,7 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard className="p-6 lg:p-8 min-h-[400px] sm:min-h-[500px] max-h-[85vh] overflow-auto scrollbar-hide">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <Target size={24} className="text-white" />
@@ -708,12 +710,12 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
           ))}
         </div>
 
-        <div className="flex justify-between">
-          <GlassButton onClick={onBack} variant="secondary">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4">
+          <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
-          <GlassButton onClick={onNext}>
+          <GlassButton onClick={onNext} className="w-full sm:w-auto">
             {language === 'pl' ? 'Dalej' : 'Next'}
             <ArrowRight size={18} />
           </GlassButton>
@@ -1384,30 +1386,36 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           </div>
         )}
 
-        <div className="flex justify-between items-center mt-6">
-          <GlassButton onClick={onBack} variant="secondary">
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-4 mt-6">
+          <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
 
-          <div className="flex gap-4 items-center">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center w-full sm:w-auto">
             {selectedImage && !processedImage && !isAnalyzing && detectedRoomType !== 'empty_room' && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.3 }}
+                className="w-full sm:w-auto"
               >
                 <GlassButton
                   onClick={handleRemoveFurniture}
                   disabled={isRemovingFurniture}
                   variant="primary"
-                  className="group"
+                  className="group w-full sm:w-auto"
                 >
                   <Sparkles size={18} className="text-gold-700 group-hover:animate-pulse" />
-                  <span>
+                  <span className="hidden sm:inline">
                     {isRemovingFurniture 
                       ? (language === 'pl' ? 'Usuwanie...' : 'Removing...')
                       : (language === 'pl' ? 'Usuń meble (Zalecane)' : 'Remove furniture (Recommended)')}
+                  </span>
+                  <span className="sm:hidden">
+                    {isRemovingFurniture 
+                      ? (language === 'pl' ? 'Usuwanie...' : 'Removing...')
+                      : (language === 'pl' ? 'Usuń meble' : 'Remove furniture')}
                   </span>
                 </GlassButton>
               </motion.div>
@@ -1423,6 +1431,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
               }}
               disabled={isAnalyzing || uploadedPhotosBase64.length === 0}
               variant={processedImage || !selectedImage || detectedRoomType === 'empty_room' ? 'primary' : 'secondary'}
+              className="w-full sm:w-auto"
             >
               {isAnalyzing 
                 ? (language === 'pl' ? 'Analizuje...' : 'Analyzing...')
@@ -1609,8 +1618,8 @@ function PreferenceSourceStep({
           </div>
         </div>
 
-        <div className="flex justify-between">
-          <GlassButton onClick={onBack} variant="secondary">
+        <div className="flex justify-start">
+          <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
@@ -1733,7 +1742,7 @@ function PreferenceQuestionsStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 h-[73vh] overflow-auto scrollbar-hide flex flex-col">
+      <GlassCard className="p-6 lg:p-8 min-h-[60vh] max-h-[90vh] h-auto overflow-auto scrollbar-hide flex flex-col">
         <div className="mb-6">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
             {language === 'pl' ? 'Testy Sensoryczne' : 'Sensory Suite'}
@@ -1768,7 +1777,7 @@ function PreferenceQuestionsStep({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-6 w-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-6 w-full">
                 <button
                   type="button"
                   onClick={() => handleVisualChoice('left')}
@@ -1872,7 +1881,7 @@ function PreferenceQuestionsStep({
           </AnimatePresence>
         </div>
 
-        <div className="flex justify-between mt-8">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-8">
           <GlassButton 
             onClick={() => {
               if (currentVisualQuestion > 0 && currentVisualQuestion < visualQuestions.length) {
@@ -1887,6 +1896,7 @@ function PreferenceQuestionsStep({
               }
             }} 
             variant="secondary"
+            className="w-full sm:w-auto"
           >
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
@@ -1901,6 +1911,7 @@ function PreferenceQuestionsStep({
                 });
               }}
               disabled={!canSubmitComplete}
+              className="w-full sm:w-auto"
             >
               {language === 'pl' ? 'Zapisz preferencje' : 'Apply preferences'}
               <ArrowRight size={18} />
@@ -1973,7 +1984,7 @@ function PainPointsStep({ selected, onUpdate, onNext, onBack }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard className="p-6 lg:p-8 min-h-[400px] sm:min-h-[500px] max-h-[85vh] overflow-auto scrollbar-hide">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <AlertCircle size={24} className="text-white" />
@@ -2008,14 +2019,14 @@ function PainPointsStep({ selected, onUpdate, onNext, onBack }: any) {
           })}
         </div>
 
-        <div className="flex justify-between">
-          <GlassButton onClick={onBack} variant="secondary">
-            <ArrowLeft size={18} className="mr-2" />
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4">
+          <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
+            <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
-          <GlassButton onClick={onNext}>
+          <GlassButton onClick={onNext} className="w-full sm:w-auto">
             {language === 'pl' ? 'Dalej' : 'Next'}
-            <ArrowRight size={18} className="ml-2" />
+            <ArrowRight size={18} />
           </GlassButton>
         </div>
       </GlassCard>
@@ -2228,14 +2239,14 @@ function ActivitiesStep({
           </div>
         )}
 
-        <div className="flex justify-between mt-6">
-          <GlassButton onClick={onBack} variant="secondary">
-            <ArrowLeft size={18} className="mr-2" />
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-6">
+          <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
+            <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
-          <GlassButton onClick={handleNextStep} disabled={!hasSelectedActivities}>
+          <GlassButton onClick={handleNextStep} disabled={!hasSelectedActivities} className="w-full sm:w-auto">
             {language === 'pl' ? 'Dalej' : 'Next'}
-            <ArrowRight size={18} className="ml-2" />
+            <ArrowRight size={18} />
           </GlassButton>
         </div>
       </GlassCard>
@@ -2268,12 +2279,12 @@ function RoomSummaryStep({ data, onComplete, onBack, isSaving }: any) {
             : `Great! "${data.name}" is ready to design. IDA has everything needed to create an interior that truly fits you.`}
         </p>
 
-        <div className="flex justify-center gap-4">
-          <GlassButton onClick={onBack} variant="secondary">
+        <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4">
+          <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
-          <GlassButton onClick={onComplete} className="px-8" disabled={isSaving}>
+          <GlassButton onClick={onComplete} className="w-full sm:w-auto sm:px-8" disabled={isSaving}>
             {isSaving
               ? (language === 'pl' ? 'Zapisuję...' : 'Saving...')
               : (language === 'pl' ? 'Zacznij Projektowanie' : 'Start Designing')

@@ -17,9 +17,9 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
   ...props
 }) => {
   const variants = {
-    primary: 'glass-button text-gold-700 hover:text-gold-800 font-medium bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl',
-    secondary: 'bg-silver-400/20 backdrop-blur-xl border border-white/20 text-gray-700 hover:bg-silver-300/30 shadow-xl',
-    subtle: 'bg-pearl-100/10 backdrop-blur-xl border border-pearl-200/30 text-gray-600 hover:bg-pearl-200/20 shadow-xl'
+    primary: 'glass-button text-gold-700 hover:text-gold-800 font-medium bg-white/10 backdrop-blur-xl border border-white/20',
+    secondary: 'bg-silver-400/20 backdrop-blur-xl border border-white/20 text-gray-700 hover:bg-silver-300/30',
+    subtle: 'bg-pearl-100/10 backdrop-blur-xl border border-pearl-200/30 text-gray-600 hover:bg-pearl-200/20'
   };
 
   const sizes = {

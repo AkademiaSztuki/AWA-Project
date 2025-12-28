@@ -22,7 +22,7 @@ import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { saveResearchConsent, saveParticipantSwipes } from '@/lib/supabase';
 import Link from 'next/link';
 
-const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[85vh]";
+const STEP_CARD_HEIGHT = "min-h-[650px] max-h-[78vh]";
 
 type WizardStep = 
   | 'consent'
@@ -616,8 +616,8 @@ export function CoreProfileWizard() {
   return (
     <div className="flex flex-col w-full">
       {/* Main Content */}
-      <div className="flex-1 flex justify-center items-start">
-        <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
+      <div className="flex-1 flex justify-center items-start overflow-x-hidden w-full">
+        <div className="w-full max-w-full lg:max-w-none mx-auto space-y-4 sm:space-y-6">
           
           {/* Step Content */}
           <AnimatePresence mode="wait">
@@ -704,110 +704,114 @@ export function CoreProfileWizard() {
               )}
 
               {currentStep === 'sensory_tests' && (
-                <GlassCard className={`p-6 md:p-8 h-[70vh] flex flex-col`}>
-                  <div className="mb-6">
-                    <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
-                      {language === 'pl' ? 'Testy Sensoryczne' : 'Sensory Suite'}
-                    </h2>
-                    <p className="text-graphite font-modern text-sm">
-                      {language === 'pl'
-                        ? 'Paleta, metafora natury, muzyka, tekstury, światło i biophilia w jednym spójnym oknie.'
-                        : 'Palette, nature metaphor, music, textures, light and biophilia inside one coherent panel.'}
-                    </p>
-                  </div>
-                  <div className="flex-1 overflow-y-auto scrollbar-hide pr-1">
-                    <SensoryTestSuite 
-                      className="flex flex-col h-full"
-                      paletteOptions={COLOR_PALETTE_OPTIONS}
-                      selectedPalette={profileData.colorsAndMaterials?.selectedPalette}
-                      onPaletteSelect={(paletteId) =>
-                        updateProfile((prev) => ({
-                          colorsAndMaterials: {
-                            ...(prev.colorsAndMaterials || { topMaterials: [] }),
-                            selectedPalette: paletteId
-                          }
-                        }))
-                      }
-                      styleOptions={STYLE_OPTIONS}
-                      selectedStyle={profileData.colorsAndMaterials?.selectedStyle}
-                      onStyleSelect={(styleId) =>
-                        updateProfile((prev) => ({
-                          colorsAndMaterials: {
-                            selectedPalette: prev.colorsAndMaterials?.selectedPalette,
-                            topMaterials: prev.colorsAndMaterials?.topMaterials || [],
-                            selectedStyle: styleId
-                          }
-                        }))
-                      }
-                      onComplete={async (results) => {
-                        // #region agent log
-                        const resultsAny = results as any;
-                        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory',message:'Saving explicit preferences to profile',data:{resultsKeys:Object.keys(results),biophiliaScore:results.biophiliaScore,music:results.music,texture:results.texture,light:results.light,natureMetaphor:results.natureMetaphor,hasStyle:!!resultsAny.style,resultsStyle:resultsAny.style||null,resultsStyleType:typeof resultsAny.style,resultsStyleIsEmpty:resultsAny.style==='',hasPalette:!!resultsAny.palette,resultsPalette:resultsAny.palette||null,profileDataStyle:profileData.colorsAndMaterials?.selectedStyle||null,profileDataStyleType:typeof profileData.colorsAndMaterials?.selectedStyle,sessionDataStyle:sessionData.colorsAndMaterials?.selectedStyle||null,sessionDataStyleType:typeof sessionData.colorsAndMaterials?.selectedStyle},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E5'})}).catch(()=>{});
-                        // #endregion
-                        const currentStyle = profileData.colorsAndMaterials?.selectedStyle;
-                        const finalStyle =
-                          results.style ||
-                          sessionData.colorsAndMaterials?.selectedStyle ||
-                          currentStyle ||
-                          '';
-                        const finalPalette =
-                          (results as any).palette ||
-                          sessionData.colorsAndMaterials?.selectedPalette ||
-                          profileData.colorsAndMaterials?.selectedPalette ||
-                          '';
-                        const finalMaterials =
-                          (results as any).topMaterials ||
-                          sessionData.colorsAndMaterials?.topMaterials ||
-                          profileData.colorsAndMaterials?.topMaterials ||
-                          [];
+                <GlassCard className={`p-3 sm:p-5 md:p-6 h-[82vh] sm:h-[64vh] flex flex-col overflow-y-auto scrollbar-hide`}>
+                  <div className="min-h-full flex flex-col">
+                    <div className="flex-1">
+                      <div className="mb-1 sm:mb-2">
+                        <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
+                          {language === 'pl' ? 'Testy Sensoryczne' : 'Sensory Suite'}
+                        </h2>
+                        <p className="text-graphite font-modern text-xs sm:text-sm opacity-80">
+                          {language === 'pl'
+                            ? 'Paleta, metafora natury, muzyka, tekstury, światło i biophilia w jednym oknie.'
+                            : 'Palette, nature metaphor, music, textures, light and biophilia inside one panel.'}
+                        </p>
+                      </div>
+                      
+                      <SensoryTestSuite 
+                        className="flex flex-col"
+                        paletteOptions={COLOR_PALETTE_OPTIONS}
+                        selectedPalette={profileData.colorsAndMaterials?.selectedPalette}
+                        onPaletteSelect={(paletteId) =>
+                          updateProfile((prev) => ({
+                            colorsAndMaterials: {
+                              ...(prev.colorsAndMaterials || { topMaterials: [] }),
+                              selectedPalette: paletteId
+                            }
+                          }))
+                        }
+                        styleOptions={STYLE_OPTIONS}
+                        selectedStyle={profileData.colorsAndMaterials?.selectedStyle}
+                        onStyleSelect={(styleId) =>
+                          updateProfile((prev) => ({
+                            colorsAndMaterials: {
+                              selectedPalette: prev.colorsAndMaterials?.selectedPalette,
+                              topMaterials: prev.colorsAndMaterials?.topMaterials || [],
+                              selectedStyle: styleId
+                            }
+                          }))
+                        }
+                        onComplete={async (results) => {
+                          // #region agent log
+                          const resultsAny = results as any;
+                          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory',message:'Saving explicit preferences to profile',data:{resultsKeys:Object.keys(results),biophiliaScore:results.biophiliaScore,music:results.music,texture:results.texture,light:results.light,natureMetaphor:results.natureMetaphor,hasStyle:!!resultsAny.style,resultsStyle:resultsAny.style||null,resultsStyleType:typeof resultsAny.style,resultsStyleIsEmpty:resultsAny.style==='',hasPalette:!!resultsAny.palette,resultsPalette:resultsAny.palette||null,profileDataStyle:profileData.colorsAndMaterials?.selectedStyle||null,profileDataStyleType:typeof profileData.colorsAndMaterials?.selectedStyle,sessionDataStyle:sessionData.colorsAndMaterials?.selectedStyle||null,sessionDataStyleType:typeof sessionData.colorsAndMaterials?.selectedStyle},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E5'})}).catch(()=>{});
+                          // #endregion
+                          const currentStyle = profileData.colorsAndMaterials?.selectedStyle;
+                          const finalStyle =
+                            results.style ||
+                            sessionData.colorsAndMaterials?.selectedStyle ||
+                            currentStyle ||
+                            '';
+                          const finalPalette =
+                            (results as any).palette ||
+                            sessionData.colorsAndMaterials?.selectedPalette ||
+                            profileData.colorsAndMaterials?.selectedPalette ||
+                            '';
+                          const finalMaterials =
+                            (results as any).topMaterials ||
+                            sessionData.colorsAndMaterials?.topMaterials ||
+                            profileData.colorsAndMaterials?.topMaterials ||
+                            [];
 
-                        // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory-explicit',message:'Resolved explicit before persist',data:{finalStyle,finalPalette,materialsCount:finalMaterials.length},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E16'})}).catch(()=>{});
-                        // #endregion
+                          // #region agent log
+                          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory-explicit',message:'Resolved explicit before persist',data:{finalStyle,finalPalette,materialsCount:finalMaterials.length},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E16'})}).catch(()=>{});
+                          // #endregion
 
-                        updateProfile({
-                          sensoryPreferences: {
-                            music: results.music,
-                            texture: results.texture,
-                            light: results.light
-                          },
-                          natureMetaphor: results.natureMetaphor,
-                          biophiliaScore: results.biophiliaScore,
-                          colorsAndMaterials: {
-                            ...(profileData.colorsAndMaterials || {}),
-                            selectedStyle: finalStyle,
-                            selectedPalette: finalPalette,
-                            topMaterials: finalMaterials
-                          }
-                        });
-                        // CRITICAL: Save biophiliaScore to sessionData immediately to prevent sync issues
-                        // CRITICAL: Use finalStyle, finalPalette, finalMaterials directly, not from profileData
-                        await updateSessionData({
-                          biophiliaScore: results.biophiliaScore,
-                          sensoryPreferences: {
-                            music: results.music,
-                            texture: results.texture,
-                            light: results.light
-                          },
-                          natureMetaphor: results.natureMetaphor,
-                          colorsAndMaterials: {
-                            selectedStyle: finalStyle,
-                            selectedPalette: finalPalette,
-                            topMaterials: finalMaterials
-                          }
-                        });
-                        // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory-updateSessionData',message:'Immediately saving biophiliaScore to sessionData',data:{biophiliaScore:results.biophiliaScore,sessionDataUpdated:true},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E15'})}).catch(()=>{});
-                        // #endregion
-                        handleNext();
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-between mt-6">
-                    <GlassButton onClick={handleBack} variant="secondary">
-                      <ArrowLeft size={18} />
-                      {language === 'pl' ? 'Wstecz' : 'Back'}
-                    </GlassButton>
+                          updateProfile({
+                            sensoryPreferences: {
+                              music: results.music,
+                              texture: results.texture,
+                              light: results.light
+                            },
+                            natureMetaphor: results.natureMetaphor,
+                            biophiliaScore: results.biophiliaScore,
+                            colorsAndMaterials: {
+                              ...(profileData.colorsAndMaterials || {}),
+                              selectedStyle: finalStyle,
+                              selectedPalette: finalPalette,
+                              topMaterials: finalMaterials
+                            }
+                          });
+                          // CRITICAL: Save biophiliaScore to sessionData immediately to prevent sync issues
+                          // CRITICAL: Use finalStyle, finalPalette, finalMaterials directly, not from profileData
+                          await updateSessionData({
+                            biophiliaScore: results.biophiliaScore,
+                            sensoryPreferences: {
+                              music: results.music,
+                              texture: results.texture,
+                              light: results.light
+                            },
+                            natureMetaphor: results.natureMetaphor,
+                            colorsAndMaterials: {
+                              selectedStyle: finalStyle,
+                              selectedPalette: finalPalette,
+                              topMaterials: finalMaterials
+                            }
+                          });
+                          // #region agent log
+                          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory-updateSessionData',message:'Immediately saving biophiliaScore to sessionData',data:{biophiliaScore:results.biophiliaScore,sessionDataUpdated:true},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E15'})}).catch(()=>{});
+                          // #endregion
+                          handleNext();
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex justify-between mt-8">
+                      <GlassButton onClick={handleBack} variant="secondary">
+                        <ArrowLeft size={18} />
+                        {language === 'pl' ? 'Wstecz' : 'Back'}
+                      </GlassButton>
+                    </div>
                   </div>
                 </GlassCard>
               )}
@@ -942,226 +946,230 @@ function ConsentStep({
   const canProceedConsent = consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13;
 
   return (
-    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
-      <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
-        {texts.title}
-      </h2>
+    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide`}>
+      <div className="min-h-full flex flex-col">
+        <div className="flex-1">
+          <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
+            {texts.title}
+          </h2>
 
-      {/* Warstwa 1: Krótkie bloki informacyjne */}
-      <div className="space-y-2.5 text-graphite font-modern text-xs mb-5">
-        <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-          <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
-            {texts.administrator}
-          </h3>
-          <p className="leading-relaxed">{texts.administratorText}</p>
-        </div>
+          {/* Warstwa 1: Krótkie bloki informacyjne */}
+          <div className="space-y-2.5 text-graphite font-modern text-xs mb-5">
+            <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
+              <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
+                {texts.administrator}
+              </h3>
+              <p className="leading-relaxed">{texts.administratorText}</p>
+            </div>
 
-        <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-          <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
-            {texts.purpose}
-          </h3>
-          <p className="leading-relaxed">{texts.purposeText}</p>
-        </div>
+            <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
+              <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
+                {texts.purpose}
+              </h3>
+              <p className="leading-relaxed">{texts.purposeText}</p>
+            </div>
 
-        <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-          <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
-            {texts.scope}
-          </h3>
-          <p className="leading-relaxed">{texts.scopeText}</p>
-        </div>
+            <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
+              <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
+                {texts.scope}
+              </h3>
+              <p className="leading-relaxed">{texts.scopeText}</p>
+            </div>
 
-        <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-          <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
-            {texts.voluntary}
-          </h3>
-          <p className="leading-relaxed">{texts.voluntaryText}</p>
-        </div>
+            <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
+              <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
+                {texts.voluntary}
+              </h3>
+              <p className="leading-relaxed">{texts.voluntaryText}</p>
+            </div>
 
-        <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-          <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
-            {texts.rights}
-          </h3>
-          <p className="leading-relaxed">{texts.rightsText}</p>
-        </div>
+            <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
+              <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
+                {texts.rights}
+              </h3>
+              <p className="leading-relaxed">{texts.rightsText}</p>
+            </div>
 
-        <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-          <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
-            {texts.photos}
-          </h3>
-          <p className="leading-relaxed">{texts.photosText}</p>
-        </div>
-      </div>
-
-      {/* Główny checkbox "Akceptuję wszystkie" */}
-      <div className="mb-4 pb-4 border-b border-white/20">
-        <label className="flex items-center gap-3 cursor-pointer group">
-          <div className="relative">
-            <input
-              type="checkbox"
-              checked={consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13}
-              onChange={(e) => {
-                const allChecked = e.target.checked;
-                setConsentState({
-                  consentResearch: allChecked,
-                  consentProcessing: allChecked,
-                  acknowledgedArt13: allChecked
-                });
-              }}
-              className="w-5 h-5 rounded border-2 border-gold/60 bg-white/10 backdrop-blur-sm text-gold focus:ring-2 focus:ring-gold focus:ring-offset-1 focus:ring-offset-transparent cursor-pointer transition-all appearance-none checked:bg-gold/40 checked:border-gold relative z-10"
-            />
-            {consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13 && (
-              <svg className="absolute top-0.5 left-0.5 w-4 h-4 text-graphite pointer-events-none z-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-              </svg>
-            )}
+            <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
+              <h3 className="text-gold font-semibold mb-1 text-xs uppercase tracking-wide">
+                {texts.photos}
+              </h3>
+              <p className="leading-relaxed">{texts.photosText}</p>
+            </div>
           </div>
-          <span className="text-sm font-semibold text-graphite font-modern flex-1 group-hover:text-gold transition-colors">
-            {texts.acceptAll}
-          </span>
-        </label>
-      </div>
 
-      {/* Szczegółowe checkboxy (opcjonalne, można je rozwinąć) */}
-      <details className="mb-4">
-        <summary className="text-xs text-silver-dark font-modern cursor-pointer hover:text-gold transition-colors mb-2">
-          {language === 'pl' ? 'Szczegóły zgód' : 'Consent details'}
-        </summary>
-        <div className="space-y-2.5 mt-3 pl-2 border-l-2 border-gold/20">
-          <label className="flex items-center gap-3 cursor-pointer group">
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={consentState.consentResearch}
-                onChange={(e) => setConsentState({ ...consentState, consentResearch: e.target.checked })}
-                className="w-4 h-4 rounded border-2 border-gold/60 bg-white/10 backdrop-blur-sm text-gold focus:ring-2 focus:ring-gold focus:ring-offset-1 focus:ring-offset-transparent cursor-pointer transition-all appearance-none checked:bg-gold/40 checked:border-gold relative z-10"
-              />
-              {consentState.consentResearch && (
-                <svg className="absolute top-0 left-0 w-4 h-4 text-graphite pointer-events-none z-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </div>
-            <span className="text-xs text-graphite font-modern flex-1">
-              {texts.consent1}
-            </span>
-          </label>
+          {/* Główny checkbox "Akceptuję wszystkie" */}
+          <div className="mb-4 pb-4 border-b border-white/20">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13}
+                  onChange={(e) => {
+                    const allChecked = e.target.checked;
+                    setConsentState({
+                      consentResearch: allChecked,
+                      consentProcessing: allChecked,
+                      acknowledgedArt13: allChecked
+                    });
+                  }}
+                  className="w-5 h-5 rounded border-2 border-gold/60 bg-white/10 backdrop-blur-sm text-gold focus:ring-2 focus:ring-gold focus:ring-offset-1 focus:ring-offset-transparent cursor-pointer transition-all appearance-none checked:bg-gold/40 checked:border-gold relative z-10"
+                />
+                {consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13 && (
+                  <svg className="absolute top-0.5 left-0.5 w-4 h-4 text-graphite pointer-events-none z-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+              <span className="text-sm font-semibold text-graphite font-modern flex-1 group-hover:text-gold transition-colors">
+                {texts.acceptAll}
+              </span>
+            </label>
+          </div>
 
-          <label className="flex items-center gap-3 cursor-pointer group">
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={consentState.consentProcessing}
-                onChange={(e) => setConsentState({ ...consentState, consentProcessing: e.target.checked })}
-                className="w-4 h-4 rounded border-2 border-gold/60 bg-white/10 backdrop-blur-sm text-gold focus:ring-2 focus:ring-gold focus:ring-offset-1 focus:ring-offset-transparent cursor-pointer transition-all appearance-none checked:bg-gold/40 checked:border-gold relative z-10"
-              />
-              {consentState.consentProcessing && (
-                <svg className="absolute top-0 left-0 w-4 h-4 text-graphite pointer-events-none z-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </div>
-            <span className="text-xs text-graphite font-modern flex-1">
-              {texts.consent2}
-            </span>
-          </label>
+          {/* Szczegółowe checkboxy (opcjonalne, można je rozwinąć) */}
+          <details className="mb-4">
+            <summary className="text-xs text-silver-dark font-modern cursor-pointer hover:text-gold transition-colors mb-2">
+              {language === 'pl' ? 'Szczegóły zgód' : 'Consent details'}
+            </summary>
+            <div className="space-y-2.5 mt-3 pl-2 border-l-2 border-gold/20">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={consentState.consentResearch}
+                    onChange={(e) => setConsentState({ ...consentState, consentResearch: e.target.checked })}
+                    className="w-4 h-4 rounded border-2 border-gold/60 bg-white/10 backdrop-blur-sm text-gold focus:ring-2 focus:ring-gold focus:ring-offset-1 focus:ring-offset-transparent cursor-pointer transition-all appearance-none checked:bg-gold/40 checked:border-gold relative z-10"
+                  />
+                  {consentState.consentResearch && (
+                    <svg className="absolute top-0 left-0 w-4 h-4 text-graphite pointer-events-none z-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <span className="text-xs text-graphite font-modern flex-1">
+                  {texts.consent1}
+                </span>
+              </label>
 
-          <label className="flex items-center gap-3 cursor-pointer group">
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={consentState.acknowledgedArt13}
-                onChange={(e) => setConsentState({ ...consentState, acknowledgedArt13: e.target.checked })}
-                className="w-4 h-4 rounded border-2 border-gold/60 bg-white/10 backdrop-blur-sm text-gold focus:ring-2 focus:ring-gold focus:ring-offset-1 focus:ring-offset-transparent cursor-pointer transition-all appearance-none checked:bg-gold/40 checked:border-gold relative z-10"
-              />
-              {consentState.acknowledgedArt13 && (
-                <svg className="absolute top-0 left-0 w-4 h-4 text-graphite pointer-events-none z-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={consentState.consentProcessing}
+                    onChange={(e) => setConsentState({ ...consentState, consentProcessing: e.target.checked })}
+                    className="w-4 h-4 rounded border-2 border-gold/60 bg-white/10 backdrop-blur-sm text-gold focus:ring-2 focus:ring-gold focus:ring-offset-1 focus:ring-offset-transparent cursor-pointer transition-all appearance-none checked:bg-gold/40 checked:border-gold relative z-10"
+                  />
+                  {consentState.consentProcessing && (
+                    <svg className="absolute top-0 left-0 w-4 h-4 text-graphite pointer-events-none z-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <span className="text-xs text-graphite font-modern flex-1">
+                  {texts.consent2}
+                </span>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={consentState.acknowledgedArt13}
+                    onChange={(e) => setConsentState({ ...consentState, acknowledgedArt13: e.target.checked })}
+                    className="w-4 h-4 rounded border-2 border-gold/60 bg-white/10 backdrop-blur-sm text-gold focus:ring-2 focus:ring-gold focus:ring-offset-1 focus:ring-offset-transparent cursor-pointer transition-all appearance-none checked:bg-gold/40 checked:border-gold relative z-10"
+                  />
+                  {consentState.acknowledgedArt13 && (
+                    <svg className="absolute top-0 left-0 w-4 h-4 text-graphite pointer-events-none z-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <span className="text-xs text-graphite font-modern flex-1">
+                  {texts.consent3}
+                </span>
+              </label>
             </div>
-            <span className="text-xs text-graphite font-modern flex-1">
-              {texts.consent3}
-            </span>
-          </label>
+          </details>
+
+          <p className="text-xs text-silver-dark font-modern mb-4 italic">
+            {texts.consentNote}
+          </p>
+
+          {/* Przycisk "Dowiedz się więcej" ze strzałką */}
+          <div className="rounded-xl overflow-hidden mb-3 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl">
+            <button
+              type="button"
+              onClick={() => setShowLearnMore(!showLearnMore)}
+              className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+            >
+              <span className="text-sm font-semibold text-graphite font-modern">
+                {texts.learnMore}
+              </span>
+              <ChevronDown
+                size={20}
+                className={`text-gold transition-transform duration-200 ${showLearnMore ? 'rotate-180' : ''}`}
+              />
+            </button>
+          </div>
+
+          {/* Akordeony "Dowiedz się więcej" - pokazują się po kliknięciu */}
+          {showLearnMore && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-3 mb-5 overflow-hidden"
+            >
+              <GlassAccordion title={texts.accordion1Title}>
+                <p className="text-sm">{texts.accordion1Content}</p>
+              </GlassAccordion>
+
+              <GlassAccordion title={texts.accordion2Title}>
+                <p className="text-sm">{texts.accordion2Content}</p>
+              </GlassAccordion>
+
+              <GlassAccordion title={texts.accordion3Title}>
+                <p className="text-sm">{texts.accordion3Content}</p>
+              </GlassAccordion>
+
+              <GlassAccordion title={texts.accordion4Title}>
+                <p className="text-sm">{texts.accordion4Content}</p>
+              </GlassAccordion>
+
+              <GlassAccordion title={texts.accordion5Title}>
+                <p className="text-sm">{texts.accordion5Content}</p>
+              </GlassAccordion>
+            </motion.div>
+          )}
+
+          {/* Linki na dole */}
+          <div className="flex flex-wrap gap-4 justify-center text-xs text-gold font-modern mb-5 border-t border-white/20 pt-4">
+            <Link href="/privacy" className="hover:text-champagne transition-colors underline">
+              {texts.privacy}
+            </Link>
+            <Link href="/terms" className="hover:text-champagne transition-colors underline">
+              {texts.terms}
+            </Link>
+            <a href="mailto:jakub.palka@akademiasztuki.eu" className="hover:text-champagne transition-colors underline">
+              {texts.contact}
+            </a>
+          </div>
         </div>
-      </details>
 
-      <p className="text-xs text-silver-dark font-modern mb-4 italic">
-        {texts.consentNote}
-      </p>
+        {/* Przyciski */}
+        <div className="flex justify-between mt-8">
+          <GlassButton variant="secondary" onClick={onExit}>
+            <ArrowLeft size={18} />
+            {texts.back}
+          </GlassButton>
 
-      {/* Przycisk "Dowiedz się więcej" ze strzałką */}
-      <div className="rounded-xl overflow-hidden mb-3 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl">
-        <button
-          type="button"
-          onClick={() => setShowLearnMore(!showLearnMore)}
-          className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
-        >
-          <span className="text-sm font-semibold text-graphite font-modern">
-            {texts.learnMore}
-          </span>
-          <ChevronDown
-            size={20}
-            className={`text-gold transition-transform duration-200 ${showLearnMore ? 'rotate-180' : ''}`}
-          />
-        </button>
-      </div>
-
-      {/* Akordeony "Dowiedz się więcej" - pokazują się po kliknięciu */}
-      {showLearnMore && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-3 mb-5 overflow-hidden"
-        >
-          <GlassAccordion title={texts.accordion1Title}>
-            <p className="text-sm">{texts.accordion1Content}</p>
-          </GlassAccordion>
-
-          <GlassAccordion title={texts.accordion2Title}>
-            <p className="text-sm">{texts.accordion2Content}</p>
-          </GlassAccordion>
-
-          <GlassAccordion title={texts.accordion3Title}>
-            <p className="text-sm">{texts.accordion3Content}</p>
-          </GlassAccordion>
-
-          <GlassAccordion title={texts.accordion4Title}>
-            <p className="text-sm">{texts.accordion4Content}</p>
-          </GlassAccordion>
-
-          <GlassAccordion title={texts.accordion5Title}>
-            <p className="text-sm">{texts.accordion5Content}</p>
-          </GlassAccordion>
-        </motion.div>
-      )}
-
-      {/* Linki na dole */}
-      <div className="flex flex-wrap gap-4 justify-center text-xs text-gold font-modern mb-5 border-t border-white/20 pt-4">
-        <Link href="/privacy" className="hover:text-champagne transition-colors underline">
-          {texts.privacy}
-        </Link>
-        <Link href="/terms" className="hover:text-champagne transition-colors underline">
-          {texts.terms}
-        </Link>
-        <a href="mailto:jakub.palka@akademiasztuki.eu" className="hover:text-champagne transition-colors underline">
-          {texts.contact}
-        </a>
-      </div>
-
-      {/* Przyciski */}
-      <div className="flex justify-between mt-6">
-        <GlassButton variant="secondary" onClick={onExit}>
-          <ArrowLeft size={18} />
-          {texts.back}
-        </GlassButton>
-
-        <GlassButton onClick={onAgree} disabled={!canProceedConsent}>
-          {texts.submit}
-          <ArrowRight size={18} />
-        </GlassButton>
+          <GlassButton onClick={onAgree} disabled={!canProceedConsent}>
+            {texts.submit}
+            <ArrowRight size={18} />
+          </GlassButton>
+        </div>
       </div>
     </GlassCard>
   );
@@ -1201,113 +1209,117 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
-        <h2 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
-          {texts.title}
-        </h2>
-        <p className="text-graphite font-modern mb-6 text-sm">
-          {texts.subtitle}
-        </p>
+      <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide`}>
+        <div className="min-h-full flex flex-col">
+          <div className="flex-1">
+            <h2 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
+              {texts.title}
+            </h2>
+            <p className="text-graphite font-modern mb-6 text-sm">
+              {texts.subtitle}
+            </p>
 
-        <div className="space-y-5">
-          <div>
-            <label className="block text-sm font-semibold text-graphite mb-2">
-              {texts.age}
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {['18-24', '25-34', '35-44', '45-54', '55-64', '65+'].map((range) => (
-                <button
-                  key={range}
-                  type="button"
-                  onClick={() => onUpdate({ ...data, ageRange: range })}
-                  className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
-                    data.ageRange === range
-                      ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                      : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
-                  }`}
-                >
-                  {range}
-                </button>
-              ))}
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-semibold text-graphite mb-2">
+                  {texts.age}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['18-24', '25-34', '35-44', '45-54', '55-64', '65+'].map((range) => (
+                    <button
+                      key={range}
+                      type="button"
+                      onClick={() => onUpdate({ ...data, ageRange: range })}
+                      className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                        data.ageRange === range
+                          ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                          : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                      }`}
+                    >
+                      {range}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-graphite mb-2">
+                  {texts.gender}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'female', label: language === 'pl' ? 'Kobieta' : 'Female' },
+                    { id: 'male', label: language === 'pl' ? 'Mężczyzna' : 'Male' },
+                    { id: 'non-binary', label: language === 'pl' ? 'Niebinarna' : 'Non-binary' },
+                    { id: 'prefer-not-say', label: language === 'pl' ? 'Wolę nie mówić' : 'Prefer not to say' }
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => onUpdate({ ...data, gender: option.id })}
+                      className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                        data.gender === option.id
+                          ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                          : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-graphite mb-2">
+                  {texts.education}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'high-school', label: language === 'pl' ? 'Średnie' : 'High School' },
+                    { id: 'bachelor', label: language === 'pl' ? 'Licencjat' : 'Bachelor\'s' },
+                    { id: 'master', label: language === 'pl' ? 'Magister' : 'Master\'s' },
+                    { id: 'doctorate', label: language === 'pl' ? 'Doktorat' : 'Doctorate' }
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => onUpdate({ ...data, education: option.id })}
+                      className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                        data.education === option.id
+                          ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                          : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-graphite mb-2">
+                  {texts.country}
+                </label>
+                <CountrySelect
+                  value={data.country}
+                  onChange={(code) => onUpdate({ ...data, country: code })}
+                  language={language}
+                />
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-graphite mb-2">
-              {texts.gender}
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: 'female', label: language === 'pl' ? 'Kobieta' : 'Female' },
-                { id: 'male', label: language === 'pl' ? 'Mężczyzna' : 'Male' },
-                { id: 'non-binary', label: language === 'pl' ? 'Niebinarna' : 'Non-binary' },
-                { id: 'prefer-not-say', label: language === 'pl' ? 'Wolę nie mówić' : 'Prefer not to say' }
-              ].map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => onUpdate({ ...data, gender: option.id })}
-                  className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
-                    data.gender === option.id
-                      ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                      : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex justify-between mt-8">
+            <GlassButton variant="secondary" onClick={onBack}>
+              <ArrowLeft size={18} />
+              {texts.back}
+            </GlassButton>
+
+            <GlassButton disabled={!canProceed} onClick={onSubmit}>
+              {texts.continue}
+              <ArrowRight size={18} />
+            </GlassButton>
           </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-graphite mb-2">
-              {texts.education}
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: 'high-school', label: language === 'pl' ? 'Średnie' : 'High School' },
-                { id: 'bachelor', label: language === 'pl' ? 'Licencjat' : 'Bachelor\'s' },
-                { id: 'master', label: language === 'pl' ? 'Magister' : 'Master\'s' },
-                { id: 'doctorate', label: language === 'pl' ? 'Doktorat' : 'Doctorate' }
-              ].map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => onUpdate({ ...data, education: option.id })}
-                  className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
-                    data.education === option.id
-                      ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                      : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-graphite mb-2">
-              {texts.country}
-            </label>
-            <CountrySelect
-              value={data.country}
-              onChange={(code) => onUpdate({ ...data, country: code })}
-              language={language}
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-between mt-6">
-          <GlassButton variant="secondary" onClick={onBack}>
-            <ArrowLeft size={18} />
-            {texts.back}
-          </GlassButton>
-
-          <GlassButton disabled={!canProceed} onClick={onSubmit}>
-            {texts.continue}
-            <ArrowRight size={18} />
-          </GlassButton>
         </div>
       </GlassCard>
     </motion.div>
@@ -1343,100 +1355,104 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
   const canProceed = lifestyleData.livingSituation && lifestyleData.lifeVibe && lifestyleData.goals?.length > 0;
 
   return (
-    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
-      <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
-        {language === 'pl' ? 'Twój Styl Życia' : 'Your Lifestyle'}
-      </h2>
-      <p className="text-graphite font-modern mb-6 text-sm">
-        {language === 'pl' ? 'Kilka szybkich pytań o Ciebie...' : 'A few quick questions about you...'}
-      </p>
-      
-      <div className="space-y-6">
-        {/* Question 1: Living Situation */}
-        <div>
-          <label className="block text-sm font-semibold text-graphite mb-2">
-            {language === 'pl' ? 'Z kim mieszkasz?' : 'Who do you live with?'}
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {LIVING_SITUATION_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => updateField('livingSituation', option.id)}
-                className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
-                  lifestyleData.livingSituation === option.id
-                    ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                    : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
-                }`}
-              >
-                {option.label[language]}
-              </button>
-            ))}
+    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide`}>
+      <div className="min-h-full flex flex-col">
+        <div className="flex-1">
+          <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
+            {language === 'pl' ? 'Twój Styl Życia' : 'Your Lifestyle'}
+          </h2>
+          <p className="text-graphite font-modern mb-6 text-sm">
+            {language === 'pl' ? 'Kilka szybkich pytań o Ciebie...' : 'A few quick questions about you...'}
+          </p>
+
+          <div className="space-y-6">
+            {/* Question 1: Living Situation */}
+            <div>
+              <label className="block text-sm font-semibold text-graphite mb-2">
+                {language === 'pl' ? 'Z kim mieszkasz?' : 'Who do you live with?'}
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {LIVING_SITUATION_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => updateField('livingSituation', option.id)}
+                    className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                      lifestyleData.livingSituation === option.id
+                        ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                        : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                    }`}
+                  >
+                    {option.label[language]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Question 2: Life Vibe */}
+            <div>
+              <label className="block text-sm font-semibold text-graphite mb-2">
+                {language === 'pl' ? 'Jaki jest vibe Twojego życia teraz?' : 'What\'s your life vibe right now?'}
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {LIFE_VIBE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => updateField('lifeVibe', option.id)}
+                    className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                      lifestyleData.lifeVibe === option.id
+                        ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                        : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                    }`}
+                  >
+                    {option.label[language]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Question 3: Goals (multi-select) */}
+            <div>
+              <label className="block text-sm font-semibold text-graphite mb-2">
+                {language === 'pl' ? 'Co jest dla Ciebie najważniejsze w domu?' : 'What matters most to you at home?'}
+                <span className="text-xs text-silver-dark ml-2">
+                  ({language === 'pl' ? 'wybierz kilka' : 'select multiple'})
+                </span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {GOAL_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => toggleGoal(option.id)}
+                    className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                      lifestyleData.goals?.includes(option.id)
+                        ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                        : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                    }`}
+                  >
+                    {option.label[language]}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Question 2: Life Vibe */}
-        <div>
-          <label className="block text-sm font-semibold text-graphite mb-2">
-            {language === 'pl' ? 'Jaki jest vibe Twojego życia teraz?' : 'What\'s your life vibe right now?'}
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {LIFE_VIBE_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => updateField('lifeVibe', option.id)}
-                className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
-                  lifestyleData.lifeVibe === option.id
-                    ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                    : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
-                }`}
-              >
-                {option.label[language]}
-              </button>
-            ))}
-          </div>
+        <div className="flex justify-between mt-8">
+          <GlassButton onClick={onBack} variant="secondary">
+            <ArrowLeft size={18} />
+            {language === 'pl' ? 'Wstecz' : 'Back'}
+          </GlassButton>
+          <GlassButton 
+            onClick={() => { onUpdate(lifestyleData); onNext(); }}
+            disabled={!canProceed}
+          >
+            {language === 'pl' ? 'Dalej' : 'Next'}
+            <ArrowRight size={18} />
+          </GlassButton>
         </div>
-
-        {/* Question 3: Goals (multi-select) */}
-        <div>
-          <label className="block text-sm font-semibold text-graphite mb-2">
-            {language === 'pl' ? 'Co jest dla Ciebie najważniejsze w domu?' : 'What matters most to you at home?'}
-            <span className="text-xs text-silver-dark ml-2">
-              ({language === 'pl' ? 'wybierz kilka' : 'select multiple'})
-            </span>
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {GOAL_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => toggleGoal(option.id)}
-                className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
-                  lifestyleData.goals?.includes(option.id)
-                    ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                    : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
-                }`}
-              >
-                {option.label[language]}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-between mt-6">
-        <GlassButton onClick={onBack} variant="secondary">
-          <ArrowLeft size={18} />
-          {language === 'pl' ? 'Wstecz' : 'Back'}
-        </GlassButton>
-        <GlassButton 
-          onClick={() => { onUpdate(lifestyleData); onNext(); }}
-          disabled={!canProceed}
-        >
-          {language === 'pl' ? 'Dalej' : 'Next'}
-          <ArrowRight size={18} />
-        </GlassButton>
       </div>
     </GlassCard>
   );
@@ -1482,6 +1498,30 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
     };
     fetchImages();
   }, []);
+
+  // Preload first 3 images immediately when images are loaded
+  useEffect(() => {
+    if (images.length > 0 && !isLoading) {
+      for (let i = 0; i < Math.min(3, images.length); i++) {
+        const img = new window.Image();
+        img.src = images[i].url;
+      }
+    }
+  }, [images, isLoading]);
+
+  // Preload next 2-3 images when current index changes
+  useEffect(() => {
+    if (images.length > 0 && currentIndex < images.length - 1) {
+      const preloadCount = Math.min(3, images.length - currentIndex - 1);
+      for (let i = 1; i <= preloadCount; i++) {
+        const nextImage = images[currentIndex + i];
+        if (nextImage) {
+          const img = new window.Image();
+          img.src = nextImage.url;
+        }
+      }
+    }
+  }, [currentIndex, images]);
 
   const currentImage = images[currentIndex];
   const progress = images.length > 0 ? (currentIndex / images.length) * 100 : 0;
@@ -1562,138 +1602,158 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
   };
 
   if (showInstructions) {
-  return (
-    <GlassCard className={`p-6 md:p-8 text-center min-h-[700px] max-h-[85vh] overflow-auto scrollbar-hide flex flex-col justify-center items-center relative`}>
-      <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-3">
-        {language === 'pl' ? 'Wnętrzarski Tinder' : 'Interior Design Tinder'}
-      </h2>
-        <p className="text-graphite font-modern mb-4 text-sm">
-          {language === 'pl' 
-            ? `${isLoading ? 'Ładowanie...' : `Pokażę Ci ${images.length} różnych wnętrz. Reaguj sercem, nie głową!`}`
-            : `${isLoading ? 'Loading...' : `I'll show you ${images.length} different interiors. React with your heart, not your head!`}`}
-        </p>
-        
-        <div className="flex justify-center gap-8 mb-6">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-              <X className="text-red-500" size={20} />
+    return (
+      <GlassCard className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} flex flex-col justify-center items-center relative overflow-y-auto scrollbar-hide`}>
+        <div className="min-h-full flex flex-col justify-center items-center">
+          <div className="flex-1 flex flex-col justify-center items-center">
+            <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-3">
+              {language === 'pl' ? 'Wnętrzarski Tinder' : 'Interior Design Tinder'}
+            </h2>
+            <p className="text-graphite font-modern mb-4 text-sm">
+              {language === 'pl' 
+                ? `${isLoading ? 'Ładowanie...' : `Pokażę Ci ${images.length} różnych wnętrz. Reaguj sercem, nie głową!`}`
+                : `${isLoading ? 'Loading...' : `I'll show you ${images.length} different interiors. React with your heart, not your head!`}`}
+            </p>
+            
+            <div className="flex justify-center gap-8 mb-6">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                  <X className="text-red-500" size={20} />
+                </div>
+                <span className="text-sm text-graphite">{language === 'pl' ? 'Nie' : 'No'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <Heart className="text-green-500" size={20} />
+                </div>
+                <span className="text-sm text-graphite">{language === 'pl' ? 'Tak!' : 'Yes!'}</span>
+              </div>
             </div>
-            <span className="text-sm text-graphite">{language === 'pl' ? 'Nie' : 'No'}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-              <Heart className="text-green-500" size={20} />
-            </div>
-            <span className="text-sm text-graphite">{language === 'pl' ? 'Tak!' : 'Yes!'}</span>
-          </div>
-        </div>
 
-        <div className="absolute bottom-6 left-6 right-6 flex justify-between">
-          <GlassButton onClick={onBack} variant="secondary">
-            <ArrowLeft size={18} />
-            {language === 'pl' ? 'Wstecz' : 'Back'}
-          </GlassButton>
-          <GlassButton onClick={() => setShowInstructions(false)}>
-            {language === 'pl' ? 'Rozpocznij' : 'Start'}
-            <ArrowRight size={18} />
-          </GlassButton>
+          <div className="flex justify-between w-full mt-8">
+            <GlassButton onClick={onBack} variant="secondary">
+              <ArrowLeft size={18} />
+              {language === 'pl' ? 'Wstecz' : 'Back'}
+            </GlassButton>
+            <GlassButton onClick={() => setShowInstructions(false)}>
+              {language === 'pl' ? 'Rozpocznij' : 'Start'}
+              <ArrowRight size={18} />
+            </GlassButton>
+          </div>
         </div>
       </GlassCard>
     );
   }
 
   return (
-    <GlassCard className={`p-4 sm:p-6 min-h-[700px] max-h-[85vh] flex flex-col`}>
-      {isLoading ? (
-        <div className="flex flex-1 items-center justify-center text-silver-dark">
-          {language === 'pl' ? 'Ładowanie zdjęć...' : 'Loading images...'}
-        </div>
-      ) : (
+    <GlassCard className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex flex-col overflow-y-auto scrollbar-hide`}>
+      <div className="min-h-full flex flex-col">
         <div className="flex-1 flex flex-col">
-          {/* Progress */}
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-silver-dark font-modern">
-                {language === 'pl' ? 'Postęp' : 'Progress'}
-              </span>
-              <span className="text-sm text-silver-dark font-modern">
-                {currentIndex + 1} / {images.length}
-              </span>
+          {isLoading ? (
+            <div className="flex flex-1 items-center justify-center text-silver-dark">
+              {language === 'pl' ? 'Ładowanie zdjęć...' : 'Loading images...'}
             </div>
-            <div className="w-full bg-silver/20 rounded-full h-2">
-              <motion.div
-                className="bg-gradient-to-r from-gold to-champagne h-2 rounded-full"
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.3 }}
-              />
-            </div>
-          </div>
+          ) : (
+            <div className="flex-1 flex flex-col">
+              {/* Progress */}
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-silver-dark font-modern">
+                    {language === 'pl' ? 'Postęp' : 'Progress'}
+                  </span>
+                  <span className="text-sm text-silver-dark font-modern">
+                    {currentIndex + 1} / {images.length}
+                  </span>
+                </div>
+                <div className="w-full bg-silver/20 rounded-full h-2">
+                  <motion.div
+                    className="bg-gradient-to-r from-gold to-champagne h-2 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+              </div>
 
-          {/* Swipe Card - Larger */}
-          <div className="relative h-[450px] md:h-[550px] mb-6">
-            <AnimatePresence>
-              {currentImage && (
-                <motion.div
-                  key={currentImage.id}
-                  className="absolute inset-0 cursor-grab active:cursor-grabbing"
-                  drag="x"
-                  dragConstraints={{ left: 0, right: 0 }}
-                  onDragEnd={handleDragEnd}
-                  initial={{ scale: 0, rotate: 0 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  exit={{ 
-                    scale: 0, 
-                    opacity: 0,
-                    transition: { duration: 0.2 }
-                  }}
-                  whileDrag={{ scale: 1.05, rotate: 5 }}
-                  style={{ touchAction: 'none' }}
-                >
-                  <div className="h-full rounded-2xl overflow-hidden shadow-2xl border-4 border-white/20">
-                    <div className="relative h-full w-full">
-                      <Image
-                        src={currentImage.url}
-                        alt="Interior"
-                        fill
-                        draggable={false}
-                        className="object-cover w-full h-full select-none"
-                        priority
-                      />
-                    </div>
+              {/* Swipe Card - Larger */}
+              <div className="relative h-[450px] md:h-[550px] mb-6">
+                {/* Hidden preload of next image for Next.js Image optimization */}
+                {images[currentIndex + 1] && (
+                  <div className="absolute opacity-0 pointer-events-none w-1 h-1 overflow-hidden">
+                    <Image
+                      src={images[currentIndex + 1].url}
+                      alt=""
+                      width={1}
+                      height={1}
+                      loading="eager"
+                    />
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                )}
+                <AnimatePresence>
+                  {currentImage && (
+                    <motion.div
+                      key={currentImage.id}
+                      className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                      drag="x"
+                      dragConstraints={{ left: 0, right: 0 }}
+                      onDragEnd={handleDragEnd}
+                      initial={{ scale: 0, rotate: 0 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      exit={{ 
+                        scale: 0, 
+                        opacity: 0,
+                        transition: { duration: 0.2 }
+                      }}
+                      whileDrag={{ scale: 1.05, rotate: 5 }}
+                      style={{ touchAction: 'none' }}
+                    >
+                      <div className="h-full rounded-2xl overflow-hidden shadow-2xl border-4 border-white/20">
+                        <div className="relative h-full w-full">
+                          <Image
+                            src={currentImage.url}
+                            alt="Interior"
+                            fill
+                            draggable={false}
+                            className="object-cover w-full h-full select-none"
+                            priority
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
-          {/* Action Buttons - Bigger */}
-          <div className="flex justify-center gap-6">
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => handleSwipe('left')}
-              className="w-20 h-20 rounded-full bg-gradient-to-br from-red-100 to-red-200 hover:from-red-200 hover:to-red-300 shadow-xl flex items-center justify-center transition-all z-10"
-            >
-              <X size={36} className="text-red-600" />
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => handleSwipe('right')}
-              className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 shadow-xl flex items-center justify-center transition-all z-10"
-            >
-              <Heart size={36} className="text-white" fill="currentColor" />
-            </motion.button>
-          </div>
+              {/* Action Buttons - Bigger */}
+              <div className="flex justify-center gap-6 mb-4">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleSwipe('left')}
+                  className="w-20 h-20 rounded-full bg-gradient-to-br from-red-100 to-red-200 hover:from-red-200 hover:to-red-300 shadow-xl flex items-center justify-center transition-all z-10"
+                >
+                  <X size={36} className="text-red-600" />
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleSwipe('right')}
+                  className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 shadow-xl flex items-center justify-center transition-all z-10"
+                >
+                  <Heart size={36} className="text-white" fill="currentColor" />
+                </motion.button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
 
-      <div className="flex justify-between mt-6">
-        <GlassButton onClick={onBack} variant="secondary">
-          <ArrowLeft size={18} />
-          {language === 'pl' ? 'Wstecz' : 'Back'}
-        </GlassButton>
+        <div className="flex justify-between mt-8">
+          <GlassButton onClick={onBack} variant="secondary">
+            <ArrowLeft size={18} />
+            {language === 'pl' ? 'Wstecz' : 'Back'}
+          </GlassButton>
+        </div>
       </div>
     </GlassCard>
   );
@@ -1750,85 +1810,69 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
   };
 
   return (
-    <GlassCard className={`p-6 md:p-8 min-h-[700px] max-h-[85vh] overflow-auto scrollbar-hide flex flex-col justify-center`}>
-      <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2 text-center">
-        {currentQ.question[language]}
-      </h2>
-      <p className="text-graphite font-modern mb-6 text-sm text-center">
-        {language === 'pl' ? 'Reaguj intuicyjnie, nie myśl za długo' : 'React intuitively, don\'t overthink'}
-      </p>
-      
-      <div className="mb-6">
-        <div className="text-xs text-silver-dark text-center mb-2 font-modern">
-          {language === 'pl' ? 'Pytanie' : 'Question'} {currentQuestion + 1} / {questions.length}
+    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex flex-col justify-center overflow-y-auto scrollbar-hide`}>
+      <div className="min-h-full flex flex-col justify-center">
+        <div className="flex-1">
+          <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2 text-center">
+            {currentQ.question[language]}
+          </h2>
+          <p className="text-graphite font-modern mb-6 text-sm text-center">
+            {language === 'pl' ? 'Reaguj intuicyjnie, nie myśl za długo' : 'React intuitively, don\'t overthink'}
+          </p>
+          
+          <div className="mb-6">
+            <div className="text-xs text-silver-dark text-center mb-2 font-modern">
+              {language === 'pl' ? 'Pytanie' : 'Question'} {currentQuestion + 1} / {questions.length}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <button
+              type="button"
+              onClick={() => handleChoice('left')}
+              className="group relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-white/30 hover:border-gold/50 transition-all hover:scale-[1.02] cursor-pointer"
+            >
+              <Image
+                src={currentQ.leftImage}
+                alt={currentQ.leftLabel[language]}
+                fill
+                className="object-cover"
+                style={{ objectPosition: 'center 30%' }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                <p className="text-white font-modern text-sm font-semibold">
+                  {currentQ.leftLabel[language]}
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleChoice('right')}
+              className="group relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-white/30 hover:border-gold/50 transition-all hover:scale-[1.02] cursor-pointer"
+            >
+              <Image
+                src={currentQ.rightImage}
+                alt={currentQ.rightLabel[language]}
+                fill
+                className="object-cover"
+                style={{ objectPosition: 'center 30%' }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                <p className="text-white font-modern text-sm font-semibold">
+                  {currentQ.rightLabel[language]}
+                </p>
+              </div>
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <button
-          type="button"
-          onClick={() => handleChoice('left')}
-          className="group relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-white/30 hover:border-gold/50 transition-all hover:scale-[1.02] cursor-pointer"
-        >
-          <Image
-            src={currentQ.leftImage}
-            alt={currentQ.leftLabel[language]}
-            fill
-            className="object-cover"
-            style={{ objectPosition: 'center 30%' }}
-            onLoad={() => {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:leftImage-onLoad',message:'Profile setup semantic differential left image loaded',data:{questionId:currentQ.id,imageUrl:currentQ.leftImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H1'})}).catch(()=>{});
-              // #endregion
-            }}
-            onError={() => {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:leftImage-onError',message:'Profile setup semantic differential left image failed',data:{questionId:currentQ.id,imageUrl:currentQ.leftImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H2'})}).catch(()=>{});
-              // #endregion
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
-            <p className="text-white font-modern text-sm font-semibold">
-              {currentQ.leftLabel[language]}
-            </p>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleChoice('right')}
-          className="group relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-white/30 hover:border-gold/50 transition-all hover:scale-[1.02] cursor-pointer"
-        >
-          <Image
-            src={currentQ.rightImage}
-            alt={currentQ.rightLabel[language]}
-            fill
-            className="object-cover"
-            style={{ objectPosition: 'center 30%' }}
-            onLoad={() => {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:rightImage-onLoad',message:'Profile setup semantic differential right image loaded',data:{questionId:currentQ.id,imageUrl:currentQ.rightImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H1'})}).catch(()=>{});
-              // #endregion
-            }}
-            onError={() => {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:rightImage-onError',message:'Profile setup semantic differential right image failed',data:{questionId:currentQ.id,imageUrl:currentQ.rightImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H2'})}).catch(()=>{});
-              // #endregion
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
-            <p className="text-white font-modern text-sm font-semibold">
-              {currentQ.rightLabel[language]}
-            </p>
-          </div>
-        </button>
-      </div>
-
-      <div className="flex justify-between mt-6">
-        <GlassButton onClick={onBack} variant="secondary">
-          <ArrowLeft size={18} />
-          {language === 'pl' ? 'Wstecz' : 'Back'}
-        </GlassButton>
+        <div className="flex justify-between mt-8">
+          <GlassButton onClick={onBack} variant="secondary">
+            <ArrowLeft size={18} />
+            {language === 'pl' ? 'Wstecz' : 'Back'}
+          </GlassButton>
+        </div>
       </div>
     </GlassCard>
   );

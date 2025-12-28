@@ -34,9 +34,9 @@ export function GlassHeader() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="w-full sticky top-2 sm:top-4 z-[100] mb-2"
+          className="w-full sticky top-2 sm:top-4 z-[100] mb-2 px-1"
         >
-          <div className="w-full glass-panel rounded-[16px] sm:rounded-[24px] md:rounded-[32px] border border-white/20 bg-white/10 backdrop-blur-2xl shadow-2xl px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hide min-w-0 relative z-[110] pointer-events-auto" style={{ overflowY: 'visible' }}>
+          <div className="w-full max-w-full glass-panel rounded-[16px] sm:rounded-[24px] md:rounded-[32px] border border-white/20 bg-white/10 backdrop-blur-2xl shadow-2xl px-1.5 sm:px-3 py-1.5 sm:py-2 flex items-center gap-0.5 sm:gap-2 overflow-x-auto scrollbar-hide min-w-0 relative z-[110] pointer-events-auto" style={{ overflowY: 'visible' }}>
             
             {/* Home Button */}
             <button 

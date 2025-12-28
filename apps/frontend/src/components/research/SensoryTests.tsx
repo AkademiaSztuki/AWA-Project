@@ -108,45 +108,47 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
     type === 'light'
       ? 'grid-cols-1 md:grid-cols-2'
       : type === 'texture' || type === 'music'
-      ? 'grid-cols-2 md:grid-cols-3'
+      ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
       : 'grid-cols-1 md:grid-cols-2';
 
   const selectedOption = selectedId ? options.find(o => o.id === selectedId) : null;
 
   const ContentWrapper = frameless ? 'div' : GlassCard;
   const wrapperClass = frameless 
-    ? `h-full flex flex-col justify-center ${className}`
-    : `p-5 md:p-6 h-full flex flex-col justify-center ${className}`;
+    ? `h-full flex flex-col justify-start ${className}`
+    : `p-2.5 sm:p-5 md:p-6 h-full flex flex-col justify-start ${className}`;
 
   return (
     <ContentWrapper className={wrapperClass}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <Icon className="text-white" size={20} />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-1.5">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0 shadow-md">
+            <Icon className="text-white" size={14} />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
+            <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-gold font-bold leading-none mb-0.5">
               {type === 'music' ? (language === 'pl' ? 'Muzyka' : 'Music') :
                type === 'texture' ? (language === 'pl' ? 'Tekstury' : 'Textures') :
                (language === 'pl' ? 'Światło' : 'Light')}
             </p>
-            <p className="text-sm font-modern text-graphite">
+            <p className="text-xs sm:text-sm font-modern text-graphite leading-tight">
               {prompts[type][language]}
             </p>
           </div>
         </div>
         {selectedOption && (
-          <p className="text-xs text-right text-silver-dark">
-            {language === 'pl' ? 'Wybrano:' : 'Selected:'}{' '}
-            <span className="font-semibold text-graphite">
+          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 bg-white/5 sm:bg-transparent p-1 sm:p-0 rounded-lg border border-white/10 sm:border-none">
+            <span className="text-[9px] uppercase tracking-wider text-silver-dark opacity-70">
+              {language === 'pl' ? 'Wybrano' : 'Selected'}
+            </span>
+            <span className="text-[10px] sm:text-xs font-bold text-gold leading-none">
               {t(selectedOption.label)}
             </span>
-          </p>
+          </div>
         )}
       </div>
 
-      <div className={`grid ${gridCols} gap-4 flex-1 content-center`}>
+      <div className={`grid ${gridCols} gap-2.5 sm:gap-4`}>
         {options.map((option) => {
           const isSelected = selectedId === option.id;
           const isPlaying = playingAudio === option.id;
@@ -156,14 +158,19 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
               key={option.id}
               type="button"
               onClick={() => handleSelect(option)}
-              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all ${
+              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all relative z-0 ${
                 isSelected
-                  ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
+                  ? 'border-gold bg-gold/15 shadow-inner shadow-gold/10'
                   : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
+              style={{ 
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                WebkitFontSmoothing: 'antialiased'
+              }}
             >
               {option.imageUrl && !imageErrors.has(option.imageUrl) ? (
-                <div className={`relative w-full overflow-hidden rounded-t-2xl rounded-b-2xl bg-gray-200 ${type === 'music' ? 'h-40' : 'h-48'}`}>
+                <div className={`relative w-full overflow-hidden bg-white/5 ${type === 'music' ? 'h-20 sm:h-40' : 'h-28 sm:h-48'}`}>
                   <Image
                     src={option.imageUrl}
                     alt={t(option.label)}
@@ -185,14 +192,14 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
                   />
                 </div>
               ) : (
-                <div className={`relative w-full overflow-hidden rounded-t-2xl rounded-b-2xl flex items-center justify-center ${type === 'music' ? 'h-40 bg-transparent' : 'h-48 bg-gray-200'}`}>
+                <div className={`relative w-full overflow-hidden flex items-center justify-center bg-white/5 ${type === 'music' ? 'h-20 sm:h-40 bg-transparent' : 'h-28 sm:h-48'}`}>
                   <Icon size={32} className="text-silver-dark" />
                 </div>
               )}
 
-              <div className="px-4 pt-3 pb-4 flex flex-col gap-2">
-                <div className="flex items-start justify-between gap-3">
-                  <h4 className="font-nasalization text-sm text-graphite">
+              <div className="px-3 sm:px-4 pt-2 sm:pt-3 pb-3 sm:pb-4 flex flex-col gap-1.5 sm:gap-2">
+                <div className="flex items-start justify-between gap-2 sm:gap-3">
+                  <h4 className="font-nasalization text-[11px] sm:text-sm text-graphite leading-tight">
                     {t(option.label)}
                   </h4>
                   {type === 'music' && option.audioUrl && (
@@ -206,17 +213,17 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
                           handlePlayAudio(option, e as any);
                         }
                       }}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors cursor-pointer ${
+                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex-shrink-0 flex items-center justify-center border transition-colors cursor-pointer ${
                         isPlaying
                           ? 'bg-gold text-white border-gold'
                           : 'border-white/20 text-graphite hover:border-gold/50'
                       }`}
                     >
-                      {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                      {isPlaying ? <Pause size={12} /> : <Play size={12} />}
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-silver-dark font-modern leading-relaxed">
+                <p className="text-[10px] sm:text-xs text-silver-dark font-modern leading-relaxed">
                   {t(option.description)}
                 </p>
               </div>
@@ -225,8 +232,8 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
         })}
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-4">
-        <p className="text-xs text-silver-dark font-modern flex-1">
+      <div className="mt-1 flex items-center justify-between gap-4">
+        <p className="text-[9px] sm:text-xs text-silver-dark font-modern flex-1 italic opacity-80">
           {type === 'music' && (language === 'pl'
             ? 'Muzyka ustawia tempo Twoich rytuałów.'
             : 'Music sets the tempo of your rituals.')}
@@ -238,7 +245,7 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
             : 'Light shapes your energy and focus throughout the day.')}
         </p>
         {stepCounter && (
-          <p className="text-xs text-silver-dark font-modern whitespace-nowrap">
+          <p className="text-[9px] sm:text-xs text-silver-dark font-modern whitespace-nowrap opacity-60">
             {stepCounter}
           </p>
         )}
@@ -274,33 +281,35 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
 
   const ContentWrapper = frameless ? 'div' : GlassCard;
   const wrapperClass = frameless 
-    ? `h-full flex flex-col justify-center ${className}`
-    : `p-5 md:p-6 h-full flex flex-col justify-center ${className}`;
+    ? `h-full flex flex-col justify-start ${className}`
+    : `p-2.5 sm:p-5 md:p-6 h-full flex flex-col justify-start ${className}`;
 
   return (
     <ContentWrapper className={wrapperClass}>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-1.5">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
+          <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-gold font-bold leading-none mb-0.5">
             {language === 'pl' ? 'Paleta' : 'Palette'}
           </p>
-          <p className="text-sm font-modern text-graphite">
+          <p className="text-xs sm:text-sm font-modern text-graphite leading-tight">
             {language === 'pl'
               ? 'Która paleta pomoże nam ustawić bazę kolorystyczną?'
               : 'Which palette should anchor the chromatic base?'}
           </p>
         </div>
         {selectedId && (
-          <p className="text-xs text-right text-silver-dark">
-            {language === 'pl' ? 'Wybrano:' : 'Selected:'}{' '}
-            <span className="font-semibold text-graphite">
+          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 bg-white/5 sm:bg-transparent p-1 sm:p-0 rounded-lg border border-white/10 sm:border-none">
+            <span className="text-[9px] uppercase tracking-wider text-silver-dark opacity-70">
+              {language === 'pl' ? 'Wybrano' : 'Selected'}
+            </span>
+            <span className="text-[10px] sm:text-xs font-bold text-gold leading-none">
               {options.find(p => p.id === selectedId)?.label[language]}
             </span>
-          </p>
+          </div>
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-4 flex-1 content-center">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
         {options.map((palette) => {
           const isSelected = palette.id === selectedId;
           return (
@@ -308,13 +317,18 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
               key={palette.id}
               type="button"
               onClick={() => onSelect(palette.id)}
-              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all ${
+              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all min-h-[90px] sm:min-h-[165px] relative z-0 ${
                 isSelected
-                  ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
+                  ? 'border-gold bg-gold/15 shadow-inner shadow-gold/10'
                   : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
+              style={{ 
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                WebkitFontSmoothing: 'antialiased'
+              }}
             >
-              <div className="relative w-full h-32 overflow-hidden rounded-t-2xl rounded-b-2xl bg-gray-200">
+              <div className="relative w-full h-9 sm:h-28 overflow-hidden bg-white/5 flex-shrink-0">
                 <div className="flex gap-2 h-full w-full">
                   {palette.colors.map((color, index) => (
                     <div
@@ -325,8 +339,8 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
                   ))}
                 </div>
               </div>
-              <div className="px-4 pt-3 pb-4 flex flex-col gap-2">
-                <p className="text-sm font-nasalization text-graphite text-center">
+              <div className="px-2 sm:px-4 pt-2 pb-3 flex-1 flex items-center justify-center">
+                <p className="text-[10px] sm:text-sm font-nasalization text-graphite text-center leading-tight">
                   {palette.label[language]}
                 </p>
               </div>
@@ -335,14 +349,14 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
         })}
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-4">
-        <p className="text-xs text-silver-dark font-modern flex-1">
+      <div className="mt-1 flex items-center justify-between gap-4">
+        <p className="text-[9px] sm:text-xs text-silver-dark font-modern flex-1 italic opacity-80">
           {language === 'pl'
             ? 'Paleta ustawia bazę pod wszystkie sensoryczne decyzje.'
             : 'The palette sets the base for every other sensory decision.'}
         </p>
         {stepCounter && (
-          <p className="text-xs text-silver-dark font-modern whitespace-nowrap">
+          <p className="text-[9px] sm:text-xs text-silver-dark font-modern whitespace-nowrap opacity-60">
             {stepCounter}
           </p>
         )}
@@ -356,21 +370,21 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
 
   const ContentWrapper = frameless ? 'div' : GlassCard;
   const wrapperClass = frameless 
-    ? `h-full flex flex-col justify-center ${className}`
-    : `p-5 md:p-6 h-full flex flex-col justify-center ${className}`;
+    ? `h-full flex flex-col justify-start ${className}`
+    : `p-2.5 sm:p-5 md:p-6 h-full flex flex-col justify-start ${className}`;
 
   return (
     <ContentWrapper className={wrapperClass}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <Palette className="text-white" size={20} />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-1.5">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0 shadow-md">
+            <Palette className="text-white" size={14} />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
+            <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-gold font-bold leading-none mb-0.5">
               {language === 'pl' ? 'Styl' : 'Style'}
             </p>
-            <p className="text-sm font-modern text-graphite">
+            <p className="text-xs sm:text-sm font-modern text-graphite leading-tight">
               {language === 'pl'
                 ? 'Który styl najlepiej opisuje Twoje preferencje?'
                 : 'Which style best describes your preferences?'}
@@ -378,19 +392,21 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
           </div>
         </div>
         {selectedId && (
-          <p className="text-xs text-right text-silver-dark">
-            {language === 'pl' ? 'Wybrano:' : 'Selected:'}{' '}
-            <span className="font-semibold text-graphite">
+          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 bg-white/5 sm:bg-transparent p-1.5 sm:p-0 rounded-lg border border-white/10 sm:border-none">
+            <span className="text-[9px] uppercase tracking-wider text-silver-dark opacity-70">
+              {language === 'pl' ? 'Wybrano' : 'Selected'}
+            </span>
+            <span className="text-[10px] sm:text-xs font-bold text-gold leading-none">
               {(() => {
                 const style = options.find(s => s.id === selectedId);
                 return style ? (language === 'pl' ? style.labelPl : style.labelEn) : '';
               })()}
             </span>
-          </p>
+          </div>
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 flex-1 content-center overflow-y-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 overflow-y-auto">
         {options.map((style) => {
           const isSelected = style.id === selectedId;
           return (
@@ -398,16 +414,21 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
               key={style.id}
               type="button"
               onClick={() => onSelect(style.id)}
-              className={`rounded-2xl border px-4 py-4 text-left flex flex-col gap-3 transition-all ${
+              className={`rounded-2xl border px-3 sm:px-4 py-3 sm:py-4 text-left flex flex-col gap-2 sm:gap-3 transition-all ${
                 isSelected
                   ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
                   : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
+              style={{ 
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                WebkitFontSmoothing: 'antialiased'
+              }}
             >
-              <h4 className="font-nasalization text-sm text-graphite">
+              <h4 className="font-nasalization text-[11px] sm:text-sm text-graphite leading-tight">
                 {language === 'pl' ? style.labelPl : style.labelEn}
               </h4>
-              <p className="text-xs text-silver-dark font-modern leading-relaxed">
+              <p className="text-[10px] sm:text-xs text-silver-dark font-modern leading-relaxed">
                 {style.description}
               </p>
             </button>
@@ -415,14 +436,14 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
         })}
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-4">
-        <p className="text-xs text-silver-dark font-modern flex-1">
+      <div className="mt-1 flex items-center justify-between gap-4">
+        <p className="text-[9px] sm:text-xs text-silver-dark font-modern flex-1 italic opacity-80">
           {language === 'pl'
             ? 'Styl ustawia bazę dla całej estetyki przestrzeni.'
             : 'Style sets the foundation for the entire space aesthetic.'}
         </p>
         {stepCounter && (
-          <p className="text-xs text-silver-dark font-modern whitespace-nowrap">
+          <p className="text-[9px] sm:text-xs text-silver-dark font-modern whitespace-nowrap opacity-60">
             {stepCounter}
           </p>
         )}
@@ -633,9 +654,9 @@ export function SensoryTestSuite({
   };
 
   return (
-    <div className={`flex flex-col gap-4 h-full pb-4 ${className}`}>
+    <div className={`flex flex-col gap-1.5 sm:gap-2 h-full pb-1 w-full max-w-full overflow-x-hidden ${className}`}>
       {profileContext && (
-        <div className="glass-panel rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-silver-dark flex flex-wrap gap-4">
+        <div className="glass-panel rounded-2xl border border-white/10 bg-white/5 p-3 text-[10px] text-silver-dark flex flex-wrap gap-3 w-full mb-1">
           {profileContext.paletteLabel && (
             <div>
               <p className="uppercase tracking-[0.2em] mb-1">{language === 'pl' ? 'Paleta' : 'Palette'}</p>
@@ -657,17 +678,17 @@ export function SensoryTestSuite({
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex gap-1 overflow-x-auto py-1 scrollbar-hide -mx-1 px-1 flex-shrink-0">
         {tests.map((test) => (
           <button
             key={test}
             onClick={() => setCurrentTest(test)}
-            className={`flex-1 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${
+            className={`whitespace-nowrap px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-nasalization font-bold transition-all flex-shrink-0 sm:flex-1 border flex items-center justify-center ${
               currentTest === test
-                ? 'bg-gold/30 border border-gold/50 text-graphite'
+                ? 'bg-white/25 border-white/40 text-white shadow-sm'
                 : isTestComplete(test)
-                ? 'bg-white/10 border border-gold/30 text-gold'
-                : 'bg-white/5 border border-white/10 text-silver-dark'
+                ? 'bg-gold/20 border-gold/30 text-gold'
+                : 'bg-white/5 border-white/10 text-white/40 hover:text-white/60'
             }`}
           >
             {getTestLabel(test)}

@@ -51,7 +51,7 @@ const LandingScreen: React.FC = () => {
       <div 
         className={`z-50 transition-all duration-1000 ${
           showAuraSection 
-            ? 'fixed bottom-0 left-0 right-0 w-full h-[260px]' 
+            ? 'fixed bottom-0 left-0 right-0 w-full h-[180px] sm:h-[220px] lg:h-[260px]' 
             : 'fixed inset-0 flex items-center justify-center pointer-events-none'
         }`}
       >
@@ -71,7 +71,7 @@ const LandingScreen: React.FC = () => {
       {/* Path Selection Buttons */}
       <div className={`flex-1 transition-opacity duration-1000 ${showAuraSection ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         {showAuraSection && (
-          <div className="flex flex-col items-center justify-center min-h-screen p-4 pb-[280px]">
+          <div className="flex flex-col items-center justify-center min-h-screen p-4 pb-48 sm:pb-64 lg:pb-[280px]">
             <div className="w-full max-w-4xl z-30">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}

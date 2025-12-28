@@ -37,6 +37,14 @@ export const MATERIAL_TRANSLATIONS: Record<string, { pl: string; en: string }> =
   'live_edge': { pl: 'Drewno surowe', en: 'Live edge' },
   'raw': { pl: 'Surowy', en: 'Raw' },
   'unfinished': { pl: 'Niefinirowany', en: 'Unfinished' },
+  
+  // Sensory texture materials (with underscores)
+  'soft_fabric': { pl: 'Miękka tkanina', en: 'Soft fabric' },
+  'smooth_wood': { pl: 'Gładkie drewno', en: 'Smooth wood' },
+  'cold_metal': { pl: 'Zimny metal', en: 'Cold metal' },
+  'rough_stone': { pl: 'Szorstki kamień', en: 'Rough stone' },
+  'warm_leather': { pl: 'Ciepła skóra', en: 'Warm leather' },
+  'warm_wood': { pl: 'Ciepłe drewno', en: 'Warm wood' },
 };
 
 // Color name translations for dashboard display
@@ -110,18 +118,34 @@ export const COLOR_TRANSLATIONS: Record<string, { pl: string; en: string }> = {
 
 /**
  * Translate a material name to the target language
+ * Handles formats like: "cold_metal", "Cold_metal", "COLD_METAL", etc.
  */
 export function translateMaterial(material: string, language: 'pl' | 'en' = 'pl'): string {
   if (!material) return material;
   
+  // Normalize: convert to lowercase and trim
   const normalized = material.toLowerCase().trim();
-  const translation = MATERIAL_TRANSLATIONS[normalized];
+  
+  // Try direct lookup first
+  let translation = MATERIAL_TRANSLATIONS[normalized];
   
   if (translation) {
     return translation[language];
   }
   
-  // If no translation found, return capitalized original
+  // If no direct match, try to format the original nicely
+  // Handle formats like "Cold_metal" -> "Cold Metal" or "cold_metal" -> "Cold Metal"
+  if (normalized.includes('_')) {
+    const parts = normalized.split('_');
+    const formatted = parts
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+    
+    // If still no match in dictionary, return formatted version (e.g., "Cold Metal")
+    return formatted;
+  }
+  
+  // If no translation found and no underscores, return capitalized original
   return material.charAt(0).toUpperCase() + material.slice(1).toLowerCase();
 }
 
@@ -141,6 +165,7 @@ export function translateColor(color: string, language: 'pl' | 'en' = 'pl'): str
   // If no translation found, return capitalized original
   return color.charAt(0).toUpperCase() + color.slice(1).toLowerCase();
 }
+
 
 
 

@@ -77,7 +77,7 @@ const AuroraBubbles: React.FC = () => {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[3] pointer-events-none overflow-hidden">
+    <div className="fixed inset-0 z-[4] pointer-events-none overflow-hidden">
       {bubbles.map((bubble, index) => (
         <div
           key={index}

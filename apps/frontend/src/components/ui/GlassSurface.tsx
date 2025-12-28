@@ -140,6 +140,7 @@ const GlassSurface = ({
     const baseStyles: CSSProperties = {
       ...style,
       width: typeof width === "number" ? `${width}px` : width,
+      maxWidth: '100%', // Zapewnia, że nie wyjdzie poza ekran na mobile
       height: typeof height === "number" ? `${height}px` : height,
       borderRadius: `${borderRadius}px`,
       cursor: onClick ? 'pointer' : undefined,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PRSMoodGridData, PRS_MOOD_GRID_CONFIG } from '@/lib/questions/validated-scales';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -34,8 +34,24 @@ export function MoodGrid({
     initialPosition || { x: 0, y: 0 }
   );
   const [hasClicked, setHasClicked] = useState(false);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [gridSize, setGridSize] = useState(400);
 
   const config = PRS_MOOD_GRID_CONFIG;
+
+  // Update grid size based on actual rendered size
+  useEffect(() => {
+    const updateGridSize = () => {
+      if (gridRef.current) {
+        const rect = gridRef.current.getBoundingClientRect();
+        setGridSize(rect.width);
+      }
+    };
+
+    updateGridSize();
+    window.addEventListener('resize', updateGridSize);
+    return () => window.removeEventListener('resize', updateGridSize);
+  }, []);
 
   const handleGridClick = (event: React.MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -57,14 +73,13 @@ export function MoodGrid({
   };
 
   // Convert -1:1 position to pixel coordinates for display
-  const getPixelPosition = (pos: PRSMoodGridData, gridSize: number) => {
+  const getPixelPosition = (pos: PRSMoodGridData, size: number) => {
     return {
-      x: ((pos.x + 1) / 2) * gridSize,
-      y: ((1 - pos.y) / 2) * gridSize
+      x: ((pos.x + 1) / 2) * size,
+      y: ((1 - pos.y) / 2) * size
     };
   };
 
-  const gridSize = 400; // px
   const pixelPos = getPixelPosition(position, gridSize);
 
   // Mode-specific styling
@@ -99,17 +114,17 @@ export function MoodGrid({
           {t(config.axes.y.labels.max)}
         </div>
 
-        <div className="flex items-center justify-center gap-3 w-full">
+        <div className="flex items-center justify-center gap-1 sm:gap-3 w-full">
           {/* X-axis label (left) */}
-          <div className="text-sm font-modern text-graphite font-semibold w-20 text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+          <div className="text-sm font-modern text-graphite font-semibold w-12 sm:w-20 text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
             {t(config.axes.x.labels.min)}
           </div>
 
           {/* Main Grid */}
-          <div className="relative flex-shrink-0">
+          <div className="relative flex-shrink-0 w-full max-w-[400px] aspect-square">
             <div
-              className="relative bg-gradient-to-br from-white/40 to-white/10 backdrop-blur-sm border-2 border-white/30 rounded-lg cursor-crosshair overflow-hidden shadow-lg"
-              style={{ width: gridSize, height: gridSize }}
+              ref={gridRef}
+              className="relative bg-gradient-to-br from-white/40 to-white/10 backdrop-blur-sm border-2 border-white/30 rounded-lg cursor-crosshair overflow-hidden shadow-lg w-full h-full"
               onClick={handleGridClick}
             >
               {/* Quadrant lines */}
@@ -142,7 +157,7 @@ export function MoodGrid({
           </div>
 
           {/* X-axis label (right) */}
-          <div className="text-sm font-modern text-graphite font-semibold w-20 text-center" style={{ writingMode: 'vertical-lr' }}>
+          <div className="text-sm font-modern text-graphite font-semibold w-12 sm:w-20 text-center" style={{ writingMode: 'vertical-lr' }}>
             {t(config.axes.x.labels.max)}
           </div>
         </div>

@@ -53,7 +53,7 @@ export const AuroraBackground: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[-50] pointer-events-none overflow-hidden"
+      className="fixed inset-0 z-[1] pointer-events-none overflow-hidden"
       style={{
         background: 'radial-gradient(ellipse at 60% 40%,rgb(199, 152, 51) 0%,rgb(136, 136, 136) 100%)'
       }}

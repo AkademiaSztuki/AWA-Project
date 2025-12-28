@@ -74,16 +74,16 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
 
   const content = (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3 flex-1">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <Mountain className="text-white" size={20} />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-1.5">
+        <div className="flex items-center gap-2.5 flex-1">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0 shadow-md">
+            <Mountain className="text-white" size={14} />
           </div>
           <div className="flex-1">
-            <p className="text-xs uppercase tracking-[0.3em] text-silver-dark">
+            <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-gold font-bold leading-none mb-0.5">
               {language === 'pl' ? 'Metafora' : 'Metaphor'}
             </p>
-            <p className="text-sm font-modern text-graphite">
+            <p className="text-xs sm:text-sm font-modern text-graphite leading-tight">
               {language === 'pl' 
                 ? 'Gdyby Twoja idealna przestrzeń była miejscem w naturze, którym by była?'
                 : 'If your ideal space was a place in nature, which would it be?'}
@@ -91,17 +91,19 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
           </div>
         </div>
         {selectedId && (
-          <p className="text-xs text-right text-silver-dark">
-            {language === 'pl' ? 'Wybrano:' : 'Selected:'}{' '}
-            <span className="font-semibold text-graphite">
+          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 bg-white/5 sm:bg-transparent p-1 sm:p-0 rounded-lg border border-white/10 sm:border-none">
+            <span className="text-[9px] uppercase tracking-wider text-silver-dark opacity-70">
+              {language === 'pl' ? 'Wybrano' : 'Selected'}
+            </span>
+            <span className="text-[10px] sm:text-xs font-bold text-gold leading-none">
               {t(NATURE_METAPHOR_OPTIONS.find(o => o.id === selectedId)!.label)}
             </span>
-          </p>
+          </div>
         )}
       </div>
 
       {/* Options Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 flex-1 content-center">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
         {NATURE_METAPHOR_OPTIONS.map((option) => {
           const isSelected = selectedId === option.id;
 
@@ -110,15 +112,20 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
               key={option.id}
               type="button"
               data-nature-metaphor-button
-              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all ${
+              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all min-h-[160px] sm:min-h-[220px] ${
                 isSelected
                   ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
                   : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
+              style={{ 
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                WebkitFontSmoothing: 'antialiased'
+              }}
               onClick={() => handleSelect(option)}
             >
               {/* Image */}
-              <div className="relative w-full h-48 overflow-hidden rounded-t-2xl rounded-b-2xl bg-gray-200">
+              <div className="relative w-full h-24 sm:h-48 overflow-hidden rounded-t-2xl rounded-b-2xl bg-gray-200 flex-shrink-0">
                 {option.imageUrl && !imageErrors.has(option.imageUrl) ? (
                   <Image
                     src={option.imageUrl}
@@ -153,13 +160,13 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
               </div>
 
               {/* Content */}
-              <div className="px-4 pt-3 pb-4 flex flex-col gap-2 min-h-[80px]" data-nature-metaphor-text>
-                <div className="flex items-start justify-between gap-3">
-                  <h4 className="font-nasalization text-sm text-graphite">
+              <div className="px-3 sm:px-4 pt-2 sm:pt-3 pb-3 sm:pb-4 flex flex-col gap-1.5 sm:gap-2 flex-1" data-nature-metaphor-text>
+                <div className="flex items-start justify-between gap-2 sm:gap-3">
+                  <h4 className="font-nasalization text-[11px] sm:text-sm text-graphite leading-tight">
                     {t(option.label)}
                   </h4>
                 </div>
-                <p className="text-xs text-silver-dark font-modern leading-relaxed">
+                <p className="text-[10px] sm:text-xs text-silver-dark font-modern leading-relaxed">
                   {t(option.description)}
                 </p>
               </div>
@@ -168,14 +175,14 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
         })}
       </div>
 
-      <div className="mt-4 mb-2 flex items-center justify-between gap-4">
-        <p className="text-xs text-silver-dark font-modern flex-1">
+      <div className="mt-2 flex items-center justify-between gap-4">
+        <p className="text-[9px] sm:text-xs text-silver-dark font-modern flex-1 italic opacity-80">
           {language === 'pl'
             ? 'Techniki projekcyjne pomagają odkryć autentyczne preferencje poza świadomymi filtrami'
             : 'Projective techniques help discover authentic preferences beyond conscious filters'}
         </p>
         {stepCounter && (
-          <p className="text-xs text-silver-dark font-modern whitespace-nowrap">
+          <p className="text-[9px] sm:text-xs text-silver-dark font-modern whitespace-nowrap opacity-60">
             {stepCounter}
           </p>
         )}

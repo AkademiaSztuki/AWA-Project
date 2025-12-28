@@ -33,6 +33,11 @@
 @layer utilities {
   .glass-panel {
     @apply bg-pearl-100/15 backdrop-blur-glass border border-white/30 shadow-glass;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Fix for dark corners in Chromium: */
+    position: relative;
+    z-index: 0;
   }
 
   .glass-button {
@@ -251,7 +256,21 @@
 }
 
 html, body, #__next, #root {
-  background: transparent !important;
+  background: transparent; /* Przywrócono transparent, aby tła fixed były widoczne */
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+  position: relative;
+}
+
+body {
+  @apply min-h-screen overflow-y-auto font-nasalization;
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-top: env(safe-area-inset-top);
 }
 
 .simplebar-scrollbar:before {

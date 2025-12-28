@@ -22,8 +22,8 @@ export function PathSelectionButton() {
       className="h-10 px-3 sm:px-4 rounded-full glass-panel transition-all text-xs sm:text-sm font-modern text-graphite flex items-center gap-1 sm:gap-2 hover:bg-white/10 active:bg-white/20 touch-target whitespace-nowrap relative z-[110] pointer-events-auto"
     >
       <ArrowLeft size={14} className="sm:w-4 sm:h-4" />
-      <span className="hidden sm:inline">{language === 'pl' ? 'Wybierz Ścieżkę' : 'Choose Path'}</span>
-      <span className="sm:hidden">{language === 'pl' ? 'Ścieżka' : 'Path'}</span>
+      <span className="hidden md:inline">{language === 'pl' ? 'Wybierz Ścieżkę' : 'Choose Path'}</span>
+      <span className="hidden sm:inline md:hidden">{language === 'pl' ? 'Ścieżka' : 'Path'}</span>
     </button>
   );
 }

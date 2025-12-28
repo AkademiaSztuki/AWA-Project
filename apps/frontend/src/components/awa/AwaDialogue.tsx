@@ -18,7 +18,7 @@ interface AwaDialogueProps {
   onDialogueEnd?: () => void;
   fullWidth?: boolean;
   autoHide?: boolean;
-  customMessage?: string;
+  customMessage?: string | string[];
 }
 
 // Dialogues with PL and EN versions
@@ -178,6 +178,14 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
       "Check if everything is correct and adjust the room type below if needed."
     ]
   },
+  room_analysis_ready: {
+    pl: [
+      "Przeanalizowałam Twoje zdjęcie. Rozpoznałam typ pomieszczenia."
+    ],
+    en: [
+      "I've analyzed your photo. I recognized the room type."
+    ]
+  },
   room_preference_source: {
     pl: [
       "Możemy użyć Twojego ogólnego profilu, albo wypełnić krótką ankietę specyficzną dla tego pokoju.",
@@ -296,6 +304,13 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
 
 // Audio file naming convention: /audio/{step}_{lang}.mp3
 const getAudioFile = (step: string, lang: 'pl' | 'en'): string => {
+  // Mapping for steps that share the same audio file
+  const AUDIO_MAPPING: Record<string, string> = {
+    'room_analysis_ready': 'room_analysis'
+  };
+
+  const audioStep = AUDIO_MAPPING[step] || step;
+  
   const audioSteps = [
     'landing', 'path_selection', 'onboarding',
     'wizard_demographics', 'wizard_lifestyle', 'tinder', 'wizard_semantic', 'wizard_sensory',
@@ -306,8 +321,8 @@ const getAudioFile = (step: string, lang: 'pl' | 'en'): string => {
     'generation', 'survey_satisfaction', 'survey_clarity', 'thanks'
   ];
   
-  if (audioSteps.includes(step)) {
-    return `/audio/${step}_${lang}.mp3`;
+  if (audioSteps.includes(audioStep)) {
+    return `/audio/${audioStep}_${lang}.mp3`;
   }
   return '';
 };
@@ -339,27 +354,26 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // Get dialogues for current language - use useMemo to ensure it's always up to date
   const dialogues = useMemo(() => {
     const stepDialogues = DIALOGUE_MAP[currentStep];
+    const baseDialogues = stepDialogues?.[language] || stepDialogues?.pl || [];
     
     if (customMessage) {
-      // If customMessage is provided and we have step dialogues, append customMessage after them
-      // Otherwise, use only customMessage
-      const baseDialogues = stepDialogues?.[language] || stepDialogues?.pl || [];
+      const customArray = Array.isArray(customMessage) ? customMessage : [customMessage];
+      
       if (baseDialogues.length > 0) {
-        const result = [...baseDialogues, customMessage];
-        console.log('[AwaDialogue] Appending customMessage to base dialogues:', {
+        const result = [...baseDialogues, ...customArray];
+        console.log('[AwaDialogue] Appending customMessage(s) to base dialogues:', {
           currentStep,
           baseDialoguesCount: baseDialogues.length,
-          customMessage,
-          totalDialogues: result.length,
-          dialogues: result
+          customCount: customArray.length,
+          totalDialogues: result.length
         });
         return result;
       } else {
-        console.log('[AwaDialogue] Using only customMessage:', customMessage);
-        return [customMessage];
+        console.log('[AwaDialogue] Using only customMessage(s):', customArray);
+        return customArray;
       }
     } else {
-      return stepDialogues?.[language] || stepDialogues?.pl || ["Cześć! Jestem IDA."];
+      return baseDialogues.length > 0 ? baseDialogues : ["Cześć! Jestem IDA."];
     }
   }, [currentStep, language, customMessage]);
   
@@ -653,46 +667,60 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   }, [currentStep, language, playAnimation]);
   
   // Handle customMessage changes - reset dialogue when customMessage appears
-  const prevCustomMessageRef = React.useRef<string | undefined>(undefined);
+  const prevCustomMessageRef = React.useRef<string | string[] | undefined>(undefined);
   useEffect(() => {
+    const customMessageStr = JSON.stringify(customMessage);
+    const prevCustomMessageStr = JSON.stringify(prevCustomMessageRef.current);
+    
     // Only process if customMessage actually changed
-    if (customMessage !== prevCustomMessageRef.current) {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2',location:'AwaDialogue.tsx:customMessage-effect',message:'customMessage changed',data:{currentStep,language,prevCustomMessageLen:prevCustomMessageRef.current?.length||0,nextCustomMessageLen:customMessage?.length||0,hasStarted,isDone,currentSentenceIndex,dialoguesLen:dialogues?.length||0},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      console.log('[AwaDialogue] customMessage changed:', {
-        customMessage,
-        prevCustomMessage: prevCustomMessageRef.current,
-        hasStarted,
-        isDone,
-        currentSentenceIndex
-      });
+    if (customMessageStr !== prevCustomMessageStr) {
+      console.log('[AwaDialogue] customMessage changed');
       
-      // Only reset if customMessage is new (not just undefined -> undefined)
-      if (customMessage && customMessage !== prevCustomMessageRef.current) {
-        console.log('[AwaDialogue] New customMessage detected, resetting dialogue');
-        // Reset dialogue state but don't interrupt if already started
-        setCurrentSentenceIndex(0);
-        setIsDone(false);
-        setIsVisible(true);
+      if (customMessage) {
+        // Check if we should reset or if it's just a change in future/current sentences
+        const customArray = Array.isArray(customMessage) ? customMessage : [customMessage];
+        const prevCustomArray = Array.isArray(prevCustomMessageRef.current) 
+          ? prevCustomMessageRef.current 
+          : (prevCustomMessageRef.current ? [prevCustomMessageRef.current] : []);
         
-        // Only reset audio if dialogue hasn't started yet
-        if (!hasStarted) {
-          setHasStarted(false);
-          setAudioReady(false);
-          // Auto-start after a short delay
-          setTimeout(() => {
-            setHasStarted(true);
-            setAudioReady(true);
-          }, 200);
+        // If the new custom message is simply an extension (same prefix of sentences), 
+        // OR if we are already in the middle of the dialogue and the change is downstream,
+        // we don't want to reset currentSentenceIndex to 0.
+        
+        // Calculate where the custom part starts in the full dialogues array
+        const stepDialogues = DIALOGUE_MAP[currentStep];
+        const baseDialogues = stepDialogues?.[language] || stepDialogues?.pl || [];
+        const customStartIndex = baseDialogues.length;
+        
+        // If we haven't reached the custom messages yet, no need to reset anything
+        if (currentSentenceIndex < customStartIndex) {
+          console.log('[AwaDialogue] Change in customMessage detected, but still in base dialogues. No reset needed.');
         } else {
-          // If already started, just reset sentence index to show new message
-          // Dialogue will continue with updated dialogues from useMemo
+          // We are in the custom part. Check if the CURRENT sentence has changed or was removed.
+          const customIdx = currentSentenceIndex - customStartIndex;
+          const currentSentenceChanged = customArray[customIdx] !== prevCustomArray[customIdx];
+          
+          if (currentSentenceChanged) {
+             // If the current sentence changed, we don't necessarily reset to 0, 
+             // but we let TextType handle the string change (it will reset that sentence).
+             // We only reset to 0 if the change is fundamental or if we were already "done".
+             if (isDone) {
+               console.log('[AwaDialogue] New content appeared after dialogue was done, resetting to show it');
+               setIsDone(false);
+               setAllSentencesCompleted(false);
+               setAudioEnded(false);
+               onDialogueEndCalledRef.current = false;
+               hideScheduledRef.current = false;
+               setIsVisible(true);
+               // If it's a completely new set of messages, maybe go back to the start of custom part?
+               // For now, let's just stay at current index and let it continue.
+             }
+          }
         }
       }
       prevCustomMessageRef.current = customMessage;
     }
-  }, [customMessage, hasStarted, currentSentenceIndex]);
+  }, [customMessage, hasStarted, currentSentenceIndex, currentStep, language, isDone]);
 
   useEffect(() => {
     if (currentStep === 'landing' && !audioReady) {
@@ -800,9 +828,9 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       fullWidth ? 'fixed bottom-0 left-0 right-0' : 'relative'
     } ${
       isLanding 
-        ? 'min-h-[380px] p-8' // Dialog should not block clicks - pointer-events-none ensures clicks pass through
-        : 'min-h-[260px] p-6 pb-8'
-    }`}>
+        ? 'min-h-[25vh] sm:min-h-[380px] p-4 sm:p-8' 
+        : 'min-h-[80px] sm:min-h-[120px] p-3 sm:p-4 pb-6'
+    } pb-[env(safe-area-inset-bottom,10px)]`}>
       {isLanding && audioReady && hasStarted && (
         <button
           onClick={handleSkip}
@@ -824,8 +852,8 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
           initialDelay={isLanding ? 0 : 0}
           className={`whitespace-pre-wrap tracking-tight w-full font-nasalization font-bold drop-shadow-lg select-none text-center pointer-events-none ${
             isLanding 
-              ? 'text-3xl md:text-4xl text-white' 
-              : 'text-2xl md:text-3xl text-white/90'
+              ? 'text-lg sm:text-3xl md:text-4xl text-white' 
+              : 'text-sm sm:text-lg md:text-xl text-white/90'
           }`}
           text={dialogues?.[currentSentenceIndex] ?? ""}
           typingSpeed={TYPING_SPEED}
