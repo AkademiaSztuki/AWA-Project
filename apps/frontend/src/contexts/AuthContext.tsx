@@ -23,7 +23,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    console.log('[AuthContext] Initializing, checking session...');
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) console.error('[AuthContext] Initial session error:', error);
+      console.log('[AuthContext] Initial session check:', !!session);
+      
       setSession(session);
       setUser(session?.user || null);
       setIsLoading(false);
@@ -34,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: 'debug-session',
-          runId: 'pre-fix',
+          runId: 'auth-fix-v3',
           hypothesisId: 'H2',
           location: 'AuthContext.tsx:getSession',
           message: 'Supabase getSession resolved',

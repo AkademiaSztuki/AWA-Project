@@ -27,18 +27,20 @@ async function getAuthClaimsSafe(): Promise<{ role?: string; aud?: string; sub?:
   }
 }
 
+// Memory-based fallback for storage if localStorage/sessionStorage are unavailable
+const memoryStorage: Record<string, string> = {};
+
 // Custom storage adapter that gracefully handles storage errors (e.g., in 3rd-party iframes)
 const safeStorageAdapter = {
   getItem: (key: string): string | null => {
     try {
       if (typeof window === 'undefined') return null;
-      return localStorage.getItem(key);
+      const val = localStorage.getItem(key);
+      if (val) return val;
+      return memoryStorage[key] || null;
     } catch (error) {
-      // Storage access denied (e.g., in 3rd-party context) - return null silently
-      if (error instanceof Error && error.message.includes('storage')) {
-        return null;
-      }
-      return null;
+      console.warn('[Supabase] Storage read error, using fallback:', key);
+      return memoryStorage[key] || null;
     }
   },
   setItem: (key: string, value: string): void => {
@@ -46,10 +48,8 @@ const safeStorageAdapter = {
       if (typeof window === 'undefined') return;
       localStorage.setItem(key, value);
     } catch (error) {
-      // Storage access denied - ignore silently
-      if (error instanceof Error && error.message.includes('storage')) {
-        return;
-      }
+      console.warn('[Supabase] Storage write error, using fallback:', key);
+      memoryStorage[key] = value;
     }
   },
   removeItem: (key: string): void => {
@@ -57,26 +57,19 @@ const safeStorageAdapter = {
       if (typeof window === 'undefined') return;
       localStorage.removeItem(key);
     } catch (error) {
-      // Storage access denied - ignore silently
-      if (error instanceof Error && error.message.includes('storage')) {
-        return;
-      }
+      delete memoryStorage[key];
     }
   }
 };
 
-// Safe localStorage helpers (for use outside of Supabase adapter)
+// Safe localStorage helpers
 export const safeLocalStorage = {
   getItem: (key: string): string | null => {
     try {
       if (typeof window === 'undefined') return null;
-      return localStorage.getItem(key);
+      return localStorage.getItem(key) || memoryStorage[key] || null;
     } catch (error) {
-      // Storage access denied (e.g., in 3rd-party iframe context) - return null silently
-      if (error instanceof Error && (error.message.includes('storage') || error.message.includes('not allowed'))) {
-        return null;
-      }
-      return null;
+      return memoryStorage[key] || null;
     }
   },
   setItem: (key: string, value: string): void => {
@@ -84,10 +77,7 @@ export const safeLocalStorage = {
       if (typeof window === 'undefined') return;
       localStorage.setItem(key, value);
     } catch (error) {
-      // Storage access denied - ignore silently
-      if (error instanceof Error && (error.message.includes('storage') || error.message.includes('not allowed'))) {
-        return;
-      }
+      memoryStorage[key] = value;
     }
   },
   removeItem: (key: string): void => {
@@ -95,26 +85,20 @@ export const safeLocalStorage = {
       if (typeof window === 'undefined') return;
       localStorage.removeItem(key);
     } catch (error) {
-      // Storage access denied - ignore silently
-      if (error instanceof Error && (error.message.includes('storage') || error.message.includes('not allowed'))) {
-        return;
-      }
+      delete memoryStorage[key];
     }
   }
 };
 
-// Safe sessionStorage helpers (for use outside of Supabase adapter)
+// Safe sessionStorage helpers
+const sessionMemoryStorage: Record<string, string> = {};
 export const safeSessionStorage = {
   getItem: (key: string): string | null => {
     try {
       if (typeof window === 'undefined') return null;
-      return sessionStorage.getItem(key);
+      return sessionStorage.getItem(key) || sessionMemoryStorage[key] || null;
     } catch (error) {
-      // Storage access denied (e.g., in 3rd-party iframe context) - return null silently
-      if (error instanceof Error && (error.message.includes('storage') || error.message.includes('not allowed'))) {
-        return null;
-      }
-      return null;
+      return sessionMemoryStorage[key] || null;
     }
   },
   setItem: (key: string, value: string): void => {
@@ -122,10 +106,7 @@ export const safeSessionStorage = {
       if (typeof window === 'undefined') return;
       sessionStorage.setItem(key, value);
     } catch (error) {
-      // Storage access denied - ignore silently
-      if (error instanceof Error && (error.message.includes('storage') || error.message.includes('not allowed'))) {
-        return;
-      }
+      sessionMemoryStorage[key] = value;
     }
   },
   removeItem: (key: string): void => {
@@ -133,10 +114,7 @@ export const safeSessionStorage = {
       if (typeof window === 'undefined') return;
       sessionStorage.removeItem(key);
     } catch (error) {
-      // Storage access denied - ignore silently
-      if (error instanceof Error && (error.message.includes('storage') || error.message.includes('not allowed'))) {
-        return;
-      }
+      delete sessionMemoryStorage[key];
     }
   }
 };
@@ -146,7 +124,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     storage: safeStorageAdapter,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false // We handle this manually in /auth/callback/page.tsx to avoid race conditions
+    detectSessionInUrl: true 
   }
 });
 

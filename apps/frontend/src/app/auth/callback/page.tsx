@@ -1,210 +1,114 @@
 "use client";
 
-import React, { useEffect, Suspense } from 'react';
+import React, { useEffect, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase, safeSessionStorage } from '@/lib/supabase';
+import { GlassButton } from '@/components/ui/GlassButton';
 
 function AuthCallbackContent() {
   const router = useRouter();
   const params = useSearchParams();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
     
     // Guard: prevent multiple executions (React StrictMode in dev)
-    // Use search and hash to make the key unique to this specific login attempt
     const callbackKey = `auth_callback_${window.location.search}${window.location.hash}`;
-    if (safeSessionStorage.getItem(callbackKey)) {
-      console.log('[AuthCallback] Already processing/completed for this URL');
-      return; // Already processed
+    const storedState = safeSessionStorage.getItem(callbackKey);
+    
+    if (storedState === 'completed' || storedState === 'processing') {
+      console.log('[AuthCallback] Already processed or processing this URL');
+      if (storedState === 'completed') {
+        const next = params.get('next') || '/';
+        window.location.replace(next);
+      }
+      return;
     }
+    
     safeSessionStorage.setItem(callbackKey, 'processing');
 
-    console.log('[AuthCallback] URL Debug:', {
-      href: window.location.href,
-      search: window.location.search,
-      hash: window.location.hash
-    });
-
-    (async () => {
+    const handleCallback = async () => {
       try {
         const href = window.location.href;
-        const search = window.location.search || '';
+        const url = new URL(href);
+        const code = url.searchParams.get('code');
+        const next = url.searchParams.get('next') || '/';
         const hash = window.location.hash || '';
-        const hasCode = new URL(href).searchParams.has('code');
-        const hasAccessToken = hash.includes('access_token=');
+        
+        console.log('[AuthCallback] Processing...', { hasCode: !!code, hasHash: !!hash, next });
 
-        const parseHashTokens = () => {
-          const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
-          const access_token = params.get('access_token') || undefined;
-          const refresh_token = params.get('refresh_token') || undefined;
-          const expires_in = params.get('expires_in');
-          const provider_token = params.get('provider_token') || undefined;
-          const token_type = params.get('token_type') || undefined;
-          return {
-            access_token,
-            refresh_token,
-            expires_in: expires_in ? Number(expires_in) : undefined,
-            provider_token,
-            token_type,
-            hasAccessToken: !!access_token,
-            hasRefresh: !!refresh_token,
-          };
-        };
+        // 1. Check if we already have a session (handled by auto-detection)
+        const { data: { session: existingSession } } = await supabase.auth.getSession();
+        if (existingSession) {
+          console.log('[AuthCallback] Session exists, finishing up');
+          safeSessionStorage.setItem(callbackKey, 'completed');
+          window.location.replace(next);
+          return;
+        }
 
-        // #region agent log
+        // 2. If we have a code, exchange it (PKCE)
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            console.error('[AuthCallback] Exchange error:', error);
+            // Check again - sometimes exchange fails because it was already exchanged
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw error;
+          }
+        } 
+        // 3. Handle hash-based implicit flow (sometimes happens on mobile)
+        else if (hash.includes('access_token=')) {
+          const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+          
+          if (accessToken && refreshToken) {
+            const { error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken
+            });
+            if (error) throw error;
+          }
+        }
+        else {
+          console.warn('[AuthCallback] No code or hash tokens found');
+          // Wait a bit, maybe Supabase internal is still working
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('Nie udało się odnaleźć sesji logowania.');
+          }
+        }
+
+        if (!isMounted) return;
+
+        console.log('[AuthCallback] Success, redirecting...');
+        safeSessionStorage.setItem(callbackKey, 'completed');
+        window.location.replace(next);
+
+      } catch (e) {
+        if (!isMounted) return;
+        console.error('[AuthCallback] Fatal error:', e);
+        safeSessionStorage.removeItem(callbackKey);
+        const msg = e instanceof Error ? e.message : 'Wystąpił nieoczekiwany błąd autoryzacji.';
+        setErrorMsg(msg);
+        
+        // Remote log
         void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sessionId: 'debug-session',
-            runId: 'fix4',
-            hypothesisId: 'H1',
-            location: 'auth/callback/page.tsx:pre-exchange',
-            message: 'Inspect callback URL before exchange',
-            data: {
-              hasCode,
-              hasAccessToken,
-              searchLength: search.length,
-              hashLength: hash.length
-            },
+            location: 'auth/callback:error',
+            message: msg,
+            data: { href: window.location.href },
             timestamp: Date.now()
           })
         }).catch(() => {});
-        // #endregion
-
-        if (!hasCode && hasAccessToken) {
-          const tokenPayload = parseHashTokens();
-
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'fix4',
-              hypothesisId: 'H1',
-              location: 'auth/callback/page.tsx:hash-fragment',
-              message: 'Parsed hash fragment tokens',
-              data: {
-                hasAccessToken: tokenPayload.hasAccessToken,
-                hasRefresh: tokenPayload.hasRefresh,
-                expiresIn: tokenPayload.expires_in,
-                tokenType: tokenPayload.token_type,
-                hasProviderToken: !!tokenPayload.provider_token
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
-
-          if (!tokenPayload.access_token || !tokenPayload.refresh_token) {
-            const err = encodeURIComponent('Missing tokens in fragment');
-            router.replace(`/?auth=error&msg=${err}`);
-            return;
-          }
-
-          const { data: setSessionData, error: setSessionError } = await supabase.auth.setSession({
-            access_token: tokenPayload.access_token,
-            refresh_token: tokenPayload.refresh_token,
-          });
-
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'fix4',
-              hypothesisId: 'H1',
-              location: 'auth/callback/page.tsx:setSession',
-              message: 'Attempted setSession from fragment',
-              data: {
-                hasSession: !!setSessionData?.session,
-                hasUser: !!setSessionData?.session?.user,
-                errorMessage: setSessionError?.message || null
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
-
-        if (setSessionError) {
-          console.error('[AuthCallback] setSession Error:', setSessionError);
-          safeSessionStorage.removeItem(callbackKey); // Allow retry on error
-          const err = encodeURIComponent(setSessionError.message || 'auth_error');
-          router.replace(`/?auth=error&msg=${err}`);
-          return;
-        }
-
-        console.log('[AuthCallback] Session set successfully');
-        safeSessionStorage.setItem(callbackKey, 'completed');
-        const next = params.get('next') || '/';
-        router.replace(next);
-        return;
       }
+    };
 
-      if (!hasCode) {
-        const errMsg = 'Missing auth code in callback';
-        console.warn('[AuthCallback]', errMsg);
-
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'fix4',
-              hypothesisId: 'H1',
-              location: 'auth/callback/page.tsx:no-code',
-              message: errMsg,
-              data: { hasAccessToken, searchLength: search.length, hashLength: hash.length },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
-
-          const err = encodeURIComponent(errMsg);
-          router.replace(`/?auth=error&msg=${err}`);
-          return;
-        }
-
-      console.log('[AuthCallback] Exchanging code for session...');
-      const exchangeResult = await supabase.auth.exchangeCodeForSession(href);
-
-      if (!isMounted) return;
-
-      if (exchangeResult.error) {
-        console.error('[AuthCallback] Exchange Error:', exchangeResult.error);
-        safeSessionStorage.removeItem(callbackKey); // Allow retry on error
-        const err = encodeURIComponent(exchangeResult.error.message || 'auth_error');
-        router.replace(`/?auth=error&msg=${err}`);
-        return;
-      }
-
-      console.log('[AuthCallback] Code exchange successful, verifying session...');
-      
-      // Double check session is actually established before redirecting
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError || !session) {
-        console.warn('[AuthCallback] Session not found after exchange, waiting briefly...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      console.log('[AuthCallback] Proceeding to destination');
-      // If we got here via magic link (type=recovery or type=signup), still go home
-      safeSessionStorage.setItem(callbackKey, 'completed');
-      const next = params.get('next') || '/';
-      router.replace(next);
-      } catch (e) {
-        if (!isMounted) return;
-        safeSessionStorage.removeItem(callbackKey); // Allow retry on error
-        console.error('Auth callback exception:', e);
-        const err = e instanceof Error ? e.message : 'unknown';
-        router.replace(`/?auth=error&msg=${encodeURIComponent(err)}`);
-      }
-    })();
+    handleCallback();
 
     return () => {
       isMounted = false;
@@ -212,9 +116,35 @@ function AuthCallbackContent() {
   }, [router, params]);
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center">
-      <div className="glass-panel rounded-xl px-6 py-4 text-sm font-modern text-graphite">
-        Łączenie z kontem…
+    <div className="min-h-screen w-full flex items-center justify-center p-4">
+      <div className="glass-panel rounded-2xl px-8 py-12 text-center max-w-sm w-full shadow-2xl border border-white/20">
+        {!errorMsg ? (
+          <>
+            <div className="relative w-16 h-16 mx-auto mb-8">
+              <div className="absolute inset-0 rounded-full border-4 border-gold/20"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-t-gold animate-spin"></div>
+            </div>
+            <div className="text-xl font-nasalization text-graphite mb-3">Łączenie z kontem…</div>
+            <div className="text-sm text-silver-dark font-modern leading-relaxed">
+              Trwa bezpieczne uwierzytelnianie.<br/>To potrwa tylko chwilę.
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="text-xl font-nasalization text-graphite mb-3">Błąd logowania</div>
+            <div className="text-sm text-red-600/80 font-modern mb-8 px-4 leading-relaxed">
+              {errorMsg}
+            </div>
+            <GlassButton onClick={() => window.location.href = '/'} className="w-full">
+              Wróć do strony głównej
+            </GlassButton>
+          </>
+        )}
       </div>
     </div>
   );
@@ -233,5 +163,3 @@ export default function AuthCallbackPage() {
     </Suspense>
   );
 }
-
-
