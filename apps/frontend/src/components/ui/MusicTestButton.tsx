@@ -225,15 +225,21 @@ export const MusicTestButton: React.FC = () => {
               <div className="flex items-center gap-3">
                 {/* Ikona głośnika - teraz przełącza dźwięk */}
                 <button
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     if (musicVolume === 0) {
+                      // Włącz muzykę
                       setMusicVolume(0.5);
+                      // Resetuj flagę ręcznego wyłączenia
+                      if (typeof window !== 'undefined') {
+                        (window as any).ambientMusicUserManuallyPaused = false;
+                      }
                       if (!isPlaying) {
                         togglePlay();
                       }
                     } else {
+                      // Wyłącz muzykę
                       setMusicVolume(0);
                       if (isPlaying) {
                         togglePlay();
@@ -257,7 +263,7 @@ export const MusicTestButton: React.FC = () => {
 
                 {/* Custom Glass Slider dla muzyki */}
                 <div className="flex-1 relative" style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}>
-                  <div className="relative w-full h-5 bg-white/25 backdrop-blur-sm border border-white/30 shadow-inner rounded-full overflow-hidden touch-none">
+                  <div className="relative w-full h-5 bg-white/25 backdrop-blur-sm border border-white/30 shadow-inner rounded-full overflow-hidden">
                     {/* Track background */}
                     <div className="absolute inset-0 bg-black/5 rounded-full"></div>
                     {/* Progress track */}
@@ -285,12 +291,22 @@ export const MusicTestButton: React.FC = () => {
                       value={musicVolume}
                       onChange={handleMusicVolumeChange}
                       onInput={handleMusicVolumeChange}
-                      onTouchStart={() => setIsDragging(true)}
-                      onTouchEnd={() => setIsDragging(false)}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer touch-none"
+                      onTouchStart={(e) => {
+                        setIsDragging(true);
+                        e.stopPropagation();
+                      }}
+                      onTouchMove={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onTouchEnd={(e) => {
+                        setIsDragging(false);
+                        e.stopPropagation();
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       style={{ 
-                        touchAction: 'none',
-                        WebkitTapHighlightColor: 'transparent'
+                        touchAction: 'pan-x',
+                        WebkitTapHighlightColor: 'transparent',
+                        pointerEvents: 'auto'
                       }}
                     />
                   </div>
@@ -328,8 +344,7 @@ export const MusicTestButton: React.FC = () => {
 
                 {/* Custom Glass Slider dla głosu */}
                 <div className="flex-1 relative" style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}>
-                  <div className="text-xs text-graphite mb-1 font-modern">Voice: {Math.round(voicePercentage)}%</div>
-                  <div className="relative w-full h-4 bg-white/25 backdrop-blur-sm border border-white/30 shadow-inner rounded-full overflow-hidden touch-none">
+                  <div className="relative w-full h-5 bg-white/25 backdrop-blur-sm border border-white/30 shadow-inner rounded-full overflow-hidden">
                     {/* Track background */}
                     <div className="absolute inset-0 bg-black/5 rounded-full"></div>
                     {/* Progress track */}
@@ -357,12 +372,22 @@ export const MusicTestButton: React.FC = () => {
                       value={voiceVolume}
                       onChange={handleVoiceVolumeChange}
                       onInput={handleVoiceVolumeChange}
-                      onTouchStart={() => setIsDragging(true)}
-                      onTouchEnd={() => setIsDragging(false)}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer touch-none"
+                      onTouchStart={(e) => {
+                        setIsDragging(true);
+                        e.stopPropagation();
+                      }}
+                      onTouchMove={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onTouchEnd={(e) => {
+                        setIsDragging(false);
+                        e.stopPropagation();
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       style={{ 
-                        touchAction: 'none',
-                        WebkitTapHighlightColor: 'transparent'
+                        touchAction: 'pan-x',
+                        WebkitTapHighlightColor: 'transparent',
+                        pointerEvents: 'auto'
                       }}
                     />
                   </div>
