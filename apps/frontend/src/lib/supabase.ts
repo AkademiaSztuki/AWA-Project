@@ -914,6 +914,15 @@ export const ensureParticipantExists = async (userHash: string): Promise<boolean
         consent_timestamp: new Date().toISOString()
       });
     
+    if (!error) {
+      // Przyznaj darmowe kredyty dla nowego uczestnika
+      void fetch('/api/credits/grant-free', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userHash }),
+      }).catch(err => console.warn('Failed to grant free credits to new participant:', err));
+    }
+    
     if (error) {
       const claims = await getAuthClaimsSafe();
       // #region agent log

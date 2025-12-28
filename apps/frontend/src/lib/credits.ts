@@ -303,20 +303,49 @@ export async function allocateSubscriptionCredits(
  * Przyznaje darmowy grant kredytów (600 kredytów = 60 generacji)
  */
 export async function grantFreeCredits(userHash: string): Promise<boolean> {
+  // Użyj service_role client dla operacji które wymagają omijania RLS
+  // Na serwerze (np. w API routes) używamy supabaseAdmin
+  // Na kliencie ta funkcja i tak by nie zadziałała ze względu na brak klucza service_role
+  let supabaseClient;
+  try {
+    supabaseClient = getSupabaseAdmin();
+  } catch (e) {
+    console.warn('[Credits] Using public supabase client for grantFreeCredits - this will likely fail due to RLS if not on server');
+    supabaseClient = supabase;
+  }
+
   // Sprawdź czy grant już został użyty
-  const { data: participant } = await supabase
+  const { data: participant, error: fetchError } = await supabaseClient
     .from('participants')
     .select('free_grant_used')
     .eq('user_hash', userHash)
-    .single();
+    .maybeSingle();
 
   if (participant?.free_grant_used) {
     console.log('Free grant already used for user:', userHash);
     return false;
   }
 
+  // Jeśli uczestnik nie istnieje, utwórz go (wymagane ze względu na klucz obcy w credit_transactions)
+  if (!participant) {
+    console.log('Participant does not exist, creating new record for userHash:', userHash);
+    const { error: insertError } = await supabaseClient
+      .from('participants')
+      .insert({
+        user_hash: userHash,
+        consent_timestamp: new Date().toISOString(),
+        free_grant_used: false,
+        updated_at: new Date().toISOString()
+      } as any);
+
+    if (insertError) {
+      console.error('Error creating participant for credit grant:', insertError);
+      return false;
+    }
+  }
+
   // Utwórz transakcję kredytową
-  const { error: transactionError } = await supabase
+  const { error: transactionError } = await supabaseClient
     .from('credit_transactions')
     .insert({
       user_hash: userHash,
@@ -333,7 +362,7 @@ export async function grantFreeCredits(userHash: string): Promise<boolean> {
   }
 
   // Oznacz grant jako użyty
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseClient
     .from('participants')
     .update({
       free_grant_used: true,

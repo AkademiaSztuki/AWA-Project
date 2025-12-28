@@ -65,13 +65,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             safeLocalStorage.setItem('aura_user_hash', userHash);
             console.log('[AuthContext] Restored user_hash from Supabase:', userHash);
             
-            // Przyznaj darmowy grant kredytów (600 kredytów = 60 generacji)
+            // Przyznaj darmowy grant kredytów (600 kredytów = 60 generacji) przez API
             try {
-              const { grantFreeCredits } = await import('@/lib/credits');
-              await grantFreeCredits(userHash);
-              console.log('[AuthContext] Granted free credits to user:', userHash);
+              const response = await fetch('/api/credits/grant-free', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userHash }),
+              });
+              const data = await response.json();
+              if (data.success) {
+                console.log('[AuthContext] Granted free credits to user via API:', userHash);
+              } else {
+                console.log('[AuthContext] Free credits not granted (maybe already used):', data.message);
+              }
             } catch (creditError) {
-              console.warn('[AuthContext] Failed to grant free credits:', creditError);
+              console.warn('[AuthContext] Failed to grant free credits via API:', creditError);
             }
           }
         } catch (error) {
