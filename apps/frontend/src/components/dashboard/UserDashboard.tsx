@@ -80,14 +80,6 @@ export function UserDashboard() {
   const { language } = useLanguage();
   const { user, linkUserHashToAuth } = useAuth();
   
-  // DODATKOWA BLOKADA: Dashboard dostępny tylko dla użytkowników po pełnej ścieżce
-  useEffect(() => {
-    if (!isLoading && !sessionData?.coreProfileComplete) {
-      console.warn('[UserDashboard] Redirecting - profile not complete');
-      router.replace('/');
-    }
-  }, [sessionData?.coreProfileComplete, isLoading, router]);
-
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [remoteSession, setRemoteSession] = useState<any>(null);
   const [completionStatus, setCompletionStatus] = useState<CompletionStatus | null>(null);
@@ -95,6 +87,14 @@ export function UserDashboard() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [actionSpaceId, setActionSpaceId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // DODATKOWA BLOKADA: Dashboard dostępny tylko dla użytkowników po pełnej ścieżce
+  useEffect(() => {
+    if (!isLoading && !sessionData?.coreProfileComplete) {
+      console.warn('[UserDashboard] Redirecting - profile not complete');
+      router.replace('/');
+    }
+  }, [sessionData?.coreProfileComplete, isLoading, router]);
 
   const getUserHash = useCallback((): string | undefined => {
     let userHash = sessionData?.userHash as string | undefined;
