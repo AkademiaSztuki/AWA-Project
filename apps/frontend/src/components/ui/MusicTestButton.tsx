@@ -199,16 +199,37 @@ export const MusicTestButton: React.FC = () => {
             touchAction: 'manipulation',
             WebkitTapHighlightColor: 'transparent'
           }}
-          onClick={(e) => {
+          onClick={async (e) => {
             e.preventDefault();
             e.stopPropagation();
             console.log('MusicTestButton: button clicked, isExpanded:', isExpanded);
+            
+            const willExpand = !isExpanded;
             
             // TYLKO toggle panel - NIE przełączaj dźwięku
             setIsExpanded(prev => {
               console.log('MusicTestButton: setting isExpanded to:', !prev);
               return !prev;
             });
+            
+            // Na mobile, przy pierwszym otwarciu panelu, spróbuj włączyć muzykę jeśli nie jest włączona
+            // i nie była ręcznie wyłączona
+            if (willExpand && typeof window !== 'undefined') {
+              const userManuallyPaused = (window as any).ambientMusicUserManuallyPaused === true;
+              if (!isPlaying && !userManuallyPaused && musicVolume > 0) {
+                // Spróbuj włączyć muzykę (może być potrzebne na mobile z autoplay policy)
+                const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+                if (audioElement && audioElement.paused) {
+                  try {
+                    (window as any).ambientMusicUserManuallyPaused = false;
+                    await audioElement.play();
+                    console.log('MusicTestButton: Music started on panel open');
+                  } catch (error) {
+                    console.log('MusicTestButton: Could not start music on panel open:', error);
+                  }
+                }
+              }
+            }
           }}
         >
           {(isPlaying || voiceEnabled) ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 opacity-60" />}

@@ -207,7 +207,12 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
         // Użytkownik ręcznie wyłączył muzykę - nie włączaj automatycznie
         return;
       }
-      if (audioRef.current && !isPlaying) {
+      if (audioRef.current) {
+        // Resetuj flagę przy próbie włączenia (na wypadek gdyby była ustawiona wcześniej)
+        if (typeof window !== 'undefined') {
+          (window as any).ambientMusicUserManuallyPaused = false;
+        }
+        if (!isPlaying) {
         // console.log('AmbientMusic: Attempting to start music');
         // console.log('AmbientMusic: Current volume:', audioRef.current.volume);
         // console.log('AmbientMusic: Audio element:', audioRef.current);
@@ -244,18 +249,26 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     };
 
     // Dodaj event listenery dla interakcji użytkownika
+    let hasStartedMusic = false;
     const handleUserInteraction = () => {
+      if (hasStartedMusic) return; // Już próbowaliśmy włączyć muzykę
       // console.log('AmbientMusic: User interaction detected, starting music');
+      hasStartedMusic = true;
       startMusic();
       // Usuń event listenery po pierwszej interakcji
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('keydown', handleUserInteraction);
       document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('touchend', handleUserInteraction);
+      document.removeEventListener('mousedown', handleUserInteraction);
     };
 
-    document.addEventListener('click', handleUserInteraction);
+    // Dodaj więcej event listenerów dla lepszej obsługi mobile
+    document.addEventListener('click', handleUserInteraction, { passive: true });
     document.addEventListener('keydown', handleUserInteraction);
-    document.addEventListener('touchstart', handleUserInteraction);
+    document.addEventListener('touchstart', handleUserInteraction, { passive: true });
+    document.addEventListener('touchend', handleUserInteraction, { passive: true });
+    document.addEventListener('mousedown', handleUserInteraction, { passive: true });
 
     // Cleanup dla pojedynczego audio elementu i listenerów
     return () => {
@@ -278,6 +291,8 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('keydown', handleUserInteraction);
       document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('touchend', handleUserInteraction);
+      document.removeEventListener('mousedown', handleUserInteraction);
     };
   };
 
