@@ -213,38 +213,39 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
           (window as any).ambientMusicUserManuallyPaused = false;
         }
         if (!isPlaying) {
-        // console.log('AmbientMusic: Attempting to start music');
-        // console.log('AmbientMusic: Current volume:', audioRef.current.volume);
-        // console.log('AmbientMusic: Audio element:', audioRef.current);
-        // console.log('AmbientMusic: Audio readyState:', audioRef.current.readyState);
-        // console.log('AmbientMusic: Audio networkState:', audioRef.current.networkState);
-        
-        // Sprawdź czy audio jest gotowe do odtwarzania
-        if (audioRef.current.readyState >= 2) { // HAVE_CURRENT_DATA
-          // console.log('AmbientMusic: Audio is ready to play');
-          audioRef.current.play().then(() => {
-            // console.log('AmbientMusic: Music started successfully');
-            // console.log('AmbientMusic: Current time:', audioRef.current?.currentTime);
-            // console.log('AmbientMusic: Duration:', audioRef.current?.duration);
-          }).catch(error => {
-            console.error('AmbientMusic: Failed to start music:', error);
-          });
+          // console.log('AmbientMusic: Attempting to start music');
+          // console.log('AmbientMusic: Current volume:', audioRef.current.volume);
+          // console.log('AmbientMusic: Audio element:', audioRef.current);
+          // console.log('AmbientMusic: Audio readyState:', audioRef.current.readyState);
+          // console.log('AmbientMusic: Audio networkState:', audioRef.current.networkState);
+          
+          // Sprawdź czy audio jest gotowe do odtwarzania
+          if (audioRef.current.readyState >= 2) { // HAVE_CURRENT_DATA
+            // console.log('AmbientMusic: Audio is ready to play');
+            audioRef.current.play().then(() => {
+              // console.log('AmbientMusic: Music started successfully');
+              // console.log('AmbientMusic: Current time:', audioRef.current?.currentTime);
+              // console.log('AmbientMusic: Duration:', audioRef.current?.duration);
+            }).catch(error => {
+              console.error('AmbientMusic: Failed to start music:', error);
+            });
+          } else {
+            // console.log('AmbientMusic: Audio not ready yet, waiting...');
+            // Spróbuj ponownie za chwilę
+            setTimeout(() => {
+              if (audioRef.current && !isPlaying) {
+                startMusic();
+              }
+            }, 100);
+          }
         } else {
-          // console.log('AmbientMusic: Audio not ready yet, waiting...');
-          // Spróbuj ponownie za chwilę
-          setTimeout(() => {
-            if (audioRef.current && !isPlaying) {
-              startMusic();
-            }
-          }, 100);
+          // console.log('AmbientMusic: Cannot start music - conditions not met:', {
+          //   hasAudioRef: !!audioRef.current,
+          //   isPlaying,
+          //   isLoaded,
+          //   readyState: audioRef.current?.readyState
+          // });
         }
-      } else {
-        // console.log('AmbientMusic: Cannot start music - conditions not met:', {
-        //   hasAudioRef: !!audioRef.current,
-        //   isPlaying,
-        //   isLoaded,
-        //   readyState: audioRef.current?.readyState
-        // });
       }
     };
 
