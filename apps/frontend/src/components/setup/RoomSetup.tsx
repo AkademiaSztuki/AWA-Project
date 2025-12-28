@@ -1002,7 +1002,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         const file = new File([blob], imageUrl.split('/').pop() || 'image.jpg', { type: blob.type });
         
         // Convert to base64
-        const base64 = await toBase64(file);
+        const base64 = await fileToNormalizedBase64(file);
         
         // Blob URL for display
         const imageObjectUrl = URL.createObjectURL(blob);
@@ -1050,7 +1050,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         const file = new File([blob], imageUrl.split('/').pop() || 'image.jpg', { type: blob.type });
         
         // Convert to base64
-        const base64 = await toBase64(file);
+        const base64 = await fileToNormalizedBase64(file);
         
         // Blob URL for display
         const imageObjectUrl = URL.createObjectURL(file);
@@ -1105,7 +1105,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       // #endregion
       
       // Convert to base64 for API
-      const base64 = await toBase64(file);
+      const base64 = await fileToNormalizedBase64(file);
       
       // Add to uploaded photos (blob URL for display)
       const imageUrl = URL.createObjectURL(file);
