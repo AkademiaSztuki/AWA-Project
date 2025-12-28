@@ -10,6 +10,7 @@ import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
 import { analyzeInspirationsWithGamma, type InspirationTaggingResult } from "@/lib/vision/gamma-tagging";
+import { fileToNormalizedDataUrl } from "@/lib/utils";
 import { saveParticipantImages } from "@/lib/remote-spaces";
 import { supabase } from "@/lib/supabase";
 import { 
@@ -50,20 +51,11 @@ export default function InspirationsPage() {
   const progress = Math.min((items.length / 10) * 100, 100);
   const fromDashboard = searchParams?.get("from") === "dashboard";
 
-  const fileToDataUrl = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
   const ensureBase64 = async (item: LocalInspiration): Promise<LocalInspiration> => {
     if (item.imageBase64) return item;
     if (item.file) {
       try {
-        const dataUrl = await fileToDataUrl(item.file);
+        const dataUrl = await fileToNormalizedDataUrl(item.file);
         return { ...item, imageBase64: dataUrl };
       } catch (error) {
         console.warn('[Inspirations] Failed to convert file to base64 for', item.id, error);

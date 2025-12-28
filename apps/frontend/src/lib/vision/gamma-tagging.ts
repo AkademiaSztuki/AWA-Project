@@ -1,6 +1,8 @@
 // Inspiration tagging helper - real API integration
 // Returns tags for inspirations using Gemini 2.0 Flash via Vertex AI (NOT Gamma/Gemma - name is legacy)
 
+import { fileToNormalizedBase64 } from '@/lib/utils';
+
 export interface InspirationTaggingResult {
   tags: {
     styles?: string[];
@@ -9,21 +11,6 @@ export interface InspirationTaggingResult {
     biophilia?: number; // 0–3
   };
   description?: string; // short VLM description for Kontext-style prompts
-}
-
-// Helper function to convert file to base64
-async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove data:image/...;base64, prefix
-      const base64 = result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 // API call to Google AI endpoint (replaces Modal/Gemma 3)
@@ -68,7 +55,7 @@ export async function analyzeInspirationsWithGamma(files: File[]): Promise<Inspi
       // #endregion
       
       try {
-        const base64 = await fileToBase64(file);
+        const base64 = await fileToNormalizedBase64(file);
         const response = await callInspirationAPI(base64);
         
         // #region agent log

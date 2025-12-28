@@ -21,6 +21,7 @@ import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { SessionData } from '@/types';
 import { RoomPreferencePayload, RoomActivity } from '@/types/deep-personalization';
+import { fileToNormalizedBase64 } from '@/lib/utils';
 import { COLOR_PALETTE_OPTIONS, getPaletteLabel } from '@/components/setup/paletteOptions';
 import { STYLE_OPTIONS, getStyleLabel } from '@/lib/questions/style-options';
 import { SensoryTestSuite } from '@/components/research/SensoryTests';
@@ -32,19 +33,7 @@ import {
 } from '@/lib/questions/validated-scales';
 import { mapActivitiesToRecommendations } from '@/lib/preferences/activity-mapping';
 
-// Helper function to convert file to base64
-const toBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Extract only the base64 part without the MIME header
-      const base64 = result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = (error) => reject(error);
-  });
+// Helper function to generate a room name based on its type
 
 type SetupStep = 
   | 'photo_upload'
@@ -262,17 +251,8 @@ export function RoomSetup({ householdId }: { householdId: string }) {
           try {
             const response = await fetch(firstPhoto);
             const blob = await response.blob();
-            roomImageBase64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => {
-                const result = reader.result as string;
-                // Extract only the base64 part without the MIME header
-                const base64Part = result.split(',')[1];
-                resolve(base64Part);
-              };
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
+            const file = new File([blob], 'room_photo.jpg', { type: blob.type });
+            roomImageBase64 = await fileToNormalizedBase64(file);
             console.log('[RoomSetup] Converted blob URL to base64, length:', roomImageBase64.length);
           } catch (error) {
             console.error('[RoomSetup] Error converting blob URL to base64:', error);
@@ -803,7 +783,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       // #endregion
       
       // Convert file to base64
-      const base64 = await toBase64(file);
+      const base64 = await fileToNormalizedBase64(file);
       console.log(`File converted to base64, length: ${base64.length} chars`);
       
       // Analyze room using Google Gemini 2.0 Flash (replaced Gemma 3)

@@ -12,21 +12,9 @@ import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { EXAMPLE_IMAGES_METADATA, getExampleImageMetadata, isExampleImage } from '@/lib/exampleImagesMetadata';
+import { fileToNormalizedBase64 } from '@/lib/utils';
 
-// Helper function to convert file to base64
-const toBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Extract only the base64 part without the MIME header
-      const base64 = result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = (error) => reject(error);
-  });
-
+// PhotoUploadPage
 export default function PhotoUploadPage() {
   const router = useRouter();
   const { sessionData, updateSession } = useSession();
@@ -112,7 +100,7 @@ export default function PhotoUploadPage() {
       
       // Convert file to base64
       const base64Start = Date.now();
-      const base64 = await toBase64(file);
+      const base64 = await fileToNormalizedBase64(file);
       console.log(`File converted to base64 in ${Date.now() - base64Start}ms, length: ${base64.length} chars`);
       
       console.log('Calling analyzeRoom API...');
@@ -197,7 +185,7 @@ export default function PhotoUploadPage() {
       
       console.log(`Przetwarzam plik: ${file.name}, typ: ${file.type}, rozmiar: ${file.size} bytes`);
       
-      const base64 = await toBase64(file);
+      const base64 = await fileToNormalizedBase64(file);
       console.log(`Przekonwertowano do base64, dlugosc: ${base64.length} znakow`);
       
       await updateSession({ roomImage: base64 });
@@ -221,7 +209,7 @@ export default function PhotoUploadPage() {
       const response = await fetch(imageUrl);
       const blob = await response.blob();
       const file = new File([blob], imageUrl.split('/').pop() || 'image.jpg', { type: blob.type });
-      const base64 = await toBase64(file);
+      const base64 = await fileToNormalizedBase64(file);
       await updateSession({ roomImage: base64 });
       setSelectedImage(imageUrl);
       
