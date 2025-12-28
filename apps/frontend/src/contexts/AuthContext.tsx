@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             safeLocalStorage.setItem('aura_user_hash', userHash);
             console.log('[AuthContext] Restored user_hash from Supabase:', userHash);
             
-            // Przyznaj darmowy grant kredytów (600 kredytów = 60 generacji) przez API
+            // Przyznaj darmowe kredyty dla konta (funkcja grantFreeCredits sprawdzi czy już były dane)
             try {
               const response = await fetch('/api/credits/grant-free', {
                 method: 'POST',
@@ -80,10 +80,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (data.success) {
                 console.log('[AuthContext] Granted free credits to user via API:', userHash);
               } else {
-                console.log('[AuthContext] Free credits not granted (maybe already used):', data.message);
+                console.log('[AuthContext] Free credits check:', data.message);
               }
             } catch (creditError) {
               console.warn('[AuthContext] Failed to grant free credits via API:', creditError);
+            }
+          } else {
+            // Jeśli użytkownik nie ma jeszcze hasha, połącz go z obecnym hashem lokalnym
+            const localHash = safeLocalStorage.getItem('aura_user_hash');
+            if (localHash) {
+              console.log('[AuthContext] No hash linked to auth, linking current local hash:', localHash);
+              await linkUserHashToAuth(localHash);
+              
+              // Po połączeniu spróbuj nadać kredyty
+              void fetch('/api/credits/grant-free', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userHash: localHash }),
+              });
             }
           }
         } catch (error) {

@@ -893,7 +893,7 @@ export const ensureParticipantExists = async (userHash: string): Promise<boolean
       });
     
     if (!error) {
-      // Przyznaj darmowe kredyty dla nowego uczestnika
+      // Przyznaj darmowe kredyty dla NOWEGO uczestnika (tylko raz)
       void fetch('/api/credits/grant-free', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

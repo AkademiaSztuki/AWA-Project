@@ -472,13 +472,6 @@ export const useSession = (): UseSessionReturn => {
       if (!userHash) {
         userHash = generateUserHash();
         safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
-        
-        // Przyznaj darmowe kredyty dla nowego użytkownika anonimowego
-        void fetch('/api/credits/grant-free', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userHash }),
-        }).catch(err => console.warn('Failed to grant free credits to new anonymous user:', err));
       }
 
       // Create initial session from localStorage (fast)

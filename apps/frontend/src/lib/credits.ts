@@ -314,19 +314,41 @@ export async function grantFreeCredits(userHash: string): Promise<boolean> {
     supabaseClient = supabase;
   }
 
-  // Sprawdź czy grant już został użyty
+  // Sprawdź czy uczestnik już otrzymał grant (również przez powiązane konto auth)
   const { data: participant, error: fetchError } = await supabaseClient
     .from('participants')
-    .select('free_grant_used')
+    .select('free_grant_used, auth_user_id')
     .eq('user_hash', userHash)
     .maybeSingle();
 
   if (participant?.free_grant_used) {
-    console.log('Free grant already used for user:', userHash);
+    console.log('Free grant already used for user hash:', userHash);
     return false;
   }
 
-  // Jeśli uczestnik nie istnieje, utwórz go (wymagane ze względu na klucz obcy w credit_transactions)
+  // Jeśli uczestnik jest zalogowany, sprawdź czy inne jego hashe już dostały grant
+  if (participant?.auth_user_id) {
+    const { data: otherParticipants } = await supabaseClient
+      .from('participants')
+      .select('free_grant_used')
+      .eq('auth_user_id', participant.auth_user_id)
+      .eq('free_grant_used', true)
+      .maybeSingle();
+
+    if (otherParticipants) {
+      console.log('Free grant already used by another hash linked to this auth user:', participant.auth_user_id);
+      
+      // Zsynchronizuj flagę dla bieżącego hasha, aby nie próbować ponownie
+      await supabaseClient
+        .from('participants')
+        .update({ free_grant_used: true, free_grant_used_at: new Date().toISOString() })
+        .eq('user_hash', userHash);
+        
+      return false;
+    }
+  }
+
+  // Jeśli uczestnik nie istnieje... (reszta kodu bez zmian)
   if (!participant) {
     console.log('Participant does not exist, creating new record for userHash:', userHash);
     const { error: insertError } = await supabaseClient
