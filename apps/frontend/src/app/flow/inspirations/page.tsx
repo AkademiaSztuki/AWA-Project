@@ -178,7 +178,7 @@ export default function InspirationsPage() {
         });
         
         // Ensure we persist base64 (data URL) for later generation usage
-        const dataUrl = await fileToDataUrl(targetItem.file);
+        const dataUrl = await fileToNormalizedDataUrl(targetItem.file);
 
         setItems(prev => {
           const updated = prev.map(item =>
@@ -227,7 +227,7 @@ export default function InspirationsPage() {
     try {
       const res = await analyzeInspirationsWithGamma([items[index].file]);
       const first = res[0];
-      const dataUrl = await fileToDataUrl(items[index].file);
+      const dataUrl = await fileToNormalizedDataUrl(items[index].file);
       
       // DEBUG: Log what Gemini returned
       console.log('[Inspirations] Gemini returned:', {
