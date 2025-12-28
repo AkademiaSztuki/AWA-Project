@@ -42,10 +42,10 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
     setError('');
     try {
       await signInWithGoogle(getEffectiveRedirectPath());
-      onSuccess?.();
+      // No onSuccess call here for OAuth because the whole page will redirect anyway.
+      // Calling router.push in onSuccess creates a race condition that blocks Safari.
     } catch (err: any) {
       setError(err.message || 'Failed to sign in with Google');
-    } finally {
       setIsLoading(false);
     }
   };

@@ -467,10 +467,6 @@ export default function PathSelectionScreen() {
           setShowLoginModal(false);
           setPendingPath(null);
         }}
-        onSuccess={handleLoginSuccess}
-        message={language === 'pl' 
-          ? 'Aby kontynuować, musisz się zalogować.' 
-          : 'Please sign in to continue.'}
       />
     </div>
   );

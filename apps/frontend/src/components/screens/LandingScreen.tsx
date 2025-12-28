@@ -184,16 +184,6 @@ const LandingScreen: React.FC = () => {
         isOpen={showLoginModal}
         redirectPath={pendingPath === 'fast' ? '/flow/onboarding' : pendingPath === 'full' ? '/setup/profile' : undefined}
         onClose={() => setShowLoginModal(false)}
-        onSuccess={async () => {
-          setShowLoginModal(false);
-          if (pendingPath) {
-            await updateSessionData({ 
-              pathType: pendingPath, 
-              currentStep: 'onboarding' as FlowStep 
-            });
-            router.push(pendingPath === 'fast' ? '/flow/onboarding' : '/setup/profile');
-          }
-        }}
       />
     </div>
   );

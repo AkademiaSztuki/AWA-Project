@@ -35,10 +35,31 @@ function AuthCallbackContent() {
         const code = url.searchParams.get('code');
         const nextFromUrl = url.searchParams.get('next');
         const nextFromStorage = safeSessionStorage.getItem('aura_auth_next');
+        const pathTypeFromStorage = safeSessionStorage.getItem('aura_auth_path_type');
         const next = nextFromUrl || nextFromStorage || '/';
         const hash = window.location.hash || '';
         
-        console.log('[AuthCallback] Processing...', { hasCode: !!code, hasHash: !!hash, next });
+        console.log('[AuthCallback] Processing...', { hasCode: !!code, hasHash: !!hash, next, pathType: pathTypeFromStorage });
+
+        // Apply pathType if found in storage
+        if (pathTypeFromStorage) {
+          try {
+            const { supabase: supabaseClient } = await import('@/lib/supabase');
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session?.user) {
+              const { saveFullSessionToSupabase } = await import('@/lib/supabase');
+              await saveFullSessionToSupabase({ 
+                userHash: session.user.id, // Temporary fallback if no hash
+                pathType: pathTypeFromStorage as 'fast' | 'full',
+                currentStep: 'onboarding'
+              });
+              console.log('[AuthCallback] pathType applied:', pathTypeFromStorage);
+            }
+          } catch (err) {
+            console.warn('[AuthCallback] Failed to apply pathType:', err);
+          }
+          safeSessionStorage.removeItem('aura_auth_path_type');
+        }
 
         // Clear the storage once we've read it
         if (nextFromStorage) {

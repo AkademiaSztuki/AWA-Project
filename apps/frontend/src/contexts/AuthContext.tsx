@@ -122,11 +122,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const redirectTo = `${window.location.origin}/auth/callback`;
     
     // Store nextPath in sessionStorage instead of URL to keep the OAuth URL clean
-    // This is more robust for Safari Mobile and prevents URL length issues.
     if (nextPath) {
       safeSessionStorage.setItem('aura_auth_next', nextPath);
+      
+      // If the next path implies a specific path type, store it too
+      if (nextPath.includes('/flow/onboarding')) {
+        safeSessionStorage.setItem('aura_auth_path_type', 'fast');
+      } else if (nextPath.includes('/setup/profile')) {
+        safeSessionStorage.setItem('aura_auth_path_type', 'full');
+      }
     } else {
       safeSessionStorage.removeItem('aura_auth_next');
+      safeSessionStorage.removeItem('aura_auth_path_type');
     }
 
     // Agent log: starting OAuth
