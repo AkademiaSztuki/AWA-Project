@@ -33,10 +33,17 @@ function AuthCallbackContent() {
         const href = window.location.href;
         const url = new URL(href);
         const code = url.searchParams.get('code');
-        const next = url.searchParams.get('next') || '/';
+        const nextFromUrl = url.searchParams.get('next');
+        const nextFromStorage = safeSessionStorage.getItem('aura_auth_next');
+        const next = nextFromUrl || nextFromStorage || '/';
         const hash = window.location.hash || '';
         
         console.log('[AuthCallback] Processing...', { hasCode: !!code, hasHash: !!hash, next });
+
+        // Clear the storage once we've read it
+        if (nextFromStorage) {
+          safeSessionStorage.removeItem('aura_auth_next');
+        }
 
         // 1. Check if we already have a session (handled by auto-detection)
         const { data: { session: existingSession } } = await supabase.auth.getSession();

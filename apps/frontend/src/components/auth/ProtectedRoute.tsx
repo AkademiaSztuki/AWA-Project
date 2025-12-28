@@ -64,6 +64,7 @@ export function ProtectedRoute({
 
   // Jeśli wymagane logowanie i użytkownik nie zalogowany - pokaż modal
   if (requireAuth && !user) {
+    // Determine the path we want to return to
     const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const effectiveRedirect = urlParams?.get('redirect') || searchParams.get('redirect') || pathname;
 
@@ -79,17 +80,13 @@ export function ProtectedRoute({
           }}
           onSuccess={() => {
             setShowLogin(false);
-            // Po zalogowaniu przekieruj na docelową stronę
-            // Sprawdź redirect z URL (może być ustawiony przez window.history.replaceState)
-            const urlParams = new URLSearchParams(window.location.search);
-            const redirect = urlParams.get('redirect') || searchParams.get('redirect');
-            
-            if (redirect && redirect !== pathname && redirect !== '/flow/path-selection') {
+            // Przekieruj na docelową stronę
+            if (effectiveRedirect && effectiveRedirect !== pathname && effectiveRedirect !== '/flow/path-selection') {
               // Użytkownik nie może wejść na dashboard bez ukończonego profilu
-              if (redirect === '/dashboard' && !sessionData?.coreProfileComplete) {
+              if (effectiveRedirect === '/dashboard' && !sessionData?.coreProfileComplete) {
                 router.push('/');
               } else {
-                router.push(redirect);
+                router.push(effectiveRedirect);
               }
             } else if (pathname !== '/flow/path-selection') {
               // Jeśli jesteśmy na dashboardzie bez profilu, idź na landing

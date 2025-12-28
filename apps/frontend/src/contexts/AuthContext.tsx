@@ -119,9 +119,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithGoogle = async (nextPath?: string) => {
-    let redirectTo = `${window.location.origin}/auth/callback`;
+    const redirectTo = `${window.location.origin}/auth/callback`;
+    
+    // Store nextPath in sessionStorage instead of URL to keep the OAuth URL clean
+    // This is more robust for Safari Mobile and prevents URL length issues.
     if (nextPath) {
-      redirectTo += `?next=${encodeURIComponent(nextPath)}`;
+      safeSessionStorage.setItem('aura_auth_next', nextPath);
+    } else {
+      safeSessionStorage.removeItem('aura_auth_next');
     }
 
     // Agent log: starting OAuth
@@ -163,9 +168,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithEmail = async (email: string, nextPath?: string) => {
-    let emailRedirectTo = `${window.location.origin}/auth/callback`;
+    const emailRedirectTo = `${window.location.origin}/auth/callback`;
+    
     if (nextPath) {
-      emailRedirectTo += `?next=${encodeURIComponent(nextPath)}`;
+      safeSessionStorage.setItem('aura_auth_next', nextPath);
+    } else {
+      safeSessionStorage.removeItem('aura_auth_next');
     }
 
     const { error } = await supabase.auth.signInWithOtp({

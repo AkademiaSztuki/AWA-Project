@@ -202,14 +202,7 @@ export default function PathSelectionScreen() {
       // Store the selected path and determine destination
       setPendingPath(pathType);
       
-      // Determine destination path based on selection
-      const destinationPath = pathType === 'fast' ? '/flow/onboarding' : '/setup/profile';
-      
-      // Update URL with redirect parameter so ProtectedRoute knows where to go after login
-      // Use router to update URL so searchParams updates properly
-      router.push(`${window.location.pathname}?redirect=${encodeURIComponent(destinationPath)}&auth=required`);
-      
-      // Show login modal - this will handle the redirect after login
+      // Show login modal
       setShowLoginModal(true);
       return;
     }

@@ -105,9 +105,7 @@ const LandingScreen: React.FC = () => {
                       stopAllDialogueAudio();
                       if (!user) { 
                         setPendingPath('fast'); 
-                        // Update URL with redirect param so LoginModal can pick it up for OAuth
-                        const destination = '/flow/onboarding';
-                        router.push(`/?redirect=${encodeURIComponent(destination)}&auth=required`, { scroll: false });
+                        // Just show the modal - LoginModal will handle the redirect via redirectPath prop
                         setShowLoginModal(true); 
                         return; 
                       }
@@ -144,9 +142,7 @@ const LandingScreen: React.FC = () => {
                       stopAllDialogueAudio();
                       if (!user) { 
                         setPendingPath('full'); 
-                        // Update URL with redirect param so LoginModal can pick it up for OAuth
-                        const destination = '/setup/profile';
-                        router.push(`/?redirect=${encodeURIComponent(destination)}&auth=required`, { scroll: false });
+                        // Just show the modal
                         setShowLoginModal(true); 
                         return; 
                       }
