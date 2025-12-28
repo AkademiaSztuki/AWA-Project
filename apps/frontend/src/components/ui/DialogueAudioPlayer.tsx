@@ -24,6 +24,40 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playAttemptedRef = useRef<boolean>(false);
   const previousSrcRef = useRef<string>('');
+  const retryOnInteractionRef = useRef<boolean>(false);
+
+  // Listen for user interactions to retry audio playback on mobile
+  useEffect(() => {
+    if (!autoPlay) return;
+
+    const handleUserInteraction = () => {
+      userHasInteracted = true;
+      // If audio is ready but not playing, try to play it
+      if (audioRef.current && retryOnInteractionRef.current && autoPlay) {
+        const audio = audioRef.current;
+        if (audio.paused && audio.readyState >= 2 && !playAttemptedRef.current) {
+          console.log('[DialogueAudioPlayer] User interaction detected, retrying audio playback');
+          playAttemptedRef.current = true;
+          audio.play().catch((error) => {
+            console.warn('DialogueAudioPlayer: Play failed on interaction retry', error);
+            // Reset playAttempted so we can try again on next interaction
+            playAttemptedRef.current = false;
+          });
+        }
+      }
+    };
+
+    // Add listeners for various user interactions
+    window.addEventListener('click', handleUserInteraction, { passive: true });
+    window.addEventListener('touchstart', handleUserInteraction, { passive: true });
+    window.addEventListener('touchend', handleUserInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener('click', handleUserInteraction);
+      window.removeEventListener('touchstart', handleUserInteraction);
+      window.removeEventListener('touchend', handleUserInteraction);
+    };
+  }, [autoPlay]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -51,22 +85,30 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
               if (autoPlay) {
                 audioRef.current.currentTime = 0;
                 playAttemptedRef.current = false;
+                retryOnInteractionRef.current = false; // Reset retry flag
                 const tryPlay = () => {
                   if (audioRef.current && autoPlay && !playAttemptedRef.current) {
                     playAttemptedRef.current = true;
-                    audioRef.current.play().catch((error) => {
-                      console.warn('DialogueAudioPlayer: Auto-play blocked, waiting for interaction', error);
-                      if (userHasInteracted) {
-                        setTimeout(() => audioRef.current?.play().catch(() => {}), 100);
-                      }
-                    });
-                  }
-                };
-                if (audioRef.current.readyState >= 2) {
-                  tryPlay();
-                } else {
-                  audioRef.current.addEventListener('canplay', tryPlay, { once: true });
+                    retryOnInteractionRef.current = false; // Reset retry flag when attempting to play
+              audioRef.current.play().catch((error) => {
+                console.warn('DialogueAudioPlayer: Auto-play blocked, waiting for interaction', error);
+                // Mark that we should retry on next user interaction
+                retryOnInteractionRef.current = true;
+                playAttemptedRef.current = false; // Allow retry
+                if (userHasInteracted) {
+                  setTimeout(() => {
+                    if (audioRef.current && !audioRef.current.paused) return;
+                    audioRef.current?.play().catch(() => {});
+                  }, 100);
                 }
+              });
+            }
+          };
+          if (audioRef.current.readyState >= 2) {
+            tryPlay();
+          } else {
+            audioRef.current.addEventListener('canplay', tryPlay, { once: true });
+          }
               }
             }
           }
@@ -83,13 +125,21 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
             if (autoPlay) {
               audioRef.current.currentTime = 0;
               playAttemptedRef.current = false;
+              retryOnInteractionRef.current = false; // Reset retry flag
               const tryPlay = () => {
                 if (audioRef.current && autoPlay && !playAttemptedRef.current) {
                   playAttemptedRef.current = true;
+                  retryOnInteractionRef.current = false; // Reset retry flag when attempting to play
                   audioRef.current.play().catch((error) => {
                     console.warn('DialogueAudioPlayer: Auto-play blocked', error);
+                    // Mark that we should retry on next user interaction
+                    retryOnInteractionRef.current = true;
+                    playAttemptedRef.current = false; // Allow retry
                     if (userHasInteracted) {
-                      setTimeout(() => audioRef.current?.play().catch(() => {}), 100);
+                      setTimeout(() => {
+                        if (audioRef.current && !audioRef.current.paused) return;
+                        audioRef.current?.play().catch(() => {});
+                      }, 100);
                     }
                   });
                 }
@@ -113,15 +163,23 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
         if (autoPlay) {
           audioRef.current.currentTime = 0;
           playAttemptedRef.current = false;
+          retryOnInteractionRef.current = false; // Reset retry flag
 
           const tryPlay = () => {
             if (audioRef.current && autoPlay && !playAttemptedRef.current) {
               playAttemptedRef.current = true;
+              retryOnInteractionRef.current = false; // Reset retry flag when attempting to play
               audioRef.current.play().catch((error) => {
                 console.warn('DialogueAudioPlayer: Auto-play blocked, waiting for interaction', error);
+                // Mark that we should retry on next user interaction
+                retryOnInteractionRef.current = true;
+                playAttemptedRef.current = false; // Allow retry
                 // Retry on interaction if blocked
                 if (userHasInteracted) {
-                  setTimeout(() => audioRef.current?.play().catch(() => {}), 100);
+                  setTimeout(() => {
+                    if (audioRef.current && !audioRef.current.paused) return;
+                    audioRef.current?.play().catch(() => {});
+                  }, 100);
                 }
               });
             }
@@ -147,6 +205,9 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
       // #region agent log
       void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'A19',location:'DialogueAudioPlayer.tsx:audio-ended',message:'Audio ended event fired',data:{src,currentTime:audio.currentTime,duration:audio.duration,ended:audio.ended},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
+      // Reset retry flag when audio ends
+      retryOnInteractionRef.current = false;
+      playAttemptedRef.current = false;
       onEnded();
     };
     audio.addEventListener('ended', handleEnded);

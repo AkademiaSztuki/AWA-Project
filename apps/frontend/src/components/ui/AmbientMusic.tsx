@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { safeLocalStorage } from '@/lib/supabase';
 
 interface AmbientMusicProps {
@@ -9,7 +9,7 @@ interface AmbientMusicProps {
 }
 
 export const AmbientMusic: React.FC<AmbientMusicProps> = ({ 
-  volume = 0.1, // Ustawione na 10% maksymalnego (0.1 z 1.0)
+  volume = 0.3, // Domyślnie 30%
   audioFile = "/audio/ambient.mp3" 
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -216,66 +216,42 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     const startMusic = () => {
       const userManuallyPaused = typeof window !== 'undefined' && (window as any).ambientMusicUserManuallyPaused === true;
       if (userManuallyPaused) {
-        // Użytkownik ręcznie wyłączył muzykę - nie włączaj automatycznie
         return;
       }
       if (audioRef.current) {
-        // Resetuj flagę przy próbie włączenia (na wypadek gdyby była ustawiona wcześniej)
+        // Resetuj flagę przed próbą włączenia
         if (typeof window !== 'undefined') {
           (window as any).ambientMusicUserManuallyPaused = false;
         }
-        if (!isPlaying) {
-          // console.log('AmbientMusic: Attempting to start music');
-          // console.log('AmbientMusic: Current volume:', audioRef.current.volume);
-          // console.log('AmbientMusic: Audio element:', audioRef.current);
-          // console.log('AmbientMusic: Audio readyState:', audioRef.current.readyState);
-          // console.log('AmbientMusic: Audio networkState:', audioRef.current.networkState);
-          
-          // Sprawdź czy audio jest gotowe do odtwarzania
-          if (audioRef.current.readyState >= 2) { // HAVE_CURRENT_DATA
-            // console.log('AmbientMusic: Audio is ready to play');
+        
+        // Próbuj odtworzyć niezależnie od stanu (play jest bezpieczne)
+        audioRef.current.play().then(() => {
+          console.log('AmbientMusic: Music started successfully after interaction');
+          removeInteractionListeners();
+        }).catch(error => {
+          // Jeśli nie udało się, to może jeszcze nie jest gotowe - canplay obsłuży resztę
+          console.log('AmbientMusic: Play failed, waiting for canplay or next interaction', error.name);
+        });
+
+        // Na wszelki wypadek dodaj canplay listener
+        audioRef.current.addEventListener('canplay', () => {
+          if (audioRef.current && !isPlaying && !userManuallyPaused) {
             audioRef.current.play().then(() => {
-              // console.log('AmbientMusic: Music started successfully');
-              // console.log('AmbientMusic: Current time:', audioRef.current?.currentTime);
-              // console.log('AmbientMusic: Duration:', audioRef.current?.duration);
-            }).catch(error => {
-              console.error('AmbientMusic: Failed to start music:', error);
-            });
-          } else {
-            // console.log('AmbientMusic: Audio not ready yet, waiting...');
-            // Spróbuj ponownie za chwilę
-            setTimeout(() => {
-              if (audioRef.current && !isPlaying) {
-                startMusic();
-              }
-            }, 100);
+              console.log('AmbientMusic: Music started successfully after canplay');
+              removeInteractionListeners();
+            }).catch(() => {});
           }
-        } else {
-          // console.log('AmbientMusic: Cannot start music - conditions not met:', {
-          //   hasAudioRef: !!audioRef.current,
-          //   isPlaying,
-          //   isLoaded,
-          //   readyState: audioRef.current?.readyState
-          // });
-        }
+        }, { once: true });
       }
     };
 
     // Dodaj event listenery dla interakcji użytkownika
-    let hasStartedMusic = false;
     const handleUserInteraction = () => {
-      if (hasStartedMusic) return; // Już próbowaliśmy włączyć muzykę
-      console.log('AmbientMusic: User interaction detected, starting music');
-      hasStartedMusic = true;
-      
-      // Resetuj flagę przed włączeniem
-      if (typeof window !== 'undefined') {
-        (window as any).ambientMusicUserManuallyPaused = false;
-      }
-      
+      console.log('AmbientMusic: User interaction detected');
       startMusic();
-      
-      // Usuń event listenery po pierwszej interakcji
+    };
+
+    const removeInteractionListeners = () => {
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('keydown', handleUserInteraction);
       document.removeEventListener('touchstart', handleUserInteraction);
@@ -285,7 +261,7 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
 
     // Dodaj więcej event listenerów dla lepszej obsługi mobile
     document.addEventListener('click', handleUserInteraction, { passive: true });
-    document.addEventListener('keydown', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction, { passive: true });
     document.addEventListener('touchstart', handleUserInteraction, { passive: true });
     document.addEventListener('touchend', handleUserInteraction, { passive: true });
     document.addEventListener('mousedown', handleUserInteraction, { passive: true });
@@ -365,17 +341,12 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
   }, [currentVolume]);
 
   // Funkcja do zmiany głośności (można wywołać z zewnątrz)
-  const setVolume = (newVolume: number) => {
+  const setVolume = useCallback((newVolume: number) => {
     const clampedVolume = Math.max(0, Math.min(1, newVolume)); // Ogranicz do 0-1
     setCurrentVolume(clampedVolume);
-    
-    // Eksponuj funkcję przez window object żeby hook mógł jej używać
-    if (typeof window !== 'undefined') {
-      (window as any).setAmbientMusicVolume = setVolume;
-    }
-  };
+  }, []);
 
-  // Eksponuj funkcję przy montowaniu komponentu
+  // Eksponuj funkcję przy montowaniu komponentu i aktualizuj ją przy każdej zmianie setVolume
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).setAmbientMusicVolume = setVolume;
@@ -383,10 +354,11 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     
     return () => {
       if (typeof window !== 'undefined') {
-        delete (window as any).setAmbientMusicVolume;
+        // Nie usuwamy, aby uniknąć problemów przy szybkich przeładowaniach
+        // (window as any).setAmbientMusicVolume = undefined;
       }
     };
-  }, []);
+  }, [setVolume]);
 
   // Renderuj element audio w DOM, żeby querySelector mógł go znaleźć
   return (
@@ -395,6 +367,7 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
       style={{ display: 'none' }} 
       data-type="ambient"
       loop
+      preload="auto"
     />
   );
 };

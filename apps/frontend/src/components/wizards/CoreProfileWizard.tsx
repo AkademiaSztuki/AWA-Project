@@ -1630,8 +1630,8 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
 
   if (showInstructions) {
     return (
-      <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} flex flex-col justify-center items-center relative overflow-y-auto scrollbar-hide !shadow-none`}>
-        <div className="min-h-full flex flex-col justify-center items-center">
+      <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} flex flex-col justify-center items-center relative overflow-y-auto scrollbar-hide !shadow-none overscroll-none`}>
+        <div className="min-h-full flex flex-col justify-center items-center touch-none">
           <div className="flex-1 flex flex-col justify-center items-center">
             <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-3">
               {language === 'pl' ? 'Wnętrzarski Tinder' : 'Interior Design Tinder'}
@@ -1644,16 +1644,16 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
             
             <div className="flex justify-center gap-8 mb-6">
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                  <X className="text-red-500" size={20} />
+                <div className="w-10 h-10 rounded-full glass-panel bg-red-500/10 backdrop-blur-xl border border-red-400/20 flex items-center justify-center">
+                  <X className="text-red-500" size={18} />
                 </div>
-                <span className="text-sm text-graphite">{language === 'pl' ? 'Nie' : 'No'}</span>
+                <span className="text-sm text-graphite font-modern">{language === 'pl' ? 'Nie' : 'No'}</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                  <Heart className="text-green-500" size={20} />
+                <div className="w-10 h-10 rounded-full glass-panel bg-green-500/10 backdrop-blur-xl border border-green-400/20 flex items-center justify-center">
+                  <Heart className="text-green-500" size={18} />
                 </div>
-                <span className="text-sm text-graphite">{language === 'pl' ? 'Tak!' : 'Yes!'}</span>
+                <span className="text-sm text-graphite font-modern">{language === 'pl' ? 'Tak!' : 'Yes!'}</span>
               </div>
             </div>
           </div>
@@ -1674,8 +1674,8 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
   }
 
   return (
-    <GlassCard variant="flatOnMobile" className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex flex-col overflow-hidden md:overflow-y-auto scrollbar-hide !shadow-none`}>
-      <div className="min-h-full flex flex-col">
+    <GlassCard variant="flatOnMobile" className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex flex-col overflow-hidden md:overflow-y-auto scrollbar-hide !shadow-none overscroll-none select-none`}>
+      <div className="min-h-full flex flex-col touch-none">
         <div className="flex-1 flex flex-col">
           {isLoading ? (
             <div className="flex flex-1 items-center justify-center text-silver-dark">
@@ -1683,28 +1683,8 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
             </div>
           ) : (
             <div className="flex-1 flex flex-col">
-              {/* Progress */}
-              <div className="mb-6">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-silver-dark font-modern">
-                    {language === 'pl' ? 'Postęp' : 'Progress'}
-                  </span>
-                  <span className="text-sm text-silver-dark font-modern">
-                    {currentIndex + 1} / {images.length}
-                  </span>
-                </div>
-                <div className="w-full bg-silver/20 rounded-full h-2">
-                  <motion.div
-                    className="bg-gradient-to-r from-gold to-champagne h-2 rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ duration: 0.3 }}
-                  />
-                </div>
-              </div>
-
-              {/* Swipe Card - Larger */}
-              <div className="relative h-[450px] md:h-[550px] mb-6">
+              {/* Swipe Card - Moved to top for better mobile swiping */}
+              <div className="relative h-[380px] sm:h-[450px] md:h-[550px] mb-6">
                 {/* Hidden preload of next image for Next.js Image optimization */}
                 {images[currentIndex + 1] && (
                   <div className="absolute opacity-0 pointer-events-none w-1 h-1 overflow-hidden">
@@ -1755,23 +1735,43 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
                 </AnimatePresence>
               </div>
 
-              {/* Action Buttons - Bigger */}
-              <div className="flex justify-center gap-6 mb-4">
+              {/* Progress - Moved below images as requested */}
+              <div className="mb-8">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-silver-dark font-modern">
+                    {language === 'pl' ? 'Postęp' : 'Progress'}
+                  </span>
+                  <span className="text-sm text-silver-dark font-modern">
+                    {currentIndex + 1} / {images.length}
+                  </span>
+                </div>
+                <div className="w-full bg-silver/20 rounded-full h-2">
+                  <motion.div
+                    className="bg-gradient-to-r from-gold to-champagne h-2 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons - Styled with Glass design and subtle color hints */}
+              <div className="flex justify-center gap-8 mb-4">
                 <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.1, backgroundColor: 'rgba(239, 68, 68, 0.15)' }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => handleSwipe('left')}
-                  className="w-20 h-20 rounded-full bg-gradient-to-br from-red-100 to-red-200 hover:from-red-200 hover:to-red-300 shadow-xl flex items-center justify-center transition-all z-10"
+                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-full glass-panel bg-red-500/10 backdrop-blur-xl border border-red-400/20 shadow-xl flex items-center justify-center transition-all z-10 pointer-events-auto group"
                 >
-                  <X size={36} className="text-red-600" />
+                  <X size={18} strokeWidth={2.5} className="text-red-400/60 group-hover:text-red-500 transition-colors sm:size-18" />
                 </motion.button>
                 <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.1, backgroundColor: 'rgba(34, 197, 94, 0.15)' }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => handleSwipe('right')}
-                  className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 shadow-xl flex items-center justify-center transition-all z-10"
+                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-full glass-panel bg-green-500/10 backdrop-blur-xl border border-green-400/20 shadow-xl flex items-center justify-center transition-all z-10 pointer-events-auto group"
                 >
-                  <Heart size={36} className="text-white" fill="currentColor" />
+                  <Heart size={18} strokeWidth={2.5} className="text-green-400/60 group-hover:text-green-500 transition-colors sm:size-18" />
                 </motion.button>
               </div>
             </div>

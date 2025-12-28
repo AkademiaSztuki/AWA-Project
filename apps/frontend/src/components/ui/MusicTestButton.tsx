@@ -55,20 +55,8 @@ export const MusicTestButton: React.FC = () => {
     const newVolume = parseFloat(target.value);
     console.log('MusicTestButton: handleMusicVolumeChange called with:', newVolume);
     
-    // NATYCHMIASTOWA synchronizacja z audio elementem PRZED aktualizacją state
-    const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
-    if (audioElement) {
-      audioElement.volume = newVolume;
-      console.log('MusicTestButton: Directly set audio volume to:', newVolume);
-    }
-    
-    // Użyj funkcji z hooka, która też zaktualizuje localStorage
+    // Użyj funkcji z hooka, która zaktualizuje wszystko (state, audio element, localStorage i sync window)
     setMusicVolume(newVolume);
-    
-    // Użyj też funkcji z AmbientMusic komponentu jeśli dostępna
-    if (typeof window !== 'undefined' && (window as any).setAmbientMusicVolume) {
-      (window as any).setAmbientMusicVolume(newVolume);
-    }
   };
 
   const musicPercentage = musicVolume * 100;
@@ -274,7 +262,7 @@ export const MusicTestButton: React.FC = () => {
                     e.stopPropagation();
                     if (musicVolume === 0) {
                       // Włącz muzykę
-                      setMusicVolume(0.5);
+                      setMusicVolume(0.3);
                       // Resetuj flagę ręcznego wyłączenia
                       if (typeof window !== 'undefined') {
                         (window as any).ambientMusicUserManuallyPaused = false;
@@ -282,7 +270,6 @@ export const MusicTestButton: React.FC = () => {
                       // Bezpośrednio włącz audio (działa lepiej na mobile)
                       const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
                       if (audioElement) {
-                        audioElement.volume = 0.5;
                         try {
                           await audioElement.play();
                           console.log('MusicTestButton: Music started directly');
@@ -296,8 +283,15 @@ export const MusicTestButton: React.FC = () => {
                     } else {
                       // Wyłącz muzykę
                       setMusicVolume(0);
-                      if (isPlaying) {
-                        togglePlay();
+                      // Nie wywołujemy togglePlay() jeśli głośność jest 0, 
+                      // bo setMusicVolume(0) już wyciszyło audio.
+                      // Ale jeśli chcemy zatrzymać odtwarzanie całkowicie:
+                      const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+                      if (audioElement && !audioElement.paused) {
+                        audioElement.pause();
+                        if (typeof window !== 'undefined') {
+                          (window as any).ambientMusicUserManuallyPaused = true;
+                        }
                       }
                     }
                   }}

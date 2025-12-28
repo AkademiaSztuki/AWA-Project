@@ -13,7 +13,7 @@ interface AmbientMusicControls {
 }
 
 export const useAmbientMusic = (): AmbientMusicControls => {
-  const [volume, setVolumeState] = useState(0.4); // Zmniejszone z 0.8 do 0.4 (połowa)
+  const [volume, setVolumeState] = useState(0.3); // Domyślnie 30%
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Zapisz głośność w localStorage i synchronizuj z audio
@@ -84,6 +84,43 @@ export const useAmbientMusic = (): AmbientMusicControls => {
     
     cleanup = setupAudioListeners();
     
+    // Dodaj cykliczne sprawdzanie stanu odtwarzania (sync)
+    const syncInterval = setInterval(() => {
+      const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+      if (audioElement) {
+        const actualIsPlaying = !audioElement.paused;
+        setIsPlaying((prev) => {
+          if (prev !== actualIsPlaying) {
+            console.log('useAmbientMusic: Syncing isPlaying state to:', actualIsPlaying);
+            return actualIsPlaying;
+          }
+          return prev;
+        });
+        
+        // Synchronizuj też głośność jeśli jest rozbieżność
+        if (Math.abs(audioElement.volume - volume) > 0.01 && volume > 0) {
+          // Ale nie nadpisuj jeśli volume jest celowo 0
+          // audioElement.volume = volume;
+        }
+      }
+    }, 1000);
+
+    // Dodaj obsługę interakcji na poziomie hooka dla pewności
+    const handleGlobalInteraction = () => {
+      const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+      const userManuallyPaused = typeof window !== 'undefined' && (window as any).ambientMusicUserManuallyPaused === true;
+      
+      if (audioElement && audioElement.paused && !userManuallyPaused && volume > 0) {
+        console.log('useAmbientMusic: Global interaction, attempting to start music');
+        audioElement.play().catch(() => {
+          // Cichy błąd - autoplay policy
+        });
+      }
+    };
+
+    document.addEventListener('click', handleGlobalInteraction, { passive: true });
+    document.addEventListener('touchstart', handleGlobalInteraction, { passive: true });
+
     // Zwróć cleanup function dla useEffect
     return () => {
       if (retryTimeout) {
@@ -92,22 +129,30 @@ export const useAmbientMusic = (): AmbientMusicControls => {
       if (cleanup) {
         cleanup();
       }
+      clearInterval(syncInterval);
+      document.removeEventListener('click', handleGlobalInteraction);
+      document.removeEventListener('touchstart', handleGlobalInteraction);
     };
-  }, []);
+  }, [volume]);
 
   const setVolume = (newVolume: number) => {
     const clampedVolume = Math.max(0, Math.min(1, newVolume));
     setVolumeState(clampedVolume);
     safeLocalStorage.setItem('ambient-music-volume', clampedVolume.toString());
     
-    // Użyj funkcji z AmbientMusic komponentu
+    // 1. Zaktualizuj bezpośrednio element audio (najszybsza metoda)
+    const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+    if (audioElement) {
+      audioElement.volume = clampedVolume;
+      console.log('useAmbientMusic: Directly set volume to:', clampedVolume);
+    }
+    
+    // 2. Wywołaj funkcję z AmbientMusic komponentu (dla synchronizacji state'u)
     if (typeof window !== 'undefined' && (window as any).setAmbientMusicVolume) {
-      (window as any).setAmbientMusicVolume(clampedVolume);
-    } else {
-      // Fallback - aktualizuj głośność bezpośrednio w elemencie audio
-      const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
-      if (audioElement) {
-        audioElement.volume = clampedVolume;
+      try {
+        (window as any).setAmbientMusicVolume(clampedVolume);
+      } catch (err) {
+        console.error('useAmbientMusic: Error calling setAmbientMusicVolume:', err);
       }
     }
   };
@@ -201,7 +246,7 @@ export const useAmbientMusic = (): AmbientMusicControls => {
   };
 
   const unmute = () => {
-    setVolume(0.4); // Przywróć domyślną głośność (zmniejszone z 0.8)
+    setVolume(0.3);
   };
 
   return {
