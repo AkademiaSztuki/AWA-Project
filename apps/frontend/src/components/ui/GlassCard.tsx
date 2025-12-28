@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 interface GlassCardProps {
   children: React.ReactNode;
   className?: string;
-  variant?: 'default' | 'interactive' | 'highlighted' | 'flat' | 'flatOnMobile';
+  variant?: 'default' | 'interactive' | 'highlighted' | 'flat' | 'flatOnMobile' | 'glass';
 }
 
 export const GlassCard: React.FC<GlassCardProps> = ({
