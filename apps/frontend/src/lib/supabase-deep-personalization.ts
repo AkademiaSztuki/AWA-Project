@@ -383,30 +383,10 @@ export async function getUserHashFromAuth(authUserId: string): Promise<string | 
       .from('participants')
       .select('user_hash')
       .eq('auth_user_id', authUserId)
-      .maybeSingle();
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: 'debug-session',
-            runId: 'incognito-fix',
-            hypothesisId: 'I5',
-            location: 'supabase-deep-personalization.ts:getUserHashFromAuth',
-            message: 'No profile linked yet (PGRST116)',
-            data: {
-              authUserId,
-              errorCode: error.code
-            },
-            timestamp: Date.now()
-          })
-        }).catch(() => {});
-        // #endregion
-        return null; // No profile linked yet
-      }
       console.warn('Error fetching user_hash from auth:', error);
       // #region agent log
       void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
@@ -430,6 +410,27 @@ export async function getUserHashFromAuth(authUserId: string): Promise<string | 
       return null;
     }
     
+    if (!data || data.length === 0) {
+      // #region agent log
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'incognito-fix',
+          hypothesisId: 'I5',
+          location: 'supabase-deep-personalization.ts:getUserHashFromAuth',
+          message: 'No profile linked yet',
+          data: { authUserId },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+      return null;
+    }
+    
+    const userHash = data[0].user_hash;
+    
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
       method: 'POST',
@@ -442,15 +443,15 @@ export async function getUserHashFromAuth(authUserId: string): Promise<string | 
         message: 'getUserHashFromAuth result',
         data: {
           authUserId,
-          foundUserHash: data?.user_hash || null,
-          hasData: !!data
+          foundUserHash: userHash,
+          rowCount: data.length
         },
         timestamp: Date.now()
       })
     }).catch(() => {});
     // #endregion
     
-    return data?.user_hash || null;
+    return userHash;
   } catch (error) {
     console.warn('Error in getUserHashFromAuth:', error);
     // #region agent log

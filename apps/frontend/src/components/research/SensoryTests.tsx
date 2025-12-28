@@ -328,7 +328,7 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
                 WebkitFontSmoothing: 'antialiased'
               }}
             >
-              <div className="relative w-full h-9 sm:h-28 overflow-hidden bg-white/5 flex-shrink-0">
+              <div className="relative w-full h-full overflow-hidden bg-white/5">
                 <div className="flex gap-2 h-full w-full">
                   {palette.colors.map((color, index) => (
                     <div
@@ -338,11 +338,6 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
                     />
                   ))}
                 </div>
-              </div>
-              <div className="px-2 sm:px-4 pt-2 pb-3 flex-1 flex items-center justify-center">
-                <p className="text-[10px] sm:text-sm font-nasalization text-graphite text-center leading-tight">
-                  {palette.label[language]}
-                </p>
               </div>
             </button>
           );
@@ -365,13 +360,45 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
   );
 }
 
+// Map style IDs to image filenames (using first available image for each style)
+const STYLE_IMAGE_MAP: Record<string, string> = {
+  'art-deco': 'living_room_art_deco_gold_brass_complex_dark_warm_low_desert_cold_metal_none_luxurious_13.jpg.jpeg',
+  'bohemian': 'living_room_bohemian_pastel_mixed_complex_bright_warm_low_garden_soft_fabric_plants_playful_23.jpg.jpeg',
+  'contemporary': 'living_room_contemporary_neutral_marble_simple_bright_cool_bright_mountain_glass_none_sophisticated_7.jpg.jpeg',
+  'eclectic': 'living_room_eclectic_rainbow_mixed_complex_bright_warm_low_sunset_soft_fabric_plants_groovy_12.jpg.jpeg',
+  'farmhouse': 'living_room_farmhouse_warm_cream_wood_simple_bright_warm_bright_garden_smooth_wood_plants_comfortable_14.jpg.jpeg',
+  'gothic': 'living_room_gothic_black_metal_simple_dark_cool_bright_mountain_cold_metal_none_dramatic_19.jpg.jpeg',
+  'industrial': 'living_room_industrial_charcoal_metal_simple_dark_neutral_light_ocean_cold_metal_none_edgy_4.jpg.jpeg',
+  'japanese': 'living_room_japanese_beige_bamboo_simple_bright_neutral_light_forest_smooth_wood_plants_zen_9.jpg.jpeg',
+  'maximalist': 'living_room_maximalist_jewel_tones_velvet_complex_bright_warm_bright_garden_soft_fabric_plants_playful_10.jpg.jpeg',
+  'mediterranean': 'living_room_mediterranean_terracotta_clay_complex_bright_warm_bright_sunset_rough_stone_plants_warm_16.jpg.jpeg',
+  'mid-century': 'living_room_mid_century_orange_wood_complex_bright_warm_bright_sunset_warm_leather_plants_nostalgic_18.jpg.jpeg',
+  'minimalist': 'living_room_minimalist_cream_linen_simple_bright_neutral_light_forest_smooth_wood_plants_calm_5.jpg.jpeg',
+  'modern': 'living_room_modern_black_white_simple_dark_neutral_light_ocean_glass_none_minimal_22.jpg.jpeg',
+  'rustic': 'living_room_rustic_warm_brown_wood_complex_bright_warm_bright_sunset_smooth_wood_plants_homey_26.jpg.jpeg',
+  'scandinavian': 'living_room_scandinavian_light_grey_wood_simple_bright_warm_bright_forest_smooth_wood_plants_hygge_21.jpg.jpeg',
+  'traditional': 'living_room_traditional_burgundy_leather_complex_dark_warm_low_desert_warm_leather_none_elegant_8.jpg.jpeg',
+  'vintage': 'living_room_vintage_brown_leather_complex_dark_warm_low_desert_warm_leather_none_nostalgic_20.jpg.jpeg',
+  'zen': 'living_room_zen_white_stone_simple_bright_neutral_light_mountain_rough_stone_plants_serene_15.jpg.jpeg',
+};
+
+function getStyleImagePath(styleId: string): string | null {
+  const filename = STYLE_IMAGE_MAP[styleId];
+  return filename ? `/Tinder/Livingroom/${filename}` : null;
+}
+
 function StyleTest({ options, selectedId, onSelect, frameless = false, className = '', stepCounter }: StyleTestProps) {
   const { language, t } = useLanguage();
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   const ContentWrapper = frameless ? 'div' : GlassCard;
   const wrapperClass = frameless 
     ? `h-full flex flex-col justify-start ${className}`
     : `p-2.5 sm:p-5 md:p-6 h-full flex flex-col justify-start ${className}`;
+
+  const handleImageError = (styleId: string) => {
+    setImageErrors(prev => new Set(prev).add(styleId));
+  };
 
   return (
     <ContentWrapper className={wrapperClass}>
@@ -409,15 +436,19 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 overflow-y-auto">
         {options.map((style) => {
           const isSelected = style.id === selectedId;
+          const imagePath = getStyleImagePath(style.id);
+          const hasImageError = imageErrors.has(style.id);
+          const hasImage = imagePath && !hasImageError;
+          
           return (
             <button
               key={style.id}
               type="button"
               onClick={() => onSelect(style.id)}
-              className={`rounded-2xl border px-3 sm:px-4 py-3 sm:py-4 text-left flex flex-col gap-2 sm:gap-3 transition-all ${
+              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all relative min-h-[200px] sm:min-h-[180px] ${
                 isSelected
-                  ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
-                  : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
+                  ? 'border-gold shadow-inner shadow-gold/10'
+                  : 'border-white/10 hover:border-gold/30'
               }`}
               style={{ 
                 transform: 'translateZ(0)',
@@ -425,12 +456,42 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
                 WebkitFontSmoothing: 'antialiased'
               }}
             >
-              <h4 className="font-nasalization text-[11px] sm:text-sm text-graphite leading-tight">
-                {language === 'pl' ? style.labelPl : style.labelEn}
-              </h4>
-              <p className="text-[10px] sm:text-xs text-silver-dark font-modern leading-relaxed">
-                {style.description}
-              </p>
+              {/* Background Image */}
+              {hasImage && (
+                <div className="absolute inset-0 z-0 rounded-2xl overflow-hidden">
+                  <Image
+                    src={imagePath}
+                    alt=""
+                    fill
+                    className="object-cover rounded-2xl"
+                    onError={() => handleImageError(style.id)}
+                    loading="lazy"
+                    quality={85}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  />
+                </div>
+              )}
+              
+              {/* Glass overlay */}
+              <div className={`absolute inset-0 z-10 rounded-2xl ${
+                hasImage 
+                  ? (isSelected ? 'bg-gold/25' : 'bg-black/20')
+                  : (isSelected ? 'bg-gold/10' : 'bg-white/5')
+              }`} />
+              
+              {/* Style name and description at bottom */}
+              <div className="absolute bottom-0 left-0 right-0 z-20 px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-0.5 sm:gap-1">
+                <h4 className={`font-nasalization text-xs sm:text-sm leading-tight ${
+                  hasImage ? 'text-white drop-shadow-lg' : 'text-graphite'
+                }`}>
+                  {language === 'pl' ? style.labelPl : style.labelEn}
+                </h4>
+                <p className={`text-[9px] sm:text-[10px] font-modern leading-tight line-clamp-2 ${
+                  hasImage ? 'text-white/90 drop-shadow-md' : 'text-silver-dark'
+                }`}>
+                  {language === 'pl' ? (style.descriptionPl || style.description) : style.description}
+                </p>
+              </div>
             </button>
           );
         })}

@@ -56,7 +56,7 @@ export const ImageComparison: React.FC<ImageComparisonProps> = ({
         animate={{ scale: 1 }}
         exit={{ scale: 0.9 }}
         onClick={(e) => e.stopPropagation()}
-        className="glass-panel p-6 rounded-3xl max-w-6xl w-full"
+        className="md:glass-panel p-6 rounded-3xl max-w-6xl w-full"
       >
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-2xl font-nasalization text-gray-800">Porównaj Obrazy</h3>

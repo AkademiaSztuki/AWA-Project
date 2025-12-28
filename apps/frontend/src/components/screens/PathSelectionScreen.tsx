@@ -395,7 +395,7 @@ export default function PathSelectionScreen() {
                 className="text-left w-full"
                 onClick={() => handlePathSelection('fast')}
               >
-                <GlassCard className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-xl sm:rounded-2xl">
+                <GlassCard variant="interactive" className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-xl sm:rounded-2xl">
                   <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                     <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center flex-shrink-0">
                       <Zap size={20} className="sm:w-7 sm:h-7 text-graphite" />

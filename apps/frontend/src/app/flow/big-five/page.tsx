@@ -426,7 +426,7 @@ export default function BigFivePage() {
         <div className="flex flex-col w-full">
           <div className="flex-1 flex justify-center items-start">
             <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
-              <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
+              <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
                 <div className="text-center">
                   <p className="text-lg text-graphite font-modern mb-4">
                     {t(
@@ -476,7 +476,7 @@ export default function BigFivePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
+              <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
                 {/* Header */}
                 <div className="text-center mb-8">
                   <motion.div
@@ -531,7 +531,7 @@ export default function BigFivePage() {
                       transition={{ duration: 0.5, delay: 0.1 }}
                       className="mb-8"
                     >
-                      <GlassCard className="p-8 bg-white/10 backdrop-blur-xl border border-white/20">
+                      <GlassCard className="p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20">
                         <h2 className="text-2xl font-nasalization text-graphite mb-6 text-center">
                           {t('Profil Osobowości', 'Personality Profile')}
                         </h2>
@@ -644,7 +644,7 @@ export default function BigFivePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
+            <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
               {/* Header */}
               <div className="text-center mb-8">
                 <motion.div

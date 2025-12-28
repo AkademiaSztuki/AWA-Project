@@ -6,6 +6,13 @@ const nextConfig = {
       'your-supabase-project.supabase.co', 
       'modal-api-domain.com'
     ],
+    // Optymalizacja obrazów - konwersja na WebP/AVIF i kompresja
+    formats: ['image/avif', 'image/webp'],
+    // Jakość kompresji (1-100, 75 to dobry balans)
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    // Minimum cache time (60 dni)
+    minimumCacheTTL: 60 * 24 * 60 * 60,
   },
   // Podstawowe optymalizacje
   compress: true,

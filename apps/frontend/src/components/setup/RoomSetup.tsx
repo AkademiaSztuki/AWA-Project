@@ -493,7 +493,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8">
+                <GlassCard variant="flatOnMobile" className="p-6 lg:p-8">
                   <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4 text-center">
                     {language === 'pl' ? 'Stan Obecny' : 'Current State'}
                   </h2>
@@ -564,7 +564,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8">
+                <GlassCard variant="flatOnMobile" className="p-6 lg:p-8">
                   <h2 className="text-2xl lg:text-3xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-4 text-center">
                     {language === 'pl' ? 'Cel: Gdzie Ma Być?' : 'Goal: Where Should It Be?'}
                   </h2>
@@ -1137,7 +1137,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <Camera size={24} className="text-white" />
@@ -1173,7 +1173,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         
         {/* Room type display and selection - always show if image is uploaded */}
         {selectedImage && !isAnalyzing && (
-          <div className="mb-6 p-6 glass-panel rounded-2xl relative overflow-hidden">
+          <div className="mb-6 p-6 md:glass-panel rounded-2xl relative overflow-hidden">
             {!processedImage && detectedRoomType !== 'empty_room' && (
               <div className="absolute top-0 right-0 w-64 h-64 bg-gold/5 blur-3xl -z-10 animate-pulse" />
             )}
@@ -1252,7 +1252,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         {/* Upload Area - hide after image is uploaded */}
         {!selectedImage && (
           <>
-        <div className="glass-panel rounded-2xl p-8 border-2 border-dashed border-gold/30 hover:border-gold/50 transition-colors mb-6">
+        <div className="md:glass-panel rounded-2xl p-8 border-2 border-dashed border-gold/30 hover:border-gold/50 transition-colors mb-6">
           <label className="cursor-pointer flex flex-col items-center">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center mb-4">
               <Camera size={32} className="text-white" />
@@ -1509,7 +1509,7 @@ function PreferenceSourceStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <Target size={24} className="text-white" />
@@ -1722,7 +1722,7 @@ function PreferenceQuestionsStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[60vh] max-h-[90vh] h-auto overflow-auto scrollbar-hide flex flex-col">
+      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[60vh] max-h-[90vh] h-auto overflow-auto scrollbar-hide flex flex-col">
         <div className="mb-6">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
             {language === 'pl' ? 'Testy Sensoryczne' : 'Sensory Suite'}
@@ -2095,7 +2095,7 @@ function ActivitiesStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <Activity size={24} className="text-white" />
@@ -2137,7 +2137,7 @@ function ActivitiesStep({
             {selectedActivities.map((activity) => {
               const definition = activityDefinitions.find((item: any) => item.id === activity.type);
               return (
-                <div key={activity.type} className="glass-panel rounded-2xl p-5 border border-white/10">
+                <div key={activity.type} className="md:glass-panel rounded-2xl p-5 border border-white/10">
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <p className="text-sm uppercase tracking-[0.2em] text-silver-dark">
@@ -2212,7 +2212,7 @@ function ActivitiesStep({
             })}
           </div>
         ) : (
-          <div className="glass-panel rounded-2xl p-6 border border-dashed border-white/15 text-center text-silver-dark font-modern mb-6">
+          <div className="md:glass-panel rounded-2xl p-6 border border-dashed border-white/15 text-center text-silver-dark font-modern mb-6">
             {language === 'pl'
               ? 'Zaznacz przynajmniej jedną aktywność, aby przejść dalej.'
               : 'Select at least one activity to continue.'}
@@ -2244,7 +2244,7 @@ function RoomSummaryStep({ data, onComplete, onBack, isSaving }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-8 text-center min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard variant="flatOnMobile" className="p-8 text-center min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
         <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
           <Target size={40} className="text-white" />
         </div>

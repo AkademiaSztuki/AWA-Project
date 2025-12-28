@@ -379,7 +379,7 @@ export function InspirationsStep({ data, onUpdate, onNext, onBack }: Inspiration
 
       {/* Status */}
       {isTagging && (
-        <div className="mb-6 p-4 glass-panel rounded-xl">
+        <div className="mb-6 p-4 md:glass-panel rounded-xl">
           <div className="flex items-center gap-3">
             <Loader2 size={20} className="text-gold animate-spin" />
             <span className="text-graphite font-modern">

@@ -134,6 +134,17 @@ const OnboardingScreen: React.FC = () => {
     }
   }, [pathType, router]);
 
+  // Skip consent step if already completed
+  useEffect(() => {
+    if (isInitialized && step === 'consent') {
+      const hasConsent = !!sessionData?.consentTimestamp;
+      if (hasConsent) {
+        console.log('[Onboarding] Consent already given, skipping to demographics');
+        setStep('demographics');
+      }
+    }
+  }, [isInitialized, sessionData, step]);
+
   const canProceedDemographics = demographics.ageRange && demographics.gender && demographics.education && demographics.country;
   const canProceedConsent = consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13;
 
@@ -141,6 +152,7 @@ const OnboardingScreen: React.FC = () => {
     if (!canProceedConsent) return;
     
     console.log('[Onboarding] Consent submit clicked');
+    const timestamp = new Date().toISOString();
     
     // Zapis zgody do bazy
     const userHash = sessionData?.userHash;
@@ -168,6 +180,9 @@ const OnboardingScreen: React.FC = () => {
       console.warn('[Onboarding] ⚠️ No userHash available, skipping consent save');
     }
     
+    // Zapisz consentTimestamp od razu po wyrażeniu zgody
+    await updateSessionData({ consentTimestamp: timestamp });
+    
     console.log('[Onboarding] ✅ Moving to demographics step');
     setStep('demographics');
   };
@@ -176,7 +191,6 @@ const OnboardingScreen: React.FC = () => {
     if (canProceedDemographics) {
       stopAllDialogueAudio();
       await updateSessionData({
-        consentTimestamp: new Date().toISOString(),
         demographics: demographics
       });
       
@@ -290,7 +304,7 @@ const OnboardingScreen: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
+              <GlassCard variant="flatOnMobile" className="p-6 md:p-8 max-h-[85vh] overflow-auto">
                 <h1 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-4">
                   {texts.title}
                 </h1>
@@ -536,7 +550,7 @@ const OnboardingScreen: React.FC = () => {
       </div>
 
       {/* Dialog IDA na dole - cała szerokość */}
-      <div className="w-full">
+      <div className="w-full pointer-events-none">
         <AwaDialogue 
           currentStep={step === 'demographics' ? 'wizard_demographics' : 'onboarding'} 
           fullWidth={true}
@@ -582,7 +596,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <GlassCard className="p-6 md:p-8 max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard variant="flatOnMobile" className="p-6 md:p-8 max-h-[85vh] overflow-auto">
         <h2 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
           {texts.title}
         </h2>

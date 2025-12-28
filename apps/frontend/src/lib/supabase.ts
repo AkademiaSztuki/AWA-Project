@@ -408,12 +408,16 @@ export const saveFullSessionToSupabase = async (sessionData: any) => {
       // #region agent log
       void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-error',message:'Error saving to participants',data:{error:error.message,errorCode:error.code,errorDetails:error.details},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
       // #endregion
-      console.error('Błąd zapisu uczestnika:', error);
+      console.error('❌ [Supabase] Błąd zapisu uczestnika:', error);
     } else {
       // #region agent log
       const savedRow = data?.[0];
       void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-success',message:'Successfully saved to participants',data:{savedCount:data?.length||0,userHash:participantRow.user_hash,savedWarmth:savedRow?.explicit_warmth,savedBrightness:savedRow?.explicit_brightness,savedComplexity:savedRow?.explicit_complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'supabase-save',hypothesisId:'G'})}).catch(()=>{});
       // #endregion
+      console.info('✅ [Supabase] Successfully saved session to participants table', {
+        userHash: participantRow.user_hash,
+        savedCount: data?.length || 0
+      });
     }
   } catch (err) {
     // #region agent log
@@ -578,9 +582,15 @@ export const saveParticipantSwipes = async (userHash: string, swipes: Array<{
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-error',message:'Error saving swipes',data:{error:error.message,errorCode:error.code,errorDetails:error.details,userHash,rowCount:rows.length,firstRow:rows[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
     // #endregion
-    console.error('Błąd zapisu participant_swipes:', error);
+    console.error('❌ [Supabase] Błąd zapisu participant_swipes:', error);
     return false;
   }
+  
+  console.info('✅ [Supabase] Successfully saved swipes to participant_swipes', {
+    userHash,
+    savedCount: data?.length || 0,
+    swipeCount: swipes.length
+  });
   
   // #region agent log
   void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-success',message:'Successfully saved swipes to participant_swipes',data:{userHash,savedCount:data?.length||0,swipeCount:swipes.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
@@ -984,13 +994,18 @@ export const saveParticipantImage = async (
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantImage-error',message:'Error saving image',data:{error:error.message,errorCode:error.code,errorDetails:error.details,imageType:image.type},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H4'})}).catch(()=>{});
     // #endregion
-    console.error('Błąd zapisu participant_images:', error);
+    console.error('❌ [Supabase] Błąd zapisu participant_images:', error);
     return null;
   }
   
   // #region agent log
   void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantImage-success',message:'Successfully saved image',data:{imageId:data?.id,userHash,imageType:image.type},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H4'})}).catch(()=>{});
   // #endregion
+  console.info('✅ [Supabase] Successfully saved image to participant_images', {
+    imageId: data?.id,
+    userHash,
+    imageType: image.type
+  });
   return data?.id || null;
 };
 
@@ -1023,6 +1038,14 @@ export const saveResearchConsent = async (
   },
   locale: 'pl' | 'en'
 ) => {
+  console.info('[Supabase] Saving research consent', {
+    userId,
+    consentResearch: consent.consentResearch,
+    consentProcessing: consent.consentProcessing,
+    acknowledgedArt13: consent.acknowledgedArt13,
+    locale
+  });
+
   const { data, error } = await supabase
     .from('research_consents')
     .insert({
@@ -1038,9 +1061,20 @@ export const saveResearchConsent = async (
     .single();
 
   if (error) {
-    console.error('Błąd zapisu zgody:', error);
+    console.error('❌ [Supabase] Błąd zapisu zgody:', {
+      error: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      userId
+    });
     return null;
   }
+
+  console.info('✅ [Supabase] Successfully saved research consent', {
+    consentId: data?.id,
+    userId
+  });
 
   return data;
 };

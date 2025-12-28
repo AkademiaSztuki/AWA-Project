@@ -27,7 +27,7 @@ export function PartOneProgressBar({ currentPath, className = '' }: PartOneProgr
     <div className={`w-full ${className}`}>
       {/* Mobile Slim Version (Sticky) */}
       <div className="block sm:hidden sticky top-0 z-[60] -mx-2 px-2 pb-2 bg-transparent">
-        <div className="glass-panel rounded-xl border border-white/20 bg-white/10 backdrop-blur-xl p-2 shadow-lg">
+        <div className="rounded-xl p-2">
           <div className="flex items-center justify-between mb-1.5 px-1">
             <span className="text-[10px] font-semibold tracking-wider uppercase text-silver-dark">
               {stepInfo.index + 1} / {PART_ONE_TOTAL_STEPS}: {stepInfo.title[language]}

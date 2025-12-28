@@ -5,26 +5,20 @@ DO $$
 DECLARE 
     r RECORD;
 BEGIN
-    -- 1. Znajdź i usuń duplikaty auth_user_id, zachowując najnowszy rekord
-    FOR r IN (
-        SELECT auth_user_id, COUNT(*) 
-        FROM public.participants 
-        WHERE auth_user_id IS NOT NULL 
-        GROUP BY auth_user_id 
-        HAVING COUNT(*) > 1
-    ) LOOP
-        -- Zachowaj najnowszy user_hash dla tego auth_user_id
-        -- Inne rekordy zostaną usunięte (kaskadowo usuną swipes/images/itp.)
-        DELETE FROM public.participants 
-        WHERE auth_user_id = r.auth_user_id 
-        AND user_hash NOT IN (
-            SELECT user_hash 
-            FROM public.participants 
-            WHERE auth_user_id = r.auth_user_id 
-            ORDER BY updated_at DESC 
-            LIMIT 1
-        );
-    END LOOP;
+    -- 1. Znajdź i usuń duplikaty auth_user_id, zachowując najnowszy rekord (updated_at)
+    -- Używamy tymczasowej tabeli aby obejść ograniczenia subkwerend w starszych wersjach Postgres
+    CREATE TEMP TABLE latest_participants AS
+    SELECT DISTINCT ON (auth_user_id) user_hash
+    FROM public.participants
+    WHERE auth_user_id IS NOT NULL
+    ORDER BY auth_user_id, updated_at DESC, user_hash ASC;
+
+    DELETE FROM public.participants
+    WHERE auth_user_id IS NOT NULL
+    AND user_hash NOT IN (SELECT user_hash FROM latest_participants);
+
+    DROP TABLE latest_participants;
+
 END $$;
 
 -- 2. Dodaj UNIQUE constraint

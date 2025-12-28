@@ -40,6 +40,16 @@
     z-index: 0;
   }
 
+  /* Płaski wariant dla mobile - usuwa tło i obramowanie */
+  .glass-panel-flat-mobile {
+    @apply md:bg-pearl-100/15 md:backdrop-blur-glass md:border md:border-white/30 md:shadow-glass;
+    @apply bg-transparent border-none shadow-none backdrop-blur-none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    position: relative;
+    z-index: 0;
+  }
+
   .glass-button {
     @apply bg-gold-500/20 backdrop-blur-glass border border-gold-400/40 shadow-glass-inset;
     @apply hover:bg-gold-400/30 hover:border-gold-400 transition-all duration-300;

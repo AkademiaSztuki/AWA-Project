@@ -90,7 +90,7 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
   };
 
   return (
-    <div className="glass-panel p-4 rounded-2xl">
+    <div className="md:glass-panel p-4 rounded-2xl">
       <h3 className="text-sm font-nasalization text-gray-700 mb-3">Historia Generacji</h3>
       
       <div className="relative">

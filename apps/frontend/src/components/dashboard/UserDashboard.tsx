@@ -822,43 +822,43 @@ export function UserDashboard() {
               const inspirationsCount = Math.max(inspirationsFromSpaces, inspirationsFromSession);
               
               return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-                  <GlassCard className="p-4 sm:p-6 min-h-[80px]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                        <Home size={20} className="text-white" />
+                <div className="grid grid-cols-3 gap-2 sm:gap-6 lg:gap-8">
+                  <GlassCard variant="flatOnMobile" className="p-2 sm:p-6 min-h-[60px] sm:min-h-[80px]">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 text-center sm:text-left">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                        <Home size={16} className="text-white sm:w-5 sm:h-5" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-2xl font-nasalization text-graphite">{spacesCount}</p>
-                        <p className="text-xs text-silver-dark font-modern">
-                          {language === 'pl' ? 'Pomieszczenia' : 'Rooms'}
+                        <p className="text-lg sm:text-2xl font-nasalization text-graphite leading-none sm:leading-normal">{spacesCount}</p>
+                        <p className="text-[10px] sm:text-xs text-silver-dark font-modern truncate">
+                          {language === 'pl' ? 'Pokoje' : 'Rooms'}
                         </p>
                       </div>
                     </div>
                   </GlassCard>
 
-                  <GlassCard className="p-4 sm:p-6 min-h-[80px]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                        <ImageIcon size={20} className="text-white" />
+                  <GlassCard variant="flatOnMobile" className="p-2 sm:p-6 min-h-[60px] sm:min-h-[80px]">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 text-center sm:text-left">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                        <ImageIcon size={16} className="text-white sm:w-5 sm:h-5" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-2xl font-nasalization text-graphite">{generatedCount}</p>
-                        <p className="text-xs text-silver-dark font-modern">
-                          {language === 'pl' ? 'Wygenerowane' : 'Generated'}
+                        <p className="text-lg sm:text-2xl font-nasalization text-graphite leading-none sm:leading-normal">{generatedCount}</p>
+                        <p className="text-[10px] sm:text-xs text-silver-dark font-modern truncate">
+                          {language === 'pl' ? 'Obrazy' : 'Generated'}
                         </p>
                       </div>
                     </div>
                   </GlassCard>
 
-                  <GlassCard className="p-4 sm:p-6 min-h-[80px]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                        <Sparkles size={20} className="text-white" />
+                  <GlassCard variant="flatOnMobile" className="p-2 sm:p-6 min-h-[60px] sm:min-h-[80px]">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 text-center sm:text-left">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
+                        <Sparkles size={16} className="text-white sm:w-5 sm:h-5" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-2xl font-nasalization text-graphite">{inspirationsCount}</p>
-                        <p className="text-xs text-silver-dark font-modern">
+                        <p className="text-lg sm:text-2xl font-nasalization text-graphite leading-none sm:leading-normal">{inspirationsCount}</p>
+                        <p className="text-[10px] sm:text-xs text-silver-dark font-modern truncate">
                           {language === 'pl' ? 'Inspiracje' : 'Inspirations'}
                         </p>
                       </div>
@@ -1024,7 +1024,7 @@ export function UserDashboard() {
       {/* Delete confirmation modal */}
       {pendingDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur">
-          <GlassCard className="max-w-md w-full p-6 border border-gold/30 shadow-2xl">
+          <GlassCard variant="flatOnMobile" className="max-w-md w-full p-6 border border-gold/30 shadow-2xl">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
                 <Trash2 size={18} className="text-white" />
@@ -1098,7 +1098,7 @@ function ProfileOverview({ sessionData, remoteSession, completionStatus }: { ses
       transition={{ duration: 0.5 }}
       className="mb-6"
     >
-      <GlassCard className="p-4 sm:p-6">
+      <GlassCard variant="flatOnMobile" className="p-4 sm:p-6">
         <div className="flex items-center gap-3 sm:gap-4 mb-4">
           <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
             <User size={24} className="sm:w-8 sm:h-8 text-white" />
@@ -1204,7 +1204,7 @@ function SpaceCard({ space, index, onOpenSpace, onRenameSpace, onDeleteSpace, is
       }}
       className="cursor-pointer"
     >
-      <GlassCard className="p-4 sm:p-6 lg:p-8 hover:border-gold/50 transition-all duration-300">
+      <GlassCard variant="flatOnMobile" className="p-4 sm:p-6 lg:p-8 hover:border-gold/50 transition-all duration-300">
         {/* Space Header */}
         <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -1345,7 +1345,7 @@ function EmptyState({ onAddSpace }: { onAddSpace: () => void }) {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <GlassCard className="p-12 text-center">
+            <GlassCard variant="flatOnMobile" className="p-12 text-center">
         <motion.div
           animate={{ 
             scale: [1, 1.1, 1],
@@ -1388,7 +1388,7 @@ function AddSpaceCallout({ onAddSpace, language }: { onAddSpace: () => void; lan
       transition={{ duration: 0.4 }}
       className="mb-6"
     >
-      <GlassCard className="p-4 sm:p-5 lg:p-6">
+            <GlassCard variant="flatOnMobile" className="p-4 sm:p-5 lg:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
@@ -1479,7 +1479,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
         transition={{ duration: 0.5 }}
         className="mb-6"
       >
-        <GlassCard className="p-4 sm:p-6 hover:border-gold/50 transition-all duration-300">
+        <GlassCard variant="flatOnMobile" className="p-4 sm:p-6 hover:border-gold/50 transition-all duration-300">
           <div className="flex items-center justify-between mb-4 gap-3">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
@@ -1520,7 +1520,7 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
       transition={{ duration: 0.5 }}
       className="mb-6"
     >
-      <GlassCard className="p-4 sm:p-6 hover:border-gold/50 transition-all duration-300">
+      <GlassCard variant="flatOnMobile" className="p-4 sm:p-6 hover:border-gold/50 transition-all duration-300">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 cursor-pointer" onClick={() => router.push('/dashboard/personality')}>
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">

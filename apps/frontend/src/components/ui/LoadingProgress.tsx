@@ -46,7 +46,7 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      <GlassCard className="p-8 rounded-3xl">
+      <GlassCard variant="glass" className="p-8 rounded-3xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

@@ -392,7 +392,10 @@ export async function createParticipantSpace(
   userHash: string,
   space: { name: string; type?: string; is_default?: boolean }
 ): Promise<{ id: string } | null> {
-  if (!userHash || !space?.name) return null;
+  if (!userHash || !space?.name) {
+    console.warn('[remote-spaces] createParticipantSpace: missing userHash or space name');
+    return null;
+  }
   const { data, error } = await supabase
     .from('participant_spaces')
     .insert({
@@ -404,9 +407,15 @@ export async function createParticipantSpace(
     .select('id')
     .single();
   if (error) {
-    console.warn('[remote-spaces] createParticipantSpace failed', error);
+    console.error('❌ [Supabase] createParticipantSpace failed', error);
     return null;
   }
+  console.info('✅ [Supabase] Successfully created participant space', {
+    spaceId: data.id,
+    userHash,
+    name: space.name,
+    isDefault: !!space.is_default
+  });
   return { id: data.id };
 }
 
@@ -522,7 +531,10 @@ export async function updateSpaceName(
 }
 
 export async function deleteSpace(userHash: string, spaceId: string): Promise<boolean> {
-  if (!userHash || !spaceId) return false;
+  if (!userHash || !spaceId) {
+    console.warn('[remote-spaces] deleteSpace: missing userHash or spaceId');
+    return false;
+  }
   
   try {
     // Best-effort: delete images belonging to this space first to avoid orphaned images being remapped elsewhere
@@ -546,13 +558,17 @@ export async function deleteSpace(userHash: string, spaceId: string): Promise<bo
       .eq('user_hash', userHash);
     
     if (error) {
-      console.warn('[remote-spaces] deleteSpace failed', error);
+      console.error('❌ [Supabase] deleteSpace failed', error);
       return false;
     }
     
+    console.info('✅ [Supabase] Successfully deleted participant space', {
+      spaceId,
+      userHash
+    });
     return true;
   } catch (e) {
-    console.warn('[remote-spaces] deleteSpace error', e);
+    console.error('❌ [Supabase] deleteSpace error', e);
     return false;
   }
 }

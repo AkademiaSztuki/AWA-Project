@@ -2960,7 +2960,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
               {/* Selected Image Info - Show when image is selected */}
               {selectedImage && (
-                <GlassCard className="p-4">
+                <GlassCard variant="flatOnMobile" className="p-4">
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-gold/10 rounded-lg">
                       <Eye size={20} className="text-gold" />
@@ -3026,7 +3026,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               
               {/* Upscaling feedback */}
               {isUpscaling && selectedImage && (
-                <GlassCard className="p-4">
+                <GlassCard variant="flatOnMobile" className="p-4">
                   <div className="flex items-center gap-3">
                     <RefreshCw size={24} className="animate-spin text-gold" />
                     <div>
@@ -3043,7 +3043,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           {isMatrixMode && blindSelectionMade && selectedImage && (
             <div className="space-y-6">
               {/* Selected Image - Main Display */}
-              <GlassCard className="p-4">
+              <GlassCard variant="flatOnMobile" className="p-4">
                 <div className="space-y-4">
                   <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
                     <Image 
@@ -3342,7 +3342,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         exit={{ opacity: 0, y: -20 }}
                         transition={{ duration: 0.4 }}
                       >
-                        <GlassCard className="p-6">
+                        <GlassCard variant="flatOnMobile" className="p-6">
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             <div>
                               <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
@@ -3472,7 +3472,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           {!isMatrixMode && generatedImages.length > 0 && (
             <>
               <div className="space-y-4">
-                <GlassCard className="p-4">
+                <GlassCard variant="flatOnMobile" className="p-4">
                   {selectedImage && (
                     <div className="space-y-4">
                       <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
@@ -3679,7 +3679,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.4 }}
                   >
-                    <GlassCard className="p-6">
+                    <GlassCard variant="flatOnMobile" className="p-6">
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <div>
                           <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">

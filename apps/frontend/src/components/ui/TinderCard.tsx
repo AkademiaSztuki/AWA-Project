@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import Image from 'next/image';
 import { useSpring, animated, config } from '@react-spring/web';
 import { useDrag } from 'react-use-gesture';
 
@@ -65,13 +66,18 @@ export const TinderCard: React.FC<TinderCardProps> = ({
       }}
       className="absolute inset-4 cursor-grab active:cursor-grabbing"
     >
-      <div className="glass-panel h-full rounded-xl overflow-hidden select-none">
-        <div className="relative h-full">
-          <img
+      <div className="lg:glass-panel h-full rounded-xl overflow-hidden select-none">
+        <div className="relative h-full w-full">
+          <Image
             src={image}
             alt={title || "Interior"}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
             draggable={false}
+            priority={isActive}
+            quality={75}
+            sizes="100vw"
+            loading={isActive ? "eager" : "lazy"}
           />
 
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />

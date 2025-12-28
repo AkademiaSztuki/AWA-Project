@@ -178,98 +178,94 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
   const usagePercentage = creditsAllocated > 0 ? (creditsUsed / creditsAllocated) * 100 : 0;
 
   return (
-    <GlassCard className={`p-6 ${className}`}>
-      <div className="space-y-6">
-        <div>
-          <h3 className="text-lg font-exo2 font-bold text-gray-800 mb-2">{t({ pl: 'Twoje kredyty', en: 'Your credits' })}</h3>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-exo2 font-bold text-gray-900">
-              {totalCredits.toLocaleString()}
-            </span>
-            <span className="text-base text-gray-600 font-modern">
-              {t({ pl: `kredytów (${balance.generationsAvailable} generacji)`, en: `credits (${balance.generationsAvailable} generations)` })}
-            </span>
+    <GlassCard variant="flatOnMobile" className={`p-4 sm:p-5 ${className}`}>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-xs font-modern font-semibold uppercase tracking-wider text-silver-dark mb-1">
+              {t({ pl: 'Twój Balans', en: 'Your Balance' })}
+            </h3>
+            <div className="flex items-baseline gap-2">
+              <span className="text-xl sm:text-2xl font-nasalization text-graphite">
+                {totalCredits.toLocaleString()}
+              </span>
+              <span className="text-[10px] sm:text-xs text-silver-dark font-modern">
+                {t({ pl: `kredytów (${balance.generationsAvailable} gen.)`, en: `credits (${balance.generationsAvailable} gen.)` })}
+              </span>
+            </div>
           </div>
+
+          {hasActiveSubscription && (
+            <div className="flex items-center gap-4 text-[10px] sm:text-xs text-silver-dark font-modern bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+              <div className="flex gap-1.5">
+                <span>{t({ pl: 'Plan:', en: 'Plan:' })}</span>
+                <span className="text-graphite font-semibold">
+                  {PLAN_NAMES[subscription.plan_id] || subscription.plan_id}
+                </span>
+              </div>
+              <div className="w-px h-3 bg-white/20" />
+              <div className="flex gap-1.5">
+                <span>{t({ pl: 'Ważny do:', en: 'Until:' })}</span>
+                <span className="text-graphite font-semibold">
+                  {new Date(subscription.current_period_end).toLocaleDateString('pl-PL')}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {hasActiveSubscription && (
-          <>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm text-gray-600">
-                <span className="font-modern">{t({ pl: 'Wykorzystane kredyty', en: 'Credits used' })}</span>
-                <span className="font-exo2 font-semibold">
-                  {creditsUsed.toLocaleString()} / {creditsAllocated.toLocaleString()}
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[10px] sm:text-xs text-silver-dark">
+                <span className="font-modern">
+                  {t({ pl: 'Wykorzystano:', en: 'Used:' })} {creditsUsed.toLocaleString()} / {creditsAllocated.toLocaleString()}
+                </span>
+                <span className="font-modern">
+                  {t({ pl: 'Pozostało:', en: 'Remaining:' })} {subscriptionCredits.toLocaleString()}
                 </span>
               </div>
-              <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-gold-400 to-yellow-400 transition-all duration-300"
+                  className="h-full bg-gradient-to-r from-gold/60 to-gold transition-all duration-300 shadow-[0_0_8px_rgba(212,175,55,0.3)]"
                   style={{ width: `${Math.min(100, usagePercentage)}%` }}
                 />
               </div>
-              <div className="text-sm text-gray-600 font-modern">
-                {t({ pl: 'Pozostało:', en: 'Remaining:' })} <span className="font-exo2 font-semibold">{subscriptionCredits.toLocaleString()} {t({ pl: 'kredytów', en: 'credits' })}</span>
-              </div>
             </div>
 
-            <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 font-modern">{t({ pl: 'Plan:', en: 'Plan:' })}</span>
-                  <span className="font-exo2 font-semibold text-gray-800">
-                    {PLAN_NAMES[subscription.plan_id] || subscription.plan_id} ({subscription.billing_period === 'monthly' ? t({ pl: 'Miesięczna', en: 'Monthly' }) : t({ pl: 'Roczna', en: 'Annual' })})
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 font-modern">{t({ pl: 'Status:', en: 'Status:' })}</span>
-                  <span className="font-exo2 font-semibold text-white">
-                    {subscription.status === 'active' ? t({ pl: 'Aktywna', en: 'Active' }) : subscription.status}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 font-modern">{t({ pl: 'Okres do:', en: 'Period until:' })}</span>
-                  <span className="font-exo2 font-semibold text-gray-800">
-                    {new Date(subscription.current_period_end).toLocaleDateString('pl-PL')}
-                  </span>
-                </div>
-                {subscription.cancel_at_period_end && (
-                  <div className="p-2 bg-amber-500/10 border border-amber-400/30 rounded-lg">
-                    <p className="text-xs text-gray-700 font-modern">
-                      {t({ pl: 'Subskrypcja zostanie anulowana na koniec okresu rozliczeniowego.', en: 'Subscription will be cancelled at the end of the billing period.' })}
-                    </p>
-                  </div>
-                )}
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {subscription.cancel_at_period_end && (
+                <p className="text-[9px] sm:text-[10px] text-amber-500 font-modern italic">
+                  {t({ pl: 'Anulowano - ważne do końca okresu', en: 'Cancelled - active until end of period' })}
+                </p>
+              )}
+              
+              <button
+                onClick={handleManageSubscription}
+                disabled={portalLoading}
+                className="text-[10px] sm:text-xs text-silver-dark hover:text-gold font-modern underline underline-offset-4 transition-colors disabled:opacity-50"
+              >
+                {portalLoading ? t({ pl: 'Otwieranie...', en: 'Opening...' }) : t({ pl: 'Zarządzaj subskrypcją', en: 'Manage subscription' })}
+              </button>
             </div>
-
-            <GlassButton
-              onClick={handleManageSubscription}
-              disabled={portalLoading}
-              variant="primary"
-              className="w-full"
-            >
-              {portalLoading ? t({ pl: 'Otwieranie...', en: 'Opening...' }) : t({ pl: 'Zarządzaj subskrypcją', en: 'Manage subscription' })}
-            </GlassButton>
-          </>
+          </div>
         )}
 
         {!hasActiveSubscription && (
-          <>
+          <div className="flex items-center justify-between gap-4 pt-2 border-t border-white/5">
             {totalCredits < 10 && (
-              <div className="p-3 bg-amber-500/10 border border-amber-400/30 rounded-xl">
-                <p className="text-sm text-gray-700 font-modern">
-                  {t({ pl: 'Masz mniej niż 10 kredytów. Rozważ zakup subskrypcji, aby kontynuować generowanie.', en: 'You have less than 10 credits. Consider purchasing a subscription to continue generating.' })}
-                </p>
-              </div>
+              <p className="text-[10px] text-amber-500/80 font-modern italic">
+                {t({ pl: 'Niski stan kredytów', en: 'Low credits' })}
+              </p>
             )}
             <GlassButton
               onClick={() => window.location.href = '/subscription/plans'}
-              variant="primary"
-              className="w-full"
+              variant="secondary"
+              className="py-1.5 px-4 text-xs h-auto min-h-0"
             >
               {t({ pl: 'Wybierz plan', en: 'Choose plan' })}
             </GlassButton>
-          </>
+          </div>
         )}
       </div>
     </GlassCard>

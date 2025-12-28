@@ -295,7 +295,7 @@ export default function PhotoUploadPage() {
     <div className="min-h-screen flex flex-col w-full">
       {/* Formularz upload */}
       <div className="flex-1 flex items-center justify-center p-4">
-        <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
+        <GlassCard variant="flatOnMobile" className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
           <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Dodaj zdjecie przestrzeni</h1>
           <p className="text-base md:text-lg text-gray-700 font-modern mb-3 leading-relaxed">
             Wgraj zdjecie swojego pokoju lub wybierz przykladowe, aby IDA mogla lepiej zrozumiec Twoj kontekst projektowy.

@@ -22,7 +22,7 @@ import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { saveResearchConsent, saveParticipantSwipes } from '@/lib/supabase';
 import Link from 'next/link';
 
-const STEP_CARD_HEIGHT = "min-h-[650px] max-h-[78vh]";
+const STEP_CARD_HEIGHT = "min-h-[500px] md:min-h-[650px] max-h-[90vh] md:max-h-[78vh]";
 
 type WizardStep = 
   | 'consent'
@@ -324,7 +324,7 @@ interface CoreProfileData {
  */
 export function CoreProfileWizard() {
   const router = useRouter();
-  const { updateSessionData, sessionData } = useSessionData();
+  const { updateSessionData, sessionData, isInitialized } = useSessionData();
   const { language } = useLanguage();
   const { user, linkUserHashToAuth } = useAuth();
   
@@ -352,6 +352,22 @@ export function CoreProfileWizard() {
       country: prev.country || getDefaultCountry(language)
     }));
   }, [language]);
+
+  // Skip already completed steps (consent, demographics) if coming from OnboardingScreen
+  useEffect(() => {
+    if (isInitialized && currentStep === 'consent') {
+      const hasConsent = !!sessionData.consentTimestamp;
+      const hasDemographics = !!(sessionData.demographics?.ageRange && sessionData.demographics?.gender);
+      
+      if (hasConsent && hasDemographics) {
+        console.log('[CoreProfileWizard] Skipping completed steps, going to lifestyle');
+        setCurrentStep('lifestyle');
+      } else if (hasConsent) {
+        console.log('[CoreProfileWizard] Skipping consent, going to demographics');
+        setCurrentStep('demographics');
+      }
+    }
+  }, [isInitialized, sessionData, currentStep]);
 
   const steps: WizardStep[] = [
     'consent',
@@ -442,9 +458,11 @@ export function CoreProfileWizard() {
 
   const handleConsentAgree = async () => {
     if (!consentState.consentResearch || !consentState.consentProcessing || !consentState.acknowledgedArt13) {
+      console.warn('[CoreProfileWizard] ⚠️ Cannot proceed - missing consent checkboxes');
       return; // Nie pozwól przejść dalej bez wszystkich checkboxów
     }
     
+    console.log('[CoreProfileWizard] ✅ All consent checkboxes checked, proceeding...');
     stopAllDialogueAudio();
     const timestamp = new Date().toISOString();
     
@@ -452,6 +470,7 @@ export function CoreProfileWizard() {
     const userHash = sessionData?.userHash;
     if (userHash) {
       try {
+        console.log('[CoreProfileWizard] Attempting to save consent with userHash:', userHash);
         const consentData = await saveResearchConsent(
           userHash,
           {
@@ -465,7 +484,7 @@ export function CoreProfileWizard() {
         if (consentData) {
           console.log('[CoreProfileWizard] ✅ Consent saved to database:', consentData.id);
         } else {
-          console.warn('[CoreProfileWizard] ⚠️ Failed to save consent to database');
+          console.warn('[CoreProfileWizard] ⚠️ Failed to save consent to database (returned null)');
         }
       } catch (error) {
         console.error('[CoreProfileWizard] ❌ Error saving consent:', error);
@@ -474,6 +493,7 @@ export function CoreProfileWizard() {
       console.warn('[CoreProfileWizard] ⚠️ No userHash available, skipping consent save');
     }
     
+    console.log('[CoreProfileWizard] Updating session data and moving to next step...');
     await updateSessionData({ consentTimestamp: timestamp });
     handleNext();
   };
@@ -704,7 +724,7 @@ export function CoreProfileWizard() {
               )}
 
               {currentStep === 'sensory_tests' && (
-                <GlassCard className={`p-3 sm:p-5 md:p-6 h-[82vh] sm:h-[64vh] flex flex-col overflow-y-auto scrollbar-hide !shadow-none`}>
+                <GlassCard variant="flatOnMobile" className={`p-3 sm:p-5 md:p-6 h-[82vh] sm:h-[64vh] flex flex-col overflow-y-auto scrollbar-hide !shadow-none`}>
                   <div className="min-h-full flex flex-col">
                     <div className="flex-1">
                       <div className="mb-1 sm:mb-2">
@@ -822,7 +842,7 @@ export function CoreProfileWizard() {
       </div>
 
       {/* Dialog IDA na dole - dynamiczny dla każdego kroku */}
-      <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+      <div className="fixed bottom-0 left-0 right-0 w-full z-50 pointer-events-none">
         <AwaDialogue 
           currentStep={STEP_TO_DIALOGUE[currentStep]} 
           fullWidth={true}
@@ -946,7 +966,7 @@ function ConsentStep({
   const canProceedConsent = consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13;
 
   return (
-    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide !shadow-none`}>
+    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto !shadow-none`}>
       <div className="min-h-full flex flex-col">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
@@ -1209,7 +1229,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide !shadow-none`}>
+      <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto !shadow-none`}>
         <div className="min-h-full flex flex-col">
           <div className="flex-1">
             <h2 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
@@ -1355,7 +1375,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
   const canProceed = lifestyleData.livingSituation && lifestyleData.lifeVibe && lifestyleData.goals?.length > 0;
 
   return (
-    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide !shadow-none`}>
+    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide !shadow-none`}>
       <div className="min-h-full flex flex-col">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
@@ -1499,25 +1519,32 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
     fetchImages();
   }, []);
 
-  // Preload first 3 images immediately when images are loaded
+  // Preload first 5 images immediately when images are loaded using link preload
   useEffect(() => {
     if (images.length > 0 && !isLoading) {
-      for (let i = 0; i < Math.min(3, images.length); i++) {
-        const img = new window.Image();
-        img.src = images[i].url;
+      const preloadCount = Math.min(5, images.length);
+      for (let i = 0; i < preloadCount; i++) {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'image';
+        link.href = images[i].url;
+        document.head.appendChild(link);
       }
     }
   }, [images, isLoading]);
 
-  // Preload next 2-3 images when current index changes
+  // Preload next 3-5 images when current index changes
   useEffect(() => {
     if (images.length > 0 && currentIndex < images.length - 1) {
-      const preloadCount = Math.min(3, images.length - currentIndex - 1);
+      const preloadCount = Math.min(5, images.length - currentIndex - 1);
       for (let i = 1; i <= preloadCount; i++) {
         const nextImage = images[currentIndex + i];
         if (nextImage) {
-          const img = new window.Image();
-          img.src = nextImage.url;
+          const link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'image';
+          link.href = nextImage.url;
+          document.head.appendChild(link);
         }
       }
     }
@@ -1603,7 +1630,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
 
   if (showInstructions) {
     return (
-      <GlassCard className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} flex flex-col justify-center items-center relative overflow-y-auto scrollbar-hide !shadow-none`}>
+      <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} flex flex-col justify-center items-center relative overflow-y-auto scrollbar-hide !shadow-none`}>
         <div className="min-h-full flex flex-col justify-center items-center">
           <div className="flex-1 flex flex-col justify-center items-center">
             <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-3">
@@ -1647,7 +1674,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
   }
 
   return (
-    <GlassCard className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex flex-col overflow-y-auto scrollbar-hide !shadow-none`}>
+    <GlassCard variant="flatOnMobile" className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex flex-col overflow-hidden md:overflow-y-auto scrollbar-hide !shadow-none`}>
       <div className="min-h-full flex flex-col">
         <div className="flex-1 flex flex-col">
           {isLoading ? (
@@ -1716,7 +1743,10 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
                             fill
                             draggable={false}
                             className="object-cover w-full h-full select-none"
-                            priority
+                            priority={currentIndex === 0}
+                            quality={75}
+                            sizes="100vw"
+                            loading={currentIndex < 3 ? "eager" : "lazy"}
                           />
                         </div>
                       </div>
@@ -1810,7 +1840,7 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
   };
 
   return (
-    <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex flex-col justify-center overflow-y-auto scrollbar-hide !shadow-none`}>
+    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex flex-col justify-center overflow-y-auto scrollbar-hide !shadow-none`}>
       <div className="min-h-full flex flex-col justify-center">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2 text-center">

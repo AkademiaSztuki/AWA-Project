@@ -103,6 +103,7 @@ export default function FastGeneratePage() {
   const { generateSixImagesParallelWithGoogle, upscaleImageWithGoogle, isLoading, error, setError } = useGoogleAI();
 
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null);
+  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]); // Store all generated images
   const [showModifications, setShowModifications] = useState(false);
   const [generationCount, setGenerationCount] = useState(0);
   const [statusMessage, setStatusMessage] = useState("Krok 1/3: Inicjalizacja środowiska AI...");
@@ -279,6 +280,7 @@ export default function FastGeneratePage() {
       };
 
       setGeneratedImage(newImage);
+      setGeneratedImages([newImage]); // Store in array
       setGenerationCount(prev => prev + 1);
       setLoadingProgress(100);
       setStatusMessage("Gotowe!");
@@ -375,17 +377,16 @@ export default function FastGeneratePage() {
       handleInitialGeneration();
     } else if (hasGeneratedImages && !generatedImage) {
       // Restore from session
-      const savedImage = savedGeneratedImages[0];
-      if (savedImage && savedImage.url) {
+      const restoredImages: GeneratedImage[] = savedGeneratedImages.map((savedImage: any) => {
         // Try to extract base64 from URL if it's a data URL
         let base64 = '';
-        if (savedImage.url.startsWith('data:')) {
+        if (savedImage.url && savedImage.url.startsWith('data:')) {
           base64 = savedImage.url.split(',')[1] || '';
         } else if (savedImage.base64) {
           base64 = savedImage.base64;
         }
         
-        setGeneratedImage({
+        return {
           id: savedImage.id || `restored-${Date.now()}`,
           url: savedImage.url,
           base64: base64,
@@ -394,7 +395,16 @@ export default function FastGeneratePage() {
           ratings: savedImage.ratings || { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
           isFavorite: savedImage.isFavorite || false,
           createdAt: savedImage.createdAt || Date.now(),
-        });
+        };
+      });
+      
+      // Restore all images to array
+      setGeneratedImages(restoredImages);
+      
+      // Set the first image as current
+      const savedImage = savedGeneratedImages[0];
+      if (savedImage && savedImage.url) {
+        setGeneratedImage(restoredImages[0]);
         
         // Restore ratings state if ratings exist
         if (savedImage.ratings) {
@@ -404,6 +414,23 @@ export default function FastGeneratePage() {
           if (savedImage.ratings.harmony > 0) {
             setHasCompletedRatings(true);
           }
+        }
+        
+        // Restore generation history if available
+        const savedGenerations = typedSessionData?.generations || [];
+        if (savedGenerations.length > 0) {
+          const history = restoredImages.map((img, idx) => {
+            const gen = savedGenerations[idx];
+            return {
+              id: img.id,
+              type: (gen?.type || 'initial') as 'initial' | 'micro' | 'macro',
+              label: gen?.type === 'initial' ? 'Początkowa generacja' : gen?.modification || 'Modyfikacja',
+              timestamp: img.createdAt,
+              imageUrl: img.url,
+            };
+          });
+          setGenerationHistory(history);
+          setCurrentHistoryIndex(history.length - 1);
         }
       }
     }
@@ -491,6 +518,7 @@ export default function FastGeneratePage() {
       };
 
       setGeneratedImage(newImage);
+      setGeneratedImages(prev => [...prev, newImage]); // Add to array
       setGenerationCount(prev => prev + 1);
       setShowModifications(false);
       // Don't reset ratings after modification - user already answered
@@ -630,7 +658,7 @@ export default function FastGeneratePage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
               >
-                <GlassCard className="p-6">
+                <GlassCard variant="flatOnMobile" className="p-6">
                   <div className="space-y-4">
                     <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
                       <Image
@@ -752,7 +780,7 @@ export default function FastGeneratePage() {
                           animate={{ opacity: 1, height: 'auto' }}
                           exit={{ opacity: 0, height: 0 }}
                         >
-                          <GlassCard className="p-6">
+                          <GlassCard variant="flatOnMobile" className="p-6">
                             <div className="space-y-6">
                               <div>
                                 <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
@@ -807,8 +835,12 @@ export default function FastGeneratePage() {
                         onNodeClick={(index) => {
                           const historyItem = generationHistory[index];
                           if (historyItem) {
-                            setCurrentHistoryIndex(index);
-                            // In a real implementation, you'd load the image from history
+                            // Find the corresponding image from generatedImages array
+                            const image = generatedImages.find(img => img.id === historyItem.id);
+                            if (image) {
+                              setGeneratedImage(image);
+                              setCurrentHistoryIndex(index);
+                            }
                           }
                         }}
                       />

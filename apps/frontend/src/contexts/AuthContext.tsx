@@ -223,9 +223,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      // After radical refactor, link auth user on participants (source of truth)
-      // Upewnij się, że consent_timestamp zawsze jest ustawione (NOT NULL constraint)
-      // Najpierw sprawdź czy rekord istnieje, aby zachować istniejący consent_timestamp
+      // First, check if this auth_user_id is already linked to ANOTHER user_hash
+      const { data: existingForAuth } = await supabase
+        .from('participants')
+        .select('user_hash')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+
+      if (existingForAuth && existingForAuth.user_hash !== userHash) {
+        console.log('[AuthContext] Auth user already linked to different hash:', existingForAuth.user_hash);
+        console.log('[AuthContext] Switching to existing linked hash');
+        safeLocalStorage.setItem('aura_user_hash', existingForAuth.user_hash);
+        // We don't need to upsert anymore as the link already exists correctly
+        return;
+      }
+
+      // Proceed with linking the provided userHash
       const { data: existing } = await supabase
         .from('participants')
         .select('consent_timestamp')
@@ -239,7 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .upsert({
           user_hash: userHash,
           auth_user_id: user.id,
-          consent_timestamp: consentTimestamp, // Zawsze ustaw consent_timestamp
+          consent_timestamp: consentTimestamp,
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_hash' } as any);
 
@@ -247,7 +260,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error linking user_hash to auth:', error);
       } else {
         console.log('Successfully linked user_hash to authenticated user');
-        // Save user_hash to localStorage for persistence
         safeLocalStorage.setItem('aura_user_hash', userHash);
       }
     } catch (error) {

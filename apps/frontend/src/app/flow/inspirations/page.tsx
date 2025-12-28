@@ -441,7 +441,7 @@ export default function InspirationsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
+            <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
               
               {/* Header with Progress Bar */}
               <div className="mb-6">
@@ -523,7 +523,7 @@ export default function InspirationsPage() {
                         transition={{ duration: 0.3, delay: index * 0.1 }}
                         className="relative group"
                       >
-                        <div className="relative aspect-square rounded-xl overflow-hidden glass-panel">
+                        <div className="relative aspect-square rounded-xl overflow-hidden lg:glass-panel">
                           <Image
                             src={item.previewUrl}
                             alt="Inspiration"
