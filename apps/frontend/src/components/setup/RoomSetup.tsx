@@ -977,9 +977,9 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           roomType: 'living_room',
           roomName: 'Salon',
           confidence: 0.93,
-          roomDescription: 'Contemporary living room with minimalist design',
-          comment: 'A minimalist living room with clean lines and neutral colors.',
-          humanComment: 'Minimalistyczny salon z czystymi liniami i stonowanymi kolorami.'
+          roomDescription: 'Modern minimalist living room with neutral tones, natural wood furniture, and abundant greenery',
+          comment: 'A serene Scandinavian-inspired living room with light wood, cream tones, and natural plants.',
+          humanComment: 'Minimalistyczny salon w stylu skandynawskim z jasnym drewnem, kremowymi tonami i naturalnymi roślinami.'
         },
         '/images/tinder/Living Room (3).jpg': {
           roomType: 'living_room',

@@ -25,9 +25,9 @@ export const EXAMPLE_IMAGES_METADATA: ExampleImageMetadata[] = [
     filename: 'Living Room (2).jpg',
     roomType: 'living_room',
     confidence: 0.95,
-    roomDescription: 'A cozy living room with warm tones and comfortable furniture',
-    comment: 'Przytulny pokój dzienny! Idealne miejsce do relaksu.',
-    humanComment: 'O, jaki ciepły salon! Widzę że to miejsce do wypoczynku. Możemy stworzyć tu naprawdę wyjątkową atmosferę.',
+    roomDescription: 'Modern minimalist living room with neutral tones, natural wood furniture, and abundant greenery',
+    comment: 'Świetny minimalistyczny salon! Widzę jasną przestrzeń z naturalnymi materiałami i roślinami.',
+    humanComment: 'O, widzę ten spokojny, minimalistyczny salon! Jasne ściany, naturalne drewno i piękne rośliny tworzą przytulną atmosferę skandynawskiego stylu - świetna baza do pracy!',
   },
   {
     url: '/images/tinder/Living Room (3).jpg',
