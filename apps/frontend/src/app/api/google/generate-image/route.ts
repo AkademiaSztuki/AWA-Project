@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
       base_image,
       style,
       modifications,
+      inspiration_images,
       width,
       height,
     } = body;
@@ -83,6 +84,9 @@ export async function POST(request: NextRequest) {
       base_image,
       style,
       modifications,
+      inspiration_images: inspiration_images && Array.isArray(inspiration_images) && inspiration_images.length > 0
+        ? inspiration_images
+        : undefined,
       width: width || 1024,
       height: height || 1024,
     };

@@ -13,6 +13,7 @@ export interface ImageGenerationRequest {
   base_image?: string; // base64 encoded image for image-to-image
   style?: string;
   modifications?: string[];
+  inspiration_images?: string[]; // Base64 images for multi-reference (InspirationReference source)
   width?: number;
   height?: number;
 }

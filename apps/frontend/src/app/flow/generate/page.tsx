@@ -575,7 +575,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // #endregion
       return;
     }
-    
+
     // Prevent duplicate generations
     if (isGenerating) {
       console.log("[6-Image Matrix] Generation already in progress, skipping.");
@@ -584,7 +584,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // #endregion
       return;
     }
-    
+
     console.log("[6-Image Matrix] Starting generation...");
     
     const typedSessionData = sessionData as any;
@@ -800,7 +800,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Step 2: Synthesize 6 prompts from different data sources
       console.log("[6-Image Matrix] Step 2: Synthesizing prompts...");
       const roomType = typedSessionData.roomType || 'living room';
-      
+
       const synthesisResult = await synthesizeSixPrompts(
         typedSessionData,
         roomType,
@@ -811,14 +811,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setSynthesisResult(synthesisResult);
       
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:synthesis-result',message:'Synthesis result after synthesizeSixPrompts',data:{generatedSourcesCount:synthesisResult.generatedSources.length,generatedSources:synthesisResult.generatedSources,skippedSourcesCount:synthesisResult.skippedSources.length,skippedSources:synthesisResult.skippedSources,displayOrder:synthesisResult.displayOrder,hasInspirationImages:!!synthesisResult.inspirationImages,resultsKeys:Object.keys(synthesisResult.results||{})},timestamp:Date.now(),sessionId:'debug-session',runId:'description-flow',hypothesisId:'H6'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:synthesis-result',message:'Synthesis result after synthesizeSixPrompts',data:{generatedSourcesCount:synthesisResult.generatedSources.length,generatedSources:synthesisResult.generatedSources,skippedSourcesCount:synthesisResult.skippedSources.length,skippedSources:synthesisResult.skippedSources,displayOrder:synthesisResult.displayOrder,hasInspirationImages:!!synthesisResult.inspirationImages,resultsKeys:Object.keys(synthesisResult.results||{}),resultsCount:Object.keys(synthesisResult.results||{}).length},timestamp:Date.now(),sessionId:'debug-session',runId:'description-flow',hypothesisId:'H6'})}).catch(()=>{});
       // #endregion
       
       console.log("[6-Image Matrix] Synthesis complete:", {
         generatedSources: synthesisResult.generatedSources,
         skippedSources: synthesisResult.skippedSources,
         displayOrder: synthesisResult.displayOrder,
-        hasInspirationImages: !!synthesisResult.inspirationImages
+        hasInspirationImages: !!synthesisResult.inspirationImages,
+        resultsCount: Object.keys(synthesisResult.results || {}).length,
+        resultsKeys: Object.keys(synthesisResult.results || {})
       });
       
       if (synthesisResult.generatedSources.length === 0) {
@@ -828,6 +830,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           .map(r => `${r.source}: ${r.warnings.join(', ')}`)
           .join('; ');
         setError(t({ pl: `Brak wystarczających danych do wygenerowania obrazów. Szczegóły: ${errorDetails}`, en: `Insufficient data to generate images. Details: ${errorDetails}` }));
+        setIsGenerating(false);
         return;
       }
       
@@ -884,10 +887,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         generatedSources: synthesisResult.generatedSources,
         skippedSources: synthesisResult.skippedSources,
         displayOrder: synthesisResult.displayOrder,
+        hasInspirationImages: !!synthesisResult.inspirationImages,
+        inspirationImagesCount: synthesisResult.inspirationImages?.length || 0,
         results: Object.keys(synthesisResult.results).map(source => ({
           source,
           hasPrompt: !!synthesisResult.results[source as GenerationSource]?.prompt,
           promptLength: synthesisResult.results[source as GenerationSource]?.prompt?.length || 0,
+          isInspirationReference: source === 'inspiration_reference',
           weights: synthesisResult.results[source as GenerationSource]?.weights ? {
             dominantStyle: synthesisResult.results[source as GenerationSource]?.weights.dominantStyle,
             colorPalette: synthesisResult.results[source as GenerationSource]?.weights.colorPalette?.slice(0, 3),
@@ -1133,21 +1139,63 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           return true;
         });
         
-        // Process remaining images: extract base64 from data URIs, keep HTTP URLs as-is
+        // Process remaining images: extract base64 from data URIs, convert HTTP URLs to base64
         if (filteredInspirationImages.length > 0) {
-          filteredInspirationImages = filteredInspirationImages.map((img: string) => {
-            // If it's base64 with data URI prefix, extract just the base64 part
-            if (img.startsWith('data:')) {
-              return img.split(',')[1];
-            }
-            // Otherwise keep as-is (base64 without prefix or HTTP/HTTPS URL)
-            return img;
-          });
-          console.log("[6-Image Matrix] Filtered inspiration images:", {
+          // Convert URLs to base64 if needed
+          const convertedImages = await Promise.all(
+            filteredInspirationImages.map(async (img: string) => {
+              // If it's base64 with data URI prefix, extract just the base64 part
+              if (img.startsWith('data:')) {
+                return img.split(',')[1];
+              }
+              // If it's an HTTP/HTTPS URL, fetch and convert to base64
+              if (img.startsWith('http://') || img.startsWith('https://')) {
+                try {
+                  console.log("[6-Image Matrix] Converting URL to base64:", img.substring(0, 80));
+                  const response = await fetch(img);
+                  if (!response.ok) {
+                    console.error(`[6-Image Matrix] Failed to fetch image from URL: ${response.status}`);
+                    return null;
+                  }
+                  const blob = await response.blob();
+                  return new Promise<string | null>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const base64 = reader.result as string;
+                      // Remove data URI prefix if present
+                      const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
+                      resolve(base64Data);
+                    };
+                    reader.onerror = () => {
+                      console.error("[6-Image Matrix] Failed to convert blob to base64");
+                      resolve(null);
+                    };
+                    reader.readAsDataURL(blob);
+                  });
+                } catch (error) {
+                  console.error("[6-Image Matrix] Error converting URL to base64:", error);
+                  return null;
+                }
+              }
+              // Otherwise assume it's already base64 without prefix
+              return img;
+            })
+          );
+          
+          // Filter out null values (failed conversions)
+          filteredInspirationImages = convertedImages.filter((img): img is string => img !== null);
+          
+          console.log("[6-Image Matrix] Filtered and converted inspiration images:", {
             original: synthesisResult.inspirationImages.length,
             filtered: filteredInspirationImages.length,
             removed: synthesisResult.inspirationImages.length - filteredInspirationImages.length
           });
+          
+          // If all images were filtered out, set to undefined
+          if (filteredInspirationImages.length === 0) {
+            console.warn("[6-Image Matrix] All inspiration images failed conversion, skipping inspiration images");
+            filteredInspirationImages = undefined;
+          }
         } else {
           console.warn("[6-Image Matrix] All inspiration images were blob URLs, skipping inspiration images");
           filteredInspirationImages = undefined;
@@ -1187,8 +1235,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         {
           prompts,
           base_image: baseImage,
-          // Note: inspiration_images not supported in MultiSourceGenerationRequest type
-          // filteredInspirationImages would need to be passed differently if needed
+          inspiration_images: filteredInspirationImages, // Pass inspiration images for InspirationReference source
           style: typedSessionData.visualDNA?.dominantStyle || 'modern',
           parameters: {
             ...parameters,
@@ -2723,8 +2770,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     ? 'Twoje wizje są generowane przez AI. Obrazy pojawią się poniżej gdy będą gotowe.'
                     : 'Wybierz wizję, która najbardziej Ci odpowiada'}
                 </p>
-
-                {/* (removed) explicit regeneration button */}
               </div>
               
               <div className="space-y-3">

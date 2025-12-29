@@ -25,6 +25,7 @@ interface MultiSourceGenerationRequest {
   base_image?: string;
   style: string;
   modifications?: string[];
+  inspiration_images?: string[]; // Base64 images for multi-reference (InspirationReference source)
   parameters: {
     strength: number;
     steps: number;
@@ -155,11 +156,17 @@ export const useGoogleAI = () => {
             throw new Error('Generation cancelled');
           }
 
+          // Only pass inspiration_images for InspirationReference source
+          const inspirationImages = source === GenerationSource.InspirationReference && request.inspiration_images
+            ? request.inspiration_images
+            : undefined;
+
           const generationRequest = {
             prompt,
             base_image: request.base_image,
             style: request.style,
             modifications: request.modifications || [],
+            inspiration_images: inspirationImages,
             width: request.parameters.width || request.parameters.image_size || 1024,
             height: request.parameters.height || request.parameters.image_size || 1024,
           };

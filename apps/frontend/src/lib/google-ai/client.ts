@@ -380,6 +380,34 @@ EXAMPLE:
         console.log('[GoogleAI] Added base image to request');
       }
 
+         // Add inspiration images if provided (for multi-reference style transfer)
+         // Google's Gemini 2.5 Flash Image supports multiple reference images
+         if (request.inspiration_images && request.inspiration_images.length > 0) {
+           console.log(`[GoogleAI] Adding ${request.inspiration_images.length} inspiration images for multi-reference`);
+           console.log(`[GoogleAI] Inspiration images details:`, request.inspiration_images.map((img, i) => ({
+             index: i,
+             hasImage: !!img,
+             length: img?.length || 0,
+             startsWithData: img?.startsWith('data:')
+           })));
+           for (let i = 0; i < Math.min(request.inspiration_images.length, 6); i++) {
+          let inspImageData = request.inspiration_images[i];
+          // Clean base64 - remove data URI prefix if present
+          if (inspImageData && inspImageData.includes(',')) {
+            inspImageData = inspImageData.split(',')[1];
+          }
+          if (inspImageData) {
+            parts.push({
+              inlineData: {
+                mimeType: 'image/jpeg',
+                data: inspImageData,
+              },
+            });
+            console.log(`[GoogleAI] Added inspiration image ${i + 1} to request`);
+          }
+        }
+      }
+
       // Add text prompt
       parts.push({
         text: request.prompt,
