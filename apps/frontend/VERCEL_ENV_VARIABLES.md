@@ -32,8 +32,8 @@ Te zmienne są wrażliwe, ale MUSZĄ być w Vercel (tylko po stronie serwera):
 
 ### Google AI (jeśli używasz):
 ```
-🔐 GOOGLE_AI_API_KEY=AQ.Ab8RN6LwGy4UYhSSYDXun1CqUIOSLSSE3MKkBdocyQb4ADSNDg
-🔐 GOOGLE_CLOUD_PROJECT=project-a2c75857-73b0-4982-acf
+🔐 GOOGLE_AI_API_KEY=your-google-ai-api-key-here
+🔐 GOOGLE_CLOUD_PROJECT=your-project-id-here
 ```
 
 **UWAGA:** `GOOGLE_APPLICATION_CREDENTIALS` - to ścieżka do pliku lokalnego, NIE dodawaj do Vercel. Zamiast tego użyj service account JSON jako zmiennej środowiskowej lub Vercel Secrets.

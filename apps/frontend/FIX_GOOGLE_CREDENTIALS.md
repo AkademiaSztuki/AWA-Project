@@ -41,7 +41,7 @@ Vertex AI (używany do generowania obrazów) wymaga OAuth 2.0 credentials, któr
 #### Wymagane zmienne:
 
 ```env
-GOOGLE_AI_API_KEY=AQ.Ab8RN6LwGy4UYhSSYDXun1CqUIOSLSSE3MKkBdocyQb4ADSNDg
+GOOGLE_AI_API_KEY=your-google-ai-api-key-here
 GOOGLE_CLOUD_PROJECT=twoj-project-id
 GOOGLE_CLOUD_LOCATION=global
 GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
