@@ -266,10 +266,12 @@
 }
 
 html, body, #__next, #root {
-  background: transparent; /* Przywrócono transparent, aby tła fixed były widoczne */
-  min-height: 100vh;
-  min-height: -webkit-fill-available;
-  min-height: 100dvh;
+  /* Fallback tło - gradient pasujący do AuroraBackground */
+  background: radial-gradient(ellipse at 60% 40%, rgb(199, 152, 51) 0%, rgb(136, 136, 136) 100%);
+  min-height: 100vh; /* fallback dla starszych przeglądarek */
+  min-height: -webkit-fill-available; /* fallback dla Safari */
+  min-height: 100svh; /* stabilna wysokość na mobile */
+  min-height: 100dvh; /* najlepsze na iOS/Safari (dynamiczne UI) */
   margin: 0;
   padding: 0;
   width: 100%;
@@ -279,8 +281,8 @@ html, body, #__next, #root {
 
 body {
   @apply min-h-screen overflow-y-auto font-nasalization;
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-top: env(safe-area-inset-top);
+  /* Usunięto padding z body - tło musi pokrywać cały ekran włącznie z safe-area */
+  /* Padding będzie na main/content zamiast na body */
 }
 
 .simplebar-scrollbar:before {

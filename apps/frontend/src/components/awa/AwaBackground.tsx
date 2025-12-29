@@ -58,7 +58,19 @@ const AwaBackground: React.FC = () => {
   }
 
   return (
-    <div className="fixed inset-0 z-[2] pointer-events-none w-screen h-screen">
+    <div 
+      className="fixed z-[2] pointer-events-none"
+      style={{
+        /* Pokrywa cały ekran włącznie z safe-area (notch) na iOS */
+        top: 'calc(-1 * env(safe-area-inset-top, 0))',
+        left: 'calc(-1 * env(safe-area-inset-left, 0))',
+        right: 'calc(-1 * env(safe-area-inset-right, 0))',
+        bottom: 'calc(-1 * env(safe-area-inset-bottom, 0))',
+        width: '100vw',
+        height: '100vh',
+        height: '100dvh', /* dynamic viewport height dla iOS */
+      }}
+    >
         <Canvas
           camera={{ position: [-1.2, 0.4, 2.2], fov: 70 }}
           className="w-screen h-screen bg-transparent"

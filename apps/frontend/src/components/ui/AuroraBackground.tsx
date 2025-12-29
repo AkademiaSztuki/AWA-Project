@@ -53,9 +53,17 @@ export const AuroraBackground: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[1] pointer-events-none overflow-hidden"
+      className="fixed z-[1] pointer-events-none overflow-hidden"
       style={{
-        background: 'radial-gradient(ellipse at 60% 40%,rgb(199, 152, 51) 0%,rgb(136, 136, 136) 100%)'
+        background: 'radial-gradient(ellipse at 60% 40%,rgb(199, 152, 51) 0%,rgb(136, 136, 136) 100%)',
+        /* Pokrywa cały ekran włącznie z safe-area (notch) na iOS */
+        top: 'calc(-1 * env(safe-area-inset-top, 0))',
+        left: 'calc(-1 * env(safe-area-inset-left, 0))',
+        right: 'calc(-1 * env(safe-area-inset-right, 0))',
+        bottom: 'calc(-1 * env(safe-area-inset-bottom, 0))',
+        width: '100vw',
+        height: '100vh',
+        height: '100dvh', /* dynamic viewport height dla iOS */
       }}
     >
       {/* Aurora bloby */}

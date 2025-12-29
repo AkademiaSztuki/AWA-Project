@@ -94,8 +94,18 @@ const ParticlesBackground: React.FC = () => {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 z-[3] pointer-events-none"
-      style={{ mixBlendMode: 'screen' }}
+      className="fixed z-[3] pointer-events-none"
+      style={{ 
+        mixBlendMode: 'screen',
+        /* Pokrywa cały ekran włącznie z safe-area (notch) na iOS */
+        top: 'calc(-1 * env(safe-area-inset-top, 0))',
+        left: 'calc(-1 * env(safe-area-inset-left, 0))',
+        right: 'calc(-1 * env(safe-area-inset-right, 0))',
+        bottom: 'calc(-1 * env(safe-area-inset-bottom, 0))',
+        width: '100vw',
+        height: '100vh',
+        height: '100dvh', /* dynamic viewport height dla iOS */
+      }}
     />
   );
 };

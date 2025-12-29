@@ -5,7 +5,19 @@ import Image from 'next/image';
 
 export function MobileBackground() {
   return (
-    <div className="fixed inset-0 z-[1] pointer-events-none bg-[#1a1a1a]">
+    <div 
+      className="fixed z-[1] pointer-events-none bg-[#1a1a1a]"
+      style={{
+        /* Pokrywa cały ekran włącznie z safe-area (notch) na iOS */
+        top: 'calc(-1 * env(safe-area-inset-top, 0))',
+        left: 'calc(-1 * env(safe-area-inset-left, 0))',
+        right: 'calc(-1 * env(safe-area-inset-right, 0))',
+        bottom: 'calc(-1 * env(safe-area-inset-bottom, 0))',
+        width: '100vw',
+        height: '100vh',
+        height: '100dvh', /* dynamic viewport height dla iOS */
+      }}
+    >
       <picture>
         <source
           srcSet="/images/background-mobile-720.webp 720w, /images/background-mobile-1080.webp 1080w"

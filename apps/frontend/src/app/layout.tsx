@@ -82,7 +82,15 @@ export default function RootLayout({
                     <AmbientMusic volume={0.3} audioFile="/audio/ambient.mp3" />
                     
                     <GlobalProtectedRoute>
-                      <main className="relative z-10 min-h-screen w-full px-1.5 sm:px-4 pt-4 sm:pt-8 pb-8 sm:pb-12 md:px-8 overflow-x-hidden">
+                      <main 
+                        className="relative z-10 min-h-screen w-full px-1.5 sm:px-4 md:px-8 overflow-x-hidden"
+                        style={{
+                          /* Padding dla safe-area (notch) - tylko na treści, nie na tle */
+                          /* Na mobile: pt-4 (1rem) + safe-area, na desktop: pt-8 (2rem) + safe-area */
+                          paddingTop: 'calc(env(safe-area-inset-top, 0) + clamp(1rem, 2vw, 2rem))',
+                          paddingBottom: 'calc(env(safe-area-inset-bottom, 0) + clamp(2rem, 3vw, 3rem))',
+                        }}
+                      >
                         <div className="mx-auto w-full max-w-[1600px] flex flex-col lg:grid lg:gap-10 lg:grid-cols-[minmax(420px,0.3fr)_minmax(480px,0.7fr)] items-start">
                           {/* Reserved column for IDA narrator - keeps content from overlapping */}
                           <div className="hidden lg:block min-h-[720px]" aria-hidden="true" />

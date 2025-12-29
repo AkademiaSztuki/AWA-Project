@@ -77,7 +77,19 @@ const AuroraBubbles: React.FC = () => {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[4] pointer-events-none overflow-hidden">
+    <div 
+      className="fixed z-[4] pointer-events-none overflow-hidden"
+      style={{
+        /* Pokrywa cały ekran włącznie z safe-area (notch) na iOS */
+        top: 'calc(-1 * env(safe-area-inset-top, 0))',
+        left: 'calc(-1 * env(safe-area-inset-left, 0))',
+        right: 'calc(-1 * env(safe-area-inset-right, 0))',
+        bottom: 'calc(-1 * env(safe-area-inset-bottom, 0))',
+        width: '100vw',
+        height: '100vh',
+        height: '100dvh', /* dynamic viewport height dla iOS */
+      }}
+    >
       {bubbles.map((bubble, index) => (
         <div
           key={index}
