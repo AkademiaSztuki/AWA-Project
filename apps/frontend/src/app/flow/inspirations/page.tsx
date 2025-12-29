@@ -412,6 +412,41 @@ export default function InspirationsPage() {
                 insp.id === item.id ? { ...insp, tags: analysis.tags, description: analysis.description } : insp
               );
               await updateSessionData({ inspirations: updatedInspirations } as any);
+              
+              // Automatically save tags to Supabase if userHash is available
+              if (userHash && item.imageBase64) {
+                try {
+                  const { fetchParticipantImages, updateParticipantImageMetadata, saveParticipantImages } = await import('@/lib/remote-spaces');
+                  const existing = await fetchParticipantImages(userHash);
+                  const itemUrl = item.imageBase64;
+                  const existingInspiration = existing.find(img => 
+                    img.type === 'inspiration' && 
+                    (img.url === itemUrl || img.url === item.previewUrl)
+                  );
+                  
+                  if (existingInspiration) {
+                    // Update existing image with tags
+                    await updateParticipantImageMetadata(userHash, existingInspiration.id, {
+                      tags: analysis.tags,
+                      description: analysis.description ?? null
+                    });
+                    console.log('[Inspirations] Tags automatically saved to Supabase for:', existingInspiration.id);
+                  } else if (itemUrl && !itemUrl.startsWith('blob:')) {
+                    // Save new image with tags if we have a valid URL
+                    await saveParticipantImages(userHash, [{
+                      url: itemUrl,
+                      type: 'inspiration',
+                      tags: analysis.tags,
+                      description: analysis.description,
+                      is_favorite: false
+                    }]);
+                    console.log('[Inspirations] New image with tags automatically saved to Supabase');
+                  }
+                } catch (supabaseError) {
+                  console.warn('[Inspirations] Failed to auto-save tags to Supabase:', supabaseError);
+                  // Don't fail the whole tagging process if Supabase save fails
+                }
+              }
             } catch (error) {
               console.error(`[Inspirations] Background tagging failed for ${item.id}:`, error);
             }

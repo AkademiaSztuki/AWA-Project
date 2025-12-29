@@ -86,7 +86,6 @@ const AuroraBubbles: React.FC = () => {
         right: 'calc(-1 * env(safe-area-inset-right, 0))',
         bottom: 'calc(-1 * env(safe-area-inset-bottom, 0))',
         width: '100vw',
-        height: '100vh',
         height: '100dvh', /* dynamic viewport height dla iOS */
       }}
     >
