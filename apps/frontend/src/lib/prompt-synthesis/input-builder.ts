@@ -161,7 +161,7 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
       values: sessionData.ladderResults?.path?.map((step) => step.selectedAnswer) || []
     },
     sensory: {
-      music: sensoryPreferences?.music || 'silence',
+      music: sensoryPreferences?.music || 'pop',
       texture: sensoryPreferences?.texture || 'smooth_wood',
       light: sensoryPreferences?.light || 'warm_bright',
       natureMetaphor: natureMetaphor

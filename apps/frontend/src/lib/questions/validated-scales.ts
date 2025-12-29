@@ -294,22 +294,22 @@ export const MUSIC_PREFERENCES: SensoryOption[] = [
     description: { pl: 'Nowoczesna, energetyczna, skoncentrowana', en: 'Modern, energetic, focused' }
   },
   { 
-    id: 'nature', 
-    label: { pl: 'Dźwięki natury', en: 'Nature sounds' }, 
-    audioUrl: '/research/sensory/music-nature.mp3', 
-    description: { pl: 'Organiczne, spokojne, uziemiające', en: 'Organic, peaceful, grounding' }
+    id: 'rock', 
+    label: { pl: 'Rock', en: 'Rock' }, 
+    audioUrl: '/research/sensory/music-rock.mp3', 
+    description: { pl: 'Energetyczna, dynamiczna, żywa', en: 'Energetic, dynamic, lively' }
   },
   { 
-    id: 'silence', 
-    label: { pl: 'Cisza', en: 'Silence' }, 
-    audioUrl: '', 
-    description: { pl: 'Cicha, minimalna, medytacyjna', en: 'Quiet, minimal, meditative' }
+    id: 'funk', 
+    label: { pl: 'Funk', en: 'Funk' }, 
+    audioUrl: '/research/sensory/music-funk.mp3', 
+    description: { pl: 'Rytmiczna, pełna życia, taneczna', en: 'Rhythmic, vibrant, danceable' }
   },
   { 
-    id: 'lofi', 
-    label: { pl: 'Lo-fi', en: 'Lo-fi' }, 
-    audioUrl: '/research/sensory/music-lofi.mp3', 
-    description: { pl: 'Przytulna, kreatywna, otaczająca', en: 'Cozy, creative, ambient' }
+    id: 'pop', 
+    label: { pl: 'Pop', en: 'Pop' }, 
+    audioUrl: '/research/sensory/music-pop.mp3', 
+    description: { pl: 'Chwytliwa, optymistyczna, uniwersalna', en: 'Catchy, upbeat, universal' }
   }
 ];
 

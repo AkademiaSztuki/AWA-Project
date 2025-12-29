@@ -11,7 +11,6 @@ import { useSessionData } from "@/hooks/useSessionData";
 import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
 import { RadarChart, DomainDescription } from '@/components/dashboard/BigFiveDetailed';
 import { 
-  Brain, 
   ArrowRight, 
   ArrowLeft
 } from "lucide-react";
@@ -479,21 +478,6 @@ export default function BigFivePage() {
               <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
                 {/* Header */}
                 <div className="text-center mb-8">
-                  <motion.div
-                    animate={{ 
-                      scale: [1, 1.05, 1],
-                      rotate: [0, 2, -2, 0]
-                    }}
-                    transition={{ 
-                      duration: 3,
-                      repeat: Infinity,
-                      repeatDelay: 2
-                    }}
-                    className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-gold via-champagne to-platinum flex items-center justify-center"
-                  >
-                    <Brain size={40} className="text-white" />
-                  </motion.div>
-                  
                   <h1 className="text-3xl md:text-4xl font-nasalization text-graphite mb-4">
                     {t("Twój Profil Osobowości", "Your Personality Profile")}
                   </h1>
@@ -647,21 +631,6 @@ export default function BigFivePage() {
             <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
               {/* Header */}
               <div className="text-center mb-8">
-                <motion.div
-                  animate={{ 
-                    scale: [1, 1.05, 1],
-                    rotate: [0, 2, -2, 0]
-                  }}
-                  transition={{ 
-                    duration: 3,
-                    repeat: Infinity,
-                    repeatDelay: 2
-                  }}
-                  className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-gold via-champagne to-platinum flex items-center justify-center"
-                >
-                  <Brain size={40} className="text-white" />
-                </motion.div>
-                
                 <h1 className="text-3xl md:text-4xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-4">
                   {t("Test Osobowości Big Five", "Big Five Personality Test")}
                 </h1>

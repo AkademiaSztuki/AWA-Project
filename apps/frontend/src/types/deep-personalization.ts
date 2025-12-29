@@ -42,7 +42,7 @@ export interface UserProfile {
   };
   
   sensoryPreferences: {
-    music: string;           // jazz, classical, electronic, nature, silence, lofi
+    music: string;           // jazz, classical, electronic, rock, funk, pop
     texture: string;         // soft_fabric, smooth_wood, cold_metal, etc
     light: string;           // warm_low, warm_bright, neutral, cool_bright
     natureMetaphor: string;  // ocean, forest, mountain, desert, garden, sunset

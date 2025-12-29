@@ -160,7 +160,7 @@ export function assessSourceQuality(
     if (inputs.aestheticDNA.explicit.selectedStyle) answerCount++;
     if (inputs.aestheticDNA.explicit.selectedPalette) answerCount++;
     if (inputs.aestheticDNA.explicit.topMaterials.length > 0) answerCount++;
-    if (inputs.sensory.music && inputs.sensory.music !== 'silence') answerCount++;
+    if (inputs.sensory.music) answerCount++;
     if (inputs.sensory.texture) answerCount++;
     if (inputs.sensory.light) answerCount++;
     if (inputs.psychologicalBaseline.biophiliaScore !== undefined) answerCount++;

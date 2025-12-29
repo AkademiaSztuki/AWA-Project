@@ -84,7 +84,7 @@ export function countExplicitAnswers(sessionData: any): number {
   if (sessionData.colorsAndMaterials?.selectedStyle) count++;
   if (sessionData.colorsAndMaterials?.selectedPalette) count++;
   if (sessionData.colorsAndMaterials?.topMaterials?.length > 0) count++;
-  if (sessionData.sensoryPreferences?.music && sessionData.sensoryPreferences.music !== 'silence') count++;
+  if (sessionData.sensoryPreferences?.music) count++;
   if (sessionData.sensoryPreferences?.texture) count++;
   if (sessionData.sensoryPreferences?.light) count++;
   if (sessionData.sensoryPreferences?.natureMetaphor) count++;
