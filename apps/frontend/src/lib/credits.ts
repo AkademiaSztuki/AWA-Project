@@ -131,6 +131,13 @@ export async function deductCredits(userHash: string, generationId: string): Pro
 
   try {
     console.log('[Credits] Deducting credits:', { userHash, generationId, amount: CREDITS_PER_GENERATION });
+
+    // generation_id miał historycznie typ UUID (FK), a w UI czasem przekazujemy string ID (np. "matrix-google-0-explicit").
+    // Żeby nie blokować odejmowania kredytów w środowiskach bez migracji typu → TEXT, zapisuj generation_id tylko gdy to UUID.
+    const isUuid =
+      typeof generationId === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(generationId);
+    const safeGenerationId = isUuid ? generationId : null;
     
     const { error } = await supabaseAdmin
       .from('credit_transactions')
@@ -139,7 +146,7 @@ export async function deductCredits(userHash: string, generationId: string): Pro
         type: 'used',
         amount: -CREDITS_PER_GENERATION,
         source: null,
-        generation_id: generationId,
+        generation_id: safeGenerationId,
         expires_at: null,
       });
 
