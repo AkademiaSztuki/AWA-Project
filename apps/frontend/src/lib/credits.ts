@@ -379,7 +379,32 @@ export async function grantFreeCredits(userHash: string): Promise<boolean> {
     });
 
   if (transactionError) {
-    console.error('Error granting free credits:', transactionError);
+    // Jeśli mamy idempotencję po stronie DB (np. UNIQUE index na free_grant),
+    // równoległe / powtórzone requesty mogą kończyć się konfliktem.
+    // W takim przypadku traktuj to jako "już przyznane" i tylko zsynchronizuj flagę.
+    const isDuplicate =
+      transactionError.code === '23505' ||
+      transactionError.message?.toLowerCase().includes('duplicate') ||
+      transactionError.message?.toLowerCase().includes('unique');
+
+    if (!isDuplicate) {
+      console.error('Error granting free credits:', transactionError);
+      return false;
+    }
+
+    console.warn('Free credits already granted (duplicate), syncing participant flag:', {
+      userHash,
+      code: transactionError.code,
+    });
+
+    await supabaseClient
+      .from('participants')
+      .update({
+        free_grant_used: true,
+        free_grant_used_at: new Date().toISOString(),
+      })
+      .eq('user_hash', userHash);
+
     return false;
   }
 
