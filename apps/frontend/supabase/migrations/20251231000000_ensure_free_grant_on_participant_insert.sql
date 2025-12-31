@@ -10,17 +10,7 @@ ALTER TABLE public.participants
   ADD COLUMN IF NOT EXISTS free_grant_used BOOLEAN DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS free_grant_used_at TIMESTAMPTZ;
 
--- 1) Add unique partial index to prevent double free_grant per user_hash
-DO $$
-BEGIN
-  IF to_regclass('public.credit_transactions') IS NOT NULL THEN
-    EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS ux_credit_transactions_free_grant_user
-             ON public.credit_transactions(user_hash)
-             WHERE source = ''free_grant''';
-  END IF;
-END $$;
-
--- 2) Helper function: grant free credits for a given user_hash (idempotent)
+-- 1) Helper function: grant free credits for a given user_hash (idempotent)
 CREATE OR REPLACE FUNCTION public.grant_free_credits_for_user_hash(p_user_hash TEXT)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -35,13 +25,23 @@ BEGIN
     RETURN FALSE;
   END IF;
 
-  -- Create the credit transaction if it doesn't already exist.
-  -- With the partial unique index, this is safe against races.
-  INSERT INTO public.credit_transactions (user_hash, type, amount, source, generation_id, expires_at)
-  VALUES (p_user_hash, 'grant', 600, 'free_grant', NULL, NULL)
-  ON CONFLICT DO NOTHING;
+  -- Prevent races without requiring a UNIQUE index (important if historical duplicates exist).
+  -- This ensures only one transaction grants per user_hash at a time.
+  PERFORM pg_advisory_xact_lock(hashtext('free_grant:' || p_user_hash));
 
-  GET DIAGNOSTICS v_inserted = (ROW_COUNT > 0);
+  -- If any free_grant already exists for this user_hash, do not grant again.
+  IF EXISTS (
+    SELECT 1
+    FROM public.credit_transactions ct
+    WHERE ct.user_hash = p_user_hash
+      AND ct.source = 'free_grant'
+  ) THEN
+    v_inserted := FALSE;
+  ELSE
+    INSERT INTO public.credit_transactions (user_hash, type, amount, source, generation_id, expires_at)
+    VALUES (p_user_hash, 'grant', 600, 'free_grant', NULL, NULL);
+    v_inserted := TRUE;
+  END IF;
 
   -- Mark as used (even if the transaction already existed)
   UPDATE public.participants
@@ -57,9 +57,9 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.grant_free_credits_for_user_hash(TEXT)
-  IS 'Idempotently grants the initial 600 free credits to a participant user_hash and marks free_grant_used.';
+  IS 'Idempotently grants the initial 600 free credits to a participant user_hash and marks free_grant_used. Uses advisory lock to avoid races without requiring unique index.';
 
--- 3) Trigger: automatically grant free credits on participant creation
+-- 2) Trigger: automatically grant free credits on participant creation
 CREATE OR REPLACE FUNCTION public.trg_participants_auto_free_grant()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -83,7 +83,7 @@ BEGIN
   END IF;
 END $$;
 
--- 4) Ensure clients can call balance RPC (prevents "credits not visible" for anon/authenticated)
+-- 3) Ensure clients can call balance RPC (prevents "credits not visible" for anon/authenticated)
 DO $$
 BEGIN
   IF to_regprocedure('public.get_credit_balance(text)') IS NOT NULL THEN
