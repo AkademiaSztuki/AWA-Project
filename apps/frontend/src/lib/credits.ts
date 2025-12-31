@@ -131,6 +131,13 @@ export async function deductCredits(userHash: string, generationId: string): Pro
 
   try {
     console.log('[Credits] Deducting credits:', { userHash, generationId, amount: CREDITS_PER_GENERATION });
+
+    // generation_id miał historycznie typ UUID (FK), a w UI czasem przekazujemy string ID (np. "matrix-google-0-explicit").
+    // Żeby nie blokować odejmowania kredytów w środowiskach bez migracji typu → TEXT, zapisuj generation_id tylko gdy to UUID.
+    const isUuid =
+      typeof generationId === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(generationId);
+    const safeGenerationId = isUuid ? generationId : null;
     
     const { error } = await supabaseAdmin
       .from('credit_transactions')
@@ -139,7 +146,7 @@ export async function deductCredits(userHash: string, generationId: string): Pro
         type: 'used',
         amount: -CREDITS_PER_GENERATION,
         source: null,
-        generation_id: generationId,
+        generation_id: safeGenerationId,
         expires_at: null,
       });
 
@@ -379,7 +386,32 @@ export async function grantFreeCredits(userHash: string): Promise<boolean> {
     });
 
   if (transactionError) {
-    console.error('Error granting free credits:', transactionError);
+    // Jeśli mamy idempotencję po stronie DB (np. UNIQUE index na free_grant),
+    // równoległe / powtórzone requesty mogą kończyć się konfliktem.
+    // W takim przypadku traktuj to jako "już przyznane" i tylko zsynchronizuj flagę.
+    const isDuplicate =
+      transactionError.code === '23505' ||
+      transactionError.message?.toLowerCase().includes('duplicate') ||
+      transactionError.message?.toLowerCase().includes('unique');
+
+    if (!isDuplicate) {
+      console.error('Error granting free credits:', transactionError);
+      return false;
+    }
+
+    console.warn('Free credits already granted (duplicate), syncing participant flag:', {
+      userHash,
+      code: transactionError.code,
+    });
+
+    await supabaseClient
+      .from('participants')
+      .update({
+        free_grant_used: true,
+        free_grant_used_at: new Date().toISOString(),
+      })
+      .eq('user_hash', userHash);
+
     return false;
   }
 
