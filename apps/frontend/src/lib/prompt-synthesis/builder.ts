@@ -1486,13 +1486,12 @@ export function buildGoogleNanoBananaPrompt(jsonPrompt: string): string {
       ? ` with subtle ${secondaryStyles.join(' and ')} influences`
       : '';
 
-    const finalPrompt = `SYSTEM INSTRUCTION: High-End Architectural Redesign AI. Curated by an expert Interior Architect.
-1. ARCHITECTURAL LOCK: Keep walls, windows, and doors 100% IDENTICAL to the input image. NO new windows. NO moving doors. 
-2. VIEWPORT LOCK: Keep the exact camera perspective.
-3. CORE TASK: ERASE all existing furniture/decor completely. Reconstruct surfaces behind them. Furnish from scratch.
-4. INTELLIGENT DESIGN: Use your expertise to ensure style/material cohesion and realistic biophilia interpretation.
+    const finalPrompt = `Publication-quality interior design photography for a prestigious architectural magazine (editorial standards like Architectural Digest, Dwell, or Elle Decoration).
 
-Professional interior design of a ${roomType}.
+ARCHITECTURAL LOCK: Keep walls, windows, doors 100% IDENTICAL. Keep exact camera perspective.
+CORE TASK: Remove all existing furniture/decor. Reconstruct surfaces. Furnish from scratch.
+
+Professional ${roomType} in ${style}${secondaryStyleText} style.
 
 KEEP: walls, windows, doors, camera angle - IDENTICAL.
 
