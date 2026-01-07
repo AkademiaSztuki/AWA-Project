@@ -3033,16 +3033,14 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 </GlassCard>
               )}
               
-              {/* Select Button - Allow when all generated sources are ready (may be <6 if some sources are skipped) */}
+              {/* Select Button - Allow when at least 1 image is ready (workaround for partial generation failures) */}
               {(() => {
-                const targetCount = synthesisResult?.generatedSources?.length || 6;
-                const isCompleteForGeneratedSources =
-                  !!synthesisResult?.generatedSources &&
-                  synthesisResult.generatedSources.every(src =>
-                    matrixImages.some(img => img.provider === 'google' && img.source === src)
-                  );
                 const readyCount = matrixImages.filter(img => img.provider === 'google').length;
-                return readyCount >= targetCount && isCompleteForGeneratedSources && !isGenerating;
+                // WORKAROUND: Allow proceeding with at least 1 generated image
+                // Previously required ALL expected sources to complete, which blocked users
+                // when inspiration generation failed for some users
+                const hasAtLeastOneImage = readyCount >= 1;
+                return hasAtLeastOneImage && !isGenerating;
               })() && (
                 <div className="flex justify-center">
                   <GlassButton
