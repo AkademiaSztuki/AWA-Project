@@ -1125,10 +1125,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         return;
       }
       
+      // NOTE: We intentionally DO NOT send binary inspiration images to Google Nano Banana.
+      // For source 6/6 we already embed extracted inspiration-derived data in the prompt
+      // (style/colors/materials/etc.), so sending base64 reference images only increases payload size
+      // and can stall generation/rendering.
+      const SEND_INSPIRATION_IMAGES_TO_MODEL = false;
+
       // Filter out blob URLs from inspiration images - they cannot be used for generation
       // Only use base64 strings or HTTP/HTTPS URLs
       let filteredInspirationImages: string[] | undefined = undefined;
-      if (synthesisResult.inspirationImages && synthesisResult.inspirationImages.length > 0) {
+      if (SEND_INSPIRATION_IMAGES_TO_MODEL && synthesisResult.inspirationImages && synthesisResult.inspirationImages.length > 0) {
         filteredInspirationImages = synthesisResult.inspirationImages.filter((img: string) => {
           // Skip blob URLs - they cannot be fetched or used
           if (img.startsWith('blob:')) {
@@ -1208,6 +1214,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         baseImageLength: baseImage?.length || 0,
         hasInspirationImages: !!filteredInspirationImages,
         inspirationImagesCount: filteredInspirationImages?.length || 0,
+        sendInspirationImagesToModel: SEND_INSPIRATION_IMAGES_TO_MODEL,
         style: typedSessionData.visualDNA?.dominantStyle || 'modern',
         parameters
       });
@@ -1235,7 +1242,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         {
           prompts,
           base_image: baseImage,
-          inspiration_images: filteredInspirationImages, // Pass inspiration images for InspirationReference source
+          // We do NOT pass inspiration_images; 6/6 is driven by extracted data embedded in the prompt.
+          inspiration_images: filteredInspirationImages,
           style: typedSessionData.visualDNA?.dominantStyle || 'modern',
           parameters: {
             ...parameters,
@@ -2581,10 +2589,21 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     return "";
   };
 
+  const interiorAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ratingsAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (interiorAdvanceTimeoutRef.current) clearTimeout(interiorAdvanceTimeoutRef.current);
+      if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
+    };
+  }, []);
+
   const handleImageRating = async (
     imageId: string,
     rating: keyof GeneratedImage['ratings'],
     value: number,
+    options?: { suppressProgress?: boolean },
   ) => {
     setGeneratedImages((prev) =>
       prev.map((img) =>
@@ -2596,7 +2615,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setSelectedImage((prev) => (prev ? { ...prev, ratings: { ...prev.ratings, [rating]: value } } : null));
     }
 
-    if (selectedImage?.id === imageId) {
+    if (selectedImage?.id === imageId && !options?.suppressProgress) {
       const updatedRatings = { ...selectedImage.ratings, [rating]: value };
       
       if (rating === 'is_my_interior') {
@@ -3282,9 +3301,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               max={5}
                               value={(selectedImage.ratings as any).is_my_interior || 3}
                               onChange={(value) => {
-                                handleImageRating(selectedImage.id, 'is_my_interior', value);
-                                // Delay hiding the bar to allow smooth exit animation
-                                setTimeout(() => {
+                                handleImageRating(selectedImage.id, 'is_my_interior', value, { suppressProgress: true });
+                                // Delay advancing to allow the user to actually drag and see the thumb move
+                                if (interiorAdvanceTimeoutRef.current) clearTimeout(interiorAdvanceTimeoutRef.current);
+                                interiorAdvanceTimeoutRef.current = setTimeout(() => {
                                   setHasAnsweredInteriorQuestion(true);
                                 }, 800);
                               }}
@@ -3329,7 +3349,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               min={1}
                               max={7}
                               value={(selectedImage.ratings as any)[key] || 4}
-                              onChange={(value) => handleImageRating(selectedImage.id, key as any, value)}
+                              onChange={(value) => {
+                                handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
+                                if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
+                                ratingsAdvanceTimeoutRef.current = setTimeout(() => {
+                                  setHasCompletedRatings(true);
+                                }, 800);
+                              }}
                               className="mb-2"
                             />
                           </div>
@@ -3662,7 +3688,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                     min={1}
                                     max={7}
                                     value={(selectedImage.ratings as any)[key] || 4}
-                                    onChange={(value) => handleImageRating(selectedImage.id, key as any, value)}
+                                    onChange={(value) => {
+                                      handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
+                                      if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
+                                      ratingsAdvanceTimeoutRef.current = setTimeout(() => {
+                                        setHasCompletedRatings(true);
+                                      }, 800);
+                                    }}
                                     className="mb-2"
                                   />
                                 </div>
