@@ -356,7 +356,8 @@ EXAMPLE:
       const accessToken = await this.getAccessToken();
       
       // Vertex AI endpoint for image generation
-      const MODEL_ID = 'gemini-2.5-flash-image';
+      // Nano Banana Pro (higher quality, supports higher resolutions; we keep current app resolutions)
+      const MODEL_ID = 'gemini-3-pro-image-preview';
       const url = `${VERTEX_AI_API_BASE}/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${MODEL_ID}:generateContent`;
       console.log('[GoogleAI] Vertex AI URL:', url);
 
@@ -566,7 +567,7 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
       return {
         image: imageData,
         generation_info: {
-          model: 'gemini-2.5-flash-image',
+          model: MODEL_ID,
           prompt: request.prompt,
           width: request.width || 1024,
           height: request.height || 1024,
@@ -601,7 +602,8 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
       const accessToken = await this.getAccessToken();
 
       // Vertex AI endpoint for image generation
-      const MODEL_ID = 'gemini-2.5-flash-image';
+      // Nano Banana Pro (we keep current output sizes; no 2K/4K imageConfig)
+      const MODEL_ID = 'gemini-3-pro-image-preview';
       const url = `${VERTEX_AI_API_BASE}/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${MODEL_ID}:generateContent`;
 
       const payload = {
@@ -661,7 +663,7 @@ Original context: ${request.prompt}`,
       return {
         image: outputImageData,
         generation_info: {
-          model: 'gemini-2.5-flash-image',
+          model: MODEL_ID,
           prompt: request.prompt,
           target_size: request.target_size || 1536,
         },
