@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { SessionData, FlowStep } from '@/types';
-import { fetchLatestSessionSnapshot, supabase, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
+import { fetchLatestSessionSnapshot, saveFullSessionToSupabase, supabase, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
 import { uploadSpaceImage, saveSpaceImagesMetadata, fetchParticipantImages } from '@/lib/remote-spaces';
 
 const SESSION_STORAGE_KEY = 'aura_session';
@@ -603,6 +603,35 @@ export const useSession = (): UseSessionReturn => {
         ...(mergedLocalSession || {}),
         userHash,
       };
+
+      const localCoreProfileComplete = !!mergedLocalSession?.coreProfileComplete;
+      const remoteCoreProfileComplete = !!remoteSession?.coreProfileComplete;
+
+      if (remoteCoreProfileComplete && !mergedSession.coreProfileComplete) {
+        mergedSession = {
+          ...mergedSession,
+          coreProfileComplete: true,
+          coreProfileCompletedAt:
+            remoteSession?.coreProfileCompletedAt ||
+            mergedSession.coreProfileCompletedAt ||
+            new Date().toISOString()
+        };
+      }
+
+      if (localCoreProfileComplete && !remoteCoreProfileComplete && userHash && !DISABLE_SESSION_SYNC) {
+        const completionTimestamp =
+          mergedLocalSession?.coreProfileCompletedAt ||
+          mergedSession.coreProfileCompletedAt ||
+          new Date().toISOString();
+        queueMicrotask(() => {
+          void saveFullSessionToSupabase({
+            ...mergedSession,
+            userHash,
+            coreProfileComplete: true,
+            coreProfileCompletedAt: completionTimestamp
+          });
+        });
+      }
 
       // Ensure roomImageEmpty from sessionStorage has priority (most recent)
       // First check the earlier read (sessionRoomImageEmpty), then check again to be sure we have the latest

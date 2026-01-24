@@ -2,82 +2,75 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAmbientMusic } from '@/hooks/useAmbientMusic';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
-import GlassSurface from './GlassSurface';
-import { Volume2, VolumeX, Volume1, MessageCircle, MessageCircleOff } from 'lucide-react';
+import { GlassSlider } from './GlassSlider';
+import { Volume2, VolumeX, Volume1, MessageCircle, MessageCircleOff, X } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export const MusicTestButton: React.FC = () => {
+  const { language } = useLanguage();
   const { volume: musicVolume, setVolume: setMusicVolume, isPlaying, togglePlay } = useAmbientMusic();
-  
-  // Debug: log isPlaying state
-  useEffect(() => {
-    console.log('MusicTestButton: isPlaying changed to:', isPlaying);
-  }, [isPlaying]);
   const dialogueVoice = useDialogueVoice();
   const { volume: voiceVolume, setVolume: setVoiceVolume, isEnabled: voiceEnabled, toggleEnabled: toggleVoiceEnabled } = dialogueVoice || { volume: 0.8, setVolume: () => {}, isEnabled: true, toggleEnabled: () => {} };
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [panelPosition, setPanelPosition] = useState({ top: 0, left: 0 });
-  const isMobileRef = useRef(false);
+  const firstButtonRef = useRef<HTMLButtonElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [panelPosition, setPanelPosition] = useState({ top: 0, right: 0 });
 
-  // Sprawdź czy jesteśmy na mobile
   useEffect(() => {
-    const checkMobile = () => {
-      isMobileRef.current = window.innerWidth < 640;
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    setMounted(true);
+    return () => setMounted(false);
   }, []);
 
-  console.log('MusicTestButton: dialogueVoice hook result:', dialogueVoice);
-  console.log('MusicTestButton: voiceVolume:', voiceVolume, 'voiceEnabled:', voiceEnabled);
-  console.log('MusicTestButton: setVoiceVolume function:', typeof setVoiceVolume);
+  // Calculate panel position based on button position
+  useEffect(() => {
+    const updatePosition = () => {
+      if (isOpen && buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        setPanelPosition({
+          top: rect.bottom + 8,
+          right: window.innerWidth - rect.right,
+        });
+      }
+    };
+
+    if (isOpen) {
+      updatePosition();
+      // Use a small timeout to ensure the DOM is stable
+      const timer = setTimeout(updatePosition, 100);
+      
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+      };
+    }
+  }, [isOpen]);
 
   const getMusicVolumeIcon = () => {
-    if (musicVolume === 0) return <VolumeX className="w-5 h-5" />;
-    if (musicVolume < 0.3) return <Volume1 className="w-5 h-5" />;
-    return <Volume2 className="w-5 h-5" />;
+    if (musicVolume === 0) return <VolumeX size={16} aria-hidden="true" />;
+    if (musicVolume < 0.3) return <Volume1 size={16} aria-hidden="true" />;
+    return <Volume2 size={16} aria-hidden="true" />;
   };
 
-  const getMusicVolumeText = () => {
-    if (musicVolume === 0) return 'Wyciszone';
-    if (musicVolume < 0.3) return 'Cicho';
-    if (musicVolume < 0.7) return 'Średnio';
-    return 'Głośno';
-  };
-
-  const handleMusicVolumeChange = (e: React.ChangeEvent<HTMLInputElement> | React.FormEvent<HTMLInputElement>) => {
-    const target = e.currentTarget as HTMLInputElement;
-    const newVolume = parseFloat(target.value);
-    console.log('MusicTestButton: handleMusicVolumeChange called with:', newVolume);
-    
-    // Użyj funkcji z hooka, która zaktualizuje wszystko (state, audio element, localStorage i sync window)
+  const handleMusicVolumeChange = (value: number) => {
+    const newVolume = value / 100; // Convert from 0-100 to 0-1
     setMusicVolume(newVolume);
   };
 
-  const musicPercentage = musicVolume * 100;
-  const voicePercentage = voiceVolume * 100;
-  const thumbWidth = 16;
-  const thumbHalf = thumbWidth / 2;
-  const calcLeft = (pct: number) =>
-    pct === 0 ? 0 : pct === 100 ? `calc(100% - ${thumbWidth}px)` : `calc(${pct}% - ${thumbHalf}px)`;
-  const musicLeftPosition = calcLeft(musicPercentage);
-  const voiceLeftPosition = calcLeft(voicePercentage);
-
-  const handleVoiceVolumeChange = (e: React.ChangeEvent<HTMLInputElement> | React.FormEvent<HTMLInputElement>) => {
-    const target = e.currentTarget as HTMLInputElement;
-    const newVolume = parseFloat(target.value);
-    console.log('MusicTestButton: handleVoiceVolumeChange called with:', newVolume, 'setVoiceVolume function exists:', !!setVoiceVolume);
+  const handleVoiceVolumeChange = (value: number) => {
+    const newVolume = value / 100; // Convert from 0-100 to 0-1
     
     // NATYCHMIASTOWA synchronizacja z audio elementami PRZED aktualizacją state
     const dialogueAudios = document.querySelectorAll('audio[data-type="dialogue"]') as NodeListOf<HTMLAudioElement>;
     dialogueAudios.forEach(audio => {
       audio.volume = newVolume;
-      console.log('MusicTestButton: Directly set dialogue audio volume to:', newVolume);
     });
     
     // Użyj funkcji z hooka, która też zaktualizuje localStorage
@@ -92,384 +85,258 @@ export const MusicTestButton: React.FC = () => {
     });
   }, [voiceVolume]);
 
-  // Update panel position when expanded or scrolled
+  // Focus management for accessibility
   useEffect(() => {
-    if (!isExpanded || !buttonRef.current) return;
+    if (isOpen && firstButtonRef.current) {
+      // Small delay to ensure panel is rendered
+      setTimeout(() => {
+        firstButtonRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen]);
 
-    const updatePosition = () => {
-      if (!buttonRef.current) return;
-      const rect = buttonRef.current.getBoundingClientRect();
-      const isMobile = window.innerWidth < 640;
-      const panelWidth = isMobile ? 240 : 280;
-      
-      let left = rect.left;
-      let top = rect.bottom + 8;
-      
-      // If it would overflow on the right, shift it left
-      if (left + panelWidth > window.innerWidth - 12) {
-        left = window.innerWidth - panelWidth - 12;
-      }
-      
-      // Ensure it doesn't overflow on the left
-      left = Math.max(12, left);
-      
-      // On mobile, ensure panel doesn't go below viewport
-      if (isMobile && top + 200 > window.innerHeight) {
-        top = rect.top - 200 - 8; // Show above button instead
-      }
-      
-      setPanelPosition({ top, left });
-    };
-
-    updatePosition();
-    
-    // Update on scroll/resize
-    window.addEventListener('scroll', updatePosition, true);
-    window.addEventListener('resize', updatePosition);
-    
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true);
-      window.removeEventListener('resize', updatePosition);
-    };
-  }, [isExpanded]);
-
-  // Close panel when clicking/touching outside - obsługa mobile
+  // Close on Escape key
   useEffect(() => {
-    if (!isExpanded) return;
-
-    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as HTMLElement;
-      const button = buttonRef.current;
-      const panel = panelRef.current;
-      
-      if (button && panel && !button.contains(target) && !panel.contains(target)) {
-        setIsExpanded(false);
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        setIsOpen(false);
       }
     };
-
-    // Obsługa zarówno mouse jak i touch
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside, { passive: true });
     
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, [isExpanded]);
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isOpen]);
 
-  // Blokuj scroll podczas przeciągania slidera na mobile
+  // Trap focus within panel when open
   useEffect(() => {
-    if (!isDragging) return;
+    if (!isOpen || !panelRef.current) return;
 
-    const preventScroll = (e: TouchEvent) => {
-      if (isDragging) {
-        e.preventDefault();
+    const panel = panelRef.current;
+    const focusableElements = panel.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusableElements[0] as HTMLElement;
+    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
       }
     };
 
-    document.addEventListener('touchmove', preventScroll, { passive: false });
-    
-    return () => {
-      document.removeEventListener('touchmove', preventScroll);
-    };
-  }, [isDragging]);
+    panel.addEventListener('keydown', handleTab);
+    return () => panel.removeEventListener('keydown', handleTab);
+  }, [isOpen]);
+
+  const musicVolumeId = 'music-volume-slider';
+  const voiceVolumeId = 'voice-volume-slider';
+
+  const t = (pl: string, en: string) => language === 'pl' ? pl : en;
+
+  if (!mounted) {
+    return (
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 active:bg-white/20 transition-all text-graphite flex-shrink-0 touch-target relative z-[110] pointer-events-auto focus:ring-2 focus:ring-gold-400 focus:outline-none"
+        aria-label={t('Otwórz panel kontroli dźwięku', 'Open sound control panel')}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        type="button"
+      >
+        {(isPlaying || voiceEnabled) ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} className="opacity-60" aria-hidden="true" />}
+      </button>
+    );
+  }
 
   return (
-    <div 
-      className="relative z-[200] pointer-events-auto"
-      style={{ position: 'relative' }}
-      onMouseEnter={() => {
-        if (window.innerWidth >= 1024) setIsExpanded(true);
-      }}
-      // Usunięto onMouseLeave - panel zamyka się tylko przez handleClickOutside lub gdy mysz opuszcza sam panel
-    >
-      <div className="flex items-center gap-3 relative">
-        {/* Główny przycisk - TYLKO otwiera/zamyka panel, NIE przełącza dźwięku */}
-        <button
-          ref={buttonRef}
-          type="button"
-          data-music-button
-          disabled={false}
-          className="w-10 h-10 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full cursor-pointer select-none transition-all duration-300 hover:scale-110 active:scale-95 shadow-lg flex items-center justify-center hover:bg-white/20 text-graphite touch-target relative z-[210] pointer-events-auto"
-          style={{ 
-            pointerEvents: 'auto', 
-            cursor: 'pointer',
-            touchAction: 'manipulation',
-            WebkitTapHighlightColor: 'transparent'
-          }}
-          onClick={async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('MusicTestButton: button clicked, isExpanded:', isExpanded);
-            
-            const willExpand = !isExpanded;
-            
-            // TYLKO toggle panel - NIE przełączaj dźwięku
-            setIsExpanded(prev => {
-              console.log('MusicTestButton: setting isExpanded to:', !prev);
-              return !prev;
-            });
-            
-            // Na mobile, przy pierwszym otwarciu panelu, spróbuj włączyć muzykę jeśli nie jest włączona
-            // i nie była ręcznie wyłączona
-            if (willExpand && typeof window !== 'undefined') {
-              const userManuallyPaused = (window as any).ambientMusicUserManuallyPaused === true;
-              if (!isPlaying && !userManuallyPaused && musicVolume > 0) {
-                // Spróbuj włączyć muzykę (może być potrzebne na mobile z autoplay policy)
-                const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
-                if (audioElement && audioElement.paused) {
-                  try {
-                    (window as any).ambientMusicUserManuallyPaused = false;
-                    await audioElement.play();
-                    console.log('MusicTestButton: Music started on panel open');
-                  } catch (error) {
-                    console.log('MusicTestButton: Could not start music on panel open:', error);
-                  }
-                }
-              }
-            }
-          }}
-        >
-          {(isPlaying || voiceEnabled) ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 opacity-60" />}
-        </button>
+    <>
+      {/* Toggle Button */}
+      <button
+        ref={buttonRef}
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 active:bg-white/20 transition-all text-graphite flex-shrink-0 touch-target relative z-[110] pointer-events-auto focus:ring-2 focus:ring-gold-400 focus:outline-none"
+        aria-label={t('Otwórz panel kontroli dźwięku', 'Open sound control panel')}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        type="button"
+      >
+        {(isPlaying || voiceEnabled) ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} className="opacity-60" aria-hidden="true" />}
+      </button>
 
-        {/* Panel kontroli głośności */}
-        {isExpanded && typeof window !== 'undefined' && document.body && createPortal(
-          <div 
-            ref={panelRef}
-            data-music-panel
-            className="fixed z-[300] pointer-events-auto"
-            style={{ 
-              top: `${panelPosition.top}px`,
-              left: `${panelPosition.left}px`,
-            }}
-            onMouseEnter={() => {
-              if (window.innerWidth >= 1024) setIsExpanded(true);
-            }}
-            onMouseLeave={() => {
-              // Only close on desktop when mouse leaves panel
-            }}
-          >
-            <div
-              className="flex flex-col gap-3 p-4 shadow-2xl bg-[#c7b07a]/95 backdrop-blur-md border border-white/25 ring-1 ring-gold/35 rounded-[20px] w-[240px] sm:w-[280px] pointer-events-auto animate-in fade-in zoom-in-95 duration-200"
-            >
-              {/* Muzyka - górny rząd */}
-              <div className="flex items-center gap-3">
-                {/* Ikona głośnika - teraz przełącza dźwięk */}
-                <button
-                  onClick={async (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (musicVolume === 0) {
-                      // Włącz muzykę
-                      setMusicVolume(0.3);
-                      // Resetuj flagę ręcznego wyłączenia
-                      if (typeof window !== 'undefined') {
-                        (window as any).ambientMusicUserManuallyPaused = false;
-                      }
-                      // Bezpośrednio włącz audio (działa lepiej na mobile)
-                      const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
-                      if (audioElement) {
-                        try {
-                          await audioElement.play();
-                          console.log('MusicTestButton: Music started directly');
-                        } catch (error) {
-                          console.error('MusicTestButton: Failed to play directly, trying togglePlay:', error);
-                          togglePlay();
-                        }
-                      } else {
-                        togglePlay();
-                      }
-                    } else {
-                      // Wyłącz muzykę
-                      setMusicVolume(0);
-                      // Nie wywołujemy togglePlay() jeśli głośność jest 0, 
-                      // bo setMusicVolume(0) już wyciszyło audio.
-                      // Ale jeśli chcemy zatrzymać odtwarzanie całkowicie:
-                      const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
-                      if (audioElement && !audioElement.paused) {
-                        audioElement.pause();
-                        if (typeof window !== 'undefined') {
-                          (window as any).ambientMusicUserManuallyPaused = true;
-                        }
-                      }
-                    }
-                  }}
-                  className="text-white hover:scale-110 active:scale-95 transition-transform duration-200 flex-shrink-0 touch-manipulation"
-                  style={{ 
-                    touchAction: 'manipulation',
-                    WebkitTapHighlightColor: 'transparent',
-                    minWidth: '44px',
-                    minHeight: '44px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  title={musicVolume === 0 ? 'Włącz muzykę' : 'Wycisz muzykę'}
-                >
-                  {getMusicVolumeIcon()}
-                </button>
+      {/* Panel via Portal */}
+      {createPortal(
+        <AnimatePresence initial={false}>
+          {isOpen && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                key="backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsOpen(false)}
+                className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[9998]"
+                aria-hidden="true"
+              />
+              
+              {/* Panel Content */}
+              <motion.div
+                key="panel"
+                ref={panelRef}
+                initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="glass-panel !fixed !z-[9999] rounded-[24px] p-4 sm:p-6 w-[min(320px,90vw)] max-w-[calc(100vw-2rem)] shadow-2xl"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="music-panel-title"
+                aria-describedby="music-panel-description"
+                style={{ 
+                  top: panelPosition.top > 0 ? `${panelPosition.top}px` : '80px',
+                  right: panelPosition.right > 0 ? `${panelPosition.right}px` : '16px',
+                  maxHeight: 'calc(100vh - 8rem)' 
+                }}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 id="music-panel-title" className="text-lg font-exo2 text-graphite">
+                    {t('Dźwięk i Muzyka', 'Sound & Music')}
+                  </h3>
+                  <button
+                    ref={firstButtonRef}
+                    onClick={() => setIsOpen(false)}
+                    className="w-8 h-8 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 transition-all focus:ring-2 focus:ring-gold-400 focus:outline-none"
+                    aria-label={t('Zamknij panel kontroli dźwięku', 'Close sound control panel')}
+                  >
+                    <X size={16} aria-hidden="true" />
+                  </button>
+                </div>
 
-                {/* Custom Glass Slider dla muzyki */}
-                <div className="flex-1 relative" style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}>
-                  <div className="relative w-full h-5 bg-white/25 backdrop-blur-sm border border-white/30 shadow-inner rounded-full overflow-hidden">
-                    {/* Track background */}
-                    <div className="absolute inset-0 bg-black/5 rounded-full"></div>
-                    {/* Progress track */}
-                    <div 
-                      className="absolute top-1/2 transform -translate-y-1/2 h-full bg-gradient-to-r from-gold to-champagne rounded-full transition-all duration-300 ease-in-out"
-                      style={{ width: `${musicPercentage}%` }}
-                    ></div>
-                    {/* Slider thumb */}
-                    <div 
-                      className={`absolute top-1/2 transform -translate-y-1/2 w-4 h-4 bg-white border border-gold/30 shadow-sm rounded-full cursor-pointer transition-all duration-300 ease-in-out hover:scale-110 focus:ring-2 focus:ring-gold-400 ${
-                        isDragging ? 'scale-125 border-gold ring-2 ring-gold-400' : ''
-                      }`}
-                      style={{ left: musicLeftPosition }}
-                      onMouseDown={() => setIsDragging(true)}
-                      onMouseUp={() => setIsDragging(false)}
-                      onMouseLeave={() => setIsDragging(false)}
-                    >
+                <div id="music-panel-description" className="sr-only">
+                  {t(
+                    'Panel umożliwia kontrolę głośności muzyki tła i głosu dialogu IDA.',
+                    'Panel allows controlling background music volume and IDA dialogue voice volume.'
+                  )}
+                </div>
+
+                <div className="space-y-6">
+                  {/* Music Volume Slider */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label 
+                        htmlFor={musicVolumeId}
+                        className="block text-sm font-exo2 text-graphite"
+                      >
+                        {t('Muzyka', 'Music')}
+                      </label>
+                      <button
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (musicVolume === 0) {
+                            setMusicVolume(0.3);
+                            if (typeof window !== 'undefined') {
+                              (window as any).ambientMusicUserManuallyPaused = false;
+                            }
+                            const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+                            if (audioElement) {
+                              try {
+                                await audioElement.play();
+                              } catch (error) {
+                                togglePlay();
+                              }
+                            } else {
+                              togglePlay();
+                            }
+                          } else {
+                            setMusicVolume(0);
+                            const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
+                            if (audioElement && !audioElement.paused) {
+                              audioElement.pause();
+                              if (typeof window !== 'undefined') {
+                                (window as any).ambientMusicUserManuallyPaused = true;
+                              }
+                            }
+                          }
+                        }}
+                        className="w-8 h-8 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 transition-all focus:ring-2 focus:ring-gold-400 focus:outline-none"
+                        aria-label={musicVolume === 0 ? t('Włącz muzykę', 'Enable music') : t('Wycisz muzykę', 'Mute music')}
+                      >
+                        {getMusicVolumeIcon()}
+                      </button>
                     </div>
-                    {/* Hidden input for accessibility - z obsługą touch */}
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={musicVolume}
-                      onChange={handleMusicVolumeChange}
-                      onInput={handleMusicVolumeChange}
-                      onMouseMove={(e) => {
-                        if (isDragging) {
-                          const target = e.currentTarget as HTMLInputElement;
-                          const newVolume = parseFloat(target.value);
-                          handleMusicVolumeChange(e);
-                        }
-                      }}
-                      onTouchStart={(e) => {
-                        setIsDragging(true);
-                        e.stopPropagation();
-                      }}
-                      onTouchMove={(e) => {
-                        const target = e.currentTarget as HTMLInputElement;
-                        const newVolume = parseFloat(target.value);
-                        handleMusicVolumeChange(e);
-                        e.stopPropagation();
-                      }}
-                      onTouchEnd={(e) => {
-                        setIsDragging(false);
-                        e.stopPropagation();
-                      }}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      style={{ 
-                        touchAction: 'pan-x',
-                        WebkitTapHighlightColor: 'transparent',
-                        pointerEvents: 'auto',
-                        zIndex: 10
-                      }}
-                    />
+                    <div className="flex items-center gap-3">
+                      <GlassSlider
+                        id={musicVolumeId}
+                        min={0}
+                        max={100}
+                        value={Math.round(musicVolume * 100)}
+                        onChange={handleMusicVolumeChange}
+                        ariaLabel={t('Głośność muzyki', 'Music volume')}
+                        ariaValueText={`${Math.round(musicVolume * 100)}%`}
+                      />
+                      <span className="text-xs text-graphite font-medium min-w-[40px] text-center flex-shrink-0" aria-live="polite">
+                        {Math.round(musicVolume * 100)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Voice Volume Slider */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label 
+                        htmlFor={voiceVolumeId}
+                        className="block text-sm font-exo2 text-graphite"
+                      >
+                        {t('Głos dialogu', 'Dialogue Voice')}
+                      </label>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleVoiceEnabled();
+                        }}
+                        className="w-8 h-8 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 transition-all focus:ring-2 focus:ring-gold-400 focus:outline-none"
+                        aria-label={voiceEnabled ? t('Wyłącz głos', 'Disable voice') : t('Włącz głos', 'Enable voice')}
+                      >
+                        {voiceEnabled ? <MessageCircle size={16} aria-hidden="true" /> : <MessageCircleOff size={16} className="opacity-60" aria-hidden="true" />}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <GlassSlider
+                        id={voiceVolumeId}
+                        min={0}
+                        max={100}
+                        value={Math.round(voiceVolume * 100)}
+                        onChange={handleVoiceVolumeChange}
+                        ariaLabel={t('Głośność głosu dialogu', 'Dialogue voice volume')}
+                        ariaValueText={`${Math.round(voiceVolume * 100)}%`}
+                      />
+                      <span className="text-xs text-graphite font-medium min-w-[40px] text-center flex-shrink-0" aria-live="polite">
+                        {Math.round(voiceVolume * 100)}%
+                      </span>
+                    </div>
                   </div>
                 </div>
-                {/* Tekst głośności muzyki */}
-                <span className="text-xs text-graphite font-medium min-w-[30px] text-center flex-shrink-0">
-                  {Math.round(musicVolume * 100)}%
-                </span>
-              </div>
-
-              {/* Głos dialogu - dolny rząd */}
-              <div className="flex items-center gap-3">
-                {/* Ikona mowy/dialogu */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('MusicTestButton: toggleVoiceEnabled button clicked');
-                    toggleVoiceEnabled();
-                  }}
-                  className="text-white hover:scale-110 active:scale-95 transition-transform duration-200 flex-shrink-0 touch-manipulation"
-                  style={{ 
-                    touchAction: 'manipulation',
-                    WebkitTapHighlightColor: 'transparent',
-                    minWidth: '44px',
-                    minHeight: '44px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  title={voiceEnabled ? 'Wyłącz głos' : 'Włącz głos'}
-                >
-                  {voiceEnabled ? <MessageCircle className="w-5 h-5" /> : <MessageCircleOff className="w-5 h-5 text-white/60" />}
-                </button>
-
-                {/* Custom Glass Slider dla głosu */}
-                <div className="flex-1 relative" style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}>
-                  <div className="relative w-full h-5 bg-white/25 backdrop-blur-sm border border-white/30 shadow-inner rounded-full overflow-hidden">
-                    {/* Track background */}
-                    <div className="absolute inset-0 bg-black/5 rounded-full"></div>
-                    {/* Progress track */}
-                    <div 
-                      className="absolute top-1/2 transform -translate-y-1/2 h-full bg-gradient-to-r from-platinum to-silver rounded-full transition-all duration-300 ease-in-out"
-                      style={{ width: `${voicePercentage}%` }}
-                    ></div>
-                    {/* Slider thumb */}
-                    <div 
-                      className={`absolute top-1/2 transform -translate-y-1/2 w-4 h-4 bg-white border border-silver/30 shadow-sm rounded-full cursor-pointer transition-all duration-300 ease-in-out hover:scale-110 focus:ring-2 focus:ring-silver ${
-                        isDragging ? 'scale-125 border-silver ring-2 ring-silver' : ''
-                      }`}
-                      style={{ left: voiceLeftPosition }}
-                      onMouseDown={() => setIsDragging(true)}
-                      onMouseUp={() => setIsDragging(false)}
-                      onMouseLeave={() => setIsDragging(false)}
-                    >
-                    </div>
-                    {/* Hidden input for accessibility - z obsługą touch */}
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={voiceVolume}
-                      onChange={handleVoiceVolumeChange}
-                      onInput={handleVoiceVolumeChange}
-                      onMouseMove={(e) => {
-                        if (isDragging) {
-                          handleVoiceVolumeChange(e);
-                        }
-                      }}
-                      onTouchStart={(e) => {
-                        setIsDragging(true);
-                        e.stopPropagation();
-                      }}
-                      onTouchMove={(e) => {
-                        handleVoiceVolumeChange(e);
-                        e.stopPropagation();
-                      }}
-                      onTouchEnd={(e) => {
-                        setIsDragging(false);
-                        e.stopPropagation();
-                      }}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      style={{ 
-                        touchAction: 'pan-x',
-                        WebkitTapHighlightColor: 'transparent',
-                        pointerEvents: 'auto',
-                        zIndex: 10
-                      }}
-                    />
-                  </div>
-                </div>
-                {/* Tekst głośności głosu */}
-                <span className="text-xs text-graphite font-medium min-w-[30px] text-center flex-shrink-0">
-                  {Math.round(voiceVolume * 100)}%
-                </span>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-      </div>
-    </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </>
   );
 };
 

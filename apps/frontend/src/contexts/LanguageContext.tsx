@@ -102,6 +102,8 @@ export function LanguageToggle() {
       <button
         type="button"
         onClick={() => setLanguage('pl')}
+        aria-label="Zmień język na polski"
+        aria-pressed={language === 'pl'}
         className={`px-2 sm:px-3 py-1.5 text-xs rounded-full transition-all font-modern touch-target relative z-[110] pointer-events-auto ${
           language === 'pl'
             ? 'text-white font-semibold'
@@ -113,6 +115,8 @@ export function LanguageToggle() {
       <button
         type="button"
         onClick={() => setLanguage('en')}
+        aria-label="Change language to English"
+        aria-pressed={language === 'en'}
         className={`px-2 sm:px-3 py-1.5 text-xs rounded-full transition-all font-modern touch-target relative z-[110] pointer-events-auto ${
           language === 'en'
             ? 'text-white font-semibold'

@@ -220,13 +220,14 @@ REQUIREMENTS:
 - confidence: Number 0-1 (confidence in room type detection)
 - room_description: Detailed description (100-200 words) of the room including: furniture, colors, materials, lighting, style, layout, condition
 - suggestions: Array of 3-5 improvement suggestions (short phrases, max 20 words each)
-- comment: Friendly, encouraging comment in Polish (2-3 sentences) that SPECIFICALLY describes what you see in THIS exact room. Mention specific details like: furniture pieces, colors, materials, lighting, architectural features (windows, doors), style elements. Make it personal and concrete - show that you're looking at THIS specific interior. Example: "Widzę w Twoim salonie dużą szarą kanapę narożną, białą ścianę z oknem, drewniany stolik kawowy i minimalistyczne dekoracje. Naturalne światło wpadające przez okno tworzy przytulną atmosferę."
+- comment_pl: Friendly, encouraging comment in Polish (2-3 sentences) that SPECIFICALLY describes what you see in THIS exact room. Mention specific details like: furniture pieces, colors, materials, lighting, architectural features (windows, doors), style elements. Make it personal and concrete - show that you're looking at THIS specific interior. Example: "Widzę w Twoim salonie dużą szarą kanapę narożną, białą ścianę z oknem, drewniany stolik kawowy i minimalistyczne dekoracje. Naturalne światło wpadające przez okno tworzy przytulną atmosferę."
+- comment_en: Friendly, encouraging comment in English (2-3 sentences) describing the same concrete details as in comment_pl.
 
 OUTPUT: Return ONLY valid JSON, no markdown, no explanation:
-{"detected_room_type":"room_type","confidence":0.9,"room_description":"...","suggestions":["suggestion1","suggestion2"],"comment":"..."}
+{"detected_room_type":"room_type","confidence":0.9,"room_description":"...","suggestions":["suggestion1","suggestion2"],"comment_pl":"...","comment_en":"..."}
 
 EXAMPLE:
-{"detected_room_type":"living_room","confidence":0.95,"room_description":"Modern living room with a large gray sectional sofa, white walls, wooden coffee table, and large windows providing natural light. The space features minimalist decor with a few plants and abstract wall art.","suggestions":["Add more lighting for evening ambiance","Introduce warmer color accents","Consider area rug for texture","Add storage solutions","Enhance biophilic elements"],"comment":"Widzę w Twoim salonie dużą szarą kanapę narożną, białą ścianę z oknem i drewniany stolik kawowy. Naturalne światło wpadające przez okno tworzy przytulną atmosferę - to świetna baza do stworzenia przestrzeni, która odzwierciedli Twoje preferencje!"}`;
+{"detected_room_type":"living_room","confidence":0.95,"room_description":"Modern living room with a large gray sectional sofa, white walls, wooden coffee table, and large windows providing natural light. The space features minimalist decor with a few plants and abstract wall art.","suggestions":["Add more lighting for evening ambiance","Introduce warmer color accents","Consider area rug for texture","Add storage solutions","Enhance biophilic elements"],"comment_pl":"Widzę w Twoim salonie dużą szarą kanapę narożną, białą ścianę z oknem i drewniany stolik kawowy. Naturalne światło wpadające przez okno tworzy przytulną atmosferę - to świetna baza do stworzenia przestrzeni, która odzwierciedli Twoje preferencje!","comment_en":"I can see a large gray sectional sofa, a white wall with a window, and a wooden coffee table in your living room. The natural light coming through the window creates a cozy atmosphere - a great foundation for a space that reflects your preferences!"}`;
 
       const payload = {
         contents: [
@@ -304,12 +305,17 @@ EXAMPLE:
       const parsed = JSON.parse(jsonText);
       
       // Validate and return with defaults
+      const commentPl = parsed.comment_pl || parsed.comment || 'Pomieszczenie zostało przeanalizowane!';
+      const commentEn = parsed.comment_en || parsed.comment || 'The room has been analyzed!';
+
       return {
         detected_room_type: parsed.detected_room_type || 'empty_room',
         confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.8,
         room_description: parsed.room_description || 'Room analysis completed.',
         suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
-        comment: parsed.comment || 'Pomieszczenie zostało przeanalizowane!',
+        comment: commentPl,
+        comment_pl: commentPl,
+        comment_en: commentEn,
         human_comment: parsed.human_comment,
       };
     } catch (error) {
@@ -323,6 +329,8 @@ EXAMPLE:
         room_description: 'Unable to parse room analysis. Please try again.',
         suggestions: [],
         comment: 'Wystąpił problem podczas analizy. Spróbuj ponownie.',
+        comment_pl: 'Wystąpił problem podczas analizy. Spróbuj ponownie.',
+        comment_en: 'There was a problem analyzing the room. Please try again.',
       };
     }
   }
@@ -356,8 +364,8 @@ EXAMPLE:
       const accessToken = await this.getAccessToken();
       
       // Vertex AI endpoint for image generation
-      // Nano Banana Pro (higher quality, supports higher resolutions; we keep current app resolutions)
-      const MODEL_ID = 'gemini-3-pro-image-preview';
+      // Nano Banana (gemini-2.5-flash-image) - cheaper option
+      const MODEL_ID = 'gemini-2.5-flash-image';
       const url = `${VERTEX_AI_API_BASE}/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${MODEL_ID}:generateContent`;
       console.log('[GoogleAI] Vertex AI URL:', url);
 

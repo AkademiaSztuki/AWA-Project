@@ -43,6 +43,22 @@ export const ImageComparison: React.FC<ImageComparisonProps> = ({
     setSliderPosition(Math.max(0, Math.min(100, percentage)));
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      setSliderPosition(prev => Math.max(0, prev - 5));
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      setSliderPosition(prev => Math.min(100, prev + 5));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setSliderPosition(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setSliderPosition(100);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -62,7 +78,8 @@ export const ImageComparison: React.FC<ImageComparisonProps> = ({
           <h3 className="text-2xl font-nasalization text-gray-800">Porównaj Obrazy</h3>
           <button
             onClick={onClose}
-            className="text-gray-600 hover:text-gray-800 text-2xl"
+            className="text-gray-600 hover:text-gray-800 text-2xl focus:ring-2 focus:ring-gold-400 focus:outline-none rounded"
+            aria-label="Zamknij porównanie obrazów"
           >
             ×
           </button>
@@ -77,6 +94,8 @@ export const ImageComparison: React.FC<ImageComparisonProps> = ({
           onTouchStart={() => setIsDragging(true)}
           onTouchEnd={() => setIsDragging(false)}
           onTouchMove={handleTouchMove}
+          role="group"
+          aria-label="Porównanie obrazów"
         >
           {/* Image A (full) */}
           <div className="absolute inset-0">
@@ -103,10 +122,18 @@ export const ImageComparison: React.FC<ImageComparisonProps> = ({
 
           {/* Slider handle */}
           <div
-            className="absolute inset-y-0 w-1 bg-white shadow-2xl"
+            role="slider"
+            tabIndex={0}
+            aria-label="Suwak porównania obrazów"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={sliderPosition}
+            aria-valuetext={`${Math.round(sliderPosition)}%`}
+            className="absolute inset-y-0 w-1 bg-white shadow-2xl focus:outline-none focus:ring-2 focus:ring-gold-400"
             style={{ left: `${sliderPosition}%` }}
+            onKeyDown={handleKeyDown}
           >
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full shadow-xl flex items-center justify-center">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full shadow-xl flex items-center justify-center pointer-events-none">
               <div className="flex gap-1">
                 <div className="w-1 h-6 bg-gray-400 rounded"></div>
                 <div className="w-1 h-6 bg-gray-400 rounded"></div>
@@ -125,7 +152,7 @@ export const ImageComparison: React.FC<ImageComparisonProps> = ({
 
         <div className="mt-6 flex justify-center gap-4">
           <p className="text-sm text-gray-600 font-modern">
-            Przeciągnij suwak aby porównać obrazy
+            Przeciągnij suwak lub użyj strzałek na klawiaturze aby porównać obrazy
           </p>
         </div>
       </motion.div>

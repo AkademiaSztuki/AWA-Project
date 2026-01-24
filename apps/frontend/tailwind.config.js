@@ -23,9 +23,9 @@ module.exports = {
           200: '#F0F0F5',  // Lekko perłowy
         },
         gold: {
-          400: '#FFE55C',  // Jasne złoto
+          400: '#FFE55C',  // Jasne złoto - UWAGA: słaby kontrast na białym tle (nie spełnia WCAG AA)
           500: '#FFD700',  // Klasyczne złoto
-          600: '#DAA520',  // Ciemne złoto
+          600: '#DAA520',  // Ciemne złoto - lepszy kontrast na białym tle
         },
         silver: {
           300: '#E5E4E2',  // Platynowy

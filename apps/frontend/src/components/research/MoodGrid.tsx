@@ -108,7 +108,7 @@ export function MoodGrid({
       </div>
 
       {/* Grid Container */}
-      <div className="flex flex-col items-center w-full max-w-[500px] mx-auto">
+      <div className="flex flex-col items-center w-full max-w-[min(500px,90vw)] mx-auto">
         {/* Y-axis label (top) */}
         <div className="text-sm font-modern text-graphite font-semibold mb-3 text-center">
           {t(config.axes.y.labels.max)}
@@ -121,7 +121,7 @@ export function MoodGrid({
           </div>
 
           {/* Main Grid */}
-          <div className="relative flex-shrink-0 w-full max-w-[400px] aspect-square">
+          <div className="relative flex-shrink-0 w-full max-w-[min(400px,85vw)] aspect-square">
             <div
               ref={gridRef}
               className="relative bg-gradient-to-br from-white/40 to-white/10 backdrop-blur-sm border-2 border-white/30 rounded-lg cursor-crosshair overflow-hidden shadow-lg w-full h-full"

@@ -22,7 +22,7 @@ import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { saveResearchConsent, saveParticipantSwipes } from '@/lib/supabase';
 import Link from 'next/link';
 
-const STEP_CARD_HEIGHT = "min-h-[500px] md:min-h-[650px] max-h-[90vh] md:max-h-[78vh]";
+const STEP_CARD_HEIGHT = "min-h-[500px] md:min-h-[650px] max-h-[min(90vh,800px)] md:max-h-[min(78vh,900px)]";
 
 type WizardStep = 
   | 'consent'
@@ -724,7 +724,7 @@ export function CoreProfileWizard() {
               )}
 
               {currentStep === 'sensory_tests' && (
-                <GlassCard variant="flatOnMobile" className={`p-3 sm:p-5 md:p-6 h-[82vh] sm:h-[64vh] flex flex-col overflow-y-auto scrollbar-hide !shadow-none`}>
+                <GlassCard variant="flatOnMobile" className={`p-3 sm:p-5 md:p-6 min-h-[clamp(400px,64vh,800px)] max-h-[min(82vh,900px)] sm:max-h-[min(64vh,800px)] flex flex-col overflow-y-auto scrollbar-hide !shadow-none`}>
                   <div className="min-h-full flex flex-col">
                     <div className="flex-1">
                       <div className="mb-1 sm:mb-2">
@@ -1244,7 +1244,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
                 <label className="block text-sm font-semibold text-graphite mb-2">
                   {texts.age}
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {['18-24', '25-34', '35-44', '45-54', '55-64', '65+'].map((range) => (
                     <button
                       key={range}
@@ -1266,7 +1266,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
                 <label className="block text-sm font-semibold text-graphite mb-2">
                   {texts.gender}
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
                     { id: 'female', label: language === 'pl' ? 'Kobieta' : 'Female' },
                     { id: 'male', label: language === 'pl' ? 'Mężczyzna' : 'Male' },
@@ -1293,7 +1293,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
                 <label className="block text-sm font-semibold text-graphite mb-2">
                   {texts.education}
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
                     { id: 'high-school', label: language === 'pl' ? 'Średnie' : 'High School' },
                     { id: 'bachelor', label: language === 'pl' ? 'Licencjat' : 'Bachelor\'s' },
@@ -1391,7 +1391,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
               <label className="block text-sm font-semibold text-graphite mb-2">
                 {language === 'pl' ? 'Z kim mieszkasz?' : 'Who do you live with?'}
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {LIVING_SITUATION_OPTIONS.map((option) => (
                   <button
                     key={option.id}
@@ -1414,13 +1414,13 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
               <label className="block text-sm font-semibold text-graphite mb-2">
                 {language === 'pl' ? 'Jaki jest vibe Twojego życia teraz?' : 'What\'s your life vibe right now?'}
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 {LIFE_VIBE_OPTIONS.map((option) => (
                   <button
                     key={option.id}
                     type="button"
                     onClick={() => updateField('lifeVibe', option.id)}
-                    className={`rounded-lg p-3 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                    className={`rounded-lg p-3 sm:p-4 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                       lifestyleData.lifeVibe === option.id
                         ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
                         : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
@@ -1440,7 +1440,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
                   ({language === 'pl' ? 'wybierz kilka' : 'select multiple'})
                 </span>
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {GOAL_OPTIONS.map((option) => (
                   <button
                     key={option.id}
@@ -1737,7 +1737,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
 
               {/* Progress - Moved below images as requested */}
               <div className="mb-8">
-                <div className="flex justify-between items-center mb-2">
+                <div className="flex justify-between items-center mb-2" aria-live="polite" aria-atomic="true">
                   <span className="text-sm text-silver-dark font-modern">
                     {language === 'pl' ? 'Postęp' : 'Progress'}
                   </span>
@@ -1762,16 +1762,18 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
                   whileTap={{ scale: 0.9 }}
                   onClick={() => handleSwipe('left')}
                   className="w-16 h-16 sm:w-20 sm:h-20 rounded-full glass-panel bg-red-500/10 backdrop-blur-xl border border-red-400/20 shadow-xl flex items-center justify-center transition-all z-10 pointer-events-auto group"
+                  aria-label={language === 'pl' ? 'Nie podoba mi się' : 'Dislike'}
                 >
-                  <X size={18} strokeWidth={2.5} className="text-red-400/60 group-hover:text-red-500 transition-colors sm:size-18" />
+                  <X size={18} strokeWidth={2.5} className="text-red-400/60 group-hover:text-red-500 transition-colors sm:size-18" aria-hidden="true" />
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.1, backgroundColor: 'rgba(34, 197, 94, 0.15)' }}
                   whileTap={{ scale: 0.9 }}
                   onClick={() => handleSwipe('right')}
                   className="w-16 h-16 sm:w-20 sm:h-20 rounded-full glass-panel bg-green-500/10 backdrop-blur-xl border border-green-400/20 shadow-xl flex items-center justify-center transition-all z-10 pointer-events-auto group"
+                  aria-label={language === 'pl' ? 'Podoba mi się' : 'Like'}
                 >
-                  <Heart size={18} strokeWidth={2.5} className="text-green-400/60 group-hover:text-green-500 transition-colors sm:size-18" />
+                  <Heart size={18} strokeWidth={2.5} className="text-green-400/60 group-hover:text-green-500 transition-colors sm:size-18" aria-hidden="true" />
                 </motion.button>
               </div>
             </div>

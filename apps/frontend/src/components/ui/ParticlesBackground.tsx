@@ -35,7 +35,7 @@ const ParticlesBackground: React.FC = () => {
     // Inicjalizacja cząsteczek
     const initParticles = () => {
       const particles: Particle[] = [];
-      const particleCount = 50; // Mniej cząsteczek niż w AuroraBackground
+      const particleCount = 12;
 
       for (let i = 0; i < particleCount; i++) {
         particles.push({
@@ -94,7 +94,7 @@ const ParticlesBackground: React.FC = () => {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed z-[3] pointer-events-none"
+      className="fixed z-[4] pointer-events-none"
       style={{ 
         mixBlendMode: 'screen',
         /* Pokrywa cały ekran włącznie z safe-area (notch) na iOS */

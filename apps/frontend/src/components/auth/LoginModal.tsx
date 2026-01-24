@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,11 +27,67 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
   const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const firstFocusableRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
   }, []);
+
+  // Focus management for accessibility
+  useEffect(() => {
+    if (isOpen && firstFocusableRef.current) {
+      setTimeout(() => {
+        firstFocusableRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen]);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isOpen, onClose]);
+
+  // Trap focus within modal when open
+  useEffect(() => {
+    if (!isOpen || !modalRef.current) return;
+
+    const modal = modalRef.current;
+    const focusableElements = modal.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusableElements[0] as HTMLElement;
+    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    };
+
+    modal.addEventListener('keydown', handleTab);
+    return () => modal.removeEventListener('keydown', handleTab);
+  }, [isOpen]);
 
   const getEffectiveRedirectPath = () => {
     return redirectPath || searchParams.get('redirect') || undefined;
@@ -81,37 +137,46 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           onClick={onClose}
+          aria-hidden="true"
         />
 
         {/* Modal */}
         <motion.div
+          ref={modalRef}
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           className="relative z-10 w-full max-w-md"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="login-modal-title"
+          aria-describedby="login-modal-description"
         >
           <GlassCard className="p-6 md:p-8">
             {/* Close Button */}
             <button
+              ref={firstFocusableRef}
               onClick={onClose}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors focus:ring-2 focus:ring-gold-400 focus:outline-none"
+              aria-label={language === 'pl' ? 'Zamknij modal logowania' : 'Close login modal'}
             >
-              <X size={18} className="text-graphite" />
+              <X size={18} className="text-graphite" aria-hidden="true" />
             </button>
 
             {/* Header */}
             <div className="text-center mb-6">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gold via-champagne to-platinum flex items-center justify-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gold via-champagne to-platinum flex items-center justify-center" aria-hidden="true">
                 <Sparkles size={28} className="text-white" />
               </div>
-              <h2 className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
+              <h2 id="login-modal-title" className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
                 {language === 'pl' ? 'Zapisz Swój Profil' : 'Save Your Profile'}
               </h2>
-              <p className="text-sm text-graphite font-modern">
+              <p id="login-modal-description" className="text-sm text-graphite font-modern">
                 {message || (language === 'pl' 
                   ? 'Zaloguj się aby zachować swój postęp i wracać kiedy chcesz'
                   : 'Sign in to save your progress and return anytime')}
               </p>
+
             </div>
 
             {emailSent ? (
@@ -135,8 +200,9 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                 <GlassButton
                   onClick={handleGoogleSignIn}
                   disabled={isLoading}
-                  className="w-full"
+                  className="w-full focus:ring-2 focus:ring-gold-400 focus:outline-none"
                   size="lg"
+                  aria-label={language === 'pl' ? 'Zaloguj się przez Google' : 'Sign in with Google'}
                 >
                   <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                     <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -162,15 +228,22 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                 {/* Email Magic Link */}
                 <form onSubmit={handleEmailSignIn}>
                   <div className="mb-4">
-                    <label className="block text-sm font-semibold text-graphite mb-2 font-modern">
+                    <label 
+                      htmlFor="email-input"
+                      className="block text-sm font-semibold text-graphite mb-2 font-modern"
+                    >
                       {language === 'pl' ? 'Email' : 'Email'}
                     </label>
                     <input
+                      id="email-input"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={language === 'pl' ? 'twoj@email.com' : 'your@email.com'}
                       required
+                      aria-required="true"
+                      aria-invalid={!!error}
+                      aria-describedby={error ? 'email-error' : undefined}
                       className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/30 text-graphite font-modern focus:border-gold/50 focus:ring-2 focus:ring-gold/20 outline-none transition-all"
                       disabled={isLoading}
                     />
@@ -179,8 +252,9 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                   <GlassButton
                     type="submit"
                     disabled={isLoading || !email}
-                    className="w-full"
+                    className="w-full focus:ring-2 focus:ring-gold-400 focus:outline-none"
                     size="lg"
+                    aria-label={language === 'pl' ? 'Wyślij link logowania na email' : 'Send login link to email'}
                   >
                     <Mail size={18} className="mr-2" />
                     {isLoading 
@@ -190,7 +264,12 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                 </form>
 
                 {error && (
-                  <div className="mt-4 p-3 bg-red-100/20 border border-red-300/30 rounded-lg">
+                  <div 
+                    id="email-error"
+                    className="mt-4 p-3 bg-red-100/20 border border-red-300/30 rounded-lg"
+                    role="alert"
+                    aria-live="polite"
+                  >
                     <p className="text-xs text-red-600 font-modern">{error}</p>
                   </div>
                 )}

@@ -84,7 +84,7 @@ export function BiophiliaTest({ onSelect, className = '', frameless = false, ste
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-1.5">
         <div className="flex items-center gap-2.5 flex-1">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0 shadow-md">
-            <Leaf className="text-white" size={14} />
+            <Leaf className="text-white" size={14} aria-hidden="true" />
           </div>
           <div className="flex-1">
             <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-gold font-bold leading-none mb-0.5">
@@ -220,7 +220,7 @@ export function BiophiliaTest({ onSelect, className = '', frameless = false, ste
     : `p-6 lg:p-8 h-full flex flex-col justify-center ${className}`;
 
   return (
-    <ContentWrapper className={wrapperClass}>
+    <ContentWrapper className={`${wrapperClass} keep-colors`}>
       {content}
     </ContentWrapper>
   );
@@ -275,8 +275,8 @@ export function BiophiliaResult({ score, className = '' }: BiophiliaResultProps)
 
   return (
     <GlassCard className={`p-4 ${className}`}>
-      <div className="flex items-center gap-4">
-        <div className="text-5xl">{getBiophiliaEmoji(score)}</div>
+        <div className="flex items-center gap-4">
+          <div className="text-5xl" aria-hidden="true">{getBiophiliaEmoji(score)}</div>
         <div className="flex-1">
           <h4 className="font-nasalization text-lg text-gray-800 mb-1">
             {getBiophiliaLevelLabel(score, language)}{' '}

@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { useSpring, animated, config } from '@react-spring/web';
 import { useDrag } from 'react-use-gesture';
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 interface TinderCardProps {
   image: string;
   title?: string;
@@ -20,6 +22,7 @@ export const TinderCard: React.FC<TinderCardProps> = ({
   onSwipe,
   isActive
 }) => {
+  const { language } = useLanguage();
   const startTime = React.useRef<number>(Date.now());
 
   const [{ x, y, rotate, scale }, api] = useSpring(() => ({
@@ -54,6 +57,21 @@ export const TinderCard: React.FC<TinderCardProps> = ({
     }
   }, [isActive]);
 
+  // Keyboard navigation for accessibility
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isActive) return;
+    
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const reactionTime = Date.now() - startTime.current;
+      onSwipe('left', reactionTime);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      const reactionTime = Date.now() - startTime.current;
+      onSwipe('right', reactionTime);
+    }
+  };
+
   return (
     <animated.div
       {...bind()}
@@ -65,6 +83,10 @@ export const TinderCard: React.FC<TinderCardProps> = ({
         touchAction: 'none'
       }}
       className="absolute inset-4 cursor-grab active:cursor-grabbing"
+      role="button"
+      tabIndex={isActive ? 0 : -1}
+      aria-label={language === 'pl' ? `Karta wnętrza: ${title || 'Wnętrze'}. Użyj strzałek w lewo lub prawo aby przesunąć kartę.` : `Interior card: ${title || 'Interior'}. Use left or right arrow keys to swipe.`}
+      onKeyDown={handleKeyDown}
     >
       <div className="lg:glass-panel h-full rounded-xl overflow-hidden select-none">
         <div className="relative h-full w-full">
@@ -93,6 +115,7 @@ export const TinderCard: React.FC<TinderCardProps> = ({
                     <span
                       key={index}
                       className="bg-gold-400/80 text-gold-900 px-2 py-1 rounded-md text-xs font-modern"
+                      aria-label={`Tag: ${tag}`}
                     >
                       {tag}
                     </span>
@@ -103,10 +126,10 @@ export const TinderCard: React.FC<TinderCardProps> = ({
           )}
 
           {/* Swipe hints */}
-          <div className="absolute top-1/2 left-4 -translate-y-1/2 text-red-400 opacity-30 text-6xl">
+          <div className="absolute top-1/2 left-4 -translate-y-1/2 text-red-400 opacity-30 text-6xl" aria-hidden="true">
             ←
           </div>
-          <div className="absolute top-1/2 right-4 -translate-y-1/2 text-green-400 opacity-30 text-6xl">
+          <div className="absolute top-1/2 right-4 -translate-y-1/2 text-green-400 opacity-30 text-6xl" aria-hidden="true">
             →
           </div>
         </div>

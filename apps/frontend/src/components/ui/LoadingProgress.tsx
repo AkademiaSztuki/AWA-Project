@@ -107,7 +107,11 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
           </motion.h3>
 
           {/* Message */}
-          <p className="text-center text-gray-700 font-modern text-lg">
+          <p 
+            className="text-center text-gray-700 font-modern text-lg"
+            aria-live="polite"
+            aria-atomic="true"
+          >
             {message}
           </p>
 
@@ -137,7 +141,7 @@ export const LoadingProgress: React.FC<LoadingProgressProps> = ({
 
           {/* Progress percentage */}
           <div className="flex justify-between items-center text-sm text-gray-600">
-          <span className="font-modern">{Math.round(progress)}%</span>
+          <span className="font-modern" aria-live="polite" aria-atomic="true">{Math.round(progress)}%</span>
           {estimatedTimeRemaining !== undefined && estimatedTimeRemaining > 0 && (
             <span className="font-modern">
               ~{estimatedTimeRemaining}s pozostało

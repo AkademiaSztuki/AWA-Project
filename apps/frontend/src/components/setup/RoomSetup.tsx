@@ -421,10 +421,10 @@ export function RoomSetup({ householdId }: { householdId: string }) {
           {/* Progress */}
           <div className="mb-8 h-12">
             <div className="flex items-center justify-between text-sm text-silver-dark mb-2 font-modern h-6">
-              <span>
+              <span aria-live="polite" aria-atomic="true">
                 {language === 'pl' ? 'Krok' : 'Step'} {currentStepIndex + 1} / {steps.length}
               </span>
-              <span>{Math.round(progress)}%</span>
+              <span aria-live="polite" aria-atomic="true">{Math.round(progress)}%</span>
             </div>
             <div className="glass-panel rounded-full h-3 overflow-hidden">
               <motion.div 
@@ -494,9 +494,9 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                 exit={{ opacity: 0, x: -20 }}
               >
                 <GlassCard variant="flatOnMobile" className="p-6 lg:p-8">
-                  <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4 text-center">
+                  <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4 text-center">
                     {language === 'pl' ? 'Stan Obecny' : 'Current State'}
-                  </h2>
+                  </h1>
                   <p className="text-graphite font-modern mb-6 text-center">
                     {language === 'pl'
                       ? 'Gdzie jest to pomieszczenie teraz?'
@@ -565,9 +565,9 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                 exit={{ opacity: 0, x: -20 }}
               >
                 <GlassCard variant="flatOnMobile" className="p-6 lg:p-8">
-                  <h2 className="text-2xl lg:text-3xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-4 text-center">
+                  <h1 className="text-2xl lg:text-3xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-4 text-center">
                     {language === 'pl' ? 'Cel: Gdzie Ma Być?' : 'Goal: Where Should It Be?'}
-                  </h2>
+                  </h1>
                   <p className="text-graphite font-modern mb-6 text-center">
                     {language === 'pl'
                       ? 'Gdzie POWINNO być to pomieszczenie idealnie?'
@@ -658,14 +658,14 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[400px] sm:min-h-[500px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard className="p-6 lg:p-8 min-h-[400px] sm:min-h-[500px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <Target size={24} className="text-white" />
           </div>
-          <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
+          <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
             {language === 'pl' ? 'Kto Używa?' : 'Who Uses It?'}
-        </h2>
+        </h1>
           </div>
 
         <p className="text-graphite font-modern mb-6">
@@ -1137,14 +1137,14 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <Camera size={24} className="text-white" />
           </div>
-          <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
+          <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
             {language === 'pl' ? 'Pokaż Nam Pomieszczenie' : 'Show Us the Space'}
-          </h2>
+          </h1>
         </div>
 
         <p className="text-graphite font-modern mb-6">
@@ -1255,7 +1255,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         <div className="md:glass-panel rounded-2xl p-8 border-2 border-dashed border-gold/30 hover:border-gold/50 transition-colors mb-6">
           <label className="cursor-pointer flex flex-col items-center">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center mb-4">
-              <Camera size={32} className="text-white" />
+              <Camera size={32} className="text-white" aria-hidden="true" />
             </div>
             <p className="text-graphite font-semibold mb-2">
                   {language === 'pl' ? 'Kliknij aby dodać zdjęcie' : 'Click to add photo'}
@@ -1265,10 +1265,11 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
             </p>
             <input
               type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/tiff,image/heic,image/heif"
+              accept="image/jpeg,image/jpg,image/png,image/tiff,image/heic,image/heif"
               onChange={handleFileUpload}
               className="hidden"
-                  disabled={isAnalyzing}
+              disabled={isAnalyzing}
+              aria-label={language === 'pl' ? 'Wybierz zdjęcie wnętrza' : 'Choose interior photo'}
             />
           </label>
         </div>
@@ -1509,15 +1510,15 @@ function PreferenceSourceStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <Target size={24} className="text-white" />
           </div>
           <div>
-            <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
+            <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
               {language === 'pl' ? 'Jak mamy poznać Twój styl?' : 'How should we learn this room?'}
-            </h2>
+            </h1>
             <p className="text-sm text-silver-dark font-modern">
               {language === 'pl'
                 ? 'Wybierz szybkie użycie profilu lub przejdź do krótkich pytań dla tego pokoju.'
@@ -1722,11 +1723,11 @@ function PreferenceQuestionsStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[60vh] max-h-[90vh] h-auto overflow-auto scrollbar-hide flex flex-col">
+      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[60vh] max-h-[min(90vh,900px)] h-auto overflow-auto scrollbar-hide flex flex-col">
         <div className="mb-6">
-          <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
+          <h1 className="text-xl md:text-2xl font-nasalization text-graphite">
             {language === 'pl' ? 'Testy Sensoryczne' : 'Sensory Suite'}
-          </h2>
+          </h1>
           <p className="text-graphite font-modern text-sm">
             {language === 'pl'
               ? 'Paleta, metafora natury, muzyka, tekstury, światło i biophilia w jednym spójnym oknie.'
@@ -1964,14 +1965,14 @@ function PainPointsStep({ selected, onUpdate, onNext, onBack }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[400px] sm:min-h-[500px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard className="p-6 lg:p-8 min-h-[400px] sm:min-h-[500px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <AlertCircle size={24} className="text-white" />
           </div>
-          <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
+          <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
             {language === 'pl' ? 'Co Cię Irytuje?' : 'What Bothers You?'}
-          </h2>
+          </h1>
         </div>
 
         <p className="text-graphite font-modern mb-6">
@@ -2095,15 +2096,15 @@ function ActivitiesStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
             <Activity size={24} className="text-white" />
           </div>
           <div>
-            <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
+            <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
               {language === 'pl' ? 'Co tu robisz?' : 'What happens here?'}
-            </h2>
+            </h1>
             <p className="text-sm text-silver-dark font-modern">
               {language === 'pl'
                 ? 'Zaznacz rytuały w tym pokoju i powiedz, jak wspiera je obecna przestrzeń.'
@@ -2244,14 +2245,14 @@ function RoomSummaryStep({ data, onComplete, onBack, isSaving }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard variant="flatOnMobile" className="p-8 text-center min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+      <GlassCard variant="flatOnMobile" className="p-8 text-center min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
         <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
           <Target size={40} className="text-white" />
         </div>
 
-        <h2 className="text-3xl lg:text-4xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-4">
+        <h1 className="text-3xl lg:text-4xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-4">
           {language === 'pl' ? 'Pomieszczenie Gotowe!' : 'Space Ready!'}
-        </h2>
+        </h1>
 
         <p className="text-graphite font-modern mb-8 max-w-xl mx-auto">
           {language === 'pl'

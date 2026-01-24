@@ -45,8 +45,11 @@ const SATISFACTION_QUESTIONS = [
   }
 ];
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export function Survey1Screen() {
   const router = useRouter();
+  const { language } = useLanguage();
   const { updateSessionData } = useSessionData();
   const [answers, setAnswers] = useState<Record<string, number>>({});
 
@@ -77,17 +80,17 @@ export function Survey1Screen() {
   const allAnswered = SATISFACTION_QUESTIONS.every(q => answers[q.key] !== undefined);
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col lg:flex-row">
       
 
       <AwaContainer currentStep="survey_satisfaction" showDialogue={false} />
 
-      <div className="flex-1 ml-[400px] flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 lg:ml-0">
         <div className="w-full max-w-3xl mx-auto">
           <GlassCard className="w-full">
-            <h2 className="text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-800 mb-4 lg:mb-6 text-center">
+            <h1 className="text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-800 mb-4 lg:mb-6 text-center">
               Twoje Doświadczenia
-            </h2>
+            </h1>
 
             <p className="text-sm lg:text-base xl:text-lg text-center text-gray-600 mb-6 lg:mb-8">
               Oceń swoje doświadczenia z aplikacją na skali 1-7
@@ -97,7 +100,7 @@ export function Survey1Screen() {
               {SATISFACTION_QUESTIONS.map((question, index) => (
                 <div key={question.key} className="border-b border-gray-200 pb-6 last:border-b-0">
                   <div className="mb-4">
-                    <span className="inline-block px-3 py-1 bg-gold/20 text-gold text-xs rounded-full mb-2">
+                    <span className="inline-block px-3 py-1 bg-gold/20 text-gold text-xs rounded-full mb-2" aria-hidden="true">
                       {question.category}
                     </span>
                     <p className="text-lg text-gray-800">{question.question}</p>
@@ -117,7 +120,7 @@ export function Survey1Screen() {
                     className="w-full mb-2"
                   />
 
-                  <div className="text-center">
+                  <div className="text-center" aria-live="polite" aria-atomic="true">
                     <span className="text-gold font-semibold">
                       Ocena: {answers[question.key] || 4}/7
                     </span>

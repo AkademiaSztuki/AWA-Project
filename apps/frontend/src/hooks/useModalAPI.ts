@@ -89,6 +89,8 @@ interface RoomAnalysisResponse {
   room_description: string;
   suggestions: string[];
   comment: string; // Gemma 3 4B-PT generated comment
+  comment_pl?: string;
+  comment_en?: string;
   human_comment?: string; // Human Polish comment from IDA
 }
 
@@ -109,6 +111,8 @@ interface RoomAnalysisResult {
   room_description: string;
   suggestions: string[];
   comment: string;
+  comment_pl?: string;
+  comment_en?: string;
   human_comment: string;
 }
 

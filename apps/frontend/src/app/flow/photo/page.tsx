@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -10,15 +10,20 @@ import GlassSurface from 'src/components/ui/GlassSurface';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
+import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { EXAMPLE_IMAGES_METADATA, getExampleImageMetadata, isExampleImage } from '@/lib/exampleImagesMetadata';
 import { fileToNormalizedBase64 } from '@/lib/utils';
+import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // PhotoUploadPage
 export default function PhotoUploadPage() {
   const router = useRouter();
   const { sessionData, updateSession } = useSession();
   const { analyzeRoom, generateLLMComment } = useModalAPI();
+  const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
+  const { language } = useLanguage();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -26,12 +31,15 @@ export default function PhotoUploadPage() {
   const [detectedRoomType, setDetectedRoomType] = useState<string | null>(null);
   const [showRoomTypeSelection, setShowRoomTypeSelection] = useState(false);
   const [roomAnalysis, setRoomAnalysis] = useState<any>(null);
-  const [llmComment, setLlmComment] = useState<{ comment: string; suggestions: string[]; } | null>(null);
-  const [humanComment, setHumanComment] = useState<string | null>(null);
+  const [llmComment, setLlmComment] = useState<{ comment?: string; commentPl?: string; commentEn?: string; suggestions: string[]; } | null>(null);
+  const [humanComment, setHumanComment] = useState<{ pl?: string; en?: string } | null>(null);
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
   const [pageViewId, setPageViewId] = useState<string | null>(null);
   const [pendingAnalysisFile, setPendingAnalysisFile] = useState<File | null>(null);
   const [pendingAnalysisLabel, setPendingAnalysisLabel] = useState<string | null>(null);
+  const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const lastSpokenTextRef = useRef<string | null>(null);
+  const ttsAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -84,7 +92,7 @@ export default function PhotoUploadPage() {
     try {
       const result = await generateLLMComment(roomType, roomDescription, 'room_analysis');
       console.log('LLM comment result:', result);
-      setHumanComment(result.comment);
+      setHumanComment({ pl: result.comment });
     } catch (error) {
       console.error('Failed to generate LLM comment:', error);
     } finally {
@@ -121,11 +129,14 @@ export default function PhotoUploadPage() {
       setDetectedRoomType(analysis.detected_room_type);
       setRoomType(analysis.detected_room_type);
       
-      // Gemini 2.0 Flash generates Polish comments
-      if (analysis.comment) {
-        console.log('Setting LLM comment from Gemini:', analysis.comment);
+      const commentPl = analysis.comment_pl || analysis.comment;
+      const commentEn = analysis.comment_en;
+      if (commentPl || commentEn) {
+        console.log('Setting LLM comment from Gemini:', { commentPl, commentEn });
         setLlmComment({
-          comment: analysis.comment,
+          comment: commentPl || commentEn || analysis.comment,
+          commentPl,
+          commentEn,
           suggestions: analysis.suggestions || []
         });
       }
@@ -155,6 +166,74 @@ export default function PhotoUploadPage() {
       setPendingAnalysisLabel(null);
     }
   }, [analyzeRoom, requestHumanComment]);
+
+  const selectedComment = language === 'en'
+    ? llmComment?.commentEn || llmComment?.comment
+    : llmComment?.commentPl || llmComment?.comment;
+
+  const selectedHumanComment = language === 'en'
+    ? humanComment?.en
+    : humanComment?.pl;
+
+  useEffect(() => {
+    if (!selectedComment || !voiceEnabled) {
+      setTtsAudioUrl(null);
+      return;
+    }
+
+    const text = selectedComment.trim();
+    if (!text || lastSpokenTextRef.current === text) {
+      return;
+    }
+
+    lastSpokenTextRef.current = text;
+    setTtsAudioUrl(null);
+    stopAllDialogueAudio();
+
+    if (ttsAbortRef.current) {
+      ttsAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    ttsAbortRef.current = controller;
+
+    (async () => {
+      try {
+        const response = await fetch('/api/elevenlabs/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          console.error('ElevenLabs TTS error:', response.status, errorText);
+          return;
+        }
+
+        const audioBlob = await response.blob();
+        if (controller.signal.aborted) return;
+        const url = URL.createObjectURL(audioBlob);
+        setTtsAudioUrl(url);
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          console.error('Failed to fetch ElevenLabs audio:', error);
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [selectedComment, voiceEnabled]);
+
+  useEffect(() => {
+    return () => {
+      if (ttsAudioUrl) {
+        URL.revokeObjectURL(ttsAudioUrl);
+      }
+    };
+  }, [ttsAudioUrl]);
 
   // Corrected paths for example images
   const exampleImages = [
@@ -227,9 +306,11 @@ export default function PhotoUploadPage() {
         setRoomType(metadata.roomType);
         setLlmComment({
           comment: metadata.comment,
+          commentPl: metadata.comment,
+          commentEn: metadata.commentEn,
           suggestions: []
         });
-        setHumanComment(metadata.humanComment);
+        setHumanComment({ pl: metadata.humanComment, en: metadata.humanCommentEn });
         setPendingAnalysisFile(null);
         setPendingAnalysisLabel(null);
       } else {
@@ -295,7 +376,7 @@ export default function PhotoUploadPage() {
     <div className="min-h-screen flex flex-col w-full">
       {/* Formularz upload */}
       <div className="flex-1 flex items-center justify-center p-4">
-        <GlassCard variant="flatOnMobile" className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
+        <GlassCard variant="flatOnMobile" className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl max-h-[min(90vh,900px)] overflow-auto scrollbar-hide">
           <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Dodaj zdjecie przestrzeni</h1>
           <p className="text-base md:text-lg text-gray-700 font-modern mb-3 leading-relaxed">
             Wgraj zdjecie swojego pokoju lub wybierz przykladowe, aby IDA mogla lepiej zrozumiec Twoj kontekst projektowy.
@@ -365,7 +446,7 @@ export default function PhotoUploadPage() {
           )}
 
 
-          {llmComment && !isGeneratingComment && (
+          {selectedComment && !isGeneratingComment && (
             <div className="mb-6 p-6 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl">
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-full flex items-center justify-center flex-shrink-0">
@@ -373,20 +454,20 @@ export default function PhotoUploadPage() {
                 </div>
                 <div className="flex-1">
                   <p className="text-white/95 font-exo2 font-bold text-lg mb-3">
-                    Komentarz IDA (Gemma 3):
+                    {language === 'en' ? 'IDA comment (Gemma 3):' : 'Komentarz IDA (Gemma 3):'}
                   </p>
                   <p className="text-sm text-white/80 font-modern leading-relaxed bg-white/5 p-4 rounded-xl border border-white/10 mb-4">
-                    {llmComment.comment}
+                    {selectedComment}
                   </p>
                   
                   {/* Human Polish comment from IDA */}
-                  {humanComment && (
+                  {selectedHumanComment && (
                     <>
                       <p className="text-white/95 font-exo2 font-bold text-lg mb-3">
-                        Komentarz IDA po polsku:
+                        {language === 'en' ? 'IDA comment (English):' : 'Komentarz IDA po polsku:'}
                       </p>
                       <p className="text-sm text-white/90 font-modern leading-relaxed bg-gradient-to-r from-blue-500/10 to-cyan-500/10 p-4 rounded-xl border border-blue-400/20 mb-4">
-                        {humanComment}
+                        {selectedHumanComment}
                       </p>
                     </>
                   )}
@@ -500,6 +581,13 @@ export default function PhotoUploadPage() {
           autoHide={true}
         />
       </div>
+      {voiceEnabled && ttsAudioUrl && (
+        <DialogueAudioPlayer
+          src={ttsAudioUrl}
+          volume={voiceVolume}
+          autoPlay={true}
+        />
+      )}
     </div>
   );
 }

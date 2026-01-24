@@ -15,7 +15,8 @@
     "export:csv": "node scripts/export-to-csv.js",
     "export:single": "node scripts/export-single-csv.js",
     "storage:create-bucket": "node scripts/create-storage-bucket.js",
-    "storage:create-bucket-api": "node scripts/create-bucket-via-api.js"
+    "storage:create-bucket-api": "node scripts/create-bucket-via-api.js",
+    "generate:desktop-bg": "node scripts/generate-desktop-background.js"
   },
   "dependencies": {
     "@react-spring/web": "^9.7.5",
@@ -44,6 +45,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "sharp": "^0.33.0",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "dotenv": "^17.2.3",

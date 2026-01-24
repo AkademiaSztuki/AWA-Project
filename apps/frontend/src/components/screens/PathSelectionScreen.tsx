@@ -66,7 +66,7 @@ export default function PathSelectionScreen() {
       fastCompletedMessage: 'Chcesz głębsze doświadczenie? Wypróbuj pełną ścieżkę, która bierze pod uwagę Twoje preferencje, styl życia i potrzeby, aby stworzyć jeszcze bardziej spersonalizowane wnętrze.',
       fastTrack: 'Szybka Ścieżka',
       fastTrackEn: 'Fast Track',
-      fastDesc: 'Wypróbuj IDA szybko - prześlij zdjęcie, przesuń kilka inspiracji i generuj!',
+      fastDesc: 'Wypróbuj IDA szybko - prześlij zdjęcie, wybierz styl i generuj!',
       minutes35: '~3-5 minut',
       minQuestions: 'Minimalna ilość pytań',
       gen10: '10 generacji',
@@ -102,7 +102,7 @@ export default function PathSelectionScreen() {
       fastCompletedMessage: 'Want a deeper experience? Try the full path, which uses your personality, preferences, and lifestyle to create an even more personalized interior.',
       fastTrack: 'Fast Track',
       fastTrackEn: 'Fast Track',
-      fastDesc: 'Try IDA quickly - upload photo, swipe a few inspirations and generate!',
+      fastDesc: 'Try IDA quickly - upload photo, choose style and generate!',
       minutes35: '~3-5 minutes',
       minQuestions: 'Minimal questions',
       gen10: '10 generations',
@@ -375,9 +375,9 @@ export default function PathSelectionScreen() {
           >
             {/* Header */}
             <div className="text-center mb-4 sm:mb-6 md:mb-8">
-              <h2 className="text-xl sm:text-2xl lg:text-3xl font-nasalization text-graphite mb-2 sm:mb-3">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-nasalization text-graphite mb-2 sm:mb-3">
                 {texts.title}
-              </h2>
+              </h1>
               <p className="text-sm sm:text-base lg:text-lg text-silver-dark font-modern">
                 {texts.subtitle} <span className="font-semibold text-gold">{texts.ida}</span>{texts.subtext}
               </p>
@@ -398,13 +398,13 @@ export default function PathSelectionScreen() {
                 <GlassCard variant="interactive" className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-xl sm:rounded-2xl">
                   <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                     <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center flex-shrink-0">
-                      <Zap size={20} className="sm:w-7 sm:h-7 text-graphite" />
+                      <Zap size={20} className="sm:w-7 sm:h-7 text-graphite" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
+                      <h2 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                         {texts.fastTrack}
-                      </h3>
-                      <p className="text-xs text-silver-dark font-modern">3-5 min • 10 {language === 'pl' ? 'generacji' : 'generations'}</p>
+                      </h2>
+                      <p className="text-xs text-silver-dark font-modern">3-5 min</p>
                     </div>
                   </div>
                   <p className="text-xs sm:text-sm text-graphite font-modern">
@@ -431,13 +431,13 @@ export default function PathSelectionScreen() {
                   </div>
                   <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 pr-16 sm:pr-20">
                     <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                      <Heart size={20} className="sm:w-7 sm:h-7 text-white" fill="currentColor" />
+                      <Heart size={20} className="sm:w-7 sm:h-7 text-white" fill="currentColor" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
+                      <h2 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                         {texts.fullExp}
-                      </h3>
-                      <p className="text-xs text-silver-dark font-modern">20-30 min • 50 {language === 'pl' ? 'generacji' : 'generations'}</p>
+                      </h2>
+                      <p className="text-xs text-silver-dark font-modern">20-30 min</p>
                     </div>
                   </div>
                   <p className="text-xs sm:text-sm text-graphite font-modern">

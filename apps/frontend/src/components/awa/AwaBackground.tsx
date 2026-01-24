@@ -59,7 +59,7 @@ const AwaBackground: React.FC = () => {
 
   return (
     <div 
-      className="fixed z-[2] pointer-events-none"
+      className="fixed z-[3] pointer-events-none"
       style={{
         /* Pokrywa cały ekran włącznie z safe-area (notch) na iOS */
         top: 'calc(-1 * env(safe-area-inset-top, 0))',
@@ -86,17 +86,8 @@ const AwaBackground: React.FC = () => {
             onLoaded={() => setIsLoading(false)} 
             position={modelPosition}
           />
-          {/* Particles wyłączone – wracamy do samego teksturowanego modelu */}
           <OrbitControls enablePan={false} enableZoom={false} enableRotate={false} />
         </Canvas>
-        {/* Loading overlay - wyłączone */}
-        {/* {isLoading && (
-          <div className="absolute inset-0 bg-pearl-100/40 backdrop-blur-sm flex items-center justify-center rounded-xl z-20">
-                    <div className="text-gold-500 font-nasalization text-lg animate-pulse">
-            Ładowanie IDA...
-          </div>
-          </div>
-        )} */}
       </div>
   );
 };

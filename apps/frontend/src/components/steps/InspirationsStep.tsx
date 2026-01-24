@@ -69,7 +69,7 @@ interface InspirationsStepProps {
 
 export function InspirationsStep({ data, onUpdate, onNext, onBack }: InspirationsStepProps) {
   const { language } = useLanguage();
-  const { updateSessionData } = useSessionData();
+  const { updateSessionData, sessionData } = useSessionData();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [items, setItems] = useState<InspirationItem[]>([]);
@@ -154,6 +154,8 @@ export function InspirationsStep({ data, onUpdate, onNext, onBack }: Inspiration
         const result = await analyzeInspirationsWithGamma([item.file]);
         if (result.length > 0) {
           const analysis = result[0];
+          
+          // Update local state
           setItems(prev => prev.map(i => 
             i.id === item.id ? { 
               ...i, 
@@ -162,6 +164,44 @@ export function InspirationsStep({ data, onUpdate, onNext, onBack }: Inspiration
               isTagging: false
             } : i
           ));
+          
+          // Automatically save tags to Supabase if image already exists there
+          if (item.url || item.fileId) {
+            try {
+              const userHash = (sessionData as any)?.userHash;
+              
+              if (userHash) {
+                const { fetchParticipantImages, updateParticipantImageMetadata, saveParticipantImages } = await import('@/lib/remote-spaces');
+                const existing = await fetchParticipantImages(userHash);
+                const existingInspiration = existing.find(img => 
+                  img.type === 'inspiration' && 
+                  (img.url === item.url || img.url === item.previewUrl)
+                );
+                
+                if (existingInspiration) {
+                  // Update existing image with tags
+                  await updateParticipantImageMetadata(userHash, existingInspiration.id, {
+                    tags: analysis.tags,
+                    description: analysis.description ?? null
+                  });
+                  console.log('[InspirationsStep] Tags saved to Supabase for existing image:', existingInspiration.id);
+                } else if (item.url && !item.url.startsWith('blob:')) {
+                  // Save new image with tags if we have a URL
+                  await saveParticipantImages(userHash, [{
+                    url: item.url,
+                    type: 'inspiration',
+                    tags: analysis.tags,
+                    description: analysis.description,
+                    is_favorite: false
+                  }]);
+                  console.log('[InspirationsStep] New image with tags saved to Supabase');
+                }
+              }
+            } catch (supabaseError) {
+              console.warn('[InspirationsStep] Failed to save tags to Supabase:', supabaseError);
+              // Don't fail the whole tagging process if Supabase save fails
+            }
+          }
         }
       } catch (error) {
         console.error('Error analyzing inspiration:', error);

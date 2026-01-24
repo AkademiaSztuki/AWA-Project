@@ -158,6 +158,28 @@
   transition: backdrop-filter 0.3s ease;
 }
 
+/* Global focus indicators for accessibility */
+*:focus-visible {
+  outline: 2px solid #FFD700;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Ensure buttons have visible focus indicators */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #FFD700;
+  outline-offset: 2px;
+}
+
+/* Remove default outline for mouse users but keep for keyboard */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
 /* Custom slider styles */
 .slider {
   -webkit-appearance: none;
@@ -196,6 +218,43 @@
 
 .slider::-moz-range-thumb:hover {
   transform: scale(1.1);
+}
+
+/* Glass slider input - hide all default browser styles */
+.glass-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.glass-slider-input::-moz-range-thumb {
+  -moz-appearance: none !important;
+  appearance: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.glass-slider-input::-webkit-slider-runnable-track {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.glass-slider-input::-moz-range-track {
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background: transparent !important;
+  border: none !important;
 }
 
 /* Animacje dla panelu kontroli muzyki */
@@ -275,7 +334,7 @@ html, body, #__next, #root {
   margin: 0;
   padding: 0;
   width: 100%;
-  overflow-x: hidden;
+  /* Removed overflow-x: hidden to allow horizontal scrolling at 200% zoom (WCAG 1.4.4) */
   position: relative;
 }
 
@@ -283,6 +342,23 @@ body {
   @apply min-h-screen overflow-y-auto font-nasalization;
   /* Usunięto padding z body - tło musi pokrywać cały ekran włącznie z safe-area */
   /* Padding będzie na main/content zamiast na body */
+}
+
+/* Neutralize color adjustment filters on content elements to keep original colors */
+.keep-colors,
+img:not(.bg-image):not(.keep-colors img),
+video:not(.keep-colors video) {
+  /* Inverse order of global filters to perfectly neutralize them */
+  filter: contrast(var(--color-adjust-contrast-inv, 1))
+          hue-rotate(calc(var(--color-adjust-hue-inv, 0) * 1deg))
+          saturate(var(--color-adjust-saturation-inv, 1)) !important;
+}
+
+/* Background elements and UI should follow the theme (no neutralization) */
+.bg-image,
+canvas,
+svg {
+  filter: none !important;
 }
 
 .simplebar-scrollbar:before {
@@ -301,6 +377,48 @@ body {
 
 .simplebar-content {
   margin-right: 0 !important;
+}
+
+/* Screen reader only class - hides visually but accessible to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Warning class for low accessibility (low saturation or contrast) */
+.low-accessibility-warning {
+  /* Visual indicator could be added here if needed */
+  /* Currently handled by warning message in ColorAdjustmentPanel */
+}
+
+/* Skip link for accessibility - hidden by default, visible on focus */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--tw-gradient-stops);
+  background: linear-gradient(135deg, #FFD700, #FFE55C);
+  color: #374151;
+  padding: 8px 16px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  z-index: 10000;
+  border-radius: 0 0 8px 0;
+  transition: top 0.2s ease;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 2px solid #FFD700;
+  outline-offset: 2px;
 }
 
 /* Styl natywnego scrollbara tylko w GlassCard */

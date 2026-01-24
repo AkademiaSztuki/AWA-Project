@@ -20,7 +20,7 @@ export function UserAuthButton() {
         disabled
         className="h-10 px-3 sm:px-4 rounded-full glass-panel transition-all text-xs sm:text-sm font-modern text-graphite/60 flex items-center gap-1 sm:gap-2 opacity-70 touch-target whitespace-nowrap"
       >
-        <User size={14} className="sm:w-4 sm:h-4" />
+        <User size={14} className="sm:w-4 sm:h-4" aria-hidden="true" />
         <span className="hidden sm:inline">{language === 'pl' ? 'Ładowanie…' : 'Loading…'}</span>
         <span className="sm:hidden">...</span>
       </button>
@@ -35,9 +35,9 @@ export function UserAuthButton() {
           onClick={() => setShowLoginModal(true)}
           className="h-10 px-3 sm:px-4 rounded-full glass-panel transition-all text-xs sm:text-sm font-modern text-graphite flex items-center gap-1 sm:gap-2 hover:bg-white/10 active:bg-white/20 touch-target whitespace-nowrap relative z-[110] pointer-events-auto"
         >
-          <User size={14} className="sm:w-4 sm:h-4" />
-          <span className="hidden md:inline">{language === 'pl' ? 'Zaloguj' : 'Sign In'}</span>
-          <span className="hidden sm:inline md:hidden">{language === 'pl' ? 'Login' : 'Login'}</span>
+          <User size={14} className="sm:w-4 sm:h-4" aria-hidden="true" />
+          <span className="hidden lg:inline">{language === 'pl' ? 'Zaloguj' : 'Sign In'}</span>
+          <span className="hidden sm:inline lg:hidden">{language === 'pl' ? 'Login' : 'Login'}</span>
         </button>
 
         <LoginModal 
@@ -60,9 +60,9 @@ export function UserAuthButton() {
       }}
       className="h-10 px-3 sm:px-4 rounded-full glass-panel transition-all text-xs sm:text-sm font-modern text-graphite flex items-center gap-1 sm:gap-2 hover:bg-white/10 active:bg-white/20 touch-target whitespace-nowrap relative z-[110] pointer-events-auto"
     >
-      <LogOut size={14} className="sm:w-4 sm:h-4" />
-      <span className="hidden md:inline">{language === 'pl' ? 'Wyloguj' : 'Sign Out'}</span>
-      <span className="hidden sm:inline md:hidden">{language === 'pl' ? 'Out' : 'Out'}</span>
+      <LogOut size={14} className="sm:w-4 sm:h-4" aria-hidden="true" />
+      <span className="hidden lg:inline">{language === 'pl' ? 'Wyloguj' : 'Sign Out'}</span>
+      <span className="hidden sm:inline lg:hidden">{language === 'pl' ? 'Out' : 'Out'}</span>
     </button>
   );
 }

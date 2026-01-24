@@ -39,6 +39,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageSquare,
+  X,
 } from 'lucide-react';
 import Image from 'next/image';
 import { buildOptimizedFluxPrompt } from '@/lib/dna';
@@ -157,6 +158,7 @@ export default function GeneratePage() {
   const [progressOffsets, setProgressOffsets] = useState<Record<string, number>>({}); // Per-source stagger for loading anims
   const [lastFailedModification, setLastFailedModification] = useState<ModificationOption | null>(null); // Track last failed modification for retry
   const [customModificationText, setCustomModificationText] = useState(''); // Custom modification text input
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false); // Lightbox zoom for step 2 image
   
   const [generationHistory, setGenerationHistory] = useState<Array<{
     id: string;
@@ -422,6 +424,12 @@ export default function GeneratePage() {
       return;
     }
 
+    // Never auto-generate when we have persisted images (e.g. after refresh before restore runs)
+    const savedCount = ((sessionData as any)?.generatedImages ?? []).length;
+    if (savedCount > 0) {
+      return;
+    }
+
     // Only trigger generation if:
     // 1. We haven't restored state from sessionData
     // 2. We haven't attempted generation
@@ -448,7 +456,7 @@ export default function GeneratePage() {
       setHasAttemptedGeneration(true);
       handleInitialGeneration();
     }
-  }, [isApiReady, generationCount, hasAttemptedGeneration, isSessionInitialized, generatedImages.length, matrixImages.length, blindSelectionMade]);
+  }, [isApiReady, generationCount, hasAttemptedGeneration, isSessionInitialized, generatedImages.length, matrixImages.length, blindSelectionMade, sessionData]);
 
   // Generate IDA comment when image is selected
   useEffect(() => {
@@ -456,6 +464,16 @@ export default function GeneratePage() {
       generateIdaComment();
     }
   }, [selectedImage]);
+
+  // Lightbox: close on Escape
+  useEffect(() => {
+    if (!isLightboxOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsLightboxOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isLightboxOpen]);
 
   const buildInitialPrompt = () => buildOptimizedFluxPrompt(sessionData as any);
 
@@ -2253,14 +2271,31 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         generatedImages: [...currentGenerated, lightweight]
       } as any);
       
-      // Save modified image to spaces
+      // Save modified image to spaces (local) and participant_images (Supabase)
       const currentSpaces = (sessionData as any)?.spaces || [];
       let updatedSpaces = currentSpaces;
       const activeSpaceId = (sessionData as any)?.currentSpaceId;
       const activeSpaceName = (sessionData as any)?.roomName;
+      const spaceId = userHash
+        ? await getOrCreateSpaceId(userHash, {
+            spaceId: activeSpaceId,
+            name: activeSpaceName || 'Moja Przestrzeń'
+          })
+        : null;
+      if (spaceId) {
+        const imagesToSave = [{
+          url: newImage.url,
+          type: 'generated' as const,
+          is_favorite: newImage.isFavorite || false,
+          source: selectedImage?.source,
+          generation_id: jobId ?? undefined,
+          space_id: spaceId
+        }];
+        await saveParticipantImages(userHash, imagesToSave);
+      }
       updatedSpaces = addGeneratedImageToSpace(
         updatedSpaces,
-        activeSpaceId,
+        spaceId ?? activeSpaceId,
         newImage.url,
         activeSpaceName,
         undefined,
@@ -2306,7 +2341,14 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             usedOriginal: false
           },
         ],
-      });
+        selectedImage: {
+          id: newImage.id,
+          url: newImage.url,
+          source: selectedImage?.source,
+          provider: 'google' as const
+        },
+        blindSelectionMade: true
+      } as any);
 
       // Persist generation modification and user choice
       try {
@@ -2779,11 +2821,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               })()}
               {/* Header */}
               <div className="text-center">
-                <h2 className="text-2xl font-bold text-graphite mb-2">
+                <h1 className="text-2xl font-bold text-graphite mb-2">
                   {isGenerating
                     ? 'Generowanie wizji...'
                     : `Porównaj wizje (${matrixImages.length}/${synthesisResult?.generatedSources?.length || 6})`}
-                </h2>
+                </h1>
                 <p className="text-silver-dark text-sm">
                   {isGenerating 
                     ? 'Twoje wizje są generowane przez AI. Obrazy pojawią się poniżej gdy będą gotowe.'
@@ -2840,7 +2882,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       <div className="relative aspect-square w-full rounded-lg overflow-hidden group">
                         {slotIsLoading ? (
                           /* Loading Skeleton - Futuristic transparent glass style */
-                          <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10">
+                          <div 
+                            className="relative aspect-square w-full rounded-lg overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10"
+                            role="status"
+                            aria-live="polite"
+                            aria-busy="true"
+                            aria-label={sourceLabel ? `Generowanie ${sourceLabel}` : `Generowanie wizji ${index + 1}`}
+                          >
                             {/* Animated gradient shimmer */}
                             <motion.div 
                               className="absolute inset-0 bg-gradient-to-r from-transparent via-gold/20 to-transparent"
@@ -2924,10 +2972,17 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                   className="text-gold font-bold text-xl drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]"
                                   animate={{ opacity: [0.8, 1, 0.8] }}
                                   transition={{ duration: 1.5, repeat: Infinity }}
+                                  aria-live="polite"
+                                  aria-atomic="true"
                                 >
                                   {`${Math.max(2, progressValue)}%`}
                                 </motion.p>
-                                <p className="text-white/70 text-xs mt-1 font-medium">Generowanie...</p>
+                                <p 
+                                  className="text-white/70 text-xs mt-1 font-medium"
+                                  aria-live="polite"
+                                >
+                                  Generowanie...
+                                </p>
                               </div>
                             </div>
 
@@ -2937,7 +2992,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                 <div className="px-2.5 py-1.5 bg-white/15 backdrop-blur-md rounded-lg border border-white/15 text-[11px] leading-tight text-white/80 space-y-0.5 max-h-[120px] overflow-y-auto">
                                   <div className="flex justify-between gap-2">
                                     <span className="font-semibold text-white/90">Dane: {sourceLabel}</span>
-                                    <span className={`font-semibold ${statusColor}`}>{statusText}</span>
+                                    <span 
+                                      className={`font-semibold ${statusColor}`}
+                                      aria-live="polite"
+                                    >
+                                      {statusText}
+                                    </span>
                                   </div>
                                   {qualityInfo.confidence !== undefined && qualityInfo.confidence !== null && (
                                     <div className="flex justify-between gap-2">
@@ -2995,15 +3055,20 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             {selectedImage?.id === image.id && !isUpscaling && (
                               <div className="absolute top-2 right-2">
                                 <div className="w-6 h-6 bg-gold rounded-full flex items-center justify-center">
-                                  <CheckCircle2 size={16} className="text-white" />
+                                  <CheckCircle2 size={16} className="text-white" aria-hidden="true" />
                                 </div>
                               </div>
                             )}
                             
                             {/* Upscaling overlay */}
                             {isUpscaling && selectedImage?.id === image.id && (
-                              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
-                                <RefreshCw size={32} className="animate-spin text-gold" />
+                              <div 
+                                className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3"
+                                role="status"
+                                aria-live="polite"
+                                aria-busy="true"
+                              >
+                                <RefreshCw size={32} className="animate-spin text-gold" aria-hidden="true" />
                                 <div className="text-center">
                                   <p className="text-white font-semibold text-sm">Przetwarzanie...</p>
                                   <p className="text-gold/80 text-xs mt-1">Zwiększanie rozdzielczości</p>
@@ -3027,7 +3092,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 <GlassCard variant="flatOnMobile" className="p-4">
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-gold/10 rounded-lg">
-                      <Eye size={20} className="text-gold" />
+                      <Eye size={20} className="text-gold" aria-hidden="true" />
                     </div>
                     <div className="flex-1">
                       <h3 className="font-semibold text-graphite">
@@ -3073,12 +3138,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   >
                     {isUpscaling ? (
                       <>
-                        <RefreshCw size={20} className="animate-spin" />
+                        <RefreshCw size={20} className="animate-spin" aria-hidden="true" />
                         <span>{t({ pl: "Przetwarzanie wybranej wizji...", en: "Processing selected vision..." })}</span>
                       </>
                     ) : (
                       <>
-                        <CheckCircle2 size={20} />
+                        <CheckCircle2 size={20} aria-hidden="true" />
                         <span>{t({ pl: "Wybieram tę wizję", en: "I choose this vision" })}</span>
                       </>
                     )}
@@ -3090,7 +3155,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               {isUpscaling && selectedImage && (
                 <GlassCard variant="flatOnMobile" className="p-4">
                   <div className="flex items-center gap-3">
-                    <RefreshCw size={24} className="animate-spin text-gold" />
+                    <RefreshCw size={24} className="animate-spin text-gold" aria-hidden="true" />
                     <div>
                       <p className="font-semibold text-graphite">{t({ pl: "Przetwarzanie wybranej wizji...", en: "Processing selected vision..." })}</p>
                       <p className="text-sm text-silver-dark">{t({ pl: "Zwiększanie rozdzielczości do pełnej jakości", en: "Increasing resolution to full quality" })}</p>
@@ -3107,7 +3172,19 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               {/* Selected Image - Main Display */}
               <GlassCard variant="flatOnMobile" className="p-4">
                 <div className="space-y-4">
-                  <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => !isModifying && setIsLightboxOpen(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        if (!isModifying) setIsLightboxOpen(true);
+                      }
+                    }}
+                    className="relative aspect-[4/3] rounded-lg overflow-hidden cursor-zoom-in"
+                    title={t({ pl: "Kliknij, aby powiększyć", en: "Click to zoom" })}
+                  >
                     <Image 
                       src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url} 
                       alt={showOriginalRoomPhoto ? t({ pl: "Oryginalne zdjęcie pokoju", en: "Original room photo" }) : t({ pl: "Wybrane wnętrze", en: "Selected interior" })} 
@@ -3148,10 +3225,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                           : 'bg-white/10'
                                       }`}
                                     >
-                                      {isCompleted && <CheckCircle size={20} className="text-white" />}
-                                      {isActive && stage === 1 && <Wand2 size={20} className="text-white" />}
-                                      {isActive && stage === 2 && <Sparkles size={20} className="text-white" />}
-                                      {isActive && stage === 3 && <CheckCircle size={20} className="text-white" />}
+                                      {isCompleted && <CheckCircle size={20} className="text-white" aria-hidden="true" />}
+                                      {isActive && stage === 1 && <Wand2 size={20} className="text-white" aria-hidden="true" />}
+                                      {isActive && stage === 2 && <Sparkles size={20} className="text-white" aria-hidden="true" />}
+                                      {isActive && stage === 3 && <CheckCircle size={20} className="text-white" aria-hidden="true" />}
                                       {!isActive && !isCompleted && <div className="w-4 h-4 rounded-full bg-white/40" />}
                                     </motion.div>
                                     
@@ -3238,34 +3315,37 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         transition={{ delay: 0.3 }}
                         className="flex items-center gap-2 px-3 py-1.5 bg-gold/90 backdrop-blur-sm rounded-full"
                       >
-                        <CheckCircle2 size={16} className="text-white" />
+                        <CheckCircle2 size={16} className="text-white" aria-hidden="true" />
                         <span className="text-sm font-medium text-white">{t({ pl: "Twój wybór", en: "Your choice" })}</span>
                       </motion.div>
                     </div>
                     <button
-                      onClick={() => handleFavorite(selectedImage.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFavorite(selectedImage.id);
+                      }}
                       className={`absolute top-4 right-4 p-2 rounded-full backdrop-blur transition-all ${
                         selectedImage.isFavorite ? 'bg-red-100 text-red-500' : 'bg-white/20 text-white hover:bg-white/30'
                       }`}
                     >
-                      <Heart size={20} fill={selectedImage.isFavorite ? 'currentColor' : 'none'} />
+                      <Heart size={20} fill={selectedImage.isFavorite ? 'currentColor' : 'none'} aria-hidden="true" />
                     </button>
-                    {/* Upscale button - only show if not already upscaled and not from matrix (since matrix is now high quality) */}
-                    {!upscaledImage && !blindSelectionMade && selectedImage.parameters?.mode !== 'upscale' && (
+                    {/* Upscale button - DISABLED for now */}
+                    {false && !upscaledImage && !blindSelectionMade && selectedImage?.parameters?.mode !== 'upscale' && (
                       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
                         <GlassButton
-                          onClick={() => handleUpscale(selectedImage)}
+                          onClick={() => selectedImage && handleUpscale(selectedImage)}
                           disabled={isUpscaling}
                           className="px-6 py-2 flex items-center gap-2 bg-gold/90 hover:bg-gold text-white whitespace-normal break-words"
                         >
                           {isUpscaling ? (
                             <>
-                              <RefreshCw size={16} className="animate-spin" />
+                                <RefreshCw size={16} className="animate-spin" aria-hidden="true" />
                               <span>{t({ pl: "Upscalowanie...", en: "Upscaling..." })}</span>
                             </>
                           ) : (
                             <>
-                              <ArrowRight size={16} />
+                              <ArrowRight size={16} aria-hidden="true" />
                               <span>{t({ pl: "Upscaluj do pełnej rozdzielczości", en: "Upscale to full resolution" })}</span>
                             </>
                           )}
@@ -3377,12 +3457,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3"
                   >
                     <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="w-full sm:flex-1 h-12 text-xs sm:text-sm">
-                      <Settings size={16} className="mr-2 flex-shrink-0" />
+                      <Settings size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
                       <span className="truncate">{showModifications ? t({ pl: 'Ukryj opcje', en: 'Hide options' }) : t({ pl: 'Modyfikuj', en: 'Modify' })}</span>
                     </GlassButton>
 
                     <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="w-full sm:flex-1 h-12 text-xs sm:text-sm">
-                      <Home size={16} className="mr-2 flex-shrink-0" />
+                      <Home size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
                       <span className="truncate">{t({ pl: 'Usuń meble', en: 'Remove furniture' })}</span>
                     </GlassButton>
 
@@ -3397,7 +3477,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       variant="secondary"
                       className="w-full sm:flex-1 h-12 text-xs sm:text-sm"
                     >
-                      <Eye size={16} className="mr-2 flex-shrink-0" />
+                      <Eye size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
                       <span className="truncate">{showOriginalRoomPhoto ? t({ pl: 'Pokaż wybraną wizję', en: 'Show selected vision' }) : t({ pl: 'Pokaż oryginalne', en: 'Show original' })}</span>
                     </GlassButton>
                   </motion.div>
@@ -3415,7 +3495,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             <div>
                               <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
-                                <Wand2 size={20} className="mr-3" />
+                                <Wand2 size={20} className="mr-3" aria-hidden="true" />
                                 {t({ pl: 'Drobne modyfikacje', en: 'Minor modifications' })}
                               </h4>
                               <p className="text-sm text-silver-dark mb-4">
@@ -3439,7 +3519,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
                             <div>
                               <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
-                                <RefreshCw size={20} className="mr-3" />
+                                <RefreshCw size={20} className="mr-3" aria-hidden="true" />
                                 {t({ pl: 'Zupełnie inny kierunek', en: 'Completely different direction' })}
                               </h4>
                               <p className="text-sm text-silver-dark mb-4">
@@ -3465,7 +3545,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                           {/* Custom Modification Section */}
                           <div className="mt-8 pt-8 border-t border-silver/30">
                             <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
-                              <MessageSquare size={20} className="mr-3 text-gold" />
+                              <MessageSquare size={20} className="mr-3 text-gold" aria-hidden="true" />
                               {t({ pl: 'Własna modyfikacja', en: 'Custom modification' })}
                             </h4>
                             <p className="text-sm text-silver-dark mb-4">
@@ -3530,10 +3610,47 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     className="px-8 py-3 flex items-center gap-2 whitespace-normal break-words"
                   >
                     <span>{t({ pl: "Kontynuuj", en: "Continue" })}</span>
-                    <ArrowRight size={18} />
+                    <ArrowRight size={18} aria-hidden="true" />
                   </GlassButton>
                 </motion.div>
               )}
+
+              {/* Lightbox: zoom image in step 2 */}
+              <AnimatePresence>
+                {isLightboxOpen && selectedImage && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+                    onClick={() => setIsLightboxOpen(false)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={t({ pl: "Powiększone zdjęcie", en: "Zoomed image" })}
+                  >
+                    <div
+                      className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url}
+                        alt={showOriginalRoomPhoto ? t({ pl: "Oryginalne zdjęcie pokoju", en: "Original room photo" }) : t({ pl: "Wybrane wnętrze", en: "Selected interior" })}
+                        className="max-w-full max-h-[90vh] w-auto object-contain"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setIsLightboxOpen(false); }}
+                        className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
+                        aria-label={t({ pl: "Zamknij", en: "Close" })}
+                      >
+                        <X size={24} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 
@@ -3559,7 +3676,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             selectedImage.isFavorite ? 'bg-red-100 text-red-500' : 'bg-white/20 text-white hover:bg-white/30'
                           }`}
                         >
-                          <Heart size={20} fill={selectedImage.isFavorite ? 'currentColor' : 'none'} />
+                          <Heart size={20} fill={selectedImage.isFavorite ? 'currentColor' : 'none'} aria-hidden="true" />
                         </button>
                       </div>
 
@@ -3713,12 +3830,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3"
                           >
                             <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="w-full sm:flex-1 h-12 text-xs sm:text-sm">
-                              <Settings size={16} className="mr-2 flex-shrink-0" />
+                              <Settings size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
                               <span className="truncate">{showModifications ? t({ pl: 'Ukryj opcje', en: 'Hide options' }) : t({ pl: 'Modyfikuj', en: 'Modify' })}</span>
                             </GlassButton>
 
                             <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="w-full sm:flex-1 h-12 text-xs sm:text-sm">
-                              <Home size={16} className="mr-2 flex-shrink-0" />
+                              <Home size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
                               <span className="truncate">{t({ pl: 'Usuń meble', en: 'Remove furniture' })}</span>
                             </GlassButton>
 
@@ -3733,7 +3850,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               variant="secondary"
                               className="w-full sm:flex-1 h-12 text-xs sm:text-sm"
                             >
-                              <Eye size={16} className="mr-2 flex-shrink-0" />
+                              <Eye size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
                               <span className="truncate">{showOriginalRoomPhoto ? t({ pl: 'Pokaż wybraną wizję', en: 'Show selected vision' }) : t({ pl: 'Pokaż oryginalne', en: 'Show original' })}</span>
                             </GlassButton>
 
@@ -3758,7 +3875,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <div>
                           <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
-                            <Wand2 size={20} className="mr-3" />
+                            <Wand2 size={20} className="mr-3" aria-hidden="true" />
                             Drobne modyfikacje
                           </h4>
                           <p className="text-sm text-silver-dark mb-4">
@@ -3782,7 +3899,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
                         <div>
                           <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
-                            <RefreshCw size={20} className="mr-3" />
+                            <RefreshCw size={20} className="mr-3" aria-hidden="true" />
                             Zupełnie inny kierunek
                           </h4>
                           <p className="text-sm text-silver-dark mb-4">
@@ -3808,7 +3925,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       {/* Custom Modification Section */}
                       <div className="mt-8 pt-8 border-t border-silver/30">
                         <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
-                          <MessageSquare size={20} className="mr-3 text-gold" />
+                          <MessageSquare size={20} className="mr-3 text-gold" aria-hidden="true" />
                           Własna modyfikacja
                         </h4>
                         <p className="text-sm text-silver-dark mb-4">
@@ -3854,7 +3971,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         <GlassButton onClick={handleContinue} className="px-8 py-4 font-semibold whitespace-normal break-words">
                           <span className="flex items-center space-x-2">
                             <span>{t({ pl: "Przejdź do Ankiety", en: "Go to Survey" })}</span>
-                            <ArrowRight size={20} />
+                            <ArrowRight size={20} aria-hidden="true" />
                           </span>
                         </GlassButton>
                       </motion.div>

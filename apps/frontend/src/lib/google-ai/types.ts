@@ -49,5 +49,7 @@ export interface RoomAnalysisResponse {
   room_description: string;
   suggestions: string[];
   comment: string; // AI-generated comment
+  comment_pl?: string;
+  comment_en?: string;
   human_comment?: string; // Optional human-readable comment
 }

@@ -304,7 +304,7 @@ const OnboardingScreen: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <GlassCard variant="flatOnMobile" className="p-6 md:p-8 max-h-[85vh] overflow-auto">
+              <GlassCard variant="flatOnMobile" className="p-6 md:p-8 max-h-[min(85vh,800px)] overflow-auto">
                 <h1 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-4">
                   {texts.title}
                 </h1>
@@ -597,9 +597,9 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
       transition={{ duration: 0.6 }}
     >
       <GlassCard variant="flatOnMobile" className="p-6 md:p-8 max-h-[85vh] overflow-auto">
-        <h2 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
+        <h1 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
           {texts.title}
-        </h2>
+        </h1>
         <p className="text-graphite font-modern mb-6 text-sm">
           {texts.subtitle}
         </p>
@@ -610,7 +610,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
             <label className="block text-sm font-semibold text-graphite mb-2">
               {texts.age}
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {['18-24', '25-34', '35-44', '45-54', '55-64', '65+'].map((range) => (
                 <button
                   key={range}
@@ -661,7 +661,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
             <label className="block text-sm font-semibold text-graphite mb-2">
               {texts.education}
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
                 { id: 'high-school', label: language === 'pl' ? 'Średnie' : 'High School' },
                 { id: 'bachelor', label: language === 'pl' ? 'Licencjat' : 'Bachelor\'s' },

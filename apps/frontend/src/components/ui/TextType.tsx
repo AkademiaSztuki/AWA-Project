@@ -291,6 +291,8 @@ const TextType = ({
         ...props.style 
       },
       "aria-label": currentFullText,
+      "aria-live": "polite",
+      "aria-atomic": "false",
       ...props,
     },
     <>

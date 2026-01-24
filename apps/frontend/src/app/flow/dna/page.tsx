@@ -163,7 +163,7 @@ export default function VisualDNAPage() {
   return (
     <div className="min-h-screen flex flex-col w-full">
       <div className="flex-1 flex items-center justify-center p-8">
-        <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-[48px] max-h-[90vh] overflow-auto scrollbar-hide">
+        <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-[48px] max-h-[min(90vh,900px)] overflow-auto scrollbar-hide">
         {isAnalyzing && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -212,7 +212,7 @@ export default function VisualDNAPage() {
                 Na podstawie {(sessionData.tinderData?.swipes?.filter((s: any) => s.direction === 'right').length) || 0} polubionych wnętrz
               </p>
             </div>
-            <div className="relative w-full max-w-[320px] aspect-square mx-auto mt-8">
+            <div className="relative w-full max-w-[min(320px,90vw)] aspect-square mx-auto mt-8">
               {[
                 {
                   icon: <Home className="text-gold" size={32} />,

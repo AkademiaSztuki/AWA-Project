@@ -35,7 +35,7 @@ interface LocalInspiration {
   addedAt?: string;
 }
 
-const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[85vh]";
+const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[min(85vh,900px)]";
 
 export default function InspirationsPage() {
   const { language } = useLanguage();
@@ -481,10 +481,10 @@ export default function InspirationsPage() {
               {/* Header with Progress Bar */}
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
+                  <h1 className="text-xl md:text-2xl font-nasalization text-graphite">
                     {t("Twoje Inspiracje", "Your Inspirations")}
-                  </h2>
-                  <div className="text-sm text-silver-dark font-modern">
+                  </h1>
+                  <div className="text-sm text-silver-dark font-modern" aria-live="polite" aria-atomic="true">
                     {items.length} / 10 {t("zdjęć", "images")}
                   </div>
                 </div>
@@ -526,7 +526,7 @@ export default function InspirationsPage() {
                     whileHover={{ scale: 1.1 }}
                     className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center group-hover:shadow-lg group-hover:shadow-gold/25 transition-all duration-300"
                   >
-                    <Upload size={28} className="text-white" />
+                    <Upload size={28} className="text-white" aria-hidden="true" />
                   </motion.div>
                   
                   <h3 className="text-lg md:text-xl font-nasalization text-graphite mb-2">
@@ -561,7 +561,9 @@ export default function InspirationsPage() {
                         <div className="relative aspect-square rounded-xl overflow-hidden lg:glass-panel">
                           <Image
                             src={item.previewUrl}
-                            alt="Inspiration"
+                            alt={language === 'pl' 
+                              ? `Inspiracja wnętrza ${index + 1}` 
+                              : `Interior inspiration ${index + 1}`}
                             fill
                             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
                             className="object-cover"
@@ -586,8 +588,9 @@ export default function InspirationsPage() {
                           <button
                             onClick={() => removeItem(item.id)}
                             className="absolute top-2 right-2 w-6 h-6 bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center"
+                            aria-label={language === 'pl' ? `Usuń inspirację ${index + 1}` : `Remove inspiration ${index + 1}`}
                           >
-                            <X size={12} />
+                            <X size={12} aria-hidden="true" />
                           </button>
                         </div>
                         
@@ -617,7 +620,7 @@ export default function InspirationsPage() {
                     variant="secondary"
                     className="w-full sm:w-auto"
                   >
-                    <ArrowLeft size={18} />
+                    <ArrowLeft size={18} aria-hidden="true" />
                     {t("Wróć", "Back")}
                   </GlassButton>
                   
@@ -637,7 +640,7 @@ export default function InspirationsPage() {
                 >
                   <span className="flex items-center gap-2">
                     {isSubmitting ? t("Zapisywanie…", "Saving…") : t("Kontynuuj", "Continue")}
-                    <ArrowRight size={18} />
+                    <ArrowRight size={18} aria-hidden="true" />
                   </span>
                 </GlassButton>
               </div>

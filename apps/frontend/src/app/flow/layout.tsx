@@ -13,7 +13,7 @@ export default function FlowLayout({
   const showProgress = isPartOneFlowPath(pathname);
 
   return (
-    <div className="flex flex-col gap-2 sm:gap-8 p-1 sm:p-4 lg:p-8 overflow-x-hidden">
+    <div className="flex flex-col gap-2 sm:gap-8 p-3 sm:p-4 lg:p-8">
       {showProgress && (
         <PartOneProgressBar currentPath={pathname} />
       )}

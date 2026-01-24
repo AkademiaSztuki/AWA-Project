@@ -10,6 +10,7 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LayoutProvider } from '@/contexts/LayoutContext';
 import { AnimationProvider } from '@/contexts/AnimationContext';
+import { ColorAdjustmentProvider } from '@/contexts/ColorAdjustmentContext';
 import { GlassHeader } from '@/components/ui/GlassHeader';
 import { GlobalProtectedRoute } from '@/components/auth/GlobalProtectedRoute';
 import type { Language } from '@/lib/questions/validated-scales';
@@ -26,7 +27,7 @@ const exo2 = Exo_2({
 });
 
 export const metadata: Metadata = {
-  title: 'Aura - AI Interior Design Dialogue',
+  title: 'IDA - Interior Design Assistant',
   description: 'Aplikacja badawcza do eksploracji współpracy człowieka z AI w projektowaniu wnętrz',
   keywords: ['AI', 'Interior Design', 'Research', 'Akademia Sztuk Pełnych'],
 };
@@ -73,17 +74,29 @@ export default function RootLayout({
   return (
     <html lang={initialLanguage} className={`${inter.variable} ${audiowide.variable} ${exo2.variable}`}>
       <body className="min-h-screen overflow-y-auto font-nasalization">
+        {/* Skip to main content link for accessibility */}
+        <a 
+          href="#main-content" 
+          className="skip-link"
+          aria-label="Przejdź do głównej treści"
+        >
+          Przejdź do głównej treści
+        </a>
         <LanguageProvider initialLanguage={initialLanguage}>
           <AuthProvider>
             <LayoutProvider>
               <AnimationProvider>
-                <LandscapeGuard>
+                <ColorAdjustmentProvider>
+                  <LandscapeGuard>
                   <ResponsiveLayoutWrapper>
                     <AmbientMusic volume={0.3} audioFile="/audio/ambient.mp3" />
                     
                     <GlobalProtectedRoute>
                       <main 
-                        className="relative z-10 min-h-screen w-full px-1.5 sm:px-4 md:px-8 overflow-x-hidden"
+                        id="main-content"
+                        className="relative z-10 min-h-screen w-full px-1.5 sm:px-4 md:px-8"
+                        role="main"
+                        aria-label="Główna treść aplikacji"
                         style={{
                           /* Padding dla safe-area (notch) - tylko na treści, nie na tle */
                           /* Na mobile: pt-4 (1rem) + safe-area, na desktop: pt-8 (2rem) + safe-area */
@@ -91,9 +104,9 @@ export default function RootLayout({
                           paddingBottom: 'calc(env(safe-area-inset-bottom, 0) + clamp(2rem, 3vw, 3rem))',
                         }}
                       >
-                        <div className="mx-auto w-full max-w-[1600px] flex flex-col lg:grid lg:gap-10 lg:grid-cols-[minmax(420px,0.3fr)_minmax(480px,0.7fr)] items-start">
+                        <div className="mx-auto w-full max-w-screen-2xl flex flex-col xl:grid xl:gap-10 xl:grid-cols-[minmax(320px,0.3fr)_minmax(400px,0.7fr)] items-start">
                           {/* Reserved column for IDA narrator - keeps content from overlapping */}
-                          <div className="hidden lg:block min-h-[720px]" aria-hidden="true" />
+                          <div className="hidden xl:block min-h-[720px]" aria-hidden="true" />
                           <div className="w-full max-w-full lg:max-w-none lg:ml-auto space-y-2 sm:space-y-4">
                             <GlassHeader />
                             <div className="w-full">
@@ -106,6 +119,7 @@ export default function RootLayout({
                     <SpeedInsights />
                   </ResponsiveLayoutWrapper>
                 </LandscapeGuard>
+                </ColorAdjustmentProvider>
               </AnimationProvider>
             </LayoutProvider>
           </AuthProvider>

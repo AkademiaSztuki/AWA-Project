@@ -119,11 +119,11 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
     : `p-2.5 sm:p-5 md:p-6 h-full flex flex-col justify-start ${className}`;
 
   return (
-    <ContentWrapper className={wrapperClass}>
+    <ContentWrapper className={`${wrapperClass} keep-colors`}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-1.5">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0 shadow-md">
-            <Icon className="text-white" size={14} />
+            <Icon className="text-white" size={14} aria-hidden="true" />
           </div>
           <div>
             <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-gold font-bold leading-none mb-0.5">
@@ -193,7 +193,7 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
                 </div>
               ) : (
                 <div className={`relative w-full overflow-hidden flex items-center justify-center bg-white/5 ${type === 'music' ? 'h-20 sm:h-40 bg-transparent' : 'h-28 sm:h-48'}`}>
-                  <Icon size={32} className="text-silver-dark" />
+                  <Icon size={32} className="text-silver-dark" aria-hidden="true" />
                 </div>
               )}
 
@@ -219,7 +219,7 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
                           : 'border-white/20 text-graphite hover:border-gold/50'
                       }`}
                     >
-                      {isPlaying ? <Pause size={12} /> : <Play size={12} />}
+                      {isPlaying ? <Pause size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
                     </div>
                   )}
                 </div>
@@ -285,7 +285,7 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
     : `p-2.5 sm:p-5 md:p-6 h-full flex flex-col justify-start ${className}`;
 
   return (
-    <ContentWrapper className={wrapperClass}>
+    <ContentWrapper className={`${wrapperClass} keep-colors`}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-1.5">
         <div>
           <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-gold font-bold leading-none mb-0.5">
@@ -401,7 +401,7 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
   };
 
   return (
-    <ContentWrapper className={wrapperClass}>
+    <ContentWrapper className={`${wrapperClass} keep-colors`}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-1.5">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0 shadow-md">

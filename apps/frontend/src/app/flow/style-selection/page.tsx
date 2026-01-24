@@ -105,7 +105,7 @@ export default function StyleSelectionPage() {
   return (
     <div className="min-h-screen flex flex-col w-full">
       <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
-        <GlassCard variant="flatOnMobile" className="w-full max-w-6xl p-6 md:p-8 lg:glass-panel lg:shadow-xl rounded-2xl max-h-[90vh] overflow-auto scrollbar-hide">
+        <GlassCard variant="flatOnMobile" className="w-full max-w-6xl p-6 md:p-8 lg:glass-panel lg:shadow-xl rounded-2xl max-h-[min(90vh,900px)] overflow-auto scrollbar-hide">
           {/* Header */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-3 mb-4">
@@ -154,7 +154,9 @@ export default function StyleSelectionPage() {
                     <div className="absolute inset-0 z-0 rounded-2xl overflow-hidden">
                       <Image
                         src={imagePath}
-                        alt=""
+                        alt={language === 'pl' 
+                          ? `Przykład wnętrza w stylu ${style.labelPl}` 
+                          : `Example interior in ${style.labelEn} style`}
                         fill
                         className="object-cover rounded-2xl"
                         onError={() => handleImageError(style.id)}

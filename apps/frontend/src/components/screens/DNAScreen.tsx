@@ -9,8 +9,11 @@ import { AwaDialogue } from '../awa/AwaDialogue';
 import { useSessionData } from '@/hooks/useSessionData';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export function DNAScreen() {
   const router = useRouter();
+  const { language } = useLanguage();
   const { sessionData, updateSessionData } = useSessionData();
   const [accuracy, setAccuracy] = useState(4);
   const [isAnalyzing, setIsAnalyzing] = useState(true);
@@ -56,9 +59,9 @@ export function DNAScreen() {
         <div className="flex-1 flex items-center justify-center">
           <GlassCard className="text-center">
             <div className="text-6xl mb-4 animate-pulse">🧬</div>
-            <h2 className="text-xl lg:text-2xl xl:text-3xl font-bold text-gray-800 mb-3 lg:mb-4">
+            <h1 className="text-xl lg:text-2xl xl:text-3xl font-bold text-gray-800 mb-3 lg:mb-4">
               Analizuję Twoje Wizualne DNA
-            </h2>
+            </h1>
             <p className="text-sm lg:text-base xl:text-lg text-gray-600">
               Przetwarzam Twoje preferencje z testu wizualnego...
             </p>
@@ -88,9 +91,9 @@ export function DNAScreen() {
           <GlassCard className="w-full">
             <div className="text-center mb-8">
               <div className="text-6xl mb-4">✨</div>
-              <h2 className="text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-800 mb-3 lg:mb-4">
+              <h1 className="text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-800 mb-3 lg:mb-4">
                 Twoje Wizualne DNA
-              </h2>
+              </h1>
               <p className="text-sm lg:text-base xl:text-lg text-gray-600">
                 Oto co odkryłam o Twoich preferencjach estetycznych
               </p>
@@ -99,22 +102,22 @@ export function DNAScreen() {
             {visualDNA && (
               <div className="space-y-4 mb-8">
                 <div className="bg-gradient-to-r from-gold/10 to-champagne/10 p-4 rounded-lg">
-                  <h3 className="font-semibold text-gold mb-2">Dominujący styl:</h3>
+                  <h2 className="font-semibold text-gold mb-2">Dominujący styl:</h2>
                   <p>{visualDNA.dominantStyle}</p>
                 </div>
 
                 <div className="bg-gradient-to-r from-silver/10 to-pearl/10 p-4 rounded-lg">
-                  <h3 className="font-semibold text-gray-700 mb-2">Paleta kolorów:</h3>
+                  <h2 className="font-semibold text-gray-700 mb-2">Paleta kolorów:</h2>
                   <p>{visualDNA.colorPalette}</p>
                 </div>
 
                 <div className="bg-gradient-to-r from-champagne/10 to-gold/10 p-4 rounded-lg">
-                  <h3 className="font-semibold text-gold mb-2">Materiały:</h3>
+                  <h2 className="font-semibold text-gold mb-2">Materiały:</h2>
                   <p>{visualDNA.materials}</p>
                 </div>
 
                 <div className="bg-gradient-to-r from-pearl/10 to-silver/10 p-4 rounded-lg">
-                  <h3 className="font-semibold text-gray-700 mb-2">Oświetlenie:</h3>
+                  <h2 className="font-semibold text-gray-700 mb-2">Oświetlenie:</h2>
                   <p>{visualDNA.lighting}</p>
                 </div>
               </div>

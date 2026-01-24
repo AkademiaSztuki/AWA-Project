@@ -788,8 +788,8 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
           fullWidth ? 'fixed bottom-0 left-0 right-0' : ''
         } ${
           isLanding 
-            ? 'min-h-[380px] p-8' 
-            : 'min-h-[260px] p-6 pb-8'
+            ? 'min-h-[clamp(200px,25vh,380px)] p-8' 
+            : 'min-h-[clamp(120px,20vh,260px)] p-6 pb-8'
         } cursor-pointer`}
         onClick={handleClickToStart}
       >
@@ -828,8 +828,8 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       fullWidth ? 'fixed bottom-0 left-0 right-0' : 'relative'
     } ${
       isLanding 
-        ? 'min-h-[25vh] sm:min-h-[380px] p-4 sm:p-8' 
-        : 'min-h-[80px] sm:min-h-[120px] p-3 sm:p-4 pb-6'
+        ? 'min-h-[clamp(200px,25vh,380px)] p-4 sm:p-8' 
+        : 'min-h-[clamp(80px,10vh,120px)] p-3 sm:p-4 pb-6'
     } pb-[env(safe-area-inset-bottom,10px)]`}>
       {isLanding && audioReady && hasStarted && (
         <button
@@ -841,7 +841,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
             {language === 'pl' ? 'Pomiń' : 'Skip'}
           </span>
           <div className="flex items-center gap-1 text-white/30 group-hover:text-white/50 transition-colors duration-300">
-            <ArrowRight size={16} className="translate-x-0 group-hover:translate-x-1 transition-transform duration-300" />
+            <ArrowRight size={16} className="translate-x-0 group-hover:translate-x-1 transition-transform duration-300" aria-hidden="true" />
           </div>
         </button>
       )}

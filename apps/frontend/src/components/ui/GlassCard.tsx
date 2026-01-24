@@ -15,9 +15,9 @@ export const GlassCard: React.FC<GlassCardProps> = ({
   variant = 'default'
 }) => {
   const variants = {
-    // default oraz flatOnMobile są płaskie na telefonie/tablecie (poniżej 1024px)
-    default: 'rounded-2xl lg:glass-panel lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl',
-    flatOnMobile: 'rounded-2xl lg:glass-panel lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl',
+    // default oraz flatOnMobile są płaskie na telefonie/tablecie (poniżej 1280px)
+    default: 'rounded-2xl xl:glass-panel xl:bg-white/10 xl:backdrop-blur-xl xl:border xl:border-white/20 xl:shadow-xl',
+    flatOnMobile: 'rounded-2xl xl:glass-panel xl:bg-white/10 xl:backdrop-blur-xl xl:border xl:border-white/20 xl:shadow-xl',
     
     // interactive oraz highlighted ZAWSZE mają szklany panel (nawet na mobile)
     interactive: 'glass-panel hover:bg-gold-400/10 hover:border-gold-300/50 cursor-pointer transition-all duration-300 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl',

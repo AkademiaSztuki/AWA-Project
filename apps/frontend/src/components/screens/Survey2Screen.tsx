@@ -10,6 +10,8 @@ import { supabase } from '@/lib/supabase';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { AwaDialogue } from '@/components/awa';
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 const CLARITY_QUESTIONS = [
   {
     key: 'clarity_understanding',
@@ -35,6 +37,7 @@ const CLARITY_QUESTIONS = [
 
 export function Survey2Screen() {
   const router = useRouter();
+  const { language } = useLanguage();
   const { updateSessionData, sessionData } = useSessionData();
   const [answers, setAnswers] = useState<Record<string, number>>({});
 
@@ -79,9 +82,9 @@ export function Survey2Screen() {
         
 
         <div className="w-full max-w-4xl mx-auto">
-        <GlassCard variant="flatOnMobile" className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl max-h-[90vh] overflow-auto">
+        <GlassCard variant="flatOnMobile" className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl max-h-[min(90vh,800px)] overflow-auto">
           <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Jasność Twoich Preferencji</h1>
-          <p className="text-base md:text-lg text-gray-700 font-modern mb-6 leading-relaxed">
+          <p className="text-base md:text-lg text-gray-700 font-modern mb-6 leading-relaxed" aria-live="polite">
             Ostatnie pytania o krystalizację Twojego gustu estetycznego
           </p>
 
@@ -101,6 +104,7 @@ export function Survey2Screen() {
                   value={answers[question.key] || 4}
                   onChange={(value) => handleAnswerChange(question.key, value)}
                   className="mb-2"
+                  ariaValueText={language === 'pl' ? `Ocena: ${answers[question.key] || 4} z 7` : `Rating: ${answers[question.key] || 4} of 7`}
                 />
               </div>
             ))}

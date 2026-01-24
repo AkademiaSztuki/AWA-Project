@@ -38,7 +38,7 @@ export default function BigFivePage() {
   const prevRetakeRef = React.useRef(retake);
   const initializedRef = React.useRef(false);
 
-  const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[85vh]";
+  const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[min(85vh,900px)]";
 
   // Reset retake initialization when retake parameter changes from false to true
   useEffect(() => {
@@ -591,7 +591,7 @@ export default function BigFivePage() {
                       >
                         <span className="flex items-center gap-2">
                           {isSubmitting ? t("Zapisywanie…", "Saving…") : t("Kontynuuj", "Continue")}
-                          <ArrowRight size={18} />
+                          <ArrowRight size={18} aria-hidden="true" />
                         </span>
                       </GlassButton>
                       {validationError && (
@@ -645,10 +645,10 @@ export default function BigFivePage() {
               {/* Progress */}
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-modern text-graphite">
+                  <span className="text-sm font-modern text-graphite" aria-live="polite">
                     {t("Pytanie", "Question")} {currentQuestion + 1} / {IPIP_120_ITEMS.length}
                   </span>
-                  <span className="text-sm font-modern text-silver-dark">
+                  <span className="text-sm font-modern text-silver-dark" aria-live="polite" aria-atomic="true">
                     {Math.round(progress)}%
                   </span>
                 </div>
@@ -662,7 +662,7 @@ export default function BigFivePage() {
 
               {/* Question */}
               <div className="mb-8 min-h-[280px] sm:min-h-[300px] md:min-h-[320px] flex flex-col">
-                <div className="text-center mb-6 flex-shrink-0">
+                <div className="text-center mb-6 flex-shrink-0" aria-live="polite" aria-atomic="false">
                   <h2 className="text-xl lg:text-2xl font-nasalization text-graphite mb-4">
                     {currentItem?.text[language] || 'Loading...'}
                   </h2>
@@ -681,6 +681,12 @@ export default function BigFivePage() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleResponse(value)}
+                      aria-label={value === 1 ? t("Zdecydowanie nie", "Strongly disagree") :
+                                 value === 2 ? t("Nie", "Disagree") :
+                                 value === 3 ? t("Neutralnie", "Neutral") :
+                                 value === 4 ? t("Zgadzam się", "Agree") :
+                                 t("Zdecydowanie tak", "Strongly agree")}
+                      aria-pressed={isSelected}
                       className={`p-2 sm:p-3 md:p-4 rounded-xl font-modern transition-all duration-300 ${
                         isSelected
                           ? 'bg-gradient-to-br from-gold to-champagne text-white shadow-lg'
@@ -710,7 +716,7 @@ export default function BigFivePage() {
                     variant="secondary"
                     className="px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base"
                   >
-                    <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px] mr-1.5 sm:mr-2" />
+                    <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px] mr-1.5 sm:mr-2" aria-hidden="true" />
                     {t("Wstecz", "Back")}
                   </GlassButton>
 
@@ -729,7 +735,7 @@ export default function BigFivePage() {
                     className="px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base"
                   >
                     {t("Dalej", "Next")}
-                    <ArrowRight size={16} className="sm:w-[18px] sm:h-[18px] ml-1.5 sm:ml-2" />
+                    <ArrowRight size={16} className="sm:w-[18px] sm:h-[18px] ml-1.5 sm:ml-2" aria-hidden="true" />
                   </GlassButton>
                 )}
               </div>

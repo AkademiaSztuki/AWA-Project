@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface Bubble {
   x: number;
@@ -10,14 +10,12 @@ interface Bubble {
   speed: number;
   direction: number;
   blur: number;
+  vy?: number;
+  innerColor?: string;
+  outerColor?: string;
 }
 
-const AuroraBubbles: React.FC = () => {
-  const [bubbles, setBubbles] = useState<Bubble[]>([]);
-
-  useEffect(() => {
-    // Inicjalizacja bąbelków - większe i bardziej widoczne
-    const initialBubbles: Bubble[] = [
+const FULL_BUBBLES: Bubble[] = [
       // Duże bąbelki w okolicach nóg IDA - zwiększona przezroczystość
       { x: 20, y: 75, size: 120, opacity: 0.65, speed: 0.3, direction: 1, blur: 25 },
       { x: 35, y: 80, size: 80, opacity: 0.68, speed: 0.4, direction: -1, blur: 20 },
@@ -44,41 +42,74 @@ const AuroraBubbles: React.FC = () => {
       { x: 70, y: 65, size: 35, opacity: 0.18, speed: 0.55, direction: 1, blur: 8 },
       { x: 90, y: 70, size: 45, opacity: 0.23, speed: 0.4, direction: -1, blur: 12 },
       { x: 15, y: 72, size: 38, opacity: 0.19, speed: 0.5, direction: 1, blur: 9 },
-    ];
+];
 
-    setBubbles(initialBubbles);
+const REDUCED_BUBBLES: Bubble[] = [
+  {
+    x: 72, y: 18, size: 350, opacity: 0.8, speed: 0.28, direction: -1, blur: 44,
+    vy: 0.15, innerColor: 'rgba(210,200,175,0.5)', outerColor: 'rgba(185,178,165,0.28)',
+  },
+  {
+    x: 20, y: 84, size: 390, opacity: 0.85, speed: 0.62, direction: 1, blur: 48,
+    vy: -0.12, innerColor: 'rgba(200,190,160,0.52)', outerColor: 'rgba(178,172,152,0.3)',
+  },
+  {
+    x: 68, y: 88, size: 330, opacity: 0.82, speed: 0.45, direction: -1, blur: 40,
+    vy: 0.2, innerColor: 'rgba(190,182,170,0.48)', outerColor: 'rgba(170,165,155,0.26)',
+  },
+  {
+    x: 85, y: 82, size: 300, opacity: 0.78, speed: 0.55, direction: 1, blur: 36,
+    vy: -0.18, innerColor: 'rgba(205,195,168,0.5)', outerColor: 'rgba(180,175,158,0.28)',
+  },
+];
 
-    // Animacja bąbelków
+interface AuroraBubblesProps {
+  variant?: 'full' | 'reduced';
+}
+
+const AuroraBubbles: React.FC<AuroraBubblesProps> = ({ variant = 'full' }) => {
+  const [bubbles, setBubbles] = useState<Bubble[]>([]);
+
+  useEffect(() => {
+    const initial = variant === 'reduced' ? REDUCED_BUBBLES : FULL_BUBBLES;
+    setBubbles(initial);
+
     const animateBubbles = () => {
-      setBubbles(prevBubbles => 
+      setBubbles(prevBubbles =>
         prevBubbles.map(bubble => {
           let newX = bubble.x + bubble.speed * bubble.direction;
-          
-          // Odbij od krawędzi ekranu
+          let newY = bubble.y;
+          let newDir = bubble.direction;
+          let newVy = bubble.vy;
           if (newX < 0 || newX > 100) {
-            return {
-              ...bubble,
-              direction: bubble.direction * -1,
-              x: Math.max(0, Math.min(100, newX))
-            };
+            newDir = bubble.direction * -1;
+            newX = Math.max(0, Math.min(100, newX));
           }
-          
+          if (bubble.vy != null) {
+            newY = bubble.y + bubble.vy;
+            if (newY < 0 || newY > 100) {
+              newVy = (bubble.vy ?? 0) * -1;
+              newY = Math.max(0, Math.min(100, newY));
+            }
+          }
           return {
             ...bubble,
-            x: newX
+            x: newX,
+            y: newY,
+            direction: newDir,
+            vy: newVy ?? bubble.vy,
           };
         })
       );
     };
 
-    const interval = setInterval(animateBubbles, 100); // Wolniejsza animacja
-
+    const interval = setInterval(animateBubbles, 100);
     return () => clearInterval(interval);
-  }, []);
+  }, [variant]);
 
   return (
     <div 
-      className="fixed z-[4] pointer-events-none overflow-hidden"
+      className="fixed z-[2] pointer-events-none overflow-hidden"
       style={{
         /* Pokrywa cały ekran włącznie z safe-area (notch) na iOS */
         top: 'calc(-1 * env(safe-area-inset-top, 0))',
@@ -89,25 +120,30 @@ const AuroraBubbles: React.FC = () => {
         height: '100dvh', /* dynamic viewport height dla iOS */
       }}
     >
-      {bubbles.map((bubble, index) => (
-        <div
-          key={index}
-          style={{
-            position: 'absolute',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(255, 215, 0, 0.3) 0%, rgba(255, 215, 0, 0.1) 70%, transparent 100%)',
-            width: `${bubble.size}px`,
-            height: `${bubble.size}px`,
-            left: `${bubble.x}%`,
-            top: `${bubble.y}%`,
-            filter: `blur(${bubble.blur}px)`,
-            opacity: bubble.opacity,
-            mixBlendMode: 'screen',
-            transform: 'translate(-50%, -50%)',
-            animation: `bubbleFloat${index} ${10 + index * 2}s ease-in-out infinite alternate`
-          }}
-        />
-      ))}
+      {bubbles.map((bubble, index) => {
+        const inner = bubble.innerColor ?? 'rgba(200,190,160,0.5)';
+        const outer = bubble.outerColor ?? 'rgba(180,175,155,0.28)';
+        const duration = 8 + index * 3;
+        return (
+          <div
+            key={index}
+            style={{
+              position: 'absolute',
+              borderRadius: '50%',
+              background: `radial-gradient(circle, ${inner} 0%, ${outer} 60%, transparent 85%)`,
+              width: `${bubble.size}px`,
+              height: `${bubble.size}px`,
+              left: `${bubble.x}%`,
+              top: `${bubble.y}%`,
+              filter: `blur(${bubble.blur}px)`,
+              opacity: bubble.opacity,
+              mixBlendMode: 'screen',
+              transform: 'translate(-50%, -50%)',
+              animation: `bubbleFloat${index} ${duration}s ease-in-out infinite alternate`,
+            }}
+          />
+        );
+      })}
       
       <style jsx>{`
         ${bubbles.map((_, index) => `

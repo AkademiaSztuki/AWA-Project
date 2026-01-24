@@ -504,12 +504,12 @@ export function DomainDescription({ domain, score, facets }: { domain: 'O' | 'C'
                 animate={{ rotate: isExpanded ? 180 : 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <ChevronDown size={24} className="text-gold" />
+                <ChevronDown size={24} className="text-gold" aria-hidden="true" />
               </motion.div>
             )}
-            <h3 className="text-xl font-nasalization text-graphite">
+            <h2 className="text-xl font-nasalization text-graphite">
               {domainData.label[language as 'pl' | 'en']}
-            </h3>
+            </h2>
           </div>
           <div className="text-3xl font-bold text-gold">{score}%</div>
         </div>
@@ -609,7 +609,7 @@ export function BigFiveDetailed({ scores, responses, completedAt }: BigFiveDetai
               variant="secondary"
               className="mb-4"
             >
-              <ArrowLeft size={20} className="mr-2" />
+              <ArrowLeft size={20} className="mr-2" aria-hidden="true" />
               {t('Powrót', 'Back')}
             </GlassButton>
 
@@ -728,9 +728,9 @@ export function BigFiveDetailed({ scores, responses, completedAt }: BigFiveDetai
             className="mt-8"
           >
             <GlassCard className="p-6">
-              <h3 className="text-xl font-nasalization text-graphite mb-4">
+              <h2 className="text-xl font-nasalization text-graphite mb-4">
                 {t('O Teście Big Five', 'About the Big Five Test')}
-              </h3>
+              </h2>
               <div className="space-y-3 text-graphite font-modern">
                 <p>
                   {t(

@@ -168,11 +168,22 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
     return null;
   }
 
-  const totalCredits = balance.balance;
+  const hasActiveSubscription = !!subscription && subscription.status === 'active';
+  
+  // Jeśli użytkownik ma aktywną subskrypcję, użyj kredytów z subskrypcji jako główny bilans
+  // W przeciwnym razie użyj bilansu z transakcji
+  const totalCredits = hasActiveSubscription 
+    ? (subscription?.subscription_credits_remaining || 0)
+    : balance.balance;
+  
+  // Oblicz dostępne generacje na podstawie wybranego źródła kredytów
+  const totalGenerationsAvailable = hasActiveSubscription
+    ? Math.floor(totalCredits / 10)
+    : balance.generationsAvailable;
+  
   const subscriptionCredits = subscription?.subscription_credits_remaining || 0;
   const creditsUsed = subscription?.credits_used || 0;
   const creditsAllocated = subscription?.credits_allocated || 0;
-  const hasActiveSubscription = !!subscription && subscription.status === 'active';
 
   // Oblicz wykorzystane kredyty z subskrypcji
   const usagePercentage = creditsAllocated > 0 ? (creditsUsed / creditsAllocated) * 100 : 0;
@@ -190,7 +201,7 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
                 {totalCredits.toLocaleString()}
               </span>
               <span className="text-[10px] sm:text-xs text-silver-dark font-modern">
-                {t({ pl: `kredytów (${balance.generationsAvailable} gen.)`, en: `credits (${balance.generationsAvailable} gen.)` })}
+                {t({ pl: `kredytów (${totalGenerationsAvailable} gen.)`, en: `credits (${totalGenerationsAvailable} gen.)` })}
               </span>
             </div>
           </div>

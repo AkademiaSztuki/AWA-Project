@@ -77,7 +77,7 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-1.5">
         <div className="flex items-center gap-2.5 flex-1">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0 shadow-md">
-            <Mountain className="text-white" size={14} />
+            <Mountain className="text-white" size={14} aria-hidden="true" />
           </div>
           <div className="flex-1">
             <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-gold font-bold leading-none mb-0.5">
@@ -196,7 +196,7 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
     : `p-6 lg:p-8 h-full flex flex-col justify-center ${className}`;
 
   return (
-    <ContentWrapper className={wrapperClass}>
+    <ContentWrapper className={`${wrapperClass} keep-colors`}>
       {content}
     </ContentWrapper>
   );
@@ -246,7 +246,7 @@ export function AspirationalSelfPrompt({ onSubmit, className = '' }: Aspirationa
       <div className="text-center mb-6">
         <div className="flex items-center justify-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-400 via-pink-400 to-rose-500 flex items-center justify-center shadow-lg">
-            <Sparkles className="text-white" size={24} />
+            <Sparkles className="text-white" size={24} aria-hidden="true" />
           </div>
           <h3 className="text-2xl lg:text-3xl xl:text-4xl font-nasalization bg-gradient-to-r from-purple-600 via-pink-500 to-rose-600 bg-clip-text text-transparent">
             {language === 'pl' ? 'Twoja Wizja' : 'Your Vision'}

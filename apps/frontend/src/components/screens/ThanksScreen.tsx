@@ -25,7 +25,7 @@ export function ThanksScreen() {
     <div className="min-h-screen flex flex-col w-full">
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-4xl mx-auto">
-        <GlassCard variant="flatOnMobile" className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl max-h-[90vh] overflow-auto">
+        <GlassCard variant="flatOnMobile" className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl max-h-[min(90vh,800px)] overflow-auto">
           <div className="text-center">
             <h1 className="text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-exo2 font-bold text-gray-800 mb-3 lg:mb-4">
               Dziękuję za Twoją podróż!

@@ -46,12 +46,12 @@ const LandingScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-x-hidden">
+    <div className="min-h-screen flex flex-col relative">
       {/* Dialogue Area - Always Mounted */}
       <div 
         className={`z-50 transition-all duration-1000 ${
           showAuraSection 
-            ? 'fixed bottom-0 left-0 right-0 w-full h-[180px] sm:h-[220px] lg:h-[260px]' 
+            ? 'fixed bottom-0 left-0 right-0 w-full min-h-[clamp(180px,20vh,260px)]' 
             : 'fixed inset-0 flex items-center justify-center pointer-events-none'
         }`}
       >
@@ -81,13 +81,13 @@ const LandingScreen: React.FC = () => {
               >
                 {/* Header */}
                 <div className="text-center mb-4 sm:mb-6 md:mb-8">
-                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-nasalization text-graphite mb-2 sm:mb-3">
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-nasalization text-graphite mb-2 sm:mb-3">
                     {language === 'pl' ? 'Wybierz Swoją Ścieżkę' : 'Choose Your Path'}
-                  </h2>
+                  </h1>
                   <p className="text-sm sm:text-base lg:text-lg text-silver-dark font-modern">
-                    {language === 'pl' ? 'Zdecyduj jak chcesz doświadczyć ' : 'Decide how you want to experience '}
+                    {language === 'pl' ? 'Jak chcesz współpracować z ' : 'Decide how you want to experience '}
                     <span className="font-semibold text-gold">IDA</span>
-                    {language === 'pl' ? ' - szybko czy dogłębnie' : ' - quick or deep'}
+                    {language === 'pl' ? ' – ekspresowo czy szczegółowo?' : ' - quick or deep'}
                   </p>
                 </div>
 
@@ -101,6 +101,7 @@ const LandingScreen: React.FC = () => {
                     transition={{ duration: 0.6, delay: 0.4 }}
                     whileHover={{ scale: 1.05, y: -5 }}
                     className="text-left w-full"
+                    aria-label={language === 'pl' ? 'Wybierz Szybką Ścieżkę (3-5 minut)' : 'Choose Fast Track (3-5 minutes)'}
                     onClick={async () => {
                       stopAllDialogueAudio();
                       if (!user) { 
@@ -116,17 +117,17 @@ const LandingScreen: React.FC = () => {
                     <GlassCard variant="interactive" className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-xl sm:rounded-2xl">
                       <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                         <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center flex-shrink-0">
-                          <Zap size={20} className="sm:w-7 sm:h-7 text-graphite" />
+                          <Zap size={20} className="sm:w-7 sm:h-7 text-graphite" aria-hidden="true" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
+                          <h2 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                             {language === 'pl' ? 'Szybka Ścieżka' : 'Fast Track'}
-                          </h3>
-                          <p className="text-xs text-silver-dark font-modern">3-5 min • 10 {language === 'pl' ? 'generacji' : 'generations'}</p>
+                          </h2>
+                          <p className="text-xs text-silver-dark font-modern">3-5 min</p>
                         </div>
                       </div>
                       <p className="text-xs sm:text-sm text-graphite font-modern">
-                        {language === 'pl' ? 'Wypróbuj IDA szybko - prześlij zdjęcie, przesuń kilka inspiracji i generuj!' : 'Try IDA quickly - upload photo, swipe a few inspirations and generate!'}
+                        {language === 'pl' ? 'Wypróbuj IDA szybko - prześlij zdjęcie, wybierz styl i generuj!' : 'Try IDA quickly - upload photo, choose style and generate!'}
                       </p>
                     </GlassCard>
                   </motion.button>
@@ -138,6 +139,7 @@ const LandingScreen: React.FC = () => {
                     transition={{ duration: 0.6, delay: 0.6 }}
                     whileHover={{ scale: 1.05, y: -5 }}
                     className="text-left w-full"
+                    aria-label={language === 'pl' ? 'Wybierz Pełne Doświadczenie (20-30 minut, polecane)' : 'Choose Full Experience (20-30 minutes, recommended)'}
                     onClick={async () => {
                       stopAllDialogueAudio();
                       if (!user) { 
@@ -159,13 +161,13 @@ const LandingScreen: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 pr-16 sm:pr-20">
                         <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                          <Heart size={20} className="sm:w-7 sm:h-7 text-white" fill="currentColor" />
+                          <Heart size={20} className="sm:w-7 sm:h-7 text-white" fill="currentColor" aria-hidden="true" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
+                          <h2 className="text-lg sm:text-xl lg:text-2xl font-nasalization text-graphite group-hover:text-silver-dark transition-colors">
                             {language === 'pl' ? 'Pełne Doświadczenie' : 'Full Experience'}
-                          </h3>
-                          <p className="text-xs text-silver-dark font-modern">20-30 min • 50 {language === 'pl' ? 'generacji' : 'generations'}</p>
+                          </h2>
+                          <p className="text-xs text-silver-dark font-modern">20-30 min</p>
                         </div>
                       </div>
                       <p className="text-xs sm:text-sm text-graphite font-modern">

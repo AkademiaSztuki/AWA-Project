@@ -32,7 +32,7 @@ export function MobileBackground() {
           fill
           priority
           quality={85}
-          className="object-cover"
+          className="object-cover bg-image"
           sizes="100vw"
           style={{
             objectFit: 'cover',

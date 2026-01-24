@@ -8,6 +8,10 @@ interface GlassSliderProps {
   value: number;
   onChange: (value: number) => void;
   className?: string;
+  id?: string;
+  ariaLabel?: string;
+  ariaValueText?: string;
+  showScaleMarkers?: boolean; // Whether to show scale markers below slider
 }
 
 export const GlassSlider: React.FC<GlassSliderProps> = ({
@@ -15,7 +19,11 @@ export const GlassSlider: React.FC<GlassSliderProps> = ({
   max,
   value,
   onChange,
-  className = ''
+  className = '',
+  id,
+  ariaLabel,
+  ariaValueText,
+  showScaleMarkers = false,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
@@ -24,7 +32,7 @@ export const GlassSlider: React.FC<GlassSliderProps> = ({
   const thumbHalf = thumbWidth / 2; // 24px
   
   // Oblicz pozycję tak żeby thumb był dokładnie na krawędziach
-  const leftPosition = percentage === 0 ? 0 : percentage === 100 ? `calc(100% - ${thumbWidth}px)` : `calc(${percentage}% - ${thumbHalf}px)`;
+  const leftPosition = `calc(${percentage}% - ${percentage / 100 * thumbWidth}px)`;
 
   const handleChange = (newValue: number) => {
     if (!hasInteracted) {
@@ -33,54 +41,66 @@ export const GlassSlider: React.FC<GlassSliderProps> = ({
     onChange(newValue);
   };
 
+  // Generate value text for screen readers
+  const getValueText = () => {
+    if (ariaValueText) return ariaValueText;
+    return `${value} z zakresu ${min} do ${max}`;
+  };
+
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className} min-h-[20px] w-full`}>
       {/* Glass container - pill-shaped like GlassSurface buttons */}
-      <div className="relative w-full h-5 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-[20px] overflow-hidden">
+      <div className="relative w-full h-5 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-[20px] overflow-visible">
         {/* Track background */}
-        <div className="absolute inset-0 bg-black/10 rounded-[20px]"></div>
+        <div className="absolute inset-0 bg-black/10 rounded-[20px]" aria-hidden="true"></div>
         
         {/* Progress track - bardziej przezroczysty */}
         <div 
-          className="absolute top-1/2 transform -translate-y-1/2 h-1.5 bg-gradient-to-r from-yellow-400/60 to-yellow-300/40 rounded-full transition-all duration-300 ease-in-out"
+          className="absolute top-1/2 transform -translate-y-1/2 h-1.5 bg-gradient-to-r from-yellow-400 to-yellow-300 rounded-full transition-all duration-300 ease-in-out"
           style={{ width: `${percentage}%` }}
+          aria-hidden="true"
         ></div>
         
         {/* Slider thumb - styled like bottom buttons */}
         <div 
-          className={`absolute top-1/2 transform -translate-y-1/2 w-12 h-4 bg-white/20 backdrop-blur-xl border border-white/30 shadow-xl rounded-[16px] cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 focus:ring-2 focus:ring-gold-400 ${
+          className={`absolute top-1/2 transform -translate-y-1/2 w-12 h-4 bg-white/40 backdrop-blur-xl border border-white/50 shadow-xl rounded-[16px] pointer-events-none transition-all duration-300 ease-in-out ${
             isDragging ? 'scale-110 border-gold/60 ring-2 ring-gold-400' : ''
           }`}
           style={{ left: leftPosition }}
-          onMouseDown={() => setIsDragging(true)}
-          onMouseUp={() => setIsDragging(false)}
-          onMouseLeave={() => setIsDragging(false)}
+          aria-hidden="true"
         >
         </div>
         
-        {/* Hidden input for accessibility */}
+        {/* Accessible input */}
         <input
+          id={id}
           type="range"
           min={min}
           max={max}
           value={value}
           onChange={(e) => handleChange(parseInt(e.target.value))}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          onMouseDown={() => setIsDragging(true)}
+          onMouseUp={() => setIsDragging(false)}
+          onMouseLeave={() => setIsDragging(false)}
+          className="glass-slider-input absolute inset-0 w-full h-full cursor-pointer focus:outline-none z-10"
+          style={{
+            WebkitAppearance: 'none',
+            appearance: 'none',
+            background: 'transparent',
+            outline: 'none',
+            margin: 0,
+            padding: 0,
+          }}
+          onFocus={(e) => {
+            e.target.blur();
+          }}
+          aria-label={ariaLabel || 'Suwak'}
+          aria-valuemin={min}
+          aria-valuemax={max}
+          aria-valuenow={value}
+          aria-valuetext={getValueText()}
+          tabIndex={0}
         />
-      </div>
-      
-      {/* Scale markers - only show when user has interacted */}
-      <div className="flex justify-between mt-2 px-2">
-        {Array.from({ length: max - min + 1 }, (_, i) => min + i).map((mark) => (
-          <div key={mark} className="flex flex-col items-center">
-            <div className={`w-2 h-2 rounded-full transition-all duration-200 ${
-              hasInteracted && mark <= value 
-                ? 'bg-gold shadow-[0_0_8px_3px_rgba(251,191,36,0.6)]' 
-                : 'bg-white/20'
-            }`}></div>
-            <span className="text-xs text-gray-500 mt-1 font-exo2">{mark}</span>
-          </div>
-        ))}
       </div>
     </div>
   );

@@ -35,14 +35,42 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
       // If audio is ready but not playing, try to play it
       if (audioRef.current && retryOnInteractionRef.current && autoPlay) {
         const audio = audioRef.current;
-        if (audio.paused && audio.readyState >= 2 && !playAttemptedRef.current) {
-          console.log('[DialogueAudioPlayer] User interaction detected, retrying audio playback');
-          playAttemptedRef.current = true;
-          audio.play().catch((error) => {
-            console.warn('DialogueAudioPlayer: Play failed on interaction retry', error);
-            // Reset playAttempted so we can try again on next interaction
-            playAttemptedRef.current = false;
-          });
+        // Wait for audio to be ready, but don't wait too long
+        if (audio.paused) {
+          if (audio.readyState >= 2) {
+            // Audio is ready, try to play immediately
+            console.log('[DialogueAudioPlayer] User interaction detected, retrying audio playback (ready)');
+            playAttemptedRef.current = true;
+            retryOnInteractionRef.current = false;
+            audio.play().catch((error) => {
+              console.warn('DialogueAudioPlayer: Play failed on interaction retry', error);
+              // Keep retry flag true for next interaction
+              retryOnInteractionRef.current = true;
+              playAttemptedRef.current = false;
+            });
+          } else {
+            // Audio not ready yet, wait for it
+            console.log('[DialogueAudioPlayer] User interaction detected, waiting for audio to be ready');
+            const tryPlayWhenReady = () => {
+              if (audioRef.current && audioRef.current.readyState >= 2 && audioRef.current.paused && retryOnInteractionRef.current) {
+                console.log('[DialogueAudioPlayer] Audio ready, retrying playback');
+                playAttemptedRef.current = true;
+                retryOnInteractionRef.current = false;
+                audioRef.current.play().catch((error) => {
+                  console.warn('DialogueAudioPlayer: Play failed after ready', error);
+                  retryOnInteractionRef.current = true;
+                  playAttemptedRef.current = false;
+                });
+              }
+            };
+            audio.addEventListener('canplay', tryPlayWhenReady, { once: true });
+            // Also try after a short delay in case canplay already fired
+            setTimeout(() => {
+              if (audio.readyState >= 2 && audio.paused && retryOnInteractionRef.current) {
+                tryPlayWhenReady();
+              }
+            }, 100);
+          }
         }
       }
     };
@@ -96,10 +124,22 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
                 retryOnInteractionRef.current = true;
                 playAttemptedRef.current = false; // Allow retry
                 if (userHasInteracted) {
+                  // Try immediately
                   setTimeout(() => {
                     if (audioRef.current && !audioRef.current.paused) return;
-                    audioRef.current?.play().catch(() => {});
+                    audioRef.current?.play().catch(() => {
+                      // If still blocked, keep retryOnInteractionRef true for next interaction
+                      retryOnInteractionRef.current = true;
+                    });
                   }, 100);
+                  // Also try after a longer delay for mobile browsers
+                  setTimeout(() => {
+                    if (audioRef.current && retryOnInteractionRef.current && audioRef.current.paused) {
+                      audioRef.current?.play().catch(() => {
+                        retryOnInteractionRef.current = true;
+                      });
+                    }
+                  }, 500);
                 }
               });
             }
@@ -136,10 +176,22 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
                     retryOnInteractionRef.current = true;
                     playAttemptedRef.current = false; // Allow retry
                     if (userHasInteracted) {
+                      // Try immediately
                       setTimeout(() => {
                         if (audioRef.current && !audioRef.current.paused) return;
-                        audioRef.current?.play().catch(() => {});
+                        audioRef.current?.play().catch(() => {
+                          // If still blocked, keep retryOnInteractionRef true for next interaction
+                          retryOnInteractionRef.current = true;
+                        });
                       }, 100);
+                      // Also try after a longer delay for mobile browsers
+                      setTimeout(() => {
+                        if (audioRef.current && retryOnInteractionRef.current && audioRef.current.paused) {
+                          audioRef.current?.play().catch(() => {
+                            retryOnInteractionRef.current = true;
+                          });
+                        }
+                      }, 500);
                     }
                   });
                 }
@@ -174,12 +226,24 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
                 // Mark that we should retry on next user interaction
                 retryOnInteractionRef.current = true;
                 playAttemptedRef.current = false; // Allow retry
-                // Retry on interaction if blocked
+                // Retry on interaction if blocked - try multiple times for mobile
                 if (userHasInteracted) {
+                  // Try immediately
                   setTimeout(() => {
                     if (audioRef.current && !audioRef.current.paused) return;
-                    audioRef.current?.play().catch(() => {});
+                    audioRef.current?.play().catch(() => {
+                      // If still blocked, keep retryOnInteractionRef true for next interaction
+                      retryOnInteractionRef.current = true;
+                    });
                   }, 100);
+                  // Also try after a longer delay for mobile browsers
+                  setTimeout(() => {
+                    if (audioRef.current && retryOnInteractionRef.current && audioRef.current.paused) {
+                      audioRef.current?.play().catch(() => {
+                        retryOnInteractionRef.current = true;
+                      });
+                    }
+                  }, 500);
                 }
               });
             }

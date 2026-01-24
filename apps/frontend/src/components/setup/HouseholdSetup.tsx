@@ -116,10 +116,10 @@ export function HouseholdSetup() {
           {/* Progress */}
           <div className="mb-8 h-12">
             <div className="flex items-center justify-between text-sm text-silver-dark mb-2 font-modern h-6">
-              <span>
+              <span aria-live="polite" aria-atomic="true">
                 {language === 'pl' ? 'Krok' : 'Step'} {step} / {totalSteps}
               </span>
-              <span>{Math.round((step / totalSteps) * 100)}%</span>
+              <span aria-live="polite" aria-atomic="true">{Math.round((step / totalSteps) * 100)}%</span>
             </div>
             <div className="glass-panel rounded-full h-3 overflow-hidden">
               <motion.div 
@@ -138,23 +138,27 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-                      <Home size={24} className="text-white" />
+                      <Home size={24} className="text-white" aria-hidden="true" />
                     </div>
-                    <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
+                    <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
                       {language === 'pl' ? 'Nazwa Przestrzeni' : 'Space Name'}
-                    </h2>
+                    </h1>
                   </div>
 
-                  <p className="text-graphite font-modern mb-6">
+                  <label 
+                    htmlFor="household-name-input"
+                    className="block text-graphite font-modern mb-2"
+                  >
                     {language === 'pl'
                       ? 'Jak nazwiemy tę przestrzeń?'
                       : 'What should we call this space?'}
-                  </p>
+                  </label>
 
                   <input
+                    id="household-name-input"
                     type="text"
                     value={householdData.name}
                     onChange={(e) => setHouseholdData({ ...householdData, name: e.target.value })}
@@ -193,7 +197,7 @@ export function HouseholdSetup() {
                       disabled={!householdData.name.trim()}
                     >
                       {language === 'pl' ? 'Dalej' : 'Next'}
-                      <ArrowRight size={18} />
+                      <ArrowRight size={18} aria-hidden="true" />
                     </GlassButton>
                   </div>
                 </GlassCard>
@@ -207,14 +211,14 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-                      <Users size={24} className="text-white" />
+                      <Users size={24} className="text-white" aria-hidden="true" />
                     </div>
-                    <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
+                    <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
                       {language === 'pl' ? 'Kto Tu Mieszka?' : 'Who Lives Here?'}
-                    </h2>
+                    </h1>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
@@ -240,7 +244,7 @@ export function HouseholdSetup() {
 
                   <div className="flex justify-between">
                     <GlassButton onClick={() => setStep(1)} variant="secondary">
-                      <ArrowLeft size={18} />
+                      <ArrowLeft size={18} aria-hidden="true" />
                       {language === 'pl' ? 'Wstecz' : 'Back'}
                     </GlassButton>
                     <GlassButton 
@@ -262,14 +266,14 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-                      <Target size={24} className="text-white" />
+                      <Target size={24} className="text-white" aria-hidden="true" />
                     </div>
-                    <h2 className="text-2xl lg:text-3xl font-nasalization text-graphite">
+                    <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
                       {language === 'pl' ? 'Cele Przestrzeni' : 'Space Goals'}
-                    </h2>
+                    </h1>
                   </div>
 
                   <p className="text-graphite font-modern mb-6">
@@ -324,7 +328,7 @@ export function HouseholdSetup() {
                         ? (language === 'pl' ? 'Zapisuję...' : 'Saving...')
                         : (language === 'pl' ? 'Zapisz i Dodaj Pokój' : 'Save & Add Room')
                       }
-                      <ArrowRight size={18} />
+                      <ArrowRight size={18} aria-hidden="true" />
                     </GlassButton>
                   </div>
                 </GlassCard>

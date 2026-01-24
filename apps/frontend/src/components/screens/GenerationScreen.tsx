@@ -109,9 +109,9 @@ export function GenerationScreen() {
 
       <div className="flex-1 p-8">
         <GlassCard className="w-full">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
+          <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
             Twoje Wizualizacje
-          </h2>
+          </h1>
 
           {isLoading ? (
             <div className="text-center py-12">
@@ -121,7 +121,7 @@ export function GenerationScreen() {
           ) : (
             <>
               {/* Grid obrazów */}
-              <div className="grid grid-cols-2 gap-6 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
                 {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
@@ -148,7 +148,7 @@ export function GenerationScreen() {
               {/* Oceny semantyczne */}
               {selectedImage && (
                 <GlassCard className="mb-8">
-                  <h3 className="text-xl font-semibold mb-4">Oceń wybrany obraz:</h3>
+                  <h2 className="text-xl font-semibold mb-4">Oceń wybrany obraz:</h2>
                   <div className="space-y-6">
                     {[
                       { label: 'Nietrafiona ↔ Idealna', key: 'match' },

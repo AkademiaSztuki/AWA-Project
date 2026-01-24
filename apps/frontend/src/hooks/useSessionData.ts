@@ -14,11 +14,15 @@ export const useSessionData = (): UseSessionDataReturn => {
   const { sessionData, updateSession, isInitialized } = useSession();
 
   const updateSessionData = useCallback((updates: Partial<SessionData>) => {
+    const normalizedUpdates: Partial<SessionData> = { ...updates };
+    if (normalizedUpdates.coreProfileComplete && !normalizedUpdates.coreProfileCompletedAt) {
+      normalizedUpdates.coreProfileCompletedAt = new Date().toISOString();
+    }
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSessionData.ts:updateSessionData',message:'Updating session data',data:{hasUserHash:!!sessionData?.userHash,updateKeys:Object.keys(updates),hasBigFive:!!updates.bigFive,hasVisualDNA:!!updates.visualDNA,hasColorsAndMaterials:!!updates.colorsAndMaterials,hasInspirations:!!updates.inspirations},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H13'})}).catch(()=>{});
     // #endregion
     
-    updateSession(updates);
+    updateSession(normalizedUpdates);
     // Zapisz całą sesję do supabase
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSessionData.ts:updateSessionData-check-sync',message:'Checking if sync should run',data:{disableSync:DISABLE_SESSION_SYNC,hasUserHash:!!sessionData?.userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H13'})}).catch(()=>{});
@@ -32,7 +36,7 @@ export const useSessionData = (): UseSessionDataReturn => {
         // #region agent log
         void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSessionData.ts:updateSessionData-calling-sync',message:'Calling saveFullSessionToSupabase',data:{hasUserHash:!!sessionData?.userHash,mergedKeys:Object.keys({...sessionData,...updates})},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H13'})}).catch(()=>{});
         // #endregion
-        void saveFullSessionToSupabase({ ...sessionData, ...updates });
+        void saveFullSessionToSupabase({ ...sessionData, ...normalizedUpdates });
       });
     } else {
       // #region agent log
