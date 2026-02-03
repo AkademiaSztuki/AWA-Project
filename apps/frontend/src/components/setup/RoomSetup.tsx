@@ -13,6 +13,9 @@ import { ACTIVITY_QUESTIONS, PAIN_POINTS } from '@/lib/questions/adaptive-questi
 import { ArrowRight, ArrowLeft, Camera, Activity, AlertCircle, Target, X, Heart, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 import { useModalAPI } from '@/hooks/useModalAPI';
+import { useDialogueVoice } from '@/hooks/useDialogueVoice';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
+import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
 import { saveRoom } from '@/lib/supabase-deep-personalization';
 import { useSession, useSessionData } from '@/hooks';
 import { saveParticipantImages } from '@/lib/remote-spaces';
@@ -73,6 +76,13 @@ const BASE_STEPS: SetupStep[] = [
   'summary'
 ];
 
+const buildRoomStepStorageKey = (roomId: string) => `awa-room-setup-step:${roomId}`;
+
+const getValidStep = (steps: SetupStep[], candidate?: string | null) => {
+  if (!candidate) return null;
+  return steps.includes(candidate as SetupStep) ? (candidate as SetupStep) : null;
+};
+
 type PreferenceSource = 'profile' | 'complete';
 type SemanticDimensionId = 'warmth' | 'brightness' | 'complexity' | 'texture';
 
@@ -115,8 +125,10 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   const router = useRouter();
   const { language } = useLanguage();
   const { sessionData, updateSessionData } = useSessionData();
+  const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
   
   const [currentStep, setCurrentStep] = useState<SetupStep>('photo_upload');
+  const hasRestoredStepRef = useRef(false);
   const [roomData, setRoomData] = useState<RoomData>({
     name: '',
     roomType: '',
@@ -125,6 +137,27 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     activities: []
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const [ttsError, setTtsError] = useState<string | null>(null);
+  const [isTtsPlaying, setIsTtsPlaying] = useState(false);
+  const [showInitialAnalysisDialog, setShowInitialAnalysisDialog] = useState(false);
+  const [analysisDialogActive, setAnalysisDialogActive] = useState(false);
+  const [analysisDialogId, setAnalysisDialogId] = useState<string | null>(null);
+  const [analysisDialogMessages, setAnalysisDialogMessages] = useState<string[] | null>(null);
+  const [furnitureSuggestionDialogActive, setFurnitureSuggestionDialogActive] = useState(false);
+  const [analysisCompleted, setAnalysisCompleted] = useState(false);
+  const lastSpokenTextRef = useRef<string | null>(null);
+  const ttsAbortRef = useRef<AbortController | null>(null);
+  const pendingTtsTextRef = useRef<string | null>(null);
+  const ttsInFlightRef = useRef(false);
+  const ttsStartedForCommentRef = useRef<string | null>(null);
+  const analysisActivatedForRef = useRef<string | null>(null);
+  const analysisDialogEndedRef = useRef<string | null>(null);
+  const ttsStartedForDialogRef = useRef<string | null>(null);
+  const initialDialogShownRef = useRef<boolean>(false);
+  const [pendingGeminiAfterInitial, setPendingGeminiAfterInitial] = useState(false);
+  const waitingForTtsToShowFurnitureSuggestionRef = useRef<boolean>(false);
+  const geminiTextPendingSeenRef = useRef<string | null>(null);
 
   // #region agent log
   const prevStepRef = useRef<string | null>(null);
@@ -161,11 +194,59 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         : BASE_STEPS.filter((step) => step !== 'preference_questions'),
     [shouldShowPreferenceQuestions]
   );
+  const stepStorageKey = useMemo(() => buildRoomStepStorageKey(householdId), [householdId]);
+
+  useEffect(() => {
+    if (hasRestoredStepRef.current) return;
+    hasRestoredStepRef.current = true;
+    if (typeof window === 'undefined') return;
+    const storedStep = sessionStorage.getItem(stepStorageKey);
+    const restored = getValidStep(steps, storedStep);
+    if (restored) {
+      setCurrentStep(restored);
+    }
+  }, [stepStorageKey, steps]);
+
+  useEffect(() => {
+    if (!steps.includes(currentStep)) {
+      setCurrentStep(steps[0] ?? 'photo_upload');
+    }
+  }, [steps, currentStep]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    sessionStorage.setItem(stepStorageKey, currentStep);
+  }, [stepStorageKey, currentStep]);
 
   const currentStepIndex = Math.max(0, steps.indexOf(currentStep));
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
 
+  const stopDialogsAndAudio = useCallback(() => {
+    stopAllDialogueAudio();
+    if (ttsAbortRef.current) {
+      ttsAbortRef.current.abort();
+      ttsAbortRef.current = null;
+    }
+    pendingTtsTextRef.current = null;
+    ttsStartedForDialogRef.current = null;
+    ttsStartedForCommentRef.current = null;
+    ttsInFlightRef.current = false;
+    waitingForTtsToShowFurnitureSuggestionRef.current = false;
+    geminiTextPendingSeenRef.current = null;
+    setTtsAudioUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setIsTtsPlaying(false);
+    setShowInitialAnalysisDialog(false);
+    setAnalysisDialogActive(false);
+    setAnalysisDialogId(null);
+    setAnalysisDialogMessages(null);
+    setFurnitureSuggestionDialogActive(false);
+  }, []);
+
   const handleNext = () => {
+    stopDialogsAndAudio();
     const nextIndex = currentStepIndex + 1;
     if (nextIndex < steps.length) {
       setCurrentStep(steps[nextIndex]);
@@ -173,6 +254,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   };
 
   const handleBack = () => {
+    stopDialogsAndAudio();
     const prevIndex = currentStepIndex - 1;
     if (prevIndex >= 0) {
       setCurrentStep(steps[prevIndex]);
@@ -182,6 +264,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   };
 
   const handleComplete = async () => {
+    stopDialogsAndAudio();
     setIsSaving(true);
     try {
       console.log('[RoomSetup] Saving room:', roomData);
@@ -192,43 +275,49 @@ export function RoomSetup({ householdId }: { householdId: string }) {
           ? mapActivitiesToRecommendations(roomData.activities)
           : undefined;
       
-      // Try to save to Supabase, but don't block if it fails
+      // Try to save to Supabase, but don't block navigation if it takes too long
+      const saveRoomPayload = {
+        householdId,
+        name: roomData.name,
+        roomType: roomData.roomType,
+        usageType: roomData.usageType,
+        sharedWith: roomData.sharedWith || [],
+        preferenceSource: roomData.preferenceSource === 'complete' ? 'questions' : roomData.preferenceSource,
+        roomPreferencePayload: roomData.explicitPreferences,
+        currentPhotos: (roomData.photos || []).map(url => ({ 
+          url, 
+          analysis: {
+            clutter: 0,
+            dominantColors: [],
+            detectedObjects: [],
+            lightQuality: 'bright',
+            aiComment: '',
+            humanComment: ''
+          },
+          uploadedAt: new Date().toISOString()
+        })),
+        prsCurrent: roomData.prsCurrent || { x: 0, y: 0 },
+        prsTarget: roomData.prsTarget || { x: 0, y: 0 },
+        painPoints: roomData.painPoints,
+        activities: (roomData.activities || []).map((activity) => ({
+          type: activity.type,
+          frequency: activity.frequency,
+          satisfaction: activity.satisfaction,
+          timeOfDay: activity.timeOfDay,
+          withWhom: activity.withWhom
+        })),
+        activityContext
+      } as Parameters<typeof saveRoom>[0];
       try {
-        const savedRoom = await saveRoom({
-          householdId,
-          name: roomData.name,
-          roomType: roomData.roomType,
-          usageType: roomData.usageType,
-          sharedWith: roomData.sharedWith || [],
-          preferenceSource: roomData.preferenceSource === 'complete' ? 'questions' : roomData.preferenceSource,
-          roomPreferencePayload: roomData.explicitPreferences,
-          currentPhotos: (roomData.photos || []).map(url => ({ 
-            url, 
-            analysis: {
-              clutter: 0,
-              dominantColors: [],
-              detectedObjects: [],
-              lightQuality: 'bright',
-              aiComment: '',
-              humanComment: ''
-            },
-            uploadedAt: new Date().toISOString()
-          })),
-          prsCurrent: roomData.prsCurrent || { x: 0, y: 0 },
-          prsTarget: roomData.prsTarget || { x: 0, y: 0 },
-          painPoints: roomData.painPoints,
-          activities: (roomData.activities || []).map((activity) => ({
-            type: activity.type,
-            frequency: activity.frequency,
-            satisfaction: activity.satisfaction,
-            timeOfDay: activity.timeOfDay,
-            withWhom: activity.withWhom
-          })),
-          activityContext
-        });
+        const savedRoom = await Promise.race([
+          saveRoom(saveRoomPayload),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
+        ]);
         
         if (savedRoom) {
           console.log('[RoomSetup] Room saved with ID:', savedRoom.id);
+        } else {
+          console.warn('[RoomSetup] Room save timed out, continuing to generate');
         }
       } catch (dbError) {
         console.warn('[RoomSetup] Could not save to DB (migrations not applied?), continuing anyway:', dbError);
@@ -319,10 +408,19 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         prsCurrent: roomData.prsCurrent,
         prsTarget: roomData.prsTarget,
         currentSpaceId: targetSpaceId,
-        spaces: updatedSpaces
-      });
-      
-      // Save room photos to participant_images
+        spaces: updatedSpaces,
+        // Clear old generation data for new room
+        matrixHistory: [],
+        selectedImage: null,
+        blindSelectionMade: false,
+        generatedImages: [],
+        generations: []
+      } as any);
+
+      console.log('[RoomSetup] Session updated, navigating to generate flow');
+      router.push(`/flow/generate`);
+
+      // Save room photos to participant_images in background (do not block navigation)
       try {
         const userHash = (sessionData as any)?.userHash;
         // #region agent log
@@ -331,24 +429,24 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         if (userHash && roomImageBase64) {
           // Convert base64 to data URL for saveParticipantImages
           const dataUrl = `data:image/jpeg;base64,${roomImageBase64}`;
-          await saveParticipantImages(userHash, [{
+          void saveParticipantImages(userHash, [{
             url: dataUrl,
             type: 'room_photo',
             is_favorite: false
-          }]);
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleComplete-complete',message:'Room photo saved successfully',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H10'})}).catch(()=>{});
-          // #endregion
+          }]).then(() => {
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleComplete-complete',message:'Room photo saved successfully',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H10'})}).catch(()=>{});
+            // #endregion
+          }).catch((e) => {
+            // #region agent log
+            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleComplete-error',message:'Error saving room photo',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H10'})}).catch(()=>{});
+            // #endregion
+            console.warn('[RoomSetup] Failed to save room photo to participant_images:', e);
+          });
         }
       } catch (e) {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleComplete-error',message:'Error saving room photo',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H10'})}).catch(()=>{});
-        // #endregion
-        console.warn('[RoomSetup] Failed to save room photo to participant_images:', e);
+        console.warn('[RoomSetup] Failed to start room photo save:', e);
       }
-      
-      // Navigate to generate flow
-      router.push(`/flow/generate`);
       
     } catch (error) {
       console.error('[RoomSetup] Error in handleComplete:', error);
@@ -358,53 +456,201 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     }
   };
 
+  const roomAnalysis = (sessionData as any)?.roomAnalysis;
+  const roomComment = language === 'pl'
+    ? (roomAnalysis?.comment_pl ?? roomAnalysis?.human_comment ?? roomAnalysis?.comment)
+    : (roomAnalysis?.comment_en ?? roomAnalysis?.comment);
+  const hasPhotos = roomData.photos && roomData.photos.length > 0;
+  const isAlreadySeen = (sessionData as any)?.roomAnalysisCommentSeen === roomComment;
+  const shouldShowAnalysis = currentStep === 'photo_upload' && hasPhotos && roomComment && !isAlreadySeen;
+  const shouldShowInitialDialog = currentStep === 'photo_upload' && hasPhotos && !initialDialogShownRef.current;
+  const analysisExtraInfo = language === 'pl'
+    ? "Sugestia: Jeśli chcesz, możesz usunąć meble ze zdjęcia przyciskiem poniżej. Pomoże to stworzyć zupełnie nową aranżację bez sugerowania się obecnym układem."
+    : "Pro Tip: You can remove furniture using the button below. This helps create a completely new arrangement without being influenced by the current layout.";
+
+  const requestTts = useCallback((text: string, force = false) => {
+    if (!text || !voiceEnabled) return;
+    if (!force && lastSpokenTextRef.current === text) return;
+    if (isTtsPlaying || ttsInFlightRef.current) {
+      pendingTtsTextRef.current = text;
+      return;
+    }
+
+    lastSpokenTextRef.current = text;
+    setTtsError(null);
+    setTtsAudioUrl(null);
+    stopAllDialogueAudio();
+    ttsInFlightRef.current = true;
+
+    if (ttsAbortRef.current) {
+      ttsAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    ttsAbortRef.current = controller;
+
+    (async () => {
+      try {
+        const response = await fetch('/api/elevenlabs/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          const message = errorText || `HTTP ${response.status}`;
+          console.error('ElevenLabs TTS error:', response.status, message);
+          setTtsError(message);
+          setIsTtsPlaying(false);
+          ttsInFlightRef.current = false;
+          return;
+        }
+
+        const audioBlob = await response.blob();
+        if (controller.signal.aborted) return;
+        const url = URL.createObjectURL(audioBlob);
+        setTtsAudioUrl(url);
+        setIsTtsPlaying(true);
+        ttsInFlightRef.current = false;
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          console.error('Failed to fetch ElevenLabs audio:', error);
+          setTtsError((error as Error).message || 'TTS request failed');
+          setIsTtsPlaying(false);
+          ttsInFlightRef.current = false;
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [voiceEnabled, isTtsPlaying]);
+
+  useEffect(() => {
+    if (!hasPhotos) {
+      initialDialogShownRef.current = false;
+      setAnalysisCompleted(false);
+      setFurnitureSuggestionDialogActive(false);
+      waitingForTtsToShowFurnitureSuggestionRef.current = false;
+      geminiTextPendingSeenRef.current = null;
+    }
+  }, [hasPhotos]);
+
+  useEffect(() => {
+    if (showInitialAnalysisDialog || analysisDialogActive) return;
+    if (!shouldShowInitialDialog) return;
+
+    initialDialogShownRef.current = true;
+    analysisDialogEndedRef.current = null;
+    ttsStartedForDialogRef.current = null;
+    setShowInitialAnalysisDialog(true);
+  }, [showInitialAnalysisDialog, analysisDialogActive, shouldShowInitialDialog]);
+
+  useEffect(() => {
+    if (!pendingGeminiAfterInitial || !roomComment || isAlreadySeen || analysisDialogActive) return;
+    analysisActivatedForRef.current = roomComment;
+    analysisDialogEndedRef.current = null;
+    ttsStartedForDialogRef.current = null;
+    const id = `analysis-${roomComment.slice(0, 40)}-${Date.now()}`;
+    setAnalysisDialogId(id);
+    setAnalysisDialogMessages([roomComment]); // Tylko roomComment, bez analysisExtraInfo
+    setAnalysisDialogActive(true);
+    setPendingGeminiAfterInitial(false);
+  }, [pendingGeminiAfterInitial, roomComment, isAlreadySeen, analysisDialogActive]);
+
+  useEffect(() => {
+    return () => {
+      if (ttsAudioUrl) {
+        URL.revokeObjectURL(ttsAudioUrl);
+      }
+    };
+  }, [ttsAudioUrl]);
+
   return (
     <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
       {/* Dialog IDA na dole - dynamiczny dla każdego kroku, pokazuje komentarz IDA jeśli dostępny */}
-      {(() => {
-        const roomAnalysis = (sessionData as any)?.roomAnalysis;
-        const roomComment = language === 'pl' 
-          ? (roomAnalysis?.human_comment || roomAnalysis?.comment)
-          : (roomAnalysis?.comment || roomAnalysis?.human_comment);
-        
-        const hasProcessedImage = (sessionData as any)?.roomImageEmpty;
-        const hasPhotos = roomData.photos && roomData.photos.length > 0;
-        
-        // Pokazuj komentarz analizy tylko w kroku photo_upload, jeśli zdjęcie zostało wgrane,
-        // komentarz jest dostępny i nie został jeszcze w pełni wyświetlony w tej sesji.
-        const isAlreadySeen = (sessionData as any)?.roomAnalysisCommentSeen === roomComment;
-        const showAnalysis = currentStep === 'photo_upload' && hasPhotos && roomComment && !isAlreadySeen;
-
-        if (showAnalysis) {
-          const extraInfo = hasProcessedImage
-            ? (language === 'pl'
-                ? "Usunąłeś meble ze zdjęcia - to świetny pomysł! Dzięki temu generowane wizualizacje nie będą zbyt mocno trzymać się obecnego układu mebli."
-                : "You removed furniture from the photo - great idea! This will help generated visualizations not stick too closely to the current furniture layout.")
-            : (language === 'pl'
-                ? "Sugestia: Jeśli chcesz, możesz usunąć meble ze zdjęcia przyciskiem poniżej. Pomoże to IDA stworzyć zupełnie nową aranżację bez sugerowania się obecnym układem."
-                : "Pro Tip: You can remove furniture using the button below. This helps IDA create a completely new arrangement without being influenced by the current layout.");
-          
-          return (
-            <div className="fixed bottom-0 left-0 right-0 w-full z-50">
-              <AwaDialogue 
-                key="room-analysis-dialogue"
-                currentStep="room_analysis_ready" 
-                fullWidth={true}
-                autoHide={true}
-                customMessage={[roomComment, extraInfo]}
-                onDialogueEnd={() => {
-                  console.log('[RoomSetup] Analysis dialogue finished, marking as seen');
-                  updateSessionData({ roomAnalysisCommentSeen: roomComment } as any);
-                }}
-              />
-            </div>
-          );
-        }
-
-        // Standardowy dialog dla danego kroku
-        return (
+      {showInitialAnalysisDialog ? (
+        <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+          <AwaDialogue 
+            key="initial-analysis"
+            currentStep="room_analysis" 
+            fullWidth={true}
+            autoHide={false}
+            onDialogueEnd={() => {
+              console.log('[RoomSetup] Initial analysis dialogue finished');
+              setShowInitialAnalysisDialog(false);
+              if (roomComment && !isAlreadySeen) {
+                analysisActivatedForRef.current = roomComment;
+                analysisDialogEndedRef.current = null;
+                ttsStartedForDialogRef.current = null;
+                const id = `analysis-${roomComment.slice(0, 40)}-${Date.now()}`;
+                setAnalysisDialogId(id);
+                setAnalysisDialogMessages([roomComment]); // Tylko roomComment, bez analysisExtraInfo
+                setAnalysisDialogActive(true);
+              } else if (!roomComment) {
+                setPendingGeminiAfterInitial(true);
+              }
+            }}
+          />
+        </div>
+      ) : analysisDialogActive && analysisDialogId && analysisDialogMessages ? (
+        <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+          <AwaDialogue 
+            key={analysisDialogId}
+            currentStep="room_analysis_ready" 
+            fullWidth={true}
+            autoHide={false}
+            disableAudio={true}
+            customMessage={analysisDialogMessages}
+            onSentenceStart={(text) => {
+              const geminiText = analysisDialogMessages[0];
+              if (!geminiText || text !== geminiText) return;
+              if (ttsStartedForDialogRef.current === geminiText) return;
+              ttsStartedForDialogRef.current = geminiText;
+              requestTts(geminiText, true);
+            }}
+            onDialogueEnd={() => {
+              const geminiText = analysisDialogMessages[0];
+              if (!geminiText) return;
+              if (analysisDialogEndedRef.current === geminiText) return;
+              analysisDialogEndedRef.current = geminiText;
+              // Dialog ma być widoczny tak długo, jak gra TTS – zamykamy dopiero po zakończeniu TTS
+              if (isTtsPlaying || ttsInFlightRef.current) {
+                waitingForTtsToShowFurnitureSuggestionRef.current = true;
+                geminiTextPendingSeenRef.current = geminiText;
+                return;
+              }
+              console.log('[RoomSetup] Analysis dialogue finished, marking as seen');
+              updateSessionData({ roomAnalysisCommentSeen: geminiText } as any);
+              setAnalysisDialogActive(false);
+              setAnalysisDialogId(null);
+              setAnalysisDialogMessages(null);
+              setAnalysisCompleted(true);
+              setFurnitureSuggestionDialogActive(true);
+            }}
+          />
+        </div>
+      ) : furnitureSuggestionDialogActive ? (
+        <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+          <AwaDialogue 
+            key="furniture-suggestion"
+            currentStep="room_furniture_suggestion" 
+            fullWidth={true}
+            autoHide={false}
+            customMessage={[analysisExtraInfo]}
+            onDialogueEnd={() => {
+              console.log('[RoomSetup] Furniture suggestion dialogue finished');
+              setFurnitureSuggestionDialogActive(false);
+            }}
+          />
+        </div>
+      ) : (
+        // Nie pokazuj dialogu "upload" jeśli już pokazaliśmy analizę (użytkownik już dodał zdjęcie)
+        !(currentStep === 'photo_upload' && hasPhotos && (analysisCompleted || initialDialogShownRef.current)) && (
           <div className="fixed bottom-0 left-0 right-0 w-full z-50">
             <AwaDialogue 
               key={`step-${currentStep}`}
@@ -413,8 +659,37 @@ export function RoomSetup({ householdId }: { householdId: string }) {
               autoHide={true}
             />
           </div>
-        );
-      })()}
+        )
+      )}
+      {voiceEnabled && ttsAudioUrl && (
+        <DialogueAudioPlayer
+          src={ttsAudioUrl}
+          volume={voiceVolume}
+          autoPlay={true}
+          onEnded={() => {
+            setIsTtsPlaying(false);
+            const nextText = pendingTtsTextRef.current;
+            if (nextText) {
+              pendingTtsTextRef.current = null;
+              requestTts(nextText, true);
+            } else if (waitingForTtsToShowFurnitureSuggestionRef.current) {
+              // TTS dla komentarza Gemini się skończyło – zamknij dialog Gemini i uruchom dialog z sugestią
+              waitingForTtsToShowFurnitureSuggestionRef.current = false;
+              const geminiText = geminiTextPendingSeenRef.current;
+              geminiTextPendingSeenRef.current = null;
+              if (geminiText) {
+                console.log('[RoomSetup] Analysis dialogue finished (after TTS), marking as seen');
+                updateSessionData({ roomAnalysisCommentSeen: geminiText } as any);
+              }
+              setAnalysisDialogActive(false);
+              setAnalysisDialogId(null);
+              setAnalysisDialogMessages(null);
+              setAnalysisCompleted(true);
+              setFurnitureSuggestionDialogActive(true);
+            }
+          }}
+        />
+      )}
 
       <div className="flex-1 p-4 lg:p-8 pb-32">
         <div className="max-w-3xl lg:max-w-none mx-auto">
@@ -760,10 +1035,13 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       try {
         setIsGeneratingHumanComment(true);
         const response = await generateLLMComment(type, description, 'room_analysis');
-        setHumanComment(response.comment);
-        // Update sessionData with human_comment
-        if (roomAnalysis) {
-          updateSessionData({ roomAnalysis: { ...roomAnalysis, human_comment: response.comment } } as any);
+        const trimmed = response.comment?.trim();
+        if (trimmed) {
+          setHumanComment(trimmed);
+          // Update sessionData with human_comment
+          if (roomAnalysis) {
+            updateSessionData({ roomAnalysis: { ...roomAnalysis, human_comment: trimmed } } as any);
+          }
         }
       } catch (error) {
         console.error('Nie udało się wygenerować komentarza IDA (LLM):', error);
@@ -787,7 +1065,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       console.log(`File converted to base64, length: ${base64.length} chars`);
       
       // Analyze room using Google Gemini 2.0 Flash (replaced Gemma 3)
-      const analysis = await analyzeRoom({ image: base64, metadata: { source: 'setup-room-step' } });
+      const analysis = await analyzeRoom({ image: base64, metadata: { source: 'setup-room-step' }, language });
       
       console.log('Room analysis result:', analysis);
       
@@ -964,6 +1242,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8',location:'RoomSetup.tsx:PhotoUploadStep:handleExampleSelect',message:'Example image selected',data:{uploadId:lastUploadIdRef.current,imageUrl,step:'photo_upload'},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
       // Pre-computed metadata for example images - NO ANALYSIS NEEDED!
+      // comment_pl / comment_en ensure correct language for display and TTS.
       const exampleMetadata: { [key: string]: any } = {
         '/images/tinder/Living Room (1).jpg': {
           roomType: 'living_room',
@@ -971,6 +1250,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           confidence: 0.95,
           roomDescription: 'Modern living room with comfortable seating',
           comment: 'This is a bright, modern living space with excellent natural light.',
+          comment_pl: 'Nowoczesny salon z dużą ilością światła naturalnego i wygodnymi meblami.',
+          comment_en: 'This is a bright, modern living space with excellent natural light.',
           humanComment: 'Nowoczesny salon z dużą ilością światła naturalnego i wygodnymi meblami.'
         },
         '/images/tinder/Living Room (2).jpg': {
@@ -979,6 +1260,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           confidence: 0.93,
           roomDescription: 'Modern minimalist living room with neutral tones, natural wood furniture, and abundant greenery',
           comment: 'A serene Scandinavian-inspired living room with light wood, cream tones, and natural plants.',
+          comment_pl: 'Minimalistyczny salon w stylu skandynawskim z jasnym drewnem, kremowymi tonami i naturalnymi roślinami.',
+          comment_en: 'A serene Scandinavian-inspired living room with light wood, cream tones, and natural plants.',
           humanComment: 'Minimalistyczny salon w stylu skandynawskim z jasnym drewnem, kremowymi tonami i naturalnymi roślinami.'
         },
         '/images/tinder/Living Room (3).jpg': {
@@ -987,6 +1270,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           confidence: 0.92,
           roomDescription: 'Cozy living room with warm atmosphere',
           comment: 'A cozy, inviting living room with warm tones.',
+          comment_pl: 'Przytulny salon z ciepłymi tonami i przyjazną atmosferą.',
+          comment_en: 'A cozy, inviting living room with warm tones.',
           humanComment: 'Przytulny salon z ciepłymi tonami i przyjazną atmosferą.'
         }
       };
@@ -1025,22 +1310,23 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           confidence: metadata.confidence,
           room_description: metadata.roomDescription,
           comment: metadata.comment,
+          comment_pl: metadata.comment_pl,
+          comment_en: metadata.comment_en,
           human_comment: metadata.humanComment,
-          suggestions: []
+          suggestions: [] as string[]
         };
         setRoomAnalysis(roomAnalysisData);
-        setLlmComment({
-          comment: metadata.comment,
-          suggestions: []
-        });
-        setHumanComment(metadata.humanComment);
-        
+        const commentForLang = language === 'pl'
+          ? (metadata.comment_pl ?? metadata.humanComment)
+          : (metadata.comment_en ?? metadata.comment);
+        setLlmComment({ comment: commentForLang, suggestions: [] });
+        setHumanComment(commentForLang);
+
         // Save to sessionData so dialogue can access it
         console.log('[PhotoUploadStep] Saving example image roomAnalysis to sessionData:', {
-          hasHumanComment: !!metadata.humanComment,
-          humanComment: metadata.humanComment,
-          hasComment: !!metadata.comment,
-          comment: metadata.comment
+          language,
+          hasCommentForLang: !!commentForLang,
+          commentForLang: commentForLang?.slice(0, 60)
         });
         updateSessionData({ roomAnalysis: roomAnalysisData } as any);
       } else {

@@ -15,9 +15,20 @@ function AuthCallbackContent() {
     
     // Guard: prevent multiple executions (React StrictMode in dev)
     const callbackKey = `auth_callback_${window.location.search}${window.location.hash}`;
-    const storedState = safeSessionStorage.getItem(callbackKey);
+    const storedStateRaw = safeSessionStorage.getItem(callbackKey);
+    const parsedState = (() => {
+      if (!storedStateRaw) return null;
+      try {
+        return JSON.parse(storedStateRaw) as { state?: string; ts?: number };
+      } catch {
+        return { state: storedStateRaw };
+      }
+    })();
+    const storedState = parsedState?.state;
+    const storedAt = typeof parsedState?.ts === 'number' ? parsedState?.ts : null;
+    const isStaleProcessing = storedState === 'processing' && storedAt && Date.now() - storedAt > 60_000;
     
-    if (storedState === 'completed' || storedState === 'processing') {
+    if (storedState === 'completed' || (storedState === 'processing' && !isStaleProcessing)) {
       console.log('[AuthCallback] Already processed or processing this URL');
       if (storedState === 'completed') {
         const next = params.get('next') || '/';
@@ -26,7 +37,7 @@ function AuthCallbackContent() {
       return;
     }
     
-    safeSessionStorage.setItem(callbackKey, 'processing');
+    safeSessionStorage.setItem(callbackKey, JSON.stringify({ state: 'processing', ts: Date.now() }));
 
     const handleCallback = async () => {
       try {
@@ -43,22 +54,24 @@ function AuthCallbackContent() {
 
         // Apply pathType if found in storage
         if (pathTypeFromStorage) {
-          try {
-            const { supabase: supabaseClient } = await import('@/lib/supabase');
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session?.user) {
-              const { saveFullSessionToSupabase } = await import('@/lib/supabase');
-              await saveFullSessionToSupabase({ 
-                userHash: session.user.id, // Temporary fallback if no hash
-                pathType: pathTypeFromStorage as 'fast' | 'full',
-                currentStep: 'onboarding'
-              });
-              console.log('[AuthCallback] pathType applied:', pathTypeFromStorage);
-            }
-          } catch (err) {
-            console.warn('[AuthCallback] Failed to apply pathType:', err);
-          }
           safeSessionStorage.removeItem('aura_auth_path_type');
+          void (async () => {
+            try {
+              const { supabase: supabaseClient } = await import('@/lib/supabase');
+              const { data: { session } } = await supabaseClient.auth.getSession();
+              if (session?.user) {
+                const { saveFullSessionToSupabase } = await import('@/lib/supabase');
+                await saveFullSessionToSupabase({ 
+                  userHash: session.user.id, // Temporary fallback if no hash
+                  pathType: pathTypeFromStorage as 'fast' | 'full',
+                  currentStep: 'onboarding'
+                });
+                console.log('[AuthCallback] pathType applied:', pathTypeFromStorage);
+              }
+            } catch (err) {
+              console.warn('[AuthCallback] Failed to apply pathType:', err);
+            }
+          })();
         }
 
         // Clear the storage once we've read it
@@ -70,7 +83,7 @@ function AuthCallbackContent() {
         const { data: { session: existingSession } } = await supabase.auth.getSession();
         if (existingSession) {
           console.log('[AuthCallback] Session exists, finishing up');
-          safeSessionStorage.setItem(callbackKey, 'completed');
+          safeSessionStorage.setItem(callbackKey, JSON.stringify({ state: 'completed', ts: Date.now() }));
           window.location.replace(next);
           return;
         }
@@ -112,7 +125,7 @@ function AuthCallbackContent() {
         if (!isMounted) return;
 
         console.log('[AuthCallback] Success, redirecting...');
-        safeSessionStorage.setItem(callbackKey, 'completed');
+        safeSessionStorage.setItem(callbackKey, JSON.stringify({ state: 'completed', ts: Date.now() }));
         window.location.replace(next);
 
       } catch (e) {

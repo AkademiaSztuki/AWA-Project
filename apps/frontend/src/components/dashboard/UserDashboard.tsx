@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
+import { useDashboardAccess } from '@/hooks/useDashboardAccess';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -79,6 +80,7 @@ export function UserDashboard() {
   const { sessionData, updateSessionData } = useSessionData();
   const { language } = useLanguage();
   const { user, linkUserHashToAuth } = useAuth();
+  const { isComplete: hasDashboardAccess, isLoading: isDashboardAccessLoading, isResolved: isDashboardAccessResolved } = useDashboardAccess();
   
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [remoteSession, setRemoteSession] = useState<any>(null);
@@ -90,11 +92,11 @@ export function UserDashboard() {
 
   // DODATKOWA BLOKADA: Dashboard dostępny tylko dla użytkowników po pełnej ścieżce
   useEffect(() => {
-    if (!isLoading && !sessionData?.coreProfileComplete) {
+    if (!isLoading && !isDashboardAccessLoading && isDashboardAccessResolved && !hasDashboardAccess) {
       console.warn('[UserDashboard] Redirecting - profile not complete');
       router.replace('/');
     }
-  }, [sessionData?.coreProfileComplete, isLoading, router]);
+  }, [hasDashboardAccess, isDashboardAccessLoading, isDashboardAccessResolved, isLoading, router]);
 
   const getUserHash = useCallback((): string | undefined => {
     let userHash = sessionData?.userHash as string | undefined;
@@ -373,7 +375,7 @@ export function UserDashboard() {
 
       // Completion status (RPC) – may fail on unauthenticated clients
       try {
-        const status = await getCompletionStatus(userHash);
+        const status = await getCompletionStatus(userHash, user?.id);
         if (status) setCompletionStatus(status);
       } catch (e) {
         console.warn('[Dashboard] getCompletionStatus failed (likely unauthenticated):', e);
@@ -1085,7 +1087,18 @@ function ProfileOverview({ sessionData, remoteSession, completionStatus }: { ses
 
   const hasBigFive = !!source?.bigFive || !!completionStatus?.coreProfileComplete;
   const hasInspirations = (source?.inspirations?.length || 0) > 0;
-  const hasRoom = !!source?.roomImage || !!source?.currentRoomId || !!(completionStatus?.roomCount && completionStatus.roomCount > 0);
+  
+  // Check if user has generated rooms/spaces
+  const hasSpaces = (source?.spaces?.length || 0) > 0;
+  const hasGeneratedImages = source?.spaces?.some((space: any) => 
+    space.images?.some((img: any) => img.type === 'generated')
+  ) || false;
+  
+  const hasRoom = !!source?.roomImage 
+    || !!source?.currentRoomId 
+    || !!(completionStatus?.roomCount && completionStatus.roomCount > 0)
+    || hasSpaces
+    || hasGeneratedImages;
 
   const completedItems = [hasVisualDNA, hasExplicitPreferences, hasBigFive, hasInspirations, hasRoom].filter(Boolean).length;
   const totalItems = 5;

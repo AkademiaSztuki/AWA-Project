@@ -686,9 +686,78 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
   }
 }
 
-export async function getCompletionStatus(userHash: string): Promise<CompletionStatus | null> {
-  // Legacy RPC removed/unused after radical refactor (participants snapshot is source of truth)
-  return null;
+export async function getCoreProfileCompletionStatus(options: {
+  authUserId?: string;
+  userHash?: string;
+}): Promise<{ coreProfileComplete: boolean; coreProfileCompletedAt?: string | null } | null> {
+  const { authUserId, userHash } = options;
+
+  if (!authUserId && !userHash) return null;
+
+  try {
+    if (authUserId) {
+      const { data, error } = await supabase
+        .from('participants')
+        .select('core_profile_complete, core_profile_completed_at, updated_at, user_hash')
+        .eq('auth_user_id', authUserId)
+        .order('core_profile_complete', { ascending: false })
+        .order('core_profile_completed_at', { ascending: false })
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.warn('getCoreProfileCompletionStatus (auth_user_id) error:', error);
+      }
+
+      if (data) {
+        return {
+          coreProfileComplete: !!data.core_profile_complete,
+          coreProfileCompletedAt: data.core_profile_completed_at
+        };
+      }
+    }
+
+    if (userHash) {
+      const { data, error } = await supabase
+        .from('participants')
+        .select('core_profile_complete, core_profile_completed_at')
+        .eq('user_hash', userHash)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('getCoreProfileCompletionStatus (user_hash) error:', error);
+        return null;
+      }
+
+      if (data) {
+        return {
+          coreProfileComplete: !!data.core_profile_complete,
+          coreProfileCompletedAt: data.core_profile_completed_at
+        };
+      }
+    }
+
+    return { coreProfileComplete: false, coreProfileCompletedAt: null };
+  } catch (error) {
+    console.warn('getCoreProfileCompletionStatus error:', error);
+    return null;
+  }
+}
+
+export async function getCompletionStatus(userHash: string, authUserId?: string): Promise<CompletionStatus | null> {
+  const completion = await getCoreProfileCompletionStatus({ authUserId, userHash });
+  if (!completion) return null;
+
+  const coreProfileComplete = !!completion.coreProfileComplete;
+  return {
+    coreProfileComplete,
+    hasHouseholds: false,
+    householdCount: 0,
+    roomCount: 0,
+    sessionCount: 0,
+    nextStep: coreProfileComplete ? 'ready' : 'complete_profile'
+  };
 }
 
 // =========================

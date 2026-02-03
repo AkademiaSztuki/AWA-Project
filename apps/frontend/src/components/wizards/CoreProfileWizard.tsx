@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -41,6 +41,8 @@ const STEP_TO_DIALOGUE: Record<WizardStep, string> = {
   semantic_diff: 'wizard_semantic',
   sensory_tests: 'wizard_sensory'
 };
+
+const WIZARD_STEP_STORAGE_KEY = 'awa-core-profile-step';
 
 // Heuristic extraction of implicit warmth / brightness / complexity from Tinder swipes
 function computeImplicitSemanticsFromSwipes(swipes: Array<{ direction: 'left' | 'right'; tags?: string[]; categories?: any }>) {
@@ -329,6 +331,7 @@ export function CoreProfileWizard() {
   const { user, linkUserHashToAuth } = useAuth();
   
   const [currentStep, setCurrentStep] = useState<WizardStep>('consent');
+  const hasRestoredStepRef = useRef(false);
   const [profileData, setProfileData] = useState<CoreProfileData>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentInsight, setCurrentInsight] = useState<string>('');
@@ -353,22 +356,6 @@ export function CoreProfileWizard() {
     }));
   }, [language]);
 
-  // Skip already completed steps (consent, demographics) if coming from OnboardingScreen
-  useEffect(() => {
-    if (isInitialized && currentStep === 'consent') {
-      const hasConsent = !!sessionData.consentTimestamp;
-      const hasDemographics = !!(sessionData.demographics?.ageRange && sessionData.demographics?.gender);
-      
-      if (hasConsent && hasDemographics) {
-        console.log('[CoreProfileWizard] Skipping completed steps, going to lifestyle');
-        setCurrentStep('lifestyle');
-      } else if (hasConsent) {
-        console.log('[CoreProfileWizard] Skipping consent, going to demographics');
-        setCurrentStep('demographics');
-      }
-    }
-  }, [isInitialized, sessionData, currentStep]);
-
   const steps: WizardStep[] = [
     'consent',
     'demographics',
@@ -377,6 +364,36 @@ export function CoreProfileWizard() {
     'semantic_diff',
     'sensory_tests'
   ];
+
+  // Restore saved step or skip completed intro steps on first load
+  useEffect(() => {
+    if (!isInitialized || hasRestoredStepRef.current) return;
+    hasRestoredStepRef.current = true;
+
+    const hasConsent = !!sessionData.consentTimestamp;
+    const hasDemographics = !!(sessionData.demographics?.ageRange && sessionData.demographics?.gender);
+
+    if (typeof window !== 'undefined' && hasConsent && hasDemographics) {
+      const stored = sessionStorage.getItem(WIZARD_STEP_STORAGE_KEY) as WizardStep | null;
+      if (stored && steps.includes(stored)) {
+        setCurrentStep(stored);
+        return;
+      }
+    }
+
+    if (hasConsent && hasDemographics) {
+      console.log('[CoreProfileWizard] Skipping completed steps, going to lifestyle');
+      setCurrentStep('lifestyle');
+    } else if (hasConsent) {
+      console.log('[CoreProfileWizard] Skipping consent, going to demographics');
+      setCurrentStep('demographics');
+    }
+  }, [isInitialized, sessionData, steps]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    sessionStorage.setItem(WIZARD_STEP_STORAGE_KEY, currentStep);
+  }, [currentStep]);
 
   const currentStepIndex = steps.indexOf(currentStep);
 
@@ -611,6 +628,10 @@ export function CoreProfileWizard() {
         coreProfileComplete: true,
         coreProfileCompletedAt: new Date().toISOString()
       });
+
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem(WIZARD_STEP_STORAGE_KEY);
+      }
 
       // Continue with flow - go to inspirations next
       router.push('/flow/inspirations');

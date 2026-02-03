@@ -17,7 +17,10 @@ import { GoogleAuth } from 'google-auth-library';
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY;
 const GOOGLE_CLOUD_PROJECT = process.env.GOOGLE_CLOUD_PROJECT;
-const GOOGLE_CLOUD_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'global';
+// Use europe-west4 (Netherlands) for European users - closer to Poland
+// This provides better latency than us-central1 and more capacity than smaller EU regions
+// Alternative: europe-central2 (Warsaw) if available, or europe-west3 (Frankfurt)
+const GOOGLE_CLOUD_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'europe-west4';
 const GOOGLE_APPLICATION_CREDENTIALS_JSON = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
 // Vertex AI endpoint for image generation (requires OAuth 2.0)
 const VERTEX_AI_API_BASE = 'https://aiplatform.googleapis.com/v1';
@@ -190,7 +193,8 @@ EXAMPLE:
    * Returns room type, description, and suggestions
    */
   async analyzeRoomWithFlashLite(
-    imageBase64: string
+    imageBase64: string,
+    language?: 'pl' | 'en'
   ): Promise<RoomAnalysisResponse> {
     try {
       if (!this.projectId) {
@@ -213,6 +217,7 @@ EXAMPLE:
         cleanBase64 = cleanBase64.split(',')[1];
       }
 
+      const commentLanguage = language === 'en' ? 'English' : 'Polish';
       const prompt = `Analyze this interior photo and identify the room type and characteristics. Return ONLY a valid JSON object.
 
 REQUIREMENTS:
@@ -220,14 +225,13 @@ REQUIREMENTS:
 - confidence: Number 0-1 (confidence in room type detection)
 - room_description: Detailed description (100-200 words) of the room including: furniture, colors, materials, lighting, style, layout, condition
 - suggestions: Array of 3-5 improvement suggestions (short phrases, max 20 words each)
-- comment_pl: Friendly, encouraging comment in Polish (2-3 sentences) that SPECIFICALLY describes what you see in THIS exact room. Mention specific details like: furniture pieces, colors, materials, lighting, architectural features (windows, doors), style elements. Make it personal and concrete - show that you're looking at THIS specific interior. Example: "Widzę w Twoim salonie dużą szarą kanapę narożną, białą ścianę z oknem, drewniany stolik kawowy i minimalistyczne dekoracje. Naturalne światło wpadające przez okno tworzy przytulną atmosferę."
-- comment_en: Friendly, encouraging comment in English (2-3 sentences) describing the same concrete details as in comment_pl.
+- comment: Friendly, VERY короткий comment in ${commentLanguage} (MAX 1 sentence, 18-22 words). Mention only 1-2 key visible items. No extra details.
 
 OUTPUT: Return ONLY valid JSON, no markdown, no explanation:
-{"detected_room_type":"room_type","confidence":0.9,"room_description":"...","suggestions":["suggestion1","suggestion2"],"comment_pl":"...","comment_en":"..."}
+{"detected_room_type":"room_type","confidence":0.9,"room_description":"...","suggestions":["suggestion1","suggestion2"],"comment":"..."}
 
 EXAMPLE:
-{"detected_room_type":"living_room","confidence":0.95,"room_description":"Modern living room with a large gray sectional sofa, white walls, wooden coffee table, and large windows providing natural light. The space features minimalist decor with a few plants and abstract wall art.","suggestions":["Add more lighting for evening ambiance","Introduce warmer color accents","Consider area rug for texture","Add storage solutions","Enhance biophilic elements"],"comment_pl":"Widzę w Twoim salonie dużą szarą kanapę narożną, białą ścianę z oknem i drewniany stolik kawowy. Naturalne światło wpadające przez okno tworzy przytulną atmosferę - to świetna baza do stworzenia przestrzeni, która odzwierciedli Twoje preferencje!","comment_en":"I can see a large gray sectional sofa, a white wall with a window, and a wooden coffee table in your living room. The natural light coming through the window creates a cozy atmosphere - a great foundation for a space that reflects your preferences!"}`;
+{"detected_room_type":"living_room","confidence":0.95,"room_description":"Modern living room with a large gray sectional sofa, white walls, wooden coffee table, and large windows providing natural light. The space features minimalist decor with a few plants and abstract wall art.","suggestions":["Add more lighting for evening ambiance","Introduce warmer color accents","Consider area rug for texture","Add storage solutions","Enhance biophilic elements"],"comment":"Widzę dużą szarą kanapę i drewniany stolik kawowy; jasne ściany z oknem nadają wnętrzu lekkość."}`;
 
       const payload = {
         contents: [
@@ -277,7 +281,7 @@ EXAMPLE:
       console.log('[GoogleAI] RAW Gemini text response:', text);
       
       // Parse the structured response
-      return this.parseRoomAnalysis(text);
+      return this.parseRoomAnalysis(text, language);
     } catch (error) {
       console.error('[GoogleAI] Error analyzing room:', error);
       throw error;
@@ -287,7 +291,7 @@ EXAMPLE:
   /**
    * Parse room analysis JSON response from Gemini
    */
-  private parseRoomAnalysis(text: string): RoomAnalysisResponse {
+  private parseRoomAnalysis(text: string, language?: 'pl' | 'en'): RoomAnalysisResponse {
     try {
       // Try to extract JSON from markdown code blocks if present
       let jsonText = text.trim();
@@ -305,17 +309,14 @@ EXAMPLE:
       const parsed = JSON.parse(jsonText);
       
       // Validate and return with defaults
-      const commentPl = parsed.comment_pl || parsed.comment || 'Pomieszczenie zostało przeanalizowane!';
-      const commentEn = parsed.comment_en || parsed.comment || 'The room has been analyzed!';
+      const comment = parsed.comment || 'Pomieszczenie zostało przeanalizowane!';
 
       return {
         detected_room_type: parsed.detected_room_type || 'empty_room',
         confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.8,
         room_description: parsed.room_description || 'Room analysis completed.',
         suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
-        comment: commentPl,
-        comment_pl: commentPl,
-        comment_en: commentEn,
+        comment,
         human_comment: parsed.human_comment,
       };
     } catch (error) {
@@ -488,7 +489,32 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
       // Low temperature for removal to ensure strict adherence to removal instructions
       const temperature = isFurnitureRemoval ? 0.3 : 0.7;
 
-      const payload = {
+      // Calculate aspect ratio from width/height if provided
+      // Supported ratios: 21:9, 16:9, 4:3, 3:2, 1:1, 9:16, 3:4, 2:3, 5:4, 4:5
+      let aspectRatio: string | undefined;
+      if (request.width && request.height) {
+        const ratio = request.width / request.height;
+        // Map to closest supported aspect ratio
+        if (Math.abs(ratio - 21/9) < 0.1) aspectRatio = '21:9';
+        else if (Math.abs(ratio - 16/9) < 0.1) aspectRatio = '16:9';
+        else if (Math.abs(ratio - 4/3) < 0.1) aspectRatio = '4:3';
+        else if (Math.abs(ratio - 3/2) < 0.1) aspectRatio = '3:2';
+        else if (Math.abs(ratio - 1) < 0.1) aspectRatio = '1:1';
+        else if (Math.abs(ratio - 9/16) < 0.1) aspectRatio = '9:16';
+        else if (Math.abs(ratio - 3/4) < 0.1) aspectRatio = '3:4';
+        else if (Math.abs(ratio - 2/3) < 0.1) aspectRatio = '2:3';
+        else if (Math.abs(ratio - 5/4) < 0.1) aspectRatio = '5:4';
+        else if (Math.abs(ratio - 4/5) < 0.1) aspectRatio = '4:5';
+        else {
+          // Default to closest match
+          if (ratio > 1.5) aspectRatio = '16:9'; // Landscape
+          else if (ratio < 0.7) aspectRatio = '9:16'; // Portrait
+          else aspectRatio = '1:1'; // Square
+        }
+        console.log(`[GoogleAI] Calculated aspect ratio: ${aspectRatio} from ${request.width}x${request.height} (ratio: ${ratio.toFixed(2)})`);
+      }
+
+      const payload: any = {
         system_instruction, // Use snake_case for Vertex AI REST API
         contents: [
           {
@@ -497,10 +523,19 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
           }
         ],
         generation_config: {
-          response_modalities: ['TEXT', 'IMAGE'],
+          // Use IMAGE only for faster generation (no text output needed)
+          response_modalities: ['IMAGE'],
           temperature, // Lower for furniture removal, balanced for normal generation
         },
       };
+
+      // Add image_config with aspect_ratio if we calculated one
+      if (aspectRatio) {
+        payload.generation_config.image_config = {
+          aspect_ratio: aspectRatio,
+        };
+        console.log(`[GoogleAI] Added image_config with aspect_ratio: ${aspectRatio}`);
+      }
 
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:payload',message:'Full payload sent to Vertex AI',data:{systemInstructionText:system_instruction.parts[0].text,prompt:request.prompt.substring(0,500),temperature:payload.generation_config.temperature,hasSystemInstruction:!!payload.system_instruction},timestamp:Date.now(),sessionId:'debug-session',runId:'geometry-debug',hypothesisId:'H2'})}).catch(()=>{});
@@ -556,6 +591,16 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
       );
       
       console.log('[GoogleAI] Image part found:', !!imagePart);
+      
+      // Check for NO_IMAGE finish reason - model refused to generate image
+      const finishReason = data.candidates?.[0]?.finishReason;
+      if (finishReason === 'NO_IMAGE') {
+        console.warn('[GoogleAI] Model returned NO_IMAGE finishReason - will retry');
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:no-image-finish-reason',message:'NO_IMAGE finishReason detected',data:{finishReason,response:JSON.stringify(data).substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H5'})}).catch(()=>{});
+        // #endregion
+        throw new Error('NO_IMAGE: Model refused to generate image');
+      }
       
       const imageData = imagePart?.inlineData?.data || imagePart?.inline_data?.data;
       

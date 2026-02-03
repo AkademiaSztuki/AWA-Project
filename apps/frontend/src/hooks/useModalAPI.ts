@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 
 interface GenerationRequest {
@@ -81,6 +81,7 @@ interface RoomAnalysisRequestMetadata {
 interface RoomAnalysisRequest {
   image: string; // base64 encoded image
   metadata?: RoomAnalysisRequestMetadata;
+  language?: 'pl' | 'en';
 }
 
 interface RoomAnalysisResponse {
@@ -371,6 +372,7 @@ export const getGenerationParameters = (
 export const useModalAPI = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlightRoomAnalysisRef = useRef<Map<string, Promise<RoomAnalysisResponse>>>(new Map());
 
   const generateImages = useCallback(async (request: GenerationRequest): Promise<GenerationResponse> => {
     setIsLoading(true);
@@ -431,9 +433,6 @@ export const useModalAPI = () => {
   }, []);
 
   const analyzeRoom = useCallback(async (request: RoomAnalysisRequest): Promise<RoomAnalysisResponse> => {
-    setIsLoading(true);
-    setError(null);
-
     // Check cache first
     const cacheKey = request.image ? await hashBase64Data(request.image) : null;
     const cachedResult = cacheKey ? getCachedRoomAnalysis(cacheKey) : null;
@@ -444,49 +443,73 @@ export const useModalAPI = () => {
       return cachedResult;
     }
 
-    // Check quota
-    const quota = checkAndIncrementRoomAnalysisUsage();
-    if (!quota.allowed) {
-      const msg = `Limit analiz pokoju (${ROOM_ANALYSIS_LIMIT}) został osiągnięty dla tej sesji. Odśwież stronę lub wróć później.`;
-      setError(msg);
-      setIsLoading(false);
-      throw new Error(msg);
+    if (cacheKey) {
+      const existingRequest = inFlightRoomAnalysisRef.current.get(cacheKey);
+      if (existingRequest) {
+        return await existingRequest;
+      }
     }
 
-    const requestId = generateRandomId();
-    const source = request.metadata?.source || 'unknown';
+    setIsLoading(true);
+    setError(null);
+
+    const requestPromise = (async () => {
+      // Check quota
+      const quota = checkAndIncrementRoomAnalysisUsage();
+      if (!quota.allowed) {
+        const msg = `Limit analiz pokoju (${ROOM_ANALYSIS_LIMIT}) został osiągnięty dla tej sesji. Odśwież stronę lub wróć później.`;
+        setError(msg);
+        setIsLoading(false);
+        throw new Error(msg);
+      }
+
+      const requestId = generateRandomId();
+      const source = request.metadata?.source || 'unknown';
+
+      try {
+        console.log('Rozpoczynam analizę pokoju (Google Gemini)...', { requestId, source });
+
+        // Use Google Gemini API instead of Modal/Gemma 3
+        const response = await fetch('/api/google/analyze-room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: request.image, language: request.language }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Room analysis API error response:', errorText);
+          throw new Error(`Błąd analizy pokoju: ${response.status} - ${errorText}`);
+        }
+
+        const result: RoomAnalysisResponse = await response.json();
+        console.log('Analiza pokoju zakończona! Otrzymano wynik:', { requestId, result });
+
+        // Cache the result
+        if (cacheKey) {
+          persistRoomAnalysisCache(cacheKey, result);
+        }
+
+        return result;
+      } catch (err: any) {
+        console.error('Wystąpił błąd w analizie pokoju:', err);
+        setError(err.message || 'Wystąpił nieznany błąd podczas analizy pokoju.');
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+
+    if (cacheKey) {
+      inFlightRoomAnalysisRef.current.set(cacheKey, requestPromise);
+    }
 
     try {
-      console.log('Rozpoczynam analizę pokoju (Google Gemini)...', { requestId, source });
-
-      // Use Google Gemini API instead of Modal/Gemma 3
-      const response = await fetch('/api/google/analyze-room', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: request.image }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Room analysis API error response:', errorText);
-        throw new Error(`Błąd analizy pokoju: ${response.status} - ${errorText}`);
-      }
-
-      const result: RoomAnalysisResponse = await response.json();
-      console.log('Analiza pokoju zakończona! Otrzymano wynik:', { requestId, result });
-
-      // Cache the result
-      if (cacheKey) {
-        persistRoomAnalysisCache(cacheKey, result);
-      }
-
-      return result;
-    } catch (err: any) {
-      console.error('Wystąpił błąd w analizie pokoju:', err);
-      setError(err.message || 'Wystąpił nieznany błąd podczas analizy pokoju.');
-      throw err;
+      return await requestPromise;
     } finally {
-      setIsLoading(false);
+      if (cacheKey) {
+        inFlightRoomAnalysisRef.current.delete(cacheKey);
+      }
     }
   }, []);
 
@@ -518,41 +541,9 @@ export const useModalAPI = () => {
     }
   };
 
-  const generateLLMComment = useCallback(async (roomType: string, roomDescription: string, context: string = 'room_analysis'): Promise<LLMCommentResponse> => {
-    console.log('Generating LLM comment with Groq...');
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      // Use Next.js API route as proxy to avoid CORS issues
-      const response = await fetch('/api/modal/llm-comment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          room_type: roomType,
-          room_description: roomDescription,
-          context: context
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('LLM comment result:', result);
-      return result;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('LLM comment generation failed:', errorMessage);
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
+  const generateLLMComment = useCallback(async (_roomType: string, _roomDescription: string, _context: string = 'room_analysis'): Promise<LLMCommentResponse> => {
+    // Modal/Groq endpoint is no longer used. Return empty comment to avoid 404s.
+    return { comment: '', suggestions: [] };
   }, []);
 
   const analyzeInspiration = useCallback(async (request: InspirationAnalysisRequest): Promise<InspirationAnalysisResponse> => {

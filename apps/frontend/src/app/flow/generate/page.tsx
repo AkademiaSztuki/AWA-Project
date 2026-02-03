@@ -113,7 +113,7 @@ const MACRO_MODIFICATIONS: ModificationOption[] = [
 
 export default function GeneratePage() {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { sessionData, updateSessionData, isInitialized: isSessionInitialized } = useSessionData();
   const { generateSixImagesParallelWithGoogle, upscaleImageWithGoogle, isLoading, error, setError } = useGoogleAI();
   const { generateLLMComment } = useModalAPI(); 
@@ -144,7 +144,12 @@ export default function GeneratePage() {
   const [matrixGenerationStartTime, setMatrixGenerationStartTime] = useState<number>(0);
   const [carouselIndex, setCarouselIndex] = useState(0); // Current carousel position
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const navigatingToModifyRef = useRef(false); // Track if intentionally going to modify page
   const [isGenerating, setIsGenerating] = useState(false); // Prevent duplicate generations
+  const isGeneratingRef = useRef(false); // Ref to avoid race conditions in rapid calls
+  const currentGenerationRunIdRef = useRef<string | null>(null); // Track active generation run ID
+  const autoTriggerAlreadyFiredRef = useRef(false); // Track if auto-trigger already fired for this session
   const [isModifying, setIsModifying] = useState(false); // Track if modification is in progress
   const [isUpscaling, setIsUpscaling] = useState(false); // Track upscale in progress
   const [upscaledImage, setUpscaledImage] = useState<GeneratedImage | null>(null); // Store upscaled version
@@ -203,44 +208,63 @@ export default function GeneratePage() {
       } catch {}
     })();
     
-    // Cleanup: abort any ongoing generation when leaving the page
+    // Cleanup: end page view but DON'T abort generation if going to modify
+    // This allows background generation to continue and update matrixHistory
     return () => { 
-      // console.log('[Generate] Page unmounting - cleaning up...');
       (async () => { 
         if (pageViewIdRef.current) await endPageView(pageViewIdRef.current); 
       })();
-      // Abort any ongoing generation - use ref to get latest abortController
-      // Note: We can't use abortController in dependencies as it changes on each generation
+      // Check if we're navigating to modify - if so, don't abort (let generation continue)
+      // Use the ref which is set BEFORE navigation, more reliable than checking URL
+      const goingToModify = navigatingToModifyRef.current || 
+        (typeof window !== 'undefined' && 
+          (window.location.pathname.includes('/flow/modify') || 
+           sessionStorage.getItem('awa-navigating-to-modify') === 'true'));
+      
+      if (abortControllerRef.current && !goingToModify) {
+        console.log('[Generate] 🛑 Cleanup: Aborting generation (navigating away, not to modify)');
+        abortControllerRef.current.abort();
+      } else if (goingToModify) {
+        console.log('[Generate] ✅ NOT aborting - letting generation continue for modify page');
+        sessionStorage.removeItem('awa-navigating-to-modify');
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount/unmount
   
-  // Separate effect to handle abortController cleanup
-  useEffect(() => {
-    return () => {
-      if (abortController) {
-        // console.log('[Generate] Aborting ongoing generation');
-        abortController.abort();
-      }
-      setIsGenerating(false);
-      setIsUpscaling(false);
-    };
-  }, [abortController]);
-  
-  // Additional cleanup on browser back/forward
+  // Additional cleanup on browser back/forward and SPA navigation
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (abortController) {
-        console.log('[Generate] Browser navigation - aborting generation');
-        abortController.abort();
+      if (abortControllerRef.current) {
+        console.log('[Generate] Browser unload - aborting generation');
+        abortControllerRef.current.abort();
       }
     };
     
+    // Handle browser back/forward buttons (popstate fires AFTER navigation in SPA)
+    const handlePopState = () => {
+      // Check if we're still on generate page - if not, abort
+      const currentPath = window.location.pathname;
+      const isOnGeneratePage = currentPath.includes('/flow/generate');
+      const goingToModify = currentPath.includes('/flow/modify') || 
+        sessionStorage.getItem('awa-navigating-to-modify') === 'true';
+      
+      if (!isOnGeneratePage && !goingToModify && abortControllerRef.current) {
+        console.log('[Generate] 🛑 Browser back/forward detected - aborting generation');
+        abortControllerRef.current.abort();
+        sessionStorage.removeItem('awa-navigating-to-modify');
+      }
+    };
+    
+    // Use both beforeunload (for tab close) and popstate (for browser back/forward)
     window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+    
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
     };
-  }, [abortController]);
+  }, []);
 
   // Restore state from sessionData after page refresh
   useEffect(() => {
@@ -344,8 +368,19 @@ export default function GeneratePage() {
           : (persistedSelected?.id || null);
 
       if (persistedSelectedId) {
-        // If selectedImage exists at all, it means user already finished the 1-of-6 step
-        setBlindSelectionMade(true);
+        // If user navigated back from modify page, show the 6-image grid again (don't lock to single image)
+        // We detect this by checking if we have matrix images/history - if so, user wants to re-select
+        const hasMatrixHistory = (typedSessionData?.matrixHistory || []).length > 0;
+        const hasMatrixCache = restoredImages.filter(img => img.id.startsWith('matrix-')).length > 0;
+        
+        if (hasMatrixHistory || hasMatrixCache) {
+          // User has seen the 6 images before - let them re-select (don't set blindSelectionMade)
+          console.log('[Generate] User navigated back - showing 6-image grid for re-selection');
+          setBlindSelectionMade(false);
+        } else {
+          // No matrix history - this is a direct restore, show selected image
+          setBlindSelectionMade(true);
+        }
 
         const selectedFromRestored = restoredImages.find(img => img.id === persistedSelectedId);
         if (selectedFromRestored) {
@@ -374,20 +409,59 @@ export default function GeneratePage() {
         setHasAttemptedGeneration(true);
       }
 
-      // Restore matrix images (first 6 images that are matrix images, sorted by displayIndex)
-      const matrixImages = restoredImages
-        .filter(img => 
-          img.id.startsWith('matrix-') &&
-          !img.id.startsWith('mod-') && 
-          !img.id.startsWith('remove-') &&
-          img.source !== GenerationSource.Implicit // Only matrix images with actual source
-        )
-        .sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0))
-        .slice(0, 6);
+      // Restore matrix images - first try from matrixHistory (has base64), then from restoredImages
+      const matrixHistory = typedSessionData?.matrixHistory || [];
+      let restoredMatrixImages: GeneratedImage[] = [];
+      
+      if (matrixHistory.length > 0) {
+        // Restore from matrixHistory (better - has base64 and URLs)
+        restoredMatrixImages = matrixHistory.map((item: any, index: number) => {
+          // Construct URL from base64 if not available
+          let imageUrl = item.imageUrl || item.url || '';
+          const base64 = item.base64 || '';
+          if (!imageUrl && base64) {
+            imageUrl = `data:image/png;base64,${base64}`;
+          }
+          
+          return {
+            id: item.id,
+            url: imageUrl,
+            base64: base64,
+            prompt: item.label || 'Restored from history',
+            provider: 'google' as const,
+            parameters: {
+              modificationType: 'initial' as const,
+              modifications: [],
+              iterationCount: 0,
+              usedOriginal: false,
+              source: item.source,
+              sourceLabel: item.source ? GENERATION_SOURCE_LABELS[item.source as GenerationSource] : undefined
+            },
+            ratings: imageRatings[item.id] || { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+            isFavorite: false,
+            createdAt: item.timestamp || Date.now(),
+            source: item.source as GenerationSource,
+            displayIndex: index,
+            isBlindSelected: item.isSelected || false
+          };
+        });
+        console.log('[Generate] Restoring matrix images from matrixHistory:', restoredMatrixImages.length, 'items');
+      } else {
+        // Fallback: restore from restoredImages (lightweight - no base64)
+        restoredMatrixImages = restoredImages
+          .filter(img => 
+            img.id.startsWith('matrix-') &&
+            !img.id.startsWith('mod-') && 
+            !img.id.startsWith('remove-') &&
+            img.source !== GenerationSource.Implicit
+          )
+          .sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0))
+          .slice(0, 6);
+        console.log('[Generate] Restoring matrix images from generatedImages:', restoredMatrixImages.length);
+      }
 
-      if (matrixImages.length > 0) {
-        console.log('[Generate] Restoring matrix images from sessionData:', matrixImages.length);
-        setMatrixImages(matrixImages);
+      if (restoredMatrixImages.length > 0) {
+        setMatrixImages(restoredMatrixImages);
       }
 
       // Restore generation history
@@ -424,39 +498,66 @@ export default function GeneratePage() {
       return;
     }
 
-    // Never auto-generate when we have persisted images (e.g. after refresh before restore runs)
-    const savedCount = ((sessionData as any)?.generatedImages ?? []).length;
-    if (savedCount > 0) {
+    // Never auto-generate when we ALREADY have restored images in state
+    // (this happens after restoration runs, not just from session data existing)
+    // This prevents regeneration on back navigation while allowing fresh generation for new rooms
+    if (matrixImages.length > 0) {
+      console.log('[Generate] Skipping auto-generation - already have matrix images in state:', matrixImages.length);
+      autoTriggerAlreadyFiredRef.current = false;
       return;
     }
 
+    const noImages = generatedImages.length === 0 && matrixImages.length === 0;
+    const isNotGenerating = !isGenerating && !isGeneratingRef.current;
+    const canAutoGenerate = noImages && isNotGenerating && generationCount === 0;
+    
+    // Reset ref if conditions allow auto-generation (enables trigger on fresh page load or after failed generation)
+    if (canAutoGenerate) {
+      autoTriggerAlreadyFiredRef.current = false;
+      console.log('[Generate] Reset auto-trigger ref - conditions allow generation');
+    }
+
+    // Prevent duplicate triggers within same render cycle using ref
+    if (autoTriggerAlreadyFiredRef.current) {
+      console.log('[Generate] Auto-trigger already fired in this cycle, skipping.');
+      return;
+    }
+
+    const staleAttempt = hasAttemptedGeneration && noImages && isNotGenerating;
+
     // Only trigger generation if:
-    // 1. We haven't restored state from sessionData
-    // 2. We haven't attempted generation
+    // 1. API is ready
+    // 2. Generation count is zero
     // 3. We don't have any images (generated or matrix)
     // 4. User hasn't already selected an image (blindSelectionMade)
-    const shouldGenerate = isApiReady && 
-                          generationCount === 0 && 
-                          !hasAttemptedGeneration && 
-                          generatedImages.length === 0 && 
-                          matrixImages.length === 0 &&
-                          !blindSelectionMade;
+    // 5. Not currently generating (check both state and ref)
+    // 6. Either we haven't attempted generation OR previous attempt is stale (no images)
+    const shouldGenerate = isApiReady &&
+                          generationCount === 0 &&
+                          noImages &&
+                          !blindSelectionMade &&
+                          isNotGenerating &&
+                          (!hasAttemptedGeneration || staleAttempt);
 
+    console.log('[Generate] Auto-generation check:', { 
+      shouldGenerate,
+      isApiReady, 
+      generationCount, 
+      hasAttemptedGeneration, 
+      staleAttempt,
+      noImages,
+      isNotGenerating,
+      blindSelectionMade,
+      matrixImagesLength: matrixImages.length
+    });
+    
     if (shouldGenerate) {
-      console.log('[Generate] Auto-triggering initial generation:', { 
-        isApiReady, 
-        generationCount, 
-        hasAttemptedGeneration, 
-        isMatrixMode, 
-        isSessionInitialized,
-        hasGeneratedImages: generatedImages.length > 0,
-        hasMatrixImages: matrixImages.length > 0,
-        blindSelectionMade
-      });
+      console.log('[Generate] ✅ Auto-triggering initial generation');
+      autoTriggerAlreadyFiredRef.current = true; // Mark as fired immediately
       setHasAttemptedGeneration(true);
       handleInitialGeneration();
     }
-  }, [isApiReady, generationCount, hasAttemptedGeneration, isSessionInitialized, generatedImages.length, matrixImages.length, blindSelectionMade, sessionData]);
+  }, [isApiReady, generationCount, hasAttemptedGeneration, isSessionInitialized, generatedImages.length, matrixImages.length, blindSelectionMade]);
 
   // Generate IDA comment when image is selected
   useEffect(() => {
@@ -582,28 +683,53 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   };
 
   const handleMatrixGeneration = async () => {
-    console.log("[6-Image Matrix] handleMatrixGeneration called", { isApiReady, isGenerating });
+    // Generate unique run ID immediately
+    const generationRunId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    
+    console.log("[6-Image Matrix] handleMatrixGeneration called", { 
+      isApiReady, 
+      isGenerating, 
+      isGeneratingRef: isGeneratingRef.current,
+      currentRunId: currentGenerationRunIdRef.current,
+      newRunId: generationRunId
+    });
+    
     // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-entry',message:'Entered handleMatrixGeneration',data:{isApiReady,wasGenerating:isGenerating,sessionHasRoomImage:!!(sessionData as any)?.roomImage,sessionHasRoomImageEmpty:!!(sessionData as any)?.roomImageEmpty,sessionInspirationsCount:((sessionData as any)?.inspirations||[]).length,sessionGeneratedImagesCount:((sessionData as any)?.generatedImages||[]).length,currentSpaceId:(sessionData as any)?.currentSpaceId||null,pathname:(typeof window!=='undefined'?window.location.pathname:'ssr')},timestamp:Date.now(),sessionId:'debug-session',runId:'gen-'+Date.now(),hypothesisId:'G2'})}).catch(()=>{});
+    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-entry',message:'Entered handleMatrixGeneration',data:{isApiReady,wasGenerating:isGenerating,wasGeneratingRef:isGeneratingRef.current,currentRunId:currentGenerationRunIdRef.current,newRunId:generationRunId,sessionHasRoomImage:!!(sessionData as any)?.roomImage,sessionHasRoomImageEmpty:!!(sessionData as any)?.roomImageEmpty,sessionInspirationsCount:((sessionData as any)?.inspirations||[]).length,sessionGeneratedImagesCount:((sessionData as any)?.generatedImages||[]).length,currentSpaceId:(sessionData as any)?.currentSpaceId||null,pathname:(typeof window!=='undefined'?window.location.pathname:'ssr')},timestamp:Date.now(),sessionId:'debug-session',runId:generationRunId,hypothesisId:'G2'})}).catch(()=>{});
     // #endregion
+    
     if (!isApiReady) {
       console.log("[6-Image Matrix] API not ready, generation cancelled.");
       // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-not-ready',message:'Generation cancelled because API not ready',data:{isApiReady},timestamp:Date.now(),sessionId:'debug-session',runId:'gen-'+Date.now(),hypothesisId:'G3'})}).catch(()=>{});
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-not-ready',message:'Generation cancelled because API not ready',data:{isApiReady},timestamp:Date.now(),sessionId:'debug-session',runId:generationRunId,hypothesisId:'G3'})}).catch(()=>{});
       // #endregion
       return;
     }
 
-    // Prevent duplicate generations
-    if (isGenerating) {
-      console.log("[6-Image Matrix] Generation already in progress, skipping.");
+    // Prevent duplicate generations - check ref immediately (avoids race conditions)
+    if (isGeneratingRef.current) {
+      const existingRunId = currentGenerationRunIdRef.current;
+      console.log("[6-Image Matrix] Generation already in progress, skipping.", { 
+        existingRunId, 
+        newRunId: generationRunId,
+        isGeneratingState: isGenerating 
+      });
       // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-already-generating',message:'Generation skipped because already in progress',data:{isGenerating},timestamp:Date.now(),sessionId:'debug-session',runId:'gen-'+Date.now(),hypothesisId:'G4'})}).catch(()=>{});
+      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-already-generating',message:'Generation skipped because already in progress',data:{isGenerating,isGeneratingRef:isGeneratingRef.current,existingRunId,newRunId:generationRunId},timestamp:Date.now(),sessionId:'debug-session',runId:generationRunId,hypothesisId:'G4'})}).catch(()=>{});
       // #endregion
       return;
     }
 
-    console.log("[6-Image Matrix] Starting generation...");
+    // Set generating flag immediately using ref (before any async operations)
+    isGeneratingRef.current = true;
+    currentGenerationRunIdRef.current = generationRunId;
+    setIsGenerating(true);
+    
+    console.log("[6-Image Matrix] ✅ Run started", { runId: generationRunId });
+
+    console.log("[6-Image Matrix] ✅ Starting generation...", { runId: generationRunId });
     
     const typedSessionData = sessionData as any;
     
@@ -704,6 +830,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     // Create new AbortController for this generation
     const controller = new AbortController();
     setAbortController(controller);
+    abortControllerRef.current = controller;
     setIsGenerating(true);
     
     // Reset images for new generation
@@ -1226,7 +1353,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         }
       }
       
+      // Use the runId already set at the start of handleMatrixGeneration
+      const generationRunId = currentGenerationRunIdRef.current!;
+      
       console.log("[6-Image Matrix] Calling generateSixImagesParallel with:", {
+        generationRunId,
         promptsCount: prompts.length,
         hasBaseImage: !!baseImage,
         baseImageLength: baseImage?.length || 0,
@@ -1263,6 +1394,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           // We do NOT pass inspiration_images; 6/6 is driven by extracted data embedded in the prompt.
           inspiration_images: filteredInspirationImages,
           style: typedSessionData.visualDNA?.dominantStyle || 'modern',
+          generation_run_id: generationRunId,
           parameters: {
             ...parameters,
             strength: parameters.strength ?? 0.55,
@@ -1322,7 +1454,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             const historyNode = {
               id: newImage.id,
               type: 'initial' as const,
-              label: sourceLabel?.pl || result.source,
+              label: (language === 'pl' ? sourceLabel?.pl : sourceLabel?.en) || sourceLabel?.pl || result.source,
               timestamp: Date.now(),
               imageUrl: newImage.url,
             };
@@ -1333,6 +1465,38 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               const newHistory = [...prev, historyNode];
               return newHistory;
             });
+            
+            // Progressively save to session so images are available even if user navigates away early
+            // Use async IIFE with fresh session read to avoid race conditions
+            (async () => {
+              try {
+                // Read fresh from localStorage to get latest state (storage key is 'aura_session')
+                const stored = typeof window !== 'undefined' 
+                  ? window.localStorage.getItem('aura_session')
+                  : null;
+                const freshSession = stored ? JSON.parse(stored) : {};
+                const currentMatrixHistory = (freshSession?.matrixHistory || []) as any[];
+                const existsInSession = currentMatrixHistory.find((h: any) => h.id === newImage.id);
+                
+                if (!existsInSession) {
+                  const newHistoryItem = {
+                    id: newImage.id,
+                    label: (language === 'pl' ? sourceLabel?.pl : sourceLabel?.en) || sourceLabel?.pl || result.source,
+                    timestamp: Date.now(),
+                    imageUrl: newImage.url,
+                    base64: newImage.base64,
+                    source: result.source,
+                    isSelected: false
+                  };
+                  await updateSessionData({
+                    matrixHistory: [...currentMatrixHistory, newHistoryItem]
+                  } as any);
+                  console.log(`[6-Image Matrix] Progressively saved ${result.source} to session`);
+                }
+              } catch (e) {
+                console.warn('[6-Image Matrix] Failed to progressively save to session:', e);
+              }
+            })();
             
             const totalExpected = prompts.length;
             const progressPercent = 55 + (completedCount / totalExpected) * 30;
@@ -1484,7 +1648,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         let updatedSpaces: any[] = [];
         const spaceId = await getOrCreateSpaceId(userHash, {
           spaceId: (sessionData as any)?.currentSpaceId,
-          name: (sessionData as any)?.roomName || 'Moja Przestrzeń'
+          name: (sessionData as any)?.roomName || t({ pl: 'Moja Przestrzeń', en: 'My Space' })
         });
 
         if (spaceId) {
@@ -1578,8 +1742,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       }
     } finally {
       // Always cleanup
+      isGeneratingRef.current = false;
+      currentGenerationRunIdRef.current = null;
       setIsGenerating(false);
       setAbortController(null);
+      abortControllerRef.current = null;
+      console.log("[6-Image Matrix] ✅ Run completed and cleaned up");
     }
   };
   
@@ -1658,107 +1826,118 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     const selectionTime = Date.now() - matrixGenerationStartTime;
     console.log(`[6-Image Matrix] User selected image from source: ${image.source} at position ${image.displayIndex}`);
     
-    setSelectedImage(image);
-    setBlindSelectionMade(true);
-    setSelectedSourceIndex(image.displayIndex || 0);
+    // Mark selection but DON'T update UI state - navigate immediately
+    // setBlindSelectionMade(true) would cause a flash of the "reveal view"
+    
+    // Build initial history from all generated matrix images
+    const initialHistory = matrixImages.map((img, idx) => ({
+      id: img.id,
+      type: 'initial' as const,
+      label: GENERATION_SOURCE_LABELS[img.source!]?.[language] || GENERATION_SOURCE_LABELS[img.source!]?.pl || `Wizja ${idx + 1}`,
+      timestamp: img.createdAt || Date.now(),
+      imageUrl: img.url,
+      base64: img.base64,
+      source: img.source,
+      isSelected: img.id === image.id
+    }));
 
-    // Persist minimal selection so refresh doesn't skip/regen unexpectedly
+    // Persist selection including base64 and full history so modify page can use it
     try {
       await updateSessionData({
         selectedImage: {
           id: image.id,
           url: image.url,
+          base64: image.base64, // Include base64 for modifications!
           source: image.source,
-          provider: image.provider
+          provider: image.provider,
+          parameters: image.parameters
         },
-        blindSelectionMade: true
+        blindSelectionMade: true,
+        // Save all matrix images for history display in modify page
+        matrixHistory: initialHistory
       } as any);
     } catch (e) {
       console.warn('[Generate] Failed to persist selectedImage/blindSelectionMade to session:', e);
     }
     
-    // Update the image as selected
-    setMatrixImages(prev => prev.map(img => ({
-      ...img,
-      isBlindSelected: img.id === image.id
-    })));
+    // Navigate to modify page IMMEDIATELY (no delay, no state change that causes flash)
+    // Set flags so cleanup doesn't abort generation - let it continue in background
+    navigatingToModifyRef.current = true;
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('awa-navigating-to-modify', 'true');
+    }
+    router.push('/flow/modify');
     
-    // Skip automatic upscaling - we now generate in high quality from the start
-    console.log('[6-Image Matrix] Skipping upscaling step - using original high-quality generation');
-    
-    // Collect full feedback with quality metrics
-    try {
-      const projectId = await getOrCreateProjectId((sessionData as any).userHash);
-      const typedSessionData = sessionData as any;
-      
-      // Get Tinder swipes for implicit quality
-      const tinderSwipes = typedSessionData.tinderData?.swipes || [];
-      const implicitQuality = tinderSwipes.length > 0 
-        ? calculateImplicitQuality(tinderSwipes)
-        : undefined;
-      
-      // Build quality report
-      const { buildPromptInputsFromSession } = await import('@/lib/prompt-synthesis/input-builder');
-      const inputs = buildPromptInputsFromSession(typedSessionData);
-      const qualityReports = assessAllSourcesQuality(inputs, tinderSwipes);
-      const sourceQualityMap: Record<string, string> = {};
-      qualityReports.forEach(r => {
-        sourceQualityMap[r.source] = r.status;
-      });
-      
-      // Conflict analysis
-      const conflictAnalysis = analyzeSourceConflict(inputs);
-      
-      const feedback: GenerationFeedback = {
-        sessionId: typedSessionData.userHash || 'unknown',
-        projectId: projectId || undefined,
-        timestamp: new Date().toISOString(),
-        generatedSources: matrixImages.map(img => img.source!).filter(Boolean),
-        sourceQuality: sourceQualityMap,
-        selectedSource: image.source || null,
-        selectionTime,
-        hasCompleteBigFive: !!(typedSessionData.bigFive?.scores && 
-          typedSessionData.bigFive.scores.openness !== 50 &&
-          typedSessionData.bigFive.scores.conscientiousness !== 50),
-        tinderSwipeCount: tinderSwipes.length,
-        explicitAnswerCount: countExplicitAnswers(typedSessionData),
-        implicitQuality,
-        conflictAnalysis: conflictAnalysis.hasConflict ? conflictAnalysis : undefined
-      };
-      
-      // Save to Supabase
-      if (projectId) {
-        await saveGenerationFeedback({
-          sessionId: feedback.sessionId,
-          projectId: feedback.projectId,
-          generatedSources: feedback.generatedSources,
-          selectedSource: feedback.selectedSource,
-          selectionTime: feedback.selectionTime,
-          hasCompleteBigFive: feedback.hasCompleteBigFive,
-          tinderSwipeCount: feedback.tinderSwipeCount,
-          explicitAnswerCount: feedback.explicitAnswerCount,
-          sourceQuality: sourceQualityMap,
-          implicitQuality: feedback.implicitQuality,
-          conflictAnalysis: feedback.conflictAnalysis
+    // Collect feedback in background (don't await - let it run after navigation)
+    (async () => {
+      try {
+        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        const typedSessionData = sessionData as any;
+        
+        // Get Tinder swipes for implicit quality
+        const tinderSwipes = typedSessionData.tinderData?.swipes || [];
+        const implicitQuality = tinderSwipes.length > 0 
+          ? calculateImplicitQuality(tinderSwipes)
+          : undefined;
+        
+        // Build quality report
+        const { buildPromptInputsFromSession } = await import('@/lib/prompt-synthesis/input-builder');
+        const inputs = buildPromptInputsFromSession(typedSessionData);
+        const qualityReports = assessAllSourcesQuality(inputs, tinderSwipes);
+        const sourceQualityMap: Record<string, string> = {};
+        qualityReports.forEach(r => {
+          sourceQualityMap[r.source] = r.status;
         });
         
-        // Also log legacy event for backward compatibility
-        await logBehavioralEvent(projectId, 'matrix_blind_selection', {
-          selectedSource: image.source,
-          selectedPosition: image.displayIndex,
-          allSources: matrixImages.map(i => i.source),
-          displayOrder: matrixDisplayOrder,
-          selectionTimeMs: selectionTime
-        });
+        // Conflict analysis
+        const conflictAnalysis = analyzeSourceConflict(inputs);
+        
+        const feedback: GenerationFeedback = {
+          sessionId: typedSessionData.userHash || 'unknown',
+          projectId: projectId || undefined,
+          timestamp: new Date().toISOString(),
+          generatedSources: matrixImages.map(img => img.source!).filter(Boolean),
+          sourceQuality: sourceQualityMap,
+          selectedSource: image.source || null,
+          selectionTime,
+          hasCompleteBigFive: !!(typedSessionData.bigFive?.scores && 
+            typedSessionData.bigFive.scores.openness !== 50 &&
+            typedSessionData.bigFive.scores.conscientiousness !== 50),
+          tinderSwipeCount: tinderSwipes.length,
+          explicitAnswerCount: countExplicitAnswers(typedSessionData),
+          implicitQuality,
+          conflictAnalysis: conflictAnalysis.hasConflict ? conflictAnalysis : undefined
+        };
+        
+        // Save to Supabase
+        if (projectId) {
+          await saveGenerationFeedback({
+            sessionId: feedback.sessionId,
+            projectId: feedback.projectId,
+            generatedSources: feedback.generatedSources,
+            selectedSource: feedback.selectedSource,
+            selectionTime: feedback.selectionTime,
+            hasCompleteBigFive: feedback.hasCompleteBigFive,
+            tinderSwipeCount: feedback.tinderSwipeCount,
+            explicitAnswerCount: feedback.explicitAnswerCount,
+            sourceQuality: sourceQualityMap,
+            implicitQuality: feedback.implicitQuality,
+            conflictAnalysis: feedback.conflictAnalysis
+          });
+          
+          // Also log legacy event for backward compatibility
+          await logBehavioralEvent(projectId, 'matrix_blind_selection', {
+            selectedSource: image.source,
+            selectedPosition: image.displayIndex,
+            allSources: matrixImages.map(i => i.source),
+            displayOrder: matrixDisplayOrder,
+            selectionTimeMs: selectionTime
+          });
+        }
+      } catch (e) {
+        console.warn('[6-Image Matrix] Failed to save feedback:', e);
       }
-    } catch (e) {
-      console.warn('[6-Image Matrix] Failed to save feedback:', e);
-    }
-    
-    // Show reveal after short delay
-    setTimeout(() => {
-      setShowSourceReveal(true);
-    }, 1000);
+    })();
   };
 
   // Generate IDA comment for generated images
@@ -1805,7 +1984,24 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   const getOptimalParameters = getGenerationParameters;
 
   const handleInitialGeneration = async (force = false) => {
-    console.log('[Generate] handleInitialGeneration called', { isApiReady, generationCount, force, isMatrixMode, isSessionInitialized });
+    console.log('[Generate] handleInitialGeneration called', { 
+      isApiReady, 
+      generationCount, 
+      force, 
+      isMatrixMode, 
+      isSessionInitialized,
+      isGenerating: isGeneratingRef.current,
+      currentRunId: currentGenerationRunIdRef.current
+    });
+    
+    // Check ref to prevent duplicate calls
+    if (isGeneratingRef.current) {
+      console.log('[Generate] ⚠️ Generation already in progress (ref check), skipping', { 
+        currentRunId: currentGenerationRunIdRef.current 
+      });
+      return;
+    }
+    
     if (!isSessionInitialized) {
       console.log('[Generate] Session data not ready yet, skipping initial generation.');
       return;
@@ -2018,7 +2214,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       const historyNode = {
         id: newImages[0].id,
         type: 'initial' as const,
-        label: 'Początkowa generacja',
+        label: t({ pl: 'Początkowa generacja', en: 'Initial generation' }),
         timestamp: Date.now(),
         imageUrl: newImages[0].url,
       };
@@ -2076,7 +2272,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       } catch {}
     } catch (err) {
       console.error('Generation failed in handleInitialGeneration:', err);
-      setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas generacji.');
+      setError(err instanceof Error ? err.message : t({ pl: 'Wystąpił nieznany błąd podczas generacji.', en: 'An unknown error occurred during generation.' }));
       try {
         const userHash = (sessionData as any).userHash;
         if (userHash) {
@@ -2433,7 +2629,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       });
 
       if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
-        setError("Nie udało się usunąć mebli.");
+        setError(t({ pl: "Nie udało się usunąć mebli.", en: "Failed to remove furniture." }));
         return;
       }
 
@@ -2522,7 +2718,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     }
     
     if (!roomImage) {
-      setError("Nie znaleziono oryginalnego zdjęcia z room setup. Proszę wrócić do kroku uploadu zdjęcia.");
+      setError(t({ pl: "Nie znaleziono oryginalnego zdjęcia z room setup. Proszę wrócić do kroku uploadu zdjęcia.", en: "Original photo from room setup not found. Please return to the photo upload step." }));
       return;
     }
 
@@ -2671,7 +2867,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           setFeedbackMessage(t({ pl: "Świetnie! Widzę podobieństwa. Możemy to jeszcze dopracować.", en: "Great! I see similarities. We can still refine this." }));
           setFeedbackType('neutral');
         } else if (value === 5) {
-          setFeedbackMessage("Doskonale! Udało nam się odtworzyć Twoje wnętrze. Teraz oceń szczegóły.");
+          setFeedbackMessage(t({ pl: "Doskonale! Udało nam się odtworzyć Twoje wnętrze. Teraz oceń szczegóły.", en: "Perfect! We managed to recreate your interior. Now rate the details." }));
           setFeedbackType('positive');
         }
         
@@ -2770,7 +2966,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 progress={loadingProgress}
                 estimatedTimeRemaining={estimatedTime}
                 onCancel={isLoading ? () => {
-                  setError("Generowanie anulowane przez użytkownika");
+                  setError(t({ pl: "Generowanie anulowane przez użytkownika", en: "Generation cancelled by user" }));
                   setLoadingProgress(0);
                 } : undefined}
               />
@@ -2823,13 +3019,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               <div className="text-center">
                 <h1 className="text-2xl font-bold text-graphite mb-2">
                   {isGenerating
-                    ? 'Generowanie wizji...'
-                    : `Porównaj wizje (${matrixImages.length}/${synthesisResult?.generatedSources?.length || 6})`}
+                    ? t({ pl: 'Generowanie wizji...', en: 'Generating visions...' })
+                    : t({ pl: `Porównaj wizje (${matrixImages.length}/${synthesisResult?.generatedSources?.length || 6})`, en: `Compare visions (${matrixImages.length}/${synthesisResult?.generatedSources?.length || 6})` })}
                 </h1>
                 <p className="text-silver-dark text-sm">
                   {isGenerating 
-                    ? 'Twoje wizje są generowane przez AI. Obrazy pojawią się poniżej gdy będą gotowe.'
-                    : 'Wybierz wizję, która najbardziej Ci odpowiada'}
+                    ? t({ pl: 'Twoje wizje są generowane przez AI. Obrazy pojawią się poniżej gdy będą gotowe.', en: 'Your visions are being generated by AI. Images will appear below when ready.' })
+                    : t({ pl: 'Wybierz wizję, która najbardziej Ci odpowiada', en: 'Choose the vision that best suits you' })}
                 </p>
               </div>
               
@@ -2853,10 +3049,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       ? 'text-amber-400'
                       : 'text-green-400';
                   const statusText = qualityInfo?.status === 'insufficient'
-                    ? 'Brak danych'
+                    ? t({ pl: 'Brak danych', en: 'No data' })
                     : qualityInfo?.status === 'limited'
-                      ? 'Niewystarczające dane'
-                      : 'Gotowe';
+                      ? t({ pl: 'Niewystarczające dane', en: 'Insufficient data' })
+                      : t({ pl: 'Gotowe', en: 'Ready' });
                   const fallbackProgress = (() => {
                     const t = Math.max(0, Math.min(1, elapsedForFallback / 90000));
                     const eased = 1 - Math.pow(1 - t, 4);
@@ -2868,7 +3064,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   const progressValue = expectedSource && imageProgress[`google-${expectedSource}`] !== undefined 
                     ? Math.round(imageProgress[`google-${expectedSource}`])
                     : fallbackProgress;
-                  const sourceLabel = expectedSource ? GENERATION_SOURCE_LABELS[expectedSource]?.pl : `Wizja ${index + 1}`;
+                  const sourceLabel = expectedSource 
+                    ? (language === 'pl' ? GENERATION_SOURCE_LABELS[expectedSource]?.pl : GENERATION_SOURCE_LABELS[expectedSource]?.en) || GENERATION_SOURCE_LABELS[expectedSource]?.pl
+                    : t({ pl: `Wizja ${index + 1}`, en: `Vision ${index + 1}` });
                   
                   return (
                     <motion.div
@@ -2887,7 +3085,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             role="status"
                             aria-live="polite"
                             aria-busy="true"
-                            aria-label={sourceLabel ? `Generowanie ${sourceLabel}` : `Generowanie wizji ${index + 1}`}
+                            aria-label={sourceLabel ? t({ pl: `Generowanie ${sourceLabel}`, en: `Generating ${sourceLabel}` }) : t({ pl: `Generowanie wizji ${index + 1}`, en: `Generating vision ${index + 1}` })}
                           >
                             {/* Animated gradient shimmer */}
                             <motion.div 
@@ -2981,7 +3179,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                   className="text-white/70 text-xs mt-1 font-medium"
                                   aria-live="polite"
                                 >
-                                  Generowanie...
+                                  {t({ pl: 'Generowanie...', en: 'Generating...' })}
                                 </p>
                               </div>
                             </div>
@@ -2991,7 +3189,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               <div className="absolute bottom-2 left-2 right-2">
                                 <div className="px-2.5 py-1.5 bg-white/15 backdrop-blur-md rounded-lg border border-white/15 text-[11px] leading-tight text-white/80 space-y-0.5 max-h-[120px] overflow-y-auto">
                                   <div className="flex justify-between gap-2">
-                                    <span className="font-semibold text-white/90">Dane: {sourceLabel}</span>
+                                    <span className="font-semibold text-white/90">{t({ pl: `Dane: ${sourceLabel}`, en: `Data: ${sourceLabel}` })}</span>
                                     <span 
                                       className={`font-semibold ${statusColor}`}
                                       aria-live="polite"
@@ -3096,35 +3294,37 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     </div>
                     <div className="flex-1">
                       <h3 className="font-semibold text-graphite">
-                        Wybrana wizja: {GENERATION_SOURCE_LABELS[selectedImage.source!]?.pl}
+                        {t({ 
+                          pl: `Wybrana wizja: ${GENERATION_SOURCE_LABELS[selectedImage.source!]?.pl || ''}`, 
+                          en: `Selected vision: ${GENERATION_SOURCE_LABELS[selectedImage.source!]?.en || GENERATION_SOURCE_LABELS[selectedImage.source!]?.pl || ''}` 
+                        })}
                       </h3>
                       <p className="text-sm text-silver-dark mt-1">
                         {selectedImage.source === GenerationSource.Implicit && 
-                          "Wygenerowane na podstawie Twoich intuicyjnych wyborów z Tindera i inspiracji."}
+                          t({ pl: "Wygenerowane na podstawie Twoich intuicyjnych wyborów z Tindera i inspiracji.", en: "Generated based on your intuitive choices from Tinder and inspirations." })}
                         {selectedImage.source === GenerationSource.Explicit && 
-                          "Wygenerowane na podstawie Twoich świadomych deklaracji preferencji."}
+                          t({ pl: "Wygenerowane na podstawie Twoich świadomych deklaracji preferencji.", en: "Generated based on your conscious preference declarations." })}
                         {selectedImage.source === GenerationSource.Personality && 
-                          "Wygenerowane na podstawie Twojego profilu osobowości Big Five."}
+                          t({ pl: "Wygenerowane na podstawie Twojego profilu osobowości Big Five.", en: "Generated based on your Big Five personality profile." })}
                         {selectedImage.source === GenerationSource.Mixed && 
-                          "Mix wszystkich danych estetycznych (40% implicit, 30% explicit, 30% personality)."}
+                          t({ pl: "Mix wszystkich danych estetycznych (40% implicit, 30% explicit, 30% personality).", en: "Mix of all aesthetic data (40% implicit, 30% explicit, 30% personality)." })}
                         {selectedImage.source === GenerationSource.MixedFunctional && 
-                          "Pełny mix + dane funkcjonalne (aktywności, problemy, nastrój PRS)."}
+                          t({ pl: "Pełny mix + dane funkcjonalne (aktywności, problemy, nastrój PRS).", en: "Full mix + functional data (activities, problems, PRS mood)." })}
                         {selectedImage.source === GenerationSource.InspirationReference && 
-                          "Multi-reference z polubionych inspiracji - style i kolory z obrazów referencyjnych."}
+                          t({ pl: "Multi-reference z polubionych inspiracji - style i kolory z obrazów referencyjnych.", en: "Multi-reference from liked inspirations - styles and colors from reference images." })}
                       </p>
                     </div>
                   </div>
                 </GlassCard>
               )}
               
-              {/* Select Button - Allow when at least 1 image is ready (workaround for partial generation failures) */}
+              {/* Select Button - Allow when at least 1 image is ready, even while generating */}
               {(() => {
                 const readyCount = matrixImages.filter(img => img.provider === 'google').length;
-                // WORKAROUND: Allow proceeding with at least 1 generated image
-                // Previously required ALL expected sources to complete, which blocked users
-                // when inspiration generation failed for some users
+                // Allow proceeding with at least 1 generated image
+                // User can select and proceed to modifications immediately
                 const hasAtLeastOneImage = readyCount >= 1;
-                return hasAtLeastOneImage && !isGenerating;
+                return hasAtLeastOneImage; // Removed !isGenerating - allow selection during generation
               })() && (
                 <div className="flex justify-center">
                   <GlassButton
@@ -3140,6 +3340,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       <>
                         <RefreshCw size={20} className="animate-spin" aria-hidden="true" />
                         <span>{t({ pl: "Przetwarzanie wybranej wizji...", en: "Processing selected vision..." })}</span>
+                      </>
+                    ) : isGenerating ? (
+                      <>
+                        <CheckCircle2 size={20} aria-hidden="true" />
+                        <span>{t({ pl: "Wybieram i przechodzę dalej", en: "Select and continue" })}</span>
                       </>
                     ) : (
                       <>
@@ -3782,13 +3987,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               transition={{ duration: 0.8, ease: "easeInOut" }}
                               className="space-y-6"
                             >
-                              <h4 className="font-semibold text-graphite text-lg">Oceń to wnętrze:</h4>
+                              <h4 className="font-semibold text-graphite text-lg">{t({ pl: "Oceń to wnętrze:", en: "Rate this interior:" })}</h4>
                               {[
                                 {
                                   key: 'aesthetic_match',
-                                  left: 'Nietrafiona',
-                                  mid: 'Zgodność z gustem',
-                                  right: 'Idealna',
+                                  left: t({ pl: 'Nietrafiona', en: 'Missed' }),
+                                  mid: t({ pl: 'Zgodność z gustem', en: 'Taste match' }),
+                                  right: t({ pl: 'Idealna', en: 'Perfect' }),
                                 },
                               ].map(({ key, left, mid, right }) => (
                                 <div key={key} className="border-b border-gray-200/50 pb-4 last:border-b-0">
@@ -3926,17 +4131,17 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       <div className="mt-8 pt-8 border-t border-silver/30">
                         <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
                           <MessageSquare size={20} className="mr-3 text-gold" aria-hidden="true" />
-                          Własna modyfikacja
+                          {t({ pl: 'Własna modyfikacja', en: 'Custom modification' })}
                         </h4>
                         <p className="text-sm text-silver-dark mb-4">
-                          Opisz co dokładnie chciałbyś zmienić na obrazku
+                          {t({ pl: 'Opisz co dokładnie chciałbyś zmienić na obrazku', en: 'Describe exactly what you would like to change in the image' })}
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3">
                           <input
                             type="text"
                             value={customModificationText}
                             onChange={(e) => setCustomModificationText(e.target.value)}
-                            placeholder="np. dodaj rośliny doniczkowe, zmień kolor zasłon na granatowy..."
+                            placeholder={t({ pl: "np. dodaj rośliny doniczkowe, zmień kolor zasłon na granatowy...", en: "e.g. add potted plants, change curtain color to navy blue..." })}
                             className="flex-1 bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gold/40 placeholder:text-silver-dark/50 text-graphite transition-all hover:bg-white/50"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && customModificationText.trim()) {
@@ -3999,7 +4204,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           currentStep="generation" 
           fullWidth={true}
           autoHide={true}
-          customMessage={idaComment || (isGeneratingComment ? "Analizuję wygenerowany obraz..." : undefined)}
+          customMessage={idaComment || (isGeneratingComment ? t({ pl: "Analizuję wygenerowany obraz...", en: "Analyzing generated image..." }) : undefined)}
         />
       </div>
     </div>

@@ -3,19 +3,17 @@
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { useSessionData } from '@/hooks/useSessionData';
+import { useDashboardAccess } from '@/hooks/useDashboardAccess';
 import { LayoutDashboard } from 'lucide-react';
 
 export function DashboardButton() {
   const router = useRouter();
   const pathname = usePathname();
   const { language } = useLanguage();
-  const { user } = useAuth();
-  const { sessionData } = useSessionData();
+  const { isComplete, isResolved } = useDashboardAccess();
 
-  // Don't show if not logged in, core profile not complete, or already on dashboard
-  if (!user || !sessionData?.coreProfileComplete || pathname === '/dashboard') {
+  // Don't show if core profile not complete, or already on dashboard
+  if (!isResolved || !isComplete || pathname === '/dashboard') {
     return null;
   }
 

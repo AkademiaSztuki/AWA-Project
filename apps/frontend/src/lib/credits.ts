@@ -38,6 +38,10 @@ export interface CreditBalance {
 export async function checkCreditsAvailable(userHash: string, amount: number = CREDITS_PER_GENERATION): Promise<boolean> {
   try {
     const balance = await getCreditBalance(userHash);
+    if (balance.hasActiveSubscription && balance.subscriptionCreditsRemaining >= amount) {
+      return true;
+    }
+
     return balance.balance >= amount;
   } catch (error) {
     // Jeśli tabele nie istnieją, zwróć true aby nie blokować aplikacji

@@ -39,6 +39,26 @@ const getCanvasDimensions = (width: number): string => {
   return 'w-[600px] h-[90vh]';                       // Ograniczona szerokość dla 4K
 };
 
+// Helper function to get responsive particle density based on screen width
+const getParticleDensity = (width: number): number => {
+  if (width < 640) return 0.15;      // Mobile portrait - bardzo mała gęstość
+  if (width < 768) return 0.18;      // Mobile landscape - mała gęstość
+  if (width < 1024) return 0.22;    // Tablet - średnia gęstość
+  if (width < 1440) return 0.25;    // Laptop - normalna gęstość
+  if (width < 1920) return 0.28;    // Desktop - wyższa gęstość
+  return 0.3;                        // Large screens - pełna gęstość
+};
+
+// Helper function to get responsive particle size based on screen width
+const getParticleSize = (width: number): number => {
+  if (width < 640) return 0.35;      // Mobile portrait - mniejszy rozmiar
+  if (width < 768) return 0.4;       // Mobile landscape - mniejszy rozmiar
+  if (width < 1024) return 0.45;    // Tablet - średni rozmiar
+  if (width < 1440) return 0.48;    // Laptop - normalny rozmiar
+  if (width < 1920) return 0.5;     // Desktop - standardowy rozmiar
+  return 0.5;                       // Large screens - standardowy rozmiar
+};
+
 export const AwaContainer: React.FC<AwaContainerProps> = ({
   currentStep,
   message,
@@ -66,6 +86,8 @@ export const AwaContainer: React.FC<AwaContainerProps> = ({
   const modelPosition: [number, number, number] = [-0.6, -0.7, 0];
   const cameraFOV = getCameraFOV(windowWidth);
   const canvasDimensions = getCanvasDimensions(windowWidth);
+  const particleDensity = getParticleDensity(windowWidth);
+  const particleSize = getParticleSize(windowWidth);
 
   return (
     <div className="fixed inset-0 z-[1] pointer-events-none">
@@ -94,8 +116,8 @@ export const AwaContainer: React.FC<AwaContainerProps> = ({
           currentStep={currentStep} 
           onLoaded={() => setIsLoading(false)} 
           position={modelPosition}
-          particleDensity={0.3}
-          particleSize={0.5}
+          particleDensity={particleDensity}
+          particleSize={particleSize}
           glowIntensity={1.5}
         />
         {/* Oryginalny model - alternatywa:

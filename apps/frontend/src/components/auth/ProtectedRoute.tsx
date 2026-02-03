@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSessionData } from '@/hooks/useSessionData';
+import { useDashboardAccess } from '@/hooks/useDashboardAccess';
 import { LoginModal } from './LoginModal';
 
 interface ProtectedRouteProps {
@@ -17,6 +18,7 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
   const { sessionData } = useSessionData();
+  const { isComplete: hasDashboardAccess, isLoading: isDashboardAccessLoading, isResolved: isDashboardAccessResolved } = useDashboardAccess();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -43,12 +45,12 @@ export function ProtectedRoute({
       // DODATKOWA BLOKADA DASHBOARDU:
       // Jeśli użytkownik jest zalogowany, ale nie ukończył pełnego profilu (long path),
       // a próbuje wejść na dashboard, przekieruj go na stronę główną lub wybór ścieżki.
-      if (pathname === '/dashboard' && !sessionData?.coreProfileComplete) {
+      if (pathname === '/dashboard' && isDashboardAccessResolved && !isDashboardAccessLoading && !hasDashboardAccess) {
         console.warn('[ProtectedRoute] Access to dashboard denied - core profile not complete');
         router.replace('/');
       }
     }
-  }, [user, isLoading, requireAuth, pathname, searchParams, sessionData?.coreProfileComplete, router]);
+  }, [user, isLoading, requireAuth, pathname, searchParams, hasDashboardAccess, isDashboardAccessLoading, isDashboardAccessResolved, router]);
 
   // Pokaż loading podczas sprawdzania autoryzacji
   if (isLoading) {
@@ -80,24 +82,11 @@ export function ProtectedRoute({
           }}
           onSuccess={() => {
             setShowLogin(false);
-            // Przekieruj na docelową stronę
-            if (effectiveRedirect && effectiveRedirect !== pathname && effectiveRedirect !== '/flow/path-selection') {
-              // Użytkownik nie może wejść na dashboard bez ukończonego profilu
-              if (effectiveRedirect === '/dashboard' && !sessionData?.coreProfileComplete) {
-                router.push('/');
-              } else {
-                router.push(effectiveRedirect);
-              }
-            } else if (pathname !== '/flow/path-selection') {
-              // Jeśli jesteśmy na dashboardzie bez profilu, idź na landing
-              if (pathname === '/dashboard' && !sessionData?.coreProfileComplete) {
-                router.push('/');
-              } else {
-                router.push(pathname);
-              }
+            // Przekieruj na docelową stronę (standardowo wracamy tam, gdzie był login)
+            if (effectiveRedirect && effectiveRedirect !== pathname) {
+              router.push(effectiveRedirect);
             } else {
-              // Fallback: jeśli ma ukończony profil to dashboard, jeśli nie to landing
-              router.push(sessionData?.coreProfileComplete ? '/dashboard' : '/');
+              router.push(pathname);
             }
           }}
           message="Musisz się zalogować, aby uzyskać dostęp do tej strony."

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { safeLocalStorage } from '@/lib/supabase';
 
 interface ColorAdjustmentContextType {
   saturation: number; // 0-200 (100 = normal)
@@ -17,11 +18,60 @@ interface ColorAdjustmentContextType {
 
 const ColorAdjustmentContext = createContext<ColorAdjustmentContextType | undefined>(undefined);
 
+const COLOR_ADJUSTMENT_STORAGE_KEY = 'color_adjustment_settings';
+
+interface StoredColorSettings {
+  saturation: number;
+  hue: number;
+  contrast: number;
+  hideModel3D: boolean;
+}
+
+const DEFAULT_SETTINGS: StoredColorSettings = {
+  saturation: 100,
+  hue: 0,
+  contrast: 100,
+  hideModel3D: false,
+};
+
+const getStoredColorSettings = (): StoredColorSettings | null => {
+  if (typeof window === 'undefined') return null;
+  const stored = safeLocalStorage.getItem(COLOR_ADJUSTMENT_STORAGE_KEY);
+  if (!stored) return null;
+  
+  try {
+    const parsed = JSON.parse(stored) as Partial<StoredColorSettings>;
+    // Validate and merge with defaults to ensure all fields exist
+    return {
+      saturation: typeof parsed.saturation === 'number' ? parsed.saturation : DEFAULT_SETTINGS.saturation,
+      hue: typeof parsed.hue === 'number' ? parsed.hue : DEFAULT_SETTINGS.hue,
+      contrast: typeof parsed.contrast === 'number' ? parsed.contrast : DEFAULT_SETTINGS.contrast,
+      hideModel3D: typeof parsed.hideModel3D === 'boolean' ? parsed.hideModel3D : DEFAULT_SETTINGS.hideModel3D,
+    };
+  } catch (error) {
+    console.warn('[ColorAdjustmentContext] Failed to parse stored settings:', error);
+    return null;
+  }
+};
+
+const persistColorSettings = (settings: StoredColorSettings): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    safeLocalStorage.setItem(COLOR_ADJUSTMENT_STORAGE_KEY, JSON.stringify(settings));
+  } catch (error) {
+    console.warn('[ColorAdjustmentContext] Failed to persist color settings:', error);
+  }
+};
+
 export function ColorAdjustmentProvider({ children }: { children: ReactNode }) {
-  const [saturation, setSaturation] = useState(100);
-  const [hue, setHue] = useState(0);
-  const [contrast, setContrast] = useState(100);
-  const [hideModel3D, setHideModel3D] = useState(false);
+  // Load initial values from localStorage or use defaults
+  const storedSettings = getStoredColorSettings();
+  const initialSettings = storedSettings || DEFAULT_SETTINGS;
+  
+  const [saturation, setSaturation] = useState(initialSettings.saturation);
+  const [hue, setHue] = useState(initialSettings.hue);
+  const [contrast, setContrast] = useState(initialSettings.contrast);
+  const [hideModel3D, setHideModel3D] = useState(initialSettings.hideModel3D);
 
   const isAdjusted = saturation !== 100 || hue !== 0 || contrast !== 100 || hideModel3D;
 
@@ -60,10 +110,22 @@ export function ColorAdjustmentProvider({ children }: { children: ReactNode }) {
     };
   }, [saturation, hue, contrast]);
 
+  // Persist settings to localStorage whenever they change
+  useEffect(() => {
+    persistColorSettings({
+      saturation,
+      hue,
+      contrast,
+      hideModel3D,
+    });
+  }, [saturation, hue, contrast, hideModel3D]);
+
   const reset = () => {
-    setSaturation(100);
-    setHue(0);
-    setContrast(100);
+    setSaturation(DEFAULT_SETTINGS.saturation);
+    setHue(DEFAULT_SETTINGS.hue);
+    setContrast(DEFAULT_SETTINGS.contrast);
+    setHideModel3D(DEFAULT_SETTINGS.hideModel3D);
+    // Settings will be persisted automatically via useEffect
   };
 
   return (

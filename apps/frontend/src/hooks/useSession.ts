@@ -63,11 +63,19 @@ const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
   sanitized.roomImage = undefined;
   sanitized.roomImageEmpty = undefined; // Also cached in sessionStorage
   sanitized.uploadedImage = undefined;
-  // Preserve minimal selected image reference so refresh doesn't jump steps/regenerate
+  // Preserve selected image with base64 and parameters (needed for modifications to work after refresh)
+  // Note: base64 is large but necessary for the modify flow - only one image at a time
   (sanitized as any).selectedImage = data.selectedImage
     ? (typeof (data as any).selectedImage === 'string'
         ? { id: (data as any).selectedImage }
-        : { id: (data as any).selectedImage?.id, url: (data as any).selectedImage?.url, source: (data as any).selectedImage?.source, provider: (data as any).selectedImage?.provider })
+        : { 
+            id: (data as any).selectedImage?.id, 
+            url: (data as any).selectedImage?.url, 
+            base64: (data as any).selectedImage?.base64, // Keep base64 for modifications!
+            source: (data as any).selectedImage?.source, 
+            provider: (data as any).selectedImage?.provider,
+            parameters: (data as any).selectedImage?.parameters // Keep parameters for modifications!
+          })
     : null;
   (sanitized as any).blindSelectionMade = (data as any).blindSelectionMade || false;
 
@@ -85,6 +93,22 @@ const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
       .map((g: any) => ({ id: g.id, url: g.url }))
       .filter((g: any) => typeof g.url === 'string' && g.url.startsWith('http'))
       .slice(-12);
+  }
+
+  // Keep matrixHistory but strip base64 to save space (imageUrl is kept for display)
+  // Base64 is only needed for selectedImage (for modifications)
+  const selectedId = (sanitized as any).selectedImage?.id;
+  if (Array.isArray((sanitized as any).matrixHistory)) {
+    (sanitized as any).matrixHistory = (sanitized as any).matrixHistory.map((item: any) => ({
+      id: item.id,
+      label: item.label,
+      timestamp: item.timestamp,
+      imageUrl: item.imageUrl || item.url,
+      source: item.source,
+      isSelected: item.id === selectedId,
+      // Keep base64 only for selected image (needed for modifications if page refreshes)
+      base64: item.id === selectedId ? item.base64 : undefined
+    }));
   }
 
   // Strip heavy base64 from inspirations but keep tags/descriptions/URLs
@@ -374,16 +398,21 @@ const persistSessionData = (data: SessionData): SessionData => {
   // #endregion
 
   const cleanedForStorage = stripInlineBlobs(data);
+  const storagePayload: SessionData = {
+    ...cleanedForStorage,
+    coreProfileComplete: undefined,
+    coreProfileCompletedAt: undefined
+  };
 
   const needsSanitization = shouldSanitizeSessionData(data);
 
   if (!needsSanitization) {
     try {
-      const serialized = JSON.stringify(cleanedForStorage);
+      const serialized = JSON.stringify(storagePayload);
 
       if (serialized.length > STORAGE_SIZE_THRESHOLD) {
         console.warn('[useSession] Dane sesji są bardzo duże – stosuję sanitizację przed zapisem.');
-        persistSanitizedSessionData(cleanedForStorage);
+        persistSanitizedSessionData(storagePayload);
         return data;
       }
 
@@ -399,7 +428,7 @@ const persistSessionData = (data: SessionData): SessionData => {
     }
   }
 
-  persistSanitizedSessionData(cleanedForStorage);
+  persistSanitizedSessionData(storagePayload);
   return data;
 };
 

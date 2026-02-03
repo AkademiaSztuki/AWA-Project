@@ -38,8 +38,12 @@ export default function PhotoUploadPage() {
   const [pendingAnalysisFile, setPendingAnalysisFile] = useState<File | null>(null);
   const [pendingAnalysisLabel, setPendingAnalysisLabel] = useState<string | null>(null);
   const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const [ttsError, setTtsError] = useState<string | null>(null);
+  const [isTtsPlaying, setIsTtsPlaying] = useState(false);
   const lastSpokenTextRef = useRef<string | null>(null);
   const ttsAbortRef = useRef<AbortController | null>(null);
+  const pendingTtsTextRef = useRef<string | null>(null);
+  const ttsInFlightRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -92,7 +96,10 @@ export default function PhotoUploadPage() {
     try {
       const result = await generateLLMComment(roomType, roomDescription, 'room_analysis');
       console.log('LLM comment result:', result);
-      setHumanComment({ pl: result.comment });
+      const trimmed = result.comment?.trim();
+      if (trimmed) {
+        setHumanComment({ pl: trimmed });
+      }
     } catch (error) {
       console.error('Failed to generate LLM comment:', error);
     } finally {
@@ -115,7 +122,7 @@ export default function PhotoUploadPage() {
       const apiStart = Date.now();
       
       // Analyze room using Google Gemini 2.0 Flash (replaced Gemma 3)
-      const analysis = await analyzeRoom({ image: base64, metadata: { source: 'flow-photo-upload' } });
+      const analysis = await analyzeRoom({ image: base64, metadata: { source: 'flow-photo-upload' }, language });
       
       console.log(`API call completed in ${Date.now() - apiStart}ms`);
       console.log(`Total analysis time: ${Date.now() - startTime}ms`);
@@ -129,12 +136,12 @@ export default function PhotoUploadPage() {
       setDetectedRoomType(analysis.detected_room_type);
       setRoomType(analysis.detected_room_type);
       
-      const commentPl = analysis.comment_pl || analysis.comment;
-      const commentEn = analysis.comment_en;
-      if (commentPl || commentEn) {
-        console.log('Setting LLM comment from Gemini:', { commentPl, commentEn });
+      const commentPl = analysis.comment_pl ?? (language === 'pl' ? analysis.comment : undefined);
+      const commentEn = analysis.comment_en ?? (language === 'en' ? analysis.comment : undefined);
+      if (commentPl || commentEn || analysis.comment) {
+        console.log('Setting LLM comment from Gemini:', { commentPl, commentEn, comment: analysis.comment });
         setLlmComment({
-          comment: commentPl || commentEn || analysis.comment,
+          comment: analysis.comment,
           commentPl,
           commentEn,
           suggestions: analysis.suggestions || []
@@ -168,27 +175,27 @@ export default function PhotoUploadPage() {
   }, [analyzeRoom, requestHumanComment]);
 
   const selectedComment = language === 'en'
-    ? llmComment?.commentEn || llmComment?.comment
-    : llmComment?.commentPl || llmComment?.comment;
+    ? (llmComment?.commentEn ?? llmComment?.comment)
+    : (llmComment?.commentPl ?? llmComment?.comment);
+  const hasAnyComment = !!(llmComment?.commentPl || llmComment?.commentEn || llmComment?.comment);
 
   const selectedHumanComment = language === 'en'
     ? humanComment?.en
     : humanComment?.pl;
 
-  useEffect(() => {
-    if (!selectedComment || !voiceEnabled) {
-      setTtsAudioUrl(null);
-      return;
-    }
-
-    const text = selectedComment.trim();
-    if (!text || lastSpokenTextRef.current === text) {
+  const requestTts = useCallback((text: string, force = false) => {
+    if (!text || !voiceEnabled) return;
+    if (!force && lastSpokenTextRef.current === text) return;
+    if (isTtsPlaying || ttsInFlightRef.current) {
+      pendingTtsTextRef.current = text;
       return;
     }
 
     lastSpokenTextRef.current = text;
+    setTtsError(null);
     setTtsAudioUrl(null);
     stopAllDialogueAudio();
+    ttsInFlightRef.current = true;
 
     if (ttsAbortRef.current) {
       ttsAbortRef.current.abort();
@@ -207,7 +214,11 @@ export default function PhotoUploadPage() {
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => '');
-          console.error('ElevenLabs TTS error:', response.status, errorText);
+          const message = errorText || `HTTP ${response.status}`;
+          console.error('ElevenLabs TTS error:', response.status, message);
+          setTtsError(message);
+          setIsTtsPlaying(false);
+          ttsInFlightRef.current = false;
           return;
         }
 
@@ -215,9 +226,14 @@ export default function PhotoUploadPage() {
         if (controller.signal.aborted) return;
         const url = URL.createObjectURL(audioBlob);
         setTtsAudioUrl(url);
+        setIsTtsPlaying(true);
+        ttsInFlightRef.current = false;
       } catch (error) {
         if ((error as Error).name !== 'AbortError') {
           console.error('Failed to fetch ElevenLabs audio:', error);
+          setTtsError((error as Error).message || 'TTS request failed');
+          setIsTtsPlaying(false);
+          ttsInFlightRef.current = false;
         }
       }
     })();
@@ -225,7 +241,19 @@ export default function PhotoUploadPage() {
     return () => {
       controller.abort();
     };
-  }, [selectedComment, voiceEnabled]);
+  }, [voiceEnabled, isTtsPlaying]);
+
+  useEffect(() => {
+    if (!selectedComment || !voiceEnabled) {
+      setTtsAudioUrl(null);
+      return;
+    }
+
+    const text = selectedComment.trim();
+    if (!text) return;
+
+    requestTts(text);
+  }, [selectedComment, voiceEnabled, requestTts]);
 
   useEffect(() => {
     return () => {
@@ -446,7 +474,7 @@ export default function PhotoUploadPage() {
           )}
 
 
-          {selectedComment && !isGeneratingComment && (
+          {hasAnyComment && !isGeneratingComment && (
             <div className="mb-6 p-6 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl">
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-full flex items-center justify-center flex-shrink-0">
@@ -456,9 +484,40 @@ export default function PhotoUploadPage() {
                   <p className="text-white/95 font-exo2 font-bold text-lg mb-3">
                     {language === 'en' ? 'IDA comment (Gemma 3):' : 'Komentarz IDA (Gemma 3):'}
                   </p>
-                  <p className="text-sm text-white/80 font-modern leading-relaxed bg-white/5 p-4 rounded-xl border border-white/10 mb-4">
-                    {selectedComment}
-                  </p>
+                  {selectedComment ? (
+                    <p className="text-sm text-white/80 font-modern leading-relaxed bg-white/5 p-4 rounded-xl border border-white/10 mb-4">
+                      {selectedComment}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-white/70 font-modern mb-3">
+                      {language === 'en'
+                        ? 'No English comment returned by Gemini yet.'
+                        : 'Brak polskiego komentarza z Gemini.'}
+                    </p>
+                  )}
+                  {!voiceEnabled && (
+                    <p className="text-xs text-white/70 font-modern mb-3">
+                      {language === 'en'
+                        ? 'Voice is disabled in settings.'
+                        : 'Głos jest wyłączony w ustawieniach.'}
+                    </p>
+                  )}
+                  {ttsError && (
+                    <p className="text-xs text-red-200 font-modern mb-3">
+                      {language === 'en'
+                        ? `Audio error: ${ttsError}`
+                        : `Błąd audio: ${ttsError}`}
+                    </p>
+                  )}
+                  {voiceEnabled && selectedComment && (
+                    <button
+                      type="button"
+                      onClick={() => requestTts(selectedComment, true)}
+                      className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 text-xs font-exo2 font-semibold transition-all duration-200"
+                    >
+                      {language === 'en' ? 'Play comment' : 'Odtwórz komentarz'}
+                    </button>
+                  )}
                   
                   {/* Human Polish comment from IDA */}
                   {selectedHumanComment && (
@@ -586,6 +645,14 @@ export default function PhotoUploadPage() {
           src={ttsAudioUrl}
           volume={voiceVolume}
           autoPlay={true}
+          onEnded={() => {
+            setIsTtsPlaying(false);
+            const nextText = pendingTtsTextRef.current;
+            if (nextText) {
+              pendingTtsTextRef.current = null;
+              requestTts(nextText, true);
+            }
+          }}
         />
       )}
     </div>

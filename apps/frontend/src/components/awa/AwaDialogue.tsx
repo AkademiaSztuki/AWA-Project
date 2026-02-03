@@ -19,6 +19,9 @@ interface AwaDialogueProps {
   fullWidth?: boolean;
   autoHide?: boolean;
   customMessage?: string | string[];
+  onSentenceStart?: (text: string) => void;
+  skipBaseDialogues?: boolean;
+  disableAudio?: boolean;
 }
 
 // Dialogues with PL and EN versions
@@ -179,12 +182,12 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
     ]
   },
   room_analysis_ready: {
-    pl: [
-      "Przeanalizowałam Twoje zdjęcie. Rozpoznałam typ pomieszczenia."
-    ],
-    en: [
-      "I've analyzed your photo. I recognized the room type."
-    ]
+    pl: [],
+    en: []
+  },
+  room_furniture_suggestion: {
+    pl: [],
+    en: []
   },
   room_preference_source: {
     pl: [
@@ -316,7 +319,7 @@ const getAudioFile = (step: string, lang: 'pl' | 'en'): string => {
     'wizard_demographics', 'wizard_lifestyle', 'tinder', 'wizard_semantic', 'wizard_sensory',
     'inspirations', 'big_five', 'dashboard',
     'style_selection',
-    'upload', 'room_analysis', 'room_preference_source', 'room_prs_current',
+    'upload', 'room_analysis', 'room_furniture_suggestion', 'room_preference_source', 'room_prs_current',
     'room_usage', 'room_activities', 'room_pain_points', 'room_prs_target', 'room_summary',
     'generation', 'survey_satisfaction', 'survey_clarity', 'thanks'
   ];
@@ -333,7 +336,10 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   onDialogueEnd,
   fullWidth = false,
   autoHide = false,
-  customMessage
+  customMessage,
+  onSentenceStart,
+  skipBaseDialogues = false,
+  disableAudio = false
 }) => {
   const { language } = useLanguage();
   const isMobile = useIsMobile();
@@ -343,6 +349,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const PAUSE_BETWEEN_SENTENCES = 1500; // Pauza między zdaniami (ms) - używane w handleSentenceComplete
   const PAUSE_AFTER_ALL_SENTENCES = 500; // Pauza po zakończeniu całego fragmentu (wszystkich zdań) (ms)
   const PAUSE_AFTER_LANDING = isMobile ? 1000 : 0; // Landing ma dodatkowe 1000ms przerwy tylko na mobile
+  const PAUSE_AFTER_ROOM_ANALYSIS = 600; // Dodatkowe opóźnienie po „Sprawdź…”, żeby nie uciąć ostatniego słowa audio
   const PAUSE_AFTER_TEXT = 0; // Pauza w TextType po zakończeniu tekstu (ms) - wyłączona, bo mamy PAUSE_BETWEEN_SENTENCES
   
   // Zabezpieczenie przed undefined
@@ -354,7 +361,9 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // Get dialogues for current language - use useMemo to ensure it's always up to date
   const dialogues = useMemo(() => {
     const stepDialogues = DIALOGUE_MAP[currentStep];
-    const baseDialogues = stepDialogues?.[language] || stepDialogues?.pl || [];
+    const baseDialogues = skipBaseDialogues
+      ? []
+      : stepDialogues?.[language] || stepDialogues?.pl || [];
     
     if (customMessage) {
       const customArray = Array.isArray(customMessage) ? customMessage : [customMessage];
@@ -377,7 +386,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     }
   }, [currentStep, language, customMessage]);
   
-  const audioFile = getAudioFile(currentStep, language);
+  const audioFile = disableAudio ? '' : getAudioFile(currentStep, language);
   
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [isDone, setIsDone] = useState(false);
@@ -387,6 +396,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const [showClickPrompt, setShowClickPrompt] = useState(false);
   const [audioEnded, setAudioEnded] = useState(false);
   const [allSentencesCompleted, setAllSentencesCompleted] = useState(false);
+  const lastSentenceStartRef = useRef<number | null>(null);
   
   // Refs to prevent multiple calls
   const onDialogueEndCalledRef = useRef(false);
@@ -465,15 +475,17 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D2',location:'AwaDialogue.tsx:handleSentenceComplete-last',message:'Last sentence completed',data:{currentStep,audioEnded,voiceEnabled,hasAudioFile:!!audioFile,hasOnDialogueEnd:!!onDialogueEnd,autoHide},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
       
-      // For landing: wait for audio to finish before calling onDialogueEnd
+      // For landing / room_analysis / room_furniture_suggestion: wait for audio to finish before calling onDialogueEnd
       // For path_selection: if autoHide, hide after audio ends
-      if (currentStep === 'landing' && onDialogueEnd && !onDialogueEndCalledRef.current) {
-        // Wait for audio to end, or timeout after delay
+      const waitForAudioSteps = ['landing', 'room_analysis', 'room_furniture_suggestion'];
+      if (waitForAudioSteps.includes(String(currentStep)) && onDialogueEnd && !onDialogueEndCalledRef.current) {
+        // Wait for audio to end, or timeout after delay (no audio / voice disabled)
         if (audioEnded || !voiceEnabled || !audioFile) {
           // #region agent log
           void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D3',location:'AwaDialogue.tsx:handleSentenceComplete-landing-immediate',message:'Landing: calling onDialogueEnd immediately',data:{audioEnded,voiceEnabled,hasAudioFile:!!audioFile},timestamp:Date.now()})}).catch(()=>{});
           // #endregion
           onDialogueEndCalledRef.current = true;
+          const delay = currentStep === 'landing' ? PAUSE_AFTER_LANDING : (currentStep === 'room_analysis' ? PAUSE_AFTER_ROOM_ANALYSIS : PAUSE_AFTER_ALL_SENTENCES);
           setTimeout(() => {
             // #region agent log
             void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D4',location:'AwaDialogue.tsx:handleSentenceComplete-landing-call',message:'Landing: calling onDialogueEnd',data:{},timestamp:Date.now()})}).catch(()=>{});
@@ -482,7 +494,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
               window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
             }
             onDialogueEnd();
-          }, PAUSE_AFTER_LANDING);
+          }, delay);
         } else {
           // #region agent log
           void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D5',location:'AwaDialogue.tsx:handleSentenceComplete-landing-wait',message:'Landing: waiting for audio to end',data:{audioEnded},timestamp:Date.now()})}).catch(()=>{});
@@ -523,6 +535,15 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     isTransitioningRef.current = false;
   }, [currentSentenceIndex]);
 
+  useEffect(() => {
+    if (!hasStarted || !audioReady || !dialogues || currentSentenceIndex >= dialogues.length) {
+      return;
+    }
+    if (lastSentenceStartRef.current === currentSentenceIndex) return;
+    lastSentenceStartRef.current = currentSentenceIndex;
+    onSentenceStart?.(dialogues[currentSentenceIndex] ?? '');
+  }, [currentSentenceIndex, dialogues, hasStarted, audioReady, onSentenceStart]);
+
   const handleAudioEnded = () => {
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D8',location:'AwaDialogue.tsx:handleAudioEnded',message:'Audio ended',data:{currentStep,allSentencesCompleted,hasOnDialogueEnd:!!onDialogueEnd,autoHide,onDialogueEndCalled:onDialogueEndCalledRef.current,hideScheduled:hideScheduledRef.current},timestamp:Date.now()})}).catch(()=>{});
@@ -530,12 +551,14 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     console.log('[AwaDialogue] Audio completed for entire dialogue', { currentStep, allSentencesCompleted, autoHide });
     setAudioEnded(true);
     
-    // If all sentences completed and audio ended, call onDialogueEnd for landing
-    if (currentStep === 'landing' && allSentencesCompleted && onDialogueEnd && !onDialogueEndCalledRef.current) {
+    // If all sentences completed and audio ended, call onDialogueEnd for landing / room_analysis / room_furniture_suggestion
+    const waitForAudioSteps = ['landing', 'room_analysis', 'room_furniture_suggestion'];
+    if (waitForAudioSteps.includes(String(currentStep)) && allSentencesCompleted && onDialogueEnd && !onDialogueEndCalledRef.current) {
       // #region agent log
       void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D9',location:'AwaDialogue.tsx:handleAudioEnded-landing',message:'Landing: audio ended, calling onDialogueEnd',data:{},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
       onDialogueEndCalledRef.current = true;
+      const delay = currentStep === 'landing' ? PAUSE_AFTER_LANDING : (currentStep === 'room_analysis' ? PAUSE_AFTER_ROOM_ANALYSIS : PAUSE_AFTER_ALL_SENTENCES);
       setTimeout(() => {
         // #region agent log
         void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D10',location:'AwaDialogue.tsx:handleAudioEnded-landing-call',message:'Landing: calling onDialogueEnd after delay',data:{},timestamp:Date.now()})}).catch(()=>{});
@@ -544,7 +567,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
           window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
         }
         onDialogueEnd();
-      }, PAUSE_AFTER_LANDING);
+      }, delay);
     }
     
     // For autoHide, hide after audio ends

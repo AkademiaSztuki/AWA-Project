@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { ArrowLeft, Heart, Sparkles, Trash2, Download, X } from 'lucide-react';
+import { ArrowLeft, Heart, Sparkles, Trash2, Download, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import { deleteParticipantImage, fetchParticipantImages, fetchParticipantSpaces } from '@/lib/remote-spaces';
 import { safeLocalStorage } from '@/lib/supabase';
@@ -211,6 +211,24 @@ export default function SpaceDetailPage() {
     if (filter === 'all') return true;
     return img.type === filter;
   }) || [];
+
+  useEffect(() => {
+    if (!selectedImage) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedImage(null);
+        return;
+      }
+      const idx = filteredImages.findIndex((img) => img.id === selectedImage.id);
+      if (e.key === 'ArrowLeft' && idx > 0) {
+        setSelectedImage(filteredImages[idx - 1]);
+      } else if (e.key === 'ArrowRight' && idx >= 0 && idx < filteredImages.length - 1) {
+        setSelectedImage(filteredImages[idx + 1]);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedImage, filteredImages]);
 
   const handleDeleteImage = (imageId: string) => {
     if (!space) return;
@@ -426,57 +444,115 @@ export default function SpaceDetailPage() {
       </div>
 
       {/* Image Modal */}
-      {selectedImage && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
-          onClick={() => setSelectedImage(null)}
-        >
+      <AnimatePresence>
+        {selectedImage && (
           <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0.9 }}
-            className="relative max-w-4xl max-h-[90vh] w-full"
-            onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center px-1.5 sm:px-4 md:px-8 py-4 md:py-8 bg-black/80"
+            onClick={() => setSelectedImage(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={language === 'pl' ? 'Powiększone zdjęcie' : 'Zoomed image'}
           >
             <button
-              onClick={() => setSelectedImage(null)}
-              className="absolute -top-12 right-0 w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }}
+              className="absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
+              aria-label={language === 'pl' ? 'Zamknij' : 'Close'}
             >
-              <X size={24} className="text-white" />
+              <X size={24} className="text-white" aria-hidden="true" />
             </button>
-            
-            <div className="relative aspect-square rounded-2xl overflow-hidden">
-              <Image
-                src={selectedImage.url}
-                alt={selectedImage.type}
-                fill
-                className="object-contain"
-              />
-            </div>
 
-            <div className="mt-4 flex gap-2 justify-center">
-              <GlassButton
-                onClick={() => handleDownloadImage(selectedImage.url)}
-                variant="secondary"
-              >
-                <Download size={20} className="mr-2" />
-                {language === 'pl' ? 'Pobierz' : 'Download'}
-              </GlassButton>
-              <GlassButton
-                onClick={() => handleDeleteImage(selectedImage.id)}
-                variant="secondary"
-                className="bg-red-500/20 hover:bg-red-500/40"
-              >
-                <Trash2 size={20} className="mr-2" />
-                {language === 'pl' ? 'Usuń' : 'Delete'}
-              </GlassButton>
+            {/* Grid aligned with layout: left col = IDA spacer, right col = header/content */}
+            <div className="w-full max-w-screen-2xl mx-auto flex-1 flex flex-col xl:grid xl:grid-cols-[minmax(320px,0.3fr)_minmax(400px,0.7fr)] xl:gap-10 xl:items-start min-h-0">
+              <div className="hidden xl:block" aria-hidden="true" />
+              <div className="w-full flex flex-col items-center justify-center min-h-0">
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              transition={{ duration: 0.2 }}
+              className="relative flex flex-col items-center justify-center w-full max-h-[calc(100vh-8rem)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="relative w-full flex-1 min-h-0 flex items-center justify-center">
+                {/* Lightbox image – full header width, rounded corners, plain img for reliable styling */}
+                <div
+                  className="relative w-full h-[calc(100vh-14rem)] flex items-center justify-center overflow-hidden rounded-3xl"
+                  style={{ borderRadius: '1.5rem' }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={selectedImage.url}
+                    alt={selectedImage.type}
+                    className="max-w-full max-h-full w-auto h-auto object-contain object-center"
+                    style={{ borderRadius: 'inherit' }}
+                  />
+                </div>
+                {/* Prev/next overlaid on image edges – only when multiple images */}
+                {filteredImages.length > 1 && (() => {
+                  const idx = filteredImages.findIndex((img) => img.id === selectedImage.id);
+                  const canGoPrev = idx > 0;
+                  const canGoNext = idx >= 0 && idx < filteredImages.length - 1;
+                  return (
+                    <>
+                      {canGoPrev && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedImage(filteredImages[idx - 1]);
+                          }}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
+                          aria-label={language === 'pl' ? 'Poprzednie zdjęcie' : 'Previous image'}
+                        >
+                          <ChevronLeft size={28} className="text-white" aria-hidden="true" />
+                        </button>
+                      )}
+                      {canGoNext && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedImage(filteredImages[idx + 1]);
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
+                          aria-label={language === 'pl' ? 'Następne zdjęcie' : 'Next image'}
+                        >
+                          <ChevronRight size={28} className="text-white" aria-hidden="true" />
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div className="mt-4 flex gap-2 justify-center flex-shrink-0">
+                <GlassButton
+                  onClick={() => handleDownloadImage(selectedImage.url)}
+                  variant="secondary"
+                >
+                  <Download size={20} className="mr-2" />
+                  {language === 'pl' ? 'Pobierz' : 'Download'}
+                </GlassButton>
+                <GlassButton
+                  onClick={() => handleDeleteImage(selectedImage.id)}
+                  variant="secondary"
+                  className="bg-red-500/20 hover:bg-red-500/40"
+                >
+                  <Trash2 size={20} className="mr-2" />
+                  {language === 'pl' ? 'Usuń' : 'Delete'}
+                </GlassButton>
+              </div>
+            </motion.div>
+              </div>
             </div>
           </motion.div>
-        </motion.div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }

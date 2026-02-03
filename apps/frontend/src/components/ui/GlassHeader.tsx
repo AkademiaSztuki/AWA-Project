@@ -11,18 +11,16 @@ import { MusicTestButton } from './MusicTestButton';
 import { ColorAdjustmentPanel } from './ColorAdjustmentPanel';
 import { Home } from 'lucide-react';
 import { useLayout } from '@/contexts/LayoutContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { useSessionData } from '@/hooks/useSessionData';
+import { useDashboardAccess } from '@/hooks/useDashboardAccess';
 
 export function GlassHeader() {
   const router = useRouter();
   const pathname = usePathname();
   const { isHeaderVisible } = useLayout();
-  const { user } = useAuth();
-  const { sessionData } = useSessionData();
+  const { isComplete, isResolved } = useDashboardAccess();
 
   const showPathSelection = pathname !== '/flow/path-selection' && pathname !== '/';
-  const showDashboard = user && sessionData?.coreProfileComplete && pathname !== '/dashboard';
+  const showDashboard = isResolved && isComplete && pathname !== '/dashboard';
 
   // Header is visible if:
   // 1. We are NOT on the home page ('/')
