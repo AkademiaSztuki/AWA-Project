@@ -11,6 +11,7 @@ import {
   SwipePattern
 } from '@/types/deep-personalization';
 import { supabase, ensureParticipantExists } from '@/lib/supabase'; // Use shared Supabase client to avoid multiple instances
+import { gcpApi } from '@/lib/gcp-api-client';
 
 // =========================
 // USER PROFILE
@@ -18,25 +19,30 @@ import { supabase, ensureParticipantExists } from '@/lib/supabase'; // Use share
 
 export async function getUserProfile(userHash: string): Promise<UserProfile | null> {
   try {
-    // New source of truth after refactor: participants (+ aggregates updated from participant_swipes)
-    const { data, error } = await supabase
-      .from('participants')
-      .select('*')
-      .eq('user_hash', userHash)
-      .maybeSingle(); // Use maybeSingle() instead of single() to avoid 406 errors
+    let data: Record<string, any> | null = null;
 
-    if (error) {
-      // PGRST116 means no rows found - this is normal for new users
-      // 406 Not Acceptable can also occur when using .single() with no rows
-      if (error.code === 'PGRST116' || error.message?.includes('406') || error.message?.includes('Not Acceptable')) {
-        console.log('User profile not found (new user) - this is normal');
+    if (gcpApi.isConfigured()) {
+      const r = await gcpApi.participants.fetchSession(userHash);
+      if (!r.ok || !r.data?.participant) return null;
+      data = r.data.participant as Record<string, any>;
+    } else {
+      const { data: sbData, error } = await supabase
+        .from('participants')
+        .select('*')
+        .eq('user_hash', userHash)
+        .maybeSingle();
+
+      if (error) {
+        if (error.code === 'PGRST116' || error.message?.includes('406') || error.message?.includes('Not Acceptable')) {
+          console.log('User profile not found (new user) - this is normal');
+          return null;
+        }
+        console.warn('Error fetching user profile:', error.code, error.message);
         return null;
       }
-      // Log other errors but don't throw - return null gracefully
-      console.warn('Error fetching user profile:', error.code, error.message);
-      return null;
+      data = sbData;
     }
-    
+
     if (!data) return null;
 
     // #region agent log
@@ -206,25 +212,32 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
  */
 export async function getUserProfileFromAuth(authUserId: string): Promise<UserProfile | null> {
   try {
-    const { data, error } = await supabase
-      .from('participants')
-      .select('*')
-      .eq('auth_user_id', authUserId)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    let userHash: string | null = null;
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null; // No profile linked yet
+    if (gcpApi.isConfigured()) {
+      const r = await gcpApi.participants.byAuth(authUserId);
+      if (!r.ok || !r.data?.participants?.length) return null;
+      userHash = r.data.participants[0].user_hash as string;
+    } else {
+      const { data, error } = await supabase
+        .from('participants')
+        .select('*')
+        .eq('auth_user_id', authUserId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        if (error.code === 'PGRST116') return null;
+        console.warn('Error fetching user profile from auth:', error);
+        return null;
       }
-      console.warn('Error fetching user profile from auth:', error);
-      return null;
+      if (!data) return null;
+      userHash = data.user_hash;
     }
-    
-    if (!data) return null;
-    
-    const profile = await getUserProfile(data.user_hash);
+
+    if (!userHash) return null;
+    const profile = await getUserProfile(userHash);
     if (!profile) return null;
     
     // #region agent log
@@ -282,34 +295,29 @@ export async function getBestProfileForAuth(authUserId: string): Promise<UserPro
     }).catch(() => {});
     // #endregion
 
-    const { data, error } = await supabase
-      .from('participants')
-      .select('*')
-      .eq('auth_user_id', authUserId)
-      .order('updated_at', { ascending: false });
+    let allRows: any[] = [];
 
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      console.warn('Error fetching best profile from auth:', error);
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'incognito-fix',
-          hypothesisId: 'I15e',
-          location: 'supabase-deep-personalization.ts:getBestProfileForAuth',
-          message: 'Error fetching best profile from auth',
-          data: { authUserId, errorCode: error.code, errorMessage: error.message },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
-      return null;
+    if (gcpApi.isConfigured()) {
+      const r = await gcpApi.participants.byAuth(authUserId);
+      if (!r.ok || !r.data?.participants?.length) return null;
+      allRows = r.data.participants;
+    } else {
+      const { data, error } = await supabase
+        .from('participants')
+        .select('*')
+        .eq('auth_user_id', authUserId)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        if (error.code === 'PGRST116') return null;
+        console.warn('Error fetching best profile from auth:', error);
+        return null;
+      }
+      allRows = data || [];
     }
 
-    if (!data || data.length === 0) return null;
+    if (!allRows.length) return null;
+    const data = allRows;
 
     // Pick first row that has any meaningful data (participants columns)
     const hasData = (row: any) =>
@@ -379,38 +387,29 @@ export async function getUserHashFromAuth(authUserId: string): Promise<string | 
     }).catch(() => {});
     // #endregion
 
-    const { data, error } = await supabase
-      .from('participants')
-      .select('user_hash')
-      .eq('auth_user_id', authUserId)
-      .order('updated_at', { ascending: false })
-      .limit(1);
+    let rows: Array<{ user_hash: string }> = [];
 
-    if (error) {
-      console.warn('Error fetching user_hash from auth:', error);
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'incognito-fix',
-          hypothesisId: 'I6',
-          location: 'supabase-deep-personalization.ts:getUserHashFromAuth',
-          message: 'Error fetching user_hash from auth',
-          data: {
-            authUserId,
-            errorCode: error.code,
-            errorMessage: error.message
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
-      return null;
+    if (gcpApi.isConfigured()) {
+      const r = await gcpApi.participants.byAuth(authUserId);
+      if (r.ok && r.data?.participants?.length) {
+        rows = r.data.participants.map((p: any) => ({ user_hash: p.user_hash }));
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('participants')
+        .select('user_hash')
+        .eq('auth_user_id', authUserId)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.warn('Error fetching user_hash from auth:', error);
+        return null;
+      }
+      rows = data || [];
     }
-    
-    if (!data || data.length === 0) {
+
+    if (!rows.length) {
       // #region agent log
       void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
         method: 'POST',
@@ -429,7 +428,7 @@ export async function getUserHashFromAuth(authUserId: string): Promise<string | 
       return null;
     }
     
-    const userHash = data[0].user_hash;
+    const userHash = rows[0].user_hash;
     
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
@@ -444,7 +443,7 @@ export async function getUserHashFromAuth(authUserId: string): Promise<string | 
         data: {
           authUserId,
           foundUserHash: userHash,
-          rowCount: data.length
+          rowCount: rows.length
         },
         timestamp: Date.now()
       })
@@ -695,6 +694,30 @@ export async function getCoreProfileCompletionStatus(options: {
   if (!authUserId && !userHash) return null;
 
   try {
+    if (gcpApi.isConfigured()) {
+      if (authUserId) {
+        const r = await gcpApi.participants.byAuth(authUserId);
+        if (r.ok && r.data?.participants?.length) {
+          const best = r.data.participants.find((p: any) => p.core_profile_complete) || r.data.participants[0];
+          return {
+            coreProfileComplete: !!best.core_profile_complete,
+            coreProfileCompletedAt: best.core_profile_completed_at as string | null
+          };
+        }
+      }
+      if (userHash) {
+        const r = await gcpApi.participants.fetchSession(userHash);
+        if (r.ok && r.data?.participant) {
+          const p = r.data.participant as any;
+          return {
+            coreProfileComplete: !!p.core_profile_complete,
+            coreProfileCompletedAt: p.core_profile_completed_at
+          };
+        }
+      }
+      return { coreProfileComplete: false, coreProfileCompletedAt: null };
+    }
+
     if (authUserId) {
       const { data, error } = await supabase
         .from('participants')

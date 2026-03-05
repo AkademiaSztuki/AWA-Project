@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkCreditsAvailable } from '@/lib/credits';
+import { isGcpConfigured, gcpServerApi } from '@/lib/gcp-api-server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +14,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const available = await checkCreditsAvailable(userHash, amount || 10);
+    let available: boolean;
+    if (isGcpConfigured()) {
+      const r = await gcpServerApi.credits.check(userHash, amount);
+      available = r.ok ? (r.data?.available ?? true) : true;
+    } else {
+      available = await checkCreditsAvailable(userHash, amount || 10);
+    }
 
     return NextResponse.json({ available });
   } catch (error: any) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCreditBalance } from '@/lib/credits';
+import { getCreditBalance, CreditBalance } from '@/lib/credits';
+import { isGcpConfigured, gcpServerApi } from '@/lib/gcp-api-server';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +14,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const balance = await getCreditBalance(userHash);
+    let balance: CreditBalance;
+    if (isGcpConfigured()) {
+      const r = await gcpServerApi.credits.balance(userHash);
+      balance = r.ok && r.data
+        ? r.data
+        : { balance: 0, generationsAvailable: 0, hasActiveSubscription: false, subscriptionCreditsRemaining: 0 };
+    } else {
+      balance = await getCreditBalance(userHash);
+    }
 
     return NextResponse.json(balance);
   } catch (error: any) {

@@ -65,6 +65,11 @@ export const gcpApi = {
 
     fetchSession: (userHash: string) =>
       apiFetch<{ participant?: Record<string, unknown> | null }>(`/api/session/${encodeURIComponent(userHash)}`),
+
+    byAuth: (authUserId: string) =>
+      apiFetch<{ participants: Array<Record<string, unknown>> }>(
+        `/api/participants/by-auth/${encodeURIComponent(authUserId)}`
+      ),
   },
 
   swipes: {

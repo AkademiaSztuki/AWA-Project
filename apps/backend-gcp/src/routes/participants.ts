@@ -103,6 +103,32 @@ participantsRouter.post('/session', async (req, res) => {
   }
 });
 
+// GET /participants/by-auth/:authUserId (lookup by auth_user_id for deep-personalization)
+participantsRouter.get('/participants/by-auth/:authUserId', async (req, res) => {
+  const { authUserId } = req.params;
+
+  if (!authUserId) {
+    return res.status(400).json({ ok: false, error: 'authUserId is required' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query(
+        'SELECT * FROM participants WHERE auth_user_id = $1 ORDER BY updated_at DESC',
+        [authUserId],
+      );
+
+      return res.json({ ok: true, participants: rows });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('participants/by-auth GET error', error);
+    return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
+
 // GET /participants/session/:userHash (fetchLatestSessionSnapshot equivalent)
 participantsRouter.get('/session/:userHash', async (req, res) => {
   const { userHash } = req.params;
