@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase';
+import { gcpApi } from './gcp-api-client';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -295,6 +296,10 @@ export const saveGenerationFeedback = async (
     userRating?: number;
   }
 ) => {
+  if (gcpApi.isConfigured()) {
+    const r = await gcpApi.research.generationFeedback(feedback);
+    return r.ok;
+  }
   const { error } = await supabase
     .from('generation_feedback')
     .insert({
@@ -332,6 +337,10 @@ export const saveRegenerationEvent = async (
     implicitQuality?: any;
   }
 ) => {
+  if (gcpApi.isConfigured()) {
+    const r = await gcpApi.research.regenerationEvent(event);
+    return r.ok;
+  }
   const { error } = await supabase
     .from('regeneration_events')
     .insert({
@@ -370,7 +379,10 @@ export const saveFullSessionToSupabase = async (sessionData: any) => {
     // #endregion
     return;
   }
-  
+  if (gcpApi.isConfigured()) {
+    const r = await gcpApi.participants.saveSession(sessionData.userHash, sessionData);
+    return r.ok ? undefined : undefined;
+  }
   try {
     // Map SessionData to participants format
     const { mapSessionDataToParticipant } = await import('@/lib/participants-mapper');
@@ -437,6 +449,12 @@ export const fetchLatestSessionSnapshot = async (userHash: string) => {
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:fetchLatestSessionSnapshot-no-hash',message:'No userHash provided',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
     // #endregion
     return null;
+  }
+  if (gcpApi.isConfigured()) {
+    const r = await gcpApi.participants.fetchSession(userHash);
+    if (!r.ok || r.data?.participant == null) return null;
+    const { mapParticipantToSessionData } = await import('@/lib/participants-mapper');
+    return mapParticipantToSessionData(r.data.participant as any);
   }
   try {
     const { data, error } = await supabase
@@ -552,7 +570,12 @@ export const saveParticipantSwipes = async (userHash: string, swipes: Array<{
     // #endregion
     return;
   }
-  
+  if (gcpApi.isConfigured()) {
+    const participantExists = await ensureParticipantExists(userHash);
+    if (!participantExists) return;
+    const r = await gcpApi.swipes.save(userHash, swipes);
+    return;
+  }
   // Ensure participant exists before inserting swipes
   const participantExists = await ensureParticipantExists(userHash);
   if (!participantExists) {
@@ -732,7 +755,12 @@ export const startParticipantGeneration = async (
     // #endregion
     return null;
   }
-  
+  if (gcpApi.isConfigured()) {
+    const participantExists = await ensureParticipantExists(userHash);
+    if (!participantExists) return null;
+    const r = await gcpApi.generations.start(userHash, job);
+    return r.ok && r.data?.generationId ? r.data.generationId : null;
+  }
   // Ensure participant exists before inserting generation
   const participantExists = await ensureParticipantExists(userHash);
   if (!participantExists) {
@@ -779,7 +807,10 @@ export const endParticipantGeneration = async (
   // #region agent log
   void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:endParticipantGeneration-entry',message:'Ending participant generation',data:{jobId,status:outcome.status,latencyMs:outcome.latency_ms,hasError:!!outcome.error_message},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H3'})}).catch(()=>{});
   // #endregion
-  
+  if (gcpApi.isConfigured()) {
+    const r = await gcpApi.generations.end(jobId, outcome);
+    return r.ok;
+  }
   const safeLatency = Math.min(Math.max(0, Math.round(outcome.latency_ms)), 2147483647);
   
   const { error } = await supabase
@@ -883,7 +914,12 @@ export const logErrorEvent = async (projectId: string, payload: { source: string
 // Helper: Ensure participant exists before inserting into related tables
 export const ensureParticipantExists = async (userHash: string): Promise<boolean> => {
   if (!userHash) return false;
-  
+
+  if (gcpApi.isConfigured()) {
+    const r = await gcpApi.participants.ensure(userHash);
+    return r.ok;
+  }
+
   try {
     // Check if participant exists
     const { data: existing } = await supabase
@@ -959,7 +995,26 @@ export const saveParticipantImage = async (
     // #endregion
     return null;
   }
-  
+  if (gcpApi.isConfigured()) {
+    const participantExists = await ensureParticipantExists(userHash);
+    if (!participantExists) return null;
+    const r = await gcpApi.images.register(userHash, {
+      type: image.type,
+      storage_path: image.storage_path,
+      public_url: image.public_url,
+      thumbnail_url: image.thumbnail_url,
+      is_favorite: image.is_favorite,
+      space_id: image.space_id,
+      tags_styles: image.tags_styles,
+      tags_colors: image.tags_colors,
+      tags_materials: image.tags_materials,
+      tags_biophilia: image.tags_biophilia,
+      description: image.description,
+      source: image.source,
+      generation_id: image.generation_id,
+    });
+    return r.ok ? (r.data?.imageId ?? null) : null;
+  }
   // Ensure participant exists before inserting image
   const participantExists = await ensureParticipantExists(userHash);
   if (!participantExists) {
@@ -1038,6 +1093,15 @@ export const saveResearchConsent = async (
   },
   locale: 'pl' | 'en'
 ) => {
+  if (gcpApi.isConfigured()) {
+    const r = await gcpApi.research.consent({
+      userId,
+      consent,
+      locale,
+      consentVersion: CONSENT_VERSION,
+    });
+    return r.ok;
+  }
   console.info('[Supabase] Saving research consent', {
     userId,
     consentResearch: consent.consentResearch,
