@@ -13,6 +13,7 @@ import { analyzeInspirationsWithGamma, type InspirationTaggingResult } from "@/l
 import { fileToNormalizedDataUrl } from "@/lib/utils";
 import { saveParticipantImages } from "@/lib/remote-spaces";
 import { supabase } from "@/lib/supabase";
+import { gcpApi } from "@/lib/gcp-api-client";
 import { 
   Upload, 
   X, 
@@ -265,10 +266,32 @@ export default function InspirationsPage() {
       
       setItems(itemsWithBase64);
 
-      // Upload files to Supabase Storage (participant-images bucket)
+      // Upload files to storage (GCS if GCP configured, otherwise Supabase Storage)
       const userHash = (sessionData as any)?.userHash || 'anonymous';
       const uploads = await Promise.all(itemsWithBase64.map(async (i) => {
         try {
+          if (!i.file && !i.imageBase64) return { id: i.id };
+
+          if (gcpApi.isConfigured()) {
+            const base64Data = i.imageBase64 || i.previewUrl || '';
+            if (!base64Data) return { id: i.id };
+            const r = await gcpApi.images.uploadAndRegister({
+              userHash,
+              type: 'inspiration',
+              base64Image: base64Data,
+              tags_styles: i.tags?.styles || [],
+              tags_colors: i.tags?.colors || [],
+              tags_materials: i.tags?.materials || [],
+              tags_biophilia: i.tags?.biophilia,
+              description: (i.tags as any)?.description,
+              source: 'user_upload',
+            });
+            if (r.ok && r.data) {
+              return { id: i.id, fileId: (r.data as any).storage_path, url: (r.data as any).public_url };
+            }
+            return { id: i.id };
+          }
+
           if (!i.file) return { id: i.id };
           const path = `${userHash}/inspiration/${i.id}`;
           const { data, error } = await supabase

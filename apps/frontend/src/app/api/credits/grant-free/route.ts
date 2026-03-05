@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { grantFreeCredits } from '@/lib/credits';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
+import { isGcpConfigured, gcpServerApi } from '@/lib/gcp-api-server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,7 +41,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const success = await grantFreeCredits(userHash);
+    let success: boolean;
+    if (isGcpConfigured()) {
+      const r = await gcpServerApi.credits.grantFree(userHash);
+      success = r.ok && !!r.data?.granted;
+    } else {
+      success = await grantFreeCredits(userHash);
+    }
 
     if (success) {
       return NextResponse.json(

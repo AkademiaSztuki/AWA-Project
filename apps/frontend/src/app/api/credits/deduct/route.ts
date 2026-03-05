@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { deductCredits } from '@/lib/credits';
+import { isGcpConfigured, gcpServerApi } from '@/lib/gcp-api-server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,16 +17,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Sprawdź czy SUPABASE_SERVICE_ROLE_KEY jest ustawione
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('[API Credits Deduct] SUPABASE_SERVICE_ROLE_KEY is not set!');
-      return NextResponse.json(
-        { error: 'Server configuration error: SUPABASE_SERVICE_ROLE_KEY is missing' },
-        { status: 500 }
-      );
+    let success: boolean;
+    if (isGcpConfigured()) {
+      const r = await gcpServerApi.credits.deduct(userHash, generationId);
+      success = r.ok;
+    } else {
+      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        console.error('[API Credits Deduct] SUPABASE_SERVICE_ROLE_KEY is not set!');
+        return NextResponse.json(
+          { error: 'Server configuration error: SUPABASE_SERVICE_ROLE_KEY is missing' },
+          { status: 500 }
+        );
+      }
+      success = await deductCredits(userHash, generationId);
     }
-
-    const success = await deductCredits(userHash, generationId);
 
     if (!success) {
       console.error('[API Credits Deduct] deductCredits returned false');

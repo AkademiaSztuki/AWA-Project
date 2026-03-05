@@ -59,18 +59,28 @@ participantsRouter.post('/session', async (req, res) => {
   try {
     const client = await pool.connect();
     try {
-      const columns = Object.keys(participantRow);
-      const values = Object.values(participantRow);
+      // Strip user_hash from participantRow to avoid duplicate column in INSERT
+      // (user_hash is already used as $1 in the query)
+      const { user_hash: _ignore, ...rowWithoutHash } = participantRow as Record<string, unknown>;
+      const entries = Object.entries(rowWithoutHash).filter(
+        ([, v]) => v !== undefined && v !== null,
+      );
 
-      if (!columns.length) {
+      if (!entries.length) {
         return res.status(400).json({ ok: false, error: 'participantRow is empty' });
       }
 
       // Ensure consent_timestamp is always set
-      if (!columns.includes('consent_timestamp')) {
-        columns.push('consent_timestamp');
-        values.push(new Date().toISOString());
+      if (!entries.some(([k]) => k === 'consent_timestamp')) {
+        entries.push(['consent_timestamp', new Date().toISOString()]);
       }
+
+      // Validate column names: only allow alphanumeric + underscores
+      const validColumnName = /^[a-z_][a-z0-9_]*$/i;
+      const safeEntries = entries.filter(([col]) => validColumnName.test(col));
+
+      const columns = safeEntries.map(([col]) => col);
+      const values = safeEntries.map(([, val]) => val);
 
       const assignments = columns.map((col, idx) => `${col} = $${idx + 2}`);
 
@@ -89,6 +99,32 @@ participantsRouter.post('/session', async (req, res) => {
     }
   } catch (error) {
     console.error('participants/session error', error);
+    return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
+
+// GET /participants/by-auth/:authUserId (lookup by auth_user_id for deep-personalization)
+participantsRouter.get('/participants/by-auth/:authUserId', async (req, res) => {
+  const { authUserId } = req.params;
+
+  if (!authUserId) {
+    return res.status(400).json({ ok: false, error: 'authUserId is required' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query(
+        'SELECT * FROM participants WHERE auth_user_id = $1 ORDER BY updated_at DESC',
+        [authUserId],
+      );
+
+      return res.json({ ok: true, participants: rows });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('participants/by-auth GET error', error);
     return res.status(500).json({ ok: false, error: 'internal_error' });
   }
 });

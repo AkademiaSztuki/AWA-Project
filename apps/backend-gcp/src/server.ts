@@ -7,6 +7,8 @@ import { generationsRouter } from './routes/generations';
 import { imagesRouter } from './routes/images';
 import { researchRouter } from './routes/research';
 import { gcsImagesRouter } from './routes/gcs-images';
+import { surveysRouter } from './routes/surveys';
+import { creditsRouter } from './routes/credits';
 
 const app = express();
 
@@ -24,6 +26,8 @@ app.use('/api', generationsRouter);
 app.use('/api', imagesRouter);
 app.use('/api', researchRouter);
 app.use('/api', gcsImagesRouter);
+app.use('/api', surveysRouter);
+app.use('/api', creditsRouter);
 
 const port = process.env.PORT || 8080;
 

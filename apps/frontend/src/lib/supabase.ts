@@ -380,8 +380,28 @@ export const saveFullSessionToSupabase = async (sessionData: any) => {
     return;
   }
   if (gcpApi.isConfigured()) {
-    const r = await gcpApi.participants.saveSession(sessionData.userHash, sessionData);
-    return r.ok ? undefined : undefined;
+    try {
+      const { mapSessionDataToParticipant } = await import('@/lib/participants-mapper');
+      let authUserId: string | undefined;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        authUserId = session?.user?.id;
+      } catch (e) {}
+      const participantRow = mapSessionDataToParticipant(sessionData, authUserId);
+      if (!participantRow.consent_timestamp) {
+        participantRow.consent_timestamp = new Date().toISOString();
+      }
+      const r = await gcpApi.participants.saveSession(sessionData.userHash, { participantRow });
+      if (!r.ok) {
+        console.error('❌ [GCP] Error saving session:', r.error);
+      } else {
+        console.info('✅ [GCP] Successfully saved session to participants table', { userHash: sessionData.userHash });
+      }
+      return;
+    } catch (err) {
+      console.error('❌ [GCP] Exception in saveFullSessionToSupabase:', err);
+      return;
+    }
   }
   try {
     // Map SessionData to participants format
@@ -572,9 +592,13 @@ export const saveParticipantSwipes = async (userHash: string, swipes: Array<{
   }
   if (gcpApi.isConfigured()) {
     const participantExists = await ensureParticipantExists(userHash);
-    if (!participantExists) return;
+    if (!participantExists) return false;
     const r = await gcpApi.swipes.save(userHash, swipes);
-    return;
+    if (!r.ok) {
+      console.error('❌ [GCP] Error saving swipes:', r.error);
+      return false;
+    }
+    return true;
   }
   // Ensure participant exists before inserting swipes
   const participantExists = await ensureParticipantExists(userHash);

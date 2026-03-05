@@ -9,9 +9,14 @@ const getBaseUrl = (): string | null => {
   return url && url.length > 0 ? url.replace(/\/$/, '') : null;
 };
 
+interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
+  method?: string;
+  body?: Record<string, unknown>;
+}
+
 async function apiFetch<T = unknown>(
   path: string,
-  options: RequestInit & { method?: string; body?: object } = {}
+  options: ApiFetchOptions = {}
 ): Promise<{ data?: T; ok: boolean; error?: string }> {
   const base = getBaseUrl();
   if (!base) {
@@ -60,6 +65,11 @@ export const gcpApi = {
 
     fetchSession: (userHash: string) =>
       apiFetch<{ participant?: Record<string, unknown> | null }>(`/api/session/${encodeURIComponent(userHash)}`),
+
+    byAuth: (authUserId: string) =>
+      apiFetch<{ participants: Array<Record<string, unknown>> }>(
+        `/api/participants/by-auth/${encodeURIComponent(authUserId)}`
+      ),
   },
 
   swipes: {
@@ -172,6 +182,20 @@ export const gcpApi = {
 
     regenerationEvent: (payload: Record<string, unknown>) =>
       apiFetch<{ ok: boolean }>('/api/research/regeneration-event', {
+        method: 'POST',
+        body: payload,
+      }),
+
+    survey: (payload: {
+      sessionId: string;
+      type: string;
+      answers: Record<string, unknown>;
+      susScore?: number;
+      clarityScore?: number;
+      agencyScore?: number;
+      satisfactionScore?: number;
+    }) =>
+      apiFetch<{ ok: boolean; surveyId?: string }>('/api/research/survey', {
         method: 'POST',
         body: payload,
       }),

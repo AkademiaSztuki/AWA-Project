@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS participants (
   implicit_material_1 TEXT,
   implicit_material_2 TEXT,
   implicit_material_3 TEXT,
+  implicit_warmth NUMERIC,
+  implicit_brightness NUMERIC,
+  implicit_complexity NUMERIC,
   dna_accuracy_score NUMERIC,
 
   -- Explicit
@@ -129,6 +132,10 @@ CREATE TABLE IF NOT EXISTS participants (
   -- Profile status
   core_profile_complete BOOLEAN DEFAULT FALSE,
   core_profile_completed_at TIMESTAMPTZ,
+
+  -- Free credits tracking
+  free_grant_used BOOLEAN DEFAULT FALSE,
+  free_grant_used_at TIMESTAMPTZ,
 
   -- Metadata
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -323,6 +330,94 @@ CREATE INDEX IF NOT EXISTS idx_regeneration_events_interpretation
 
 CREATE INDEX IF NOT EXISTS idx_regeneration_events_created_at
   ON regeneration_events(created_at);
+
+-- ============================================
+-- TABLE: survey_results
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS survey_results (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  answers JSONB,
+  sus_score NUMERIC,
+  clarity_score NUMERIC,
+  agency_score NUMERIC,
+  satisfaction_score NUMERIC,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_survey_results_session
+  ON survey_results(session_id);
+
+CREATE INDEX IF NOT EXISTS idx_survey_results_type
+  ON survey_results(type);
+
+-- ============================================
+-- TABLE: credit_transactions
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS credit_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_hash TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('grant', 'used', 'expired', 'subscription_allocated')),
+  amount INTEGER NOT NULL,
+  source TEXT,
+  generation_id UUID,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_user
+  ON credit_transactions(user_hash);
+
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_type
+  ON credit_transactions(type);
+
+-- ============================================
+-- TABLE: subscriptions
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_hash TEXT NOT NULL,
+  stripe_subscription_id TEXT UNIQUE,
+  stripe_customer_id TEXT,
+  plan_id TEXT,
+  billing_period TEXT CHECK (billing_period IN ('monthly', 'yearly')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled', 'past_due', 'trialing', 'incomplete')),
+  credits_allocated INTEGER DEFAULT 0,
+  credits_used INTEGER DEFAULT 0,
+  subscription_credits_remaining INTEGER DEFAULT 0,
+  current_period_start TIMESTAMPTZ,
+  current_period_end TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user
+  ON subscriptions(user_hash);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status
+  ON subscriptions(status);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_id
+  ON subscriptions(stripe_subscription_id);
+
+-- ============================================
+-- TABLE: stripe_webhook_events (idempotency)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stripe_event_id TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL,
+  data JSONB,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stripe_events_stripe_id
+  ON stripe_webhook_events(stripe_event_id);
 
 -- ============================================
 -- Updated-at trigger for participants
