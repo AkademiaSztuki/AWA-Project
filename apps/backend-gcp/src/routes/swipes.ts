@@ -187,7 +187,7 @@ swipesRouter.post('/participants/:userHash/swipes', async (req, res) => {
         },
       });
     } catch (error) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       console.error('swipes insert error', error);
       return res.status(500).json({ ok: false, error: 'internal_error' });
     } finally {
