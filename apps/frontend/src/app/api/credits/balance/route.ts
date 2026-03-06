@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCreditBalance } from '@/lib/credits';
+import { getCreditOverviewAdmin } from '@/lib/credits';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const balance = await getCreditBalance(userHash);
+    const balance = await getCreditOverviewAdmin(userHash);
 
     return NextResponse.json(balance);
   } catch (error: any) {

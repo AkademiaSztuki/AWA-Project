@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage } from '@/lib/supabase';
-import { checkCreditsAvailable } from '@/lib/credits';
 import { UpgradePrompt } from '@/components/subscription/UpgradePrompt';
 import { supabase } from '@/lib/supabase';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -732,6 +731,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     console.log("[6-Image Matrix] ✅ Starting generation...", { runId: generationRunId });
     
     const typedSessionData = sessionData as any;
+    const userHash = typedSessionData?.userHash;
     
     // Try to get roomImage from sessionStorage if not in sessionData (Supabase might be disconnected)
     let roomImage = typedSessionData?.roomImage;
@@ -977,6 +977,25 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         setError(t({ pl: `Brak wystarczających danych do wygenerowania obrazów. Szczegóły: ${errorDetails}`, en: `Insufficient data to generate images. Details: ${errorDetails}` }));
         setIsGenerating(false);
         return;
+      }
+
+      const requiredCredits = synthesisResult.generatedSources.length * 10;
+      if (userHash) {
+        let hasCredits = true;
+        try {
+          hasCredits = await checkCreditsViaApi(userHash, requiredCredits);
+        } catch (creditError) {
+          console.warn('[6-Image Matrix] Error checking credits:', creditError);
+        }
+
+        if (!hasCredits) {
+          setError(t({
+            pl: `Nie masz wystarczającej liczby kredytów. Potrzebujesz ${requiredCredits} kredytów na tę generację.`,
+            en: `You do not have enough credits. You need ${requiredCredits} credits for this generation.`,
+          }));
+          setStatusMessage({ pl: 'Brak kredytów', en: 'No credits' });
+          return;
+        }
       }
       
       // Step 2: Prepare prompts for parallel generation
@@ -1983,6 +2002,22 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   // Use centralized parameters from useModalAPI
   const getOptimalParameters = getGenerationParameters;
 
+  const checkCreditsViaApi = async (userHash: string, amount: number) => {
+    const response = await fetch('/api/credits/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userHash, amount }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to check credits');
+    }
+
+    const data = await response.json();
+    return !!data.available;
+  };
+
   const handleInitialGeneration = async (force = false) => {
     console.log('[Generate] handleInitialGeneration called', { 
       isApiReady, 
@@ -2017,11 +2052,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
     // Sprawdź dostępność kredytów przed generacją
     const userHash = (sessionData as any)?.userHash;
-    if (userHash) {
+    if (userHash && !isMatrixMode) {
       // Sprawdź kredyty (z try-catch aby nie blokować aplikacji jeśli tabela nie istnieje)
       let hasCredits = true;
       try {
-        hasCredits = await checkCreditsAvailable(userHash, 10);
+        hasCredits = await checkCreditsViaApi(userHash, 10);
       } catch (creditError) {
         console.warn('Error checking credits (tables may not exist yet):', creditError);
         // Kontynuuj bez sprawdzania kredytów jeśli tabela nie istnieje

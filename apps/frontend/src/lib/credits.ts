@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase';
-import { PostgrestError } from '@supabase/supabase-js';
 
 const CREDITS_PER_GENERATION = 10;
 const FREE_GRANT_CREDITS = 600;
@@ -17,7 +16,7 @@ function getSupabaseAdmin() {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for credit operations. Please add it to Vercel environment variables.');
   }
   
-  return createClient(supabaseUrl, supabaseServiceKey, {
+  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -30,6 +29,138 @@ export interface CreditBalance {
   generationsAvailable: number;
   hasActiveSubscription: boolean;
   subscriptionCreditsRemaining: number;
+}
+
+export interface SubscriptionSummary {
+  id: string;
+  credits_used: number;
+  credits_allocated: number;
+  subscription_credits_remaining: number;
+  stripe_customer_id: string | null;
+  plan_id: string;
+  billing_period: string;
+  status: string;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
+}
+
+export interface CreditOverview {
+  balance: CreditBalance;
+  subscription: SubscriptionSummary | null;
+}
+
+type CreditClient = ReturnType<typeof getSupabaseAdmin> | typeof supabase;
+
+async function getActiveSubscription(
+  client: CreditClient,
+  userHash: string
+): Promise<SubscriptionSummary | null> {
+  const { data, error } = await client
+    .from('subscriptions')
+    .select(
+      'id, credits_used, credits_allocated, subscription_credits_remaining, stripe_customer_id, plan_id, billing_period, status, current_period_end, cancel_at_period_end, current_period_start'
+    )
+    .eq('user_hash', userHash)
+    .eq('status', 'active')
+    .order('current_period_start', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.warn('[Credits] Error getting active subscription:', error);
+    return null;
+  }
+
+  const subscription = data?.[0];
+  if (!subscription) {
+    return null;
+  }
+
+  return {
+    id: subscription.id,
+    credits_used: subscription.credits_used || 0,
+    credits_allocated: subscription.credits_allocated || 0,
+    subscription_credits_remaining: subscription.subscription_credits_remaining || 0,
+    stripe_customer_id: subscription.stripe_customer_id || null,
+    plan_id: subscription.plan_id,
+    billing_period: subscription.billing_period,
+    status: subscription.status,
+    current_period_end: subscription.current_period_end,
+    cancel_at_period_end: !!subscription.cancel_at_period_end,
+  };
+}
+
+async function fetchCreditBalanceWithClient(
+  client: CreditClient,
+  userHash: string
+): Promise<CreditOverview> {
+  try {
+    // Użyj funkcji SQL do obliczenia bilansu (jeśli istnieje)
+    const { data, error } = await client.rpc('get_credit_balance', {
+      p_user_hash: userHash,
+    });
+
+    if (error) {
+      // Fallback: oblicz bilans bezpośrednio z tabeli
+      console.warn('RPC function not available, using direct query:', error);
+      const { data: transactions, error: queryError } = await client
+        .from('credit_transactions')
+        .select('amount')
+        .eq('user_hash', userHash)
+        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
+
+      if (queryError) {
+        console.error('Error getting credit balance:', queryError);
+        return {
+          balance: {
+            balance: 0,
+            generationsAvailable: 0,
+            hasActiveSubscription: false,
+            subscriptionCreditsRemaining: 0,
+          },
+          subscription: null,
+        };
+      }
+
+      const balance = transactions?.reduce((sum, tx) => sum + (tx.amount || 0), 0) || 0;
+      const generationsAvailable = Math.floor(balance / CREDITS_PER_GENERATION);
+      const subscription = await getActiveSubscription(client, userHash);
+
+      return {
+        balance: {
+          balance,
+          generationsAvailable,
+          hasActiveSubscription: !!subscription,
+          subscriptionCreditsRemaining: subscription?.subscription_credits_remaining || 0,
+        },
+        subscription,
+      };
+    }
+
+    const balance = data || 0;
+    const generationsAvailable = Math.floor(balance / CREDITS_PER_GENERATION);
+    const subscription = await getActiveSubscription(client, userHash);
+
+    return {
+      balance: {
+        balance,
+        generationsAvailable,
+        hasActiveSubscription: !!subscription,
+        subscriptionCreditsRemaining: subscription?.subscription_credits_remaining || 0,
+      },
+      subscription,
+    };
+  } catch (error) {
+    console.error('Error in fetchCreditBalanceWithClient:', error);
+    return {
+      balance: {
+        balance: 0,
+        generationsAvailable: 0,
+        hasActiveSubscription: false,
+        subscriptionCreditsRemaining: 0,
+      },
+      subscription: null,
+    };
+  }
 }
 
 /**
@@ -50,80 +181,38 @@ export async function checkCreditsAvailable(userHash: string, amount: number = C
   }
 }
 
+export async function checkCreditsAvailableAdmin(
+  userHash: string,
+  amount: number = CREDITS_PER_GENERATION
+): Promise<boolean> {
+  try {
+    const balance = await getCreditBalanceAdmin(userHash);
+    if (balance.hasActiveSubscription && balance.subscriptionCreditsRemaining >= amount) {
+      return true;
+    }
+
+    return balance.balance >= amount;
+  } catch (error) {
+    console.warn('Error checking admin credits availability (tables may not exist):', error);
+    return true;
+  }
+}
+
 /**
  * Pobiera aktualny bilans kredytów użytkownika
  */
 export async function getCreditBalance(userHash: string): Promise<CreditBalance> {
-  try {
-    // Użyj funkcji SQL do obliczenia bilansu (jeśli istnieje)
-    const { data, error } = await supabase.rpc('get_credit_balance', {
-      p_user_hash: userHash,
-    });
+  const overview = await fetchCreditBalanceWithClient(supabase, userHash);
+  return overview.balance;
+}
 
-    if (error) {
-      // Fallback: oblicz bilans bezpośrednio z tabeli
-      console.warn('RPC function not available, using direct query:', error);
-      const { data: transactions, error: queryError } = await supabase
-        .from('credit_transactions')
-        .select('amount')
-        .eq('user_hash', userHash)
-        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
+export async function getCreditBalanceAdmin(userHash: string): Promise<CreditBalance> {
+  const overview = await fetchCreditBalanceWithClient(getSupabaseAdmin(), userHash);
+  return overview.balance;
+}
 
-      if (queryError) {
-        console.error('Error getting credit balance:', queryError);
-        return {
-          balance: 0,
-          generationsAvailable: 0,
-          hasActiveSubscription: false,
-          subscriptionCreditsRemaining: 0,
-        };
-      }
-
-      const balance = transactions?.reduce((sum, tx) => sum + (tx.amount || 0), 0) || 0;
-      const generationsAvailable = Math.floor(balance / CREDITS_PER_GENERATION);
-
-      // Sprawdź aktywną subskrypcję
-      const { data: subscription } = await supabase
-        .from('subscriptions')
-        .select('subscription_credits_remaining, credits_used')
-        .eq('user_hash', userHash)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      return {
-        balance,
-        generationsAvailable,
-        hasActiveSubscription: !!subscription,
-        subscriptionCreditsRemaining: subscription?.subscription_credits_remaining || 0,
-      };
-    }
-
-    const balance = data || 0;
-  const generationsAvailable = Math.floor(balance / CREDITS_PER_GENERATION);
-
-  // Sprawdź aktywną subskrypcję
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('subscription_credits_remaining, credits_used')
-    .eq('user_hash', userHash)
-    .eq('status', 'active')
-    .maybeSingle();
-
-  return {
-    balance,
-    generationsAvailable,
-    hasActiveSubscription: !!subscription,
-    subscriptionCreditsRemaining: subscription?.subscription_credits_remaining || 0,
-  };
-  } catch (error) {
-    console.error('Error in getCreditBalance:', error);
-    return {
-      balance: 0,
-      generationsAvailable: 0,
-      hasActiveSubscription: false,
-      subscriptionCreditsRemaining: 0,
-    };
-  }
+export async function getCreditOverviewAdmin(userHash: string): Promise<CreditOverview> {
+  return fetchCreditBalanceWithClient(getSupabaseAdmin(), userHash);
 }
 
 /**

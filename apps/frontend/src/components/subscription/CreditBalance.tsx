@@ -3,25 +3,12 @@
 import React, { useEffect, useState } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { getCreditBalance, CreditBalance as CreditBalanceType } from '@/lib/credits';
-import { supabase } from '@/lib/supabase';
+import { CreditBalance as CreditBalanceType, SubscriptionSummary } from '@/lib/credits';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface CreditBalanceProps {
   userHash: string;
   className?: string;
-}
-
-interface Subscription {
-  credits_used: number;
-  credits_allocated: number;
-  subscription_credits_remaining: number;
-  stripe_customer_id: string;
-  plan_id: string;
-  billing_period: string;
-  status: string;
-  current_period_end: string;
-  cancel_at_period_end: boolean;
 }
 
 const PLAN_NAMES: Record<string, string> = {
@@ -33,7 +20,7 @@ const PLAN_NAMES: Record<string, string> = {
 export function CreditBalance({ userHash, className }: CreditBalanceProps) {
   const { t } = useLanguage();
   const [balance, setBalance] = useState<CreditBalanceType | null>(null);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
 
@@ -46,62 +33,15 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [balanceData, subscriptionResponse] = await Promise.all([
-          getCreditBalance(userHash),
-          supabase
-            .from('subscriptions')
-            .select('*')
-            .eq('user_hash', userHash)
-            .eq('status', 'active')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-        ]);
+        const response = await fetch(`/api/credits/balance?userHash=${encodeURIComponent(userHash)}`);
+        const data = await response.json();
 
-        // Log subscription fetch result for debugging
-        if (subscriptionResponse.error) {
-          // PGRST116 means multiple rows or no rows - handle gracefully
-          if (subscriptionResponse.error.code === 'PGRST116') {
-            console.log('[CreditBalance] Multiple or no subscriptions found, fetching first active one:', {
-              userHash: userHash.substring(0, 8) + '...',
-            });
-            // Try to get the first active subscription
-            const { data: subscriptions, error: listError } = await supabase
-              .from('subscriptions')
-              .select('*')
-              .eq('user_hash', userHash)
-              .eq('status', 'active')
-              .order('created_at', { ascending: false })
-              .limit(1);
-            
-            if (!listError && subscriptions && subscriptions.length > 0) {
-              setSubscription(subscriptions[0]);
-              console.log('[CreditBalance] Using first active subscription:', {
-                planId: subscriptions[0].plan_id,
-                status: subscriptions[0].status,
-              });
-            } else {
-              setSubscription(null);
-              console.log('[CreditBalance] No active subscription found');
-            }
-          } else {
-            console.log('[CreditBalance] Subscription fetch error:', {
-              error: subscriptionResponse.error.message,
-              code: subscriptionResponse.error.code,
-              userHash: userHash.substring(0, 8) + '...',
-            });
-            setSubscription(null);
-          }
-        } else {
-          console.log('[CreditBalance] Subscription fetch result:', {
-            hasSubscription: !!subscriptionResponse.data,
-            status: subscriptionResponse.data?.status,
-            planId: subscriptionResponse.data?.plan_id,
-          });
-          setSubscription(subscriptionResponse.data);
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch credit balance');
         }
 
-        setBalance(balanceData);
+        setBalance(data.balance);
+        setSubscription(data.subscription || null);
       } catch (error) {
         console.error('Error fetching credit balance:', error);
         setBalance({
@@ -110,6 +50,7 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
           hasActiveSubscription: false,
           subscriptionCreditsRemaining: 0,
         });
+        setSubscription(null);
       } finally {
         setLoading(false);
       }

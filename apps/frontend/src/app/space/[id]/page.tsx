@@ -43,7 +43,7 @@ export default function SpaceDetailPage() {
   const params = useParams();
   const spaceId = params?.id as string;
   const searchParams = useSearchParams();
-  const { sessionData, updateSessionData } = useSessionData();
+  const { sessionData } = useSessionData();
   const { language } = useLanguage();
 
   const [space, setSpace] = useState<Space | null>(null);
@@ -80,17 +80,6 @@ export default function SpaceDetailPage() {
         void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:load-space-fetched',message:'Fetched participant_images for space detail',data:{spaceId,normalizedSpaceId,userHash:userHash||null,imageCount:participantImages.length,generatedCount:participantImages.filter(i=>i.type==='generated').length,inspirationCount:participantImages.filter(i=>i.type==='inspiration').length,imagesWithSpaceId:participantImages.filter((i:any)=>i.spaceId).length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD2'})}).catch(()=>{});
         // #endregion
 
-        // Inspirations from session (global) to display inside the space
-        const sessionInspirations = ((sessionData as any)?.inspirations || []).map((insp: any) => ({
-          id: insp.id || `insp-${insp.url || Math.random()}`,
-          url: insp.url || insp.imageBase64,
-          type: 'inspiration' as const,
-          addedAt: insp.addedAt || new Date().toISOString(),
-          isFavorite: false,
-          thumbnailUrl: insp.thumbnailUrl,
-          tags: insp.tags
-        }));
-
         const mergedImages = (() => {
           const byKey = new Map<string, SpaceImage>();
           const add = (img: SpaceImage) => {
@@ -124,9 +113,6 @@ export default function SpaceDetailPage() {
                 tags: img.tags
               })
             );
-
-          // Session inspirations are global, so don't filter by spaceId
-          sessionInspirations.forEach(add);
           
           const result = sortImagesDescending(Array.from(byKey.values()));
           
@@ -163,28 +149,7 @@ export default function SpaceDetailPage() {
     const spaces = (sessionData as any)?.spaces || [];
     const foundSpace = spaces.find((s: Space) => s.id === spaceId);
     if (foundSpace) {
-      // Merge inspirations from session so they are visible here too
-      const sessionInspirations = ((sessionData as any)?.inspirations || []).map((insp: any) => ({
-        id: insp.id || `insp-${insp.url || Math.random()}`,
-        url: insp.url || insp.imageBase64,
-        type: 'inspiration' as const,
-        addedAt: insp.addedAt || new Date().toISOString(),
-        isFavorite: false,
-        thumbnailUrl: insp.thumbnailUrl,
-        tags: insp.tags
-      }));
-
-      const byKey = new Map<string, SpaceImage>();
-      const add = (img: SpaceImage) => {
-        if (!img.url) return;
-        const key = `${img.type}:${img.url}`;
-        if (!byKey.has(key)) byKey.set(key, img);
-      };
-
-      (foundSpace.images || []).forEach(add);
-      sessionInspirations.forEach(add);
-
-      setSpace({ ...foundSpace, images: sortImagesDescending(Array.from(byKey.values())) });
+      setSpace({ ...foundSpace, images: sortImagesDescending(foundSpace.images || []) });
       return;
     }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkCreditsAvailable } from '@/lib/credits';
+import { checkCreditsAvailableAdmin } from '@/lib/credits';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const available = await checkCreditsAvailable(userHash, amount || 10);
+    const available = await checkCreditsAvailableAdmin(userHash, amount || 10);
 
     return NextResponse.json({ available });
   } catch (error: any) {

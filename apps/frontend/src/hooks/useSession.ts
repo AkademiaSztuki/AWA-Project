@@ -943,31 +943,12 @@ export const useSession = (): UseSessionReturn => {
             ? ((mergedSession as any).inspirations as any[])
             : [];
 
-          // Merge: prefer remote (participant_images), but keep any local inspirations missing remotely.
-          // Dedup by URL when possible, else by id.
-          const keyOf = (insp: any) => {
-            const url = typeof insp?.url === 'string' ? insp.url : '';
-            return url ? `url:${url}` : `id:${insp?.id || ''}`;
-          };
-          const seen = new Set<string>();
-          const merged: any[] = [];
-          for (const insp of effectiveRemoteInspirations) {
-            const k = keyOf(insp);
-            if (!k || seen.has(k)) continue;
-            seen.add(k);
-            merged.push(insp);
-          }
-          for (const insp of localInspirations) {
-            const k = keyOf(insp);
-            if (!k || seen.has(k)) continue;
-            seen.add(k);
-            merged.push(insp);
-          }
-
           if (effectiveRemoteInspirations.length > 0) {
             mergedSession = {
               ...(mergedSession || {}),
-              inspirations: merged,
+              // participant_images is the source of truth once remote data exists;
+              // keeping stale local-only entries here causes old inspirations to reappear.
+              inspirations: effectiveRemoteInspirations,
             };
           }
 
@@ -983,9 +964,9 @@ export const useSession = (): UseSessionReturn => {
                 activeSpaceId: activeSpaceId || null,
                 remoteCount: effectiveRemoteInspirations.length,
                 localCount: localInspirations.length,
-                mergedCount: merged.length,
-                mergedHasTags: merged.some((i: any) => !!i?.tags),
-                mergedTagsSamples: merged.slice(0, 3).map((i: any) => ({
+                mergedCount: effectiveRemoteInspirations.length,
+                mergedHasTags: effectiveRemoteInspirations.some((i: any) => !!i?.tags),
+                mergedTagsSamples: effectiveRemoteInspirations.slice(0, 3).map((i: any) => ({
                   id: i.id,
                   stylesCount: i?.tags?.styles?.length || 0,
                   colorsCount: i?.tags?.colors?.length || 0,
