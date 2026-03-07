@@ -400,7 +400,7 @@ export async function allocateSubscriptionCredits(
 }
 
 /**
- * Przyznaje darmowy grant kredytów (600 kredytów = 60 generacji)
+ * Przyznaje darmowy grant kredytów (600 kredytów = 60 obrazów)
  */
 export async function grantFreeCredits(userHash: string): Promise<boolean> {
   // Użyj service_role client dla operacji które wymagają omijania RLS

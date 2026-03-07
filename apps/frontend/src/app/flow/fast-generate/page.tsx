@@ -147,6 +147,35 @@ export default function FastGeneratePage() {
     });
   };
 
+  const checkCreditsViaApi = async (userHash: string, amount: number) => {
+    const response = await fetch('/api/credits/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userHash, amount }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to check credits');
+    }
+
+    const data = await response.json();
+    return !!data.available;
+  };
+
+  const deductCreditsViaApi = async (userHash: string, generationId: string) => {
+    const response = await fetch('/api/credits/deduct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userHash, generationId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to deduct credits');
+    }
+  };
+
   // Initial generation
   const handleInitialGeneration = async () => {
     if (isGenerating) return;
@@ -159,6 +188,20 @@ export default function FastGeneratePage() {
     if (!processedRoomImage) {
       setError('Brak zdjęcia pomieszczenia. Wróć do poprzedniego kroku i dodaj zdjęcie.');
       return;
+    }
+
+    if (typedSessionData?.userHash) {
+      let hasCredits = true;
+      try {
+        hasCredits = await checkCreditsViaApi(typedSessionData.userHash, 10);
+      } catch (creditError) {
+        console.warn('[Fast Generate] Error checking credits:', creditError);
+      }
+
+      if (!hasCredits) {
+        setError('Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jeden obraz.');
+        return;
+      }
     }
 
     setIsGenerating(true);
@@ -354,6 +397,13 @@ export default function FastGeneratePage() {
       }
 
       if (jobId) await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 });
+      if (userHash) {
+        try {
+          await deductCreditsViaApi(userHash, newImage.id);
+        } catch (creditError) {
+          console.warn('[Fast Generate] Error deducting credits:', creditError);
+        }
+      }
       if (viewId) await endPageView(viewId);
 
     } catch (err) {

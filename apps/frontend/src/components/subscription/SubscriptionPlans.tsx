@@ -201,7 +201,7 @@ export function SubscriptionPlans({ userHash, onSelectPlan, className }: Subscri
                     <span className="text-sm text-gray-600 font-modern">kredytów</span>
                   </div>
                   <div className="text-sm text-gray-600 font-modern">
-                    = {Math.floor(credits / 10).toLocaleString()} generacji
+                    = {Math.floor(credits / 10).toLocaleString()} obrazów
                   </div>
                 </div>
 

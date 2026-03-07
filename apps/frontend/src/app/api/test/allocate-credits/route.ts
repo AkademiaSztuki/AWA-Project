@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Przydzielono ${credits} kredytów (${credits / 10} generacji)`,
+      message: `Przydzielono ${credits} kredytów (${credits / 10} obrazów)`,
       credits,
       expiresAt: expiresAt.toISOString(),
     });

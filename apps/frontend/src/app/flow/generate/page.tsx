@@ -990,8 +990,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
         if (!hasCredits) {
           setError(t({
-            pl: `Nie masz wystarczającej liczby kredytów. Potrzebujesz ${requiredCredits} kredytów na tę generację.`,
-            en: `You do not have enough credits. You need ${requiredCredits} credits for this generation.`,
+            pl: `Nie masz wystarczającej liczby kredytów. Potrzebujesz ${requiredCredits} kredytów na ten zestaw obrazów.`,
+            en: `You do not have enough credits. You need ${requiredCredits} credits for this image set.`,
           }));
           setStatusMessage({ pl: 'Brak kredytów', en: 'No credits' });
           return;
@@ -1724,25 +1724,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           const totalCreditsToDeduct = newMatrixImages.length * 10; // 10 kredytów na obrazek
           console.log(`[6-Image Matrix] Deducting ${totalCreditsToDeduct} credits for ${newMatrixImages.length} images`);
           
-          // Odejmij kredyty dla każdego obrazka osobno (każdy ma swój generationId)
-          const deductPromises = newMatrixImages.map(async (image) => {
-            if (image.id) {
-              const response = await fetch('/api/credits/deduct', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userHash, generationId: image.id }),
-              });
-              
-              if (!response.ok) {
-                const errorData = await response.json();
-                console.warn(`[Credits] Failed to deduct credits for image ${image.id}:`, errorData.error || 'Unknown error');
-              } else {
-                console.log(`[Credits] Credits deducted successfully for image ${image.id}`);
-              }
-            }
-          });
-          
-          await Promise.all(deductPromises);
+          await deductCreditsForImages(userHash, newMatrixImages.map((image) => image.id));
           console.log(`[6-Image Matrix] All credits deducted successfully for ${newMatrixImages.length} images`);
         } catch (creditError) {
           console.warn('[6-Image Matrix] Error deducting credits (tables may not exist yet):', creditError);
@@ -2018,6 +2000,24 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     return !!data.available;
   };
 
+  const deductCreditsViaApi = async (userHash: string, generationId: string) => {
+    const response = await fetch('/api/credits/deduct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userHash, generationId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to deduct credits');
+    }
+  };
+
+  const deductCreditsForImages = async (userHash: string, imageIds: string[]) => {
+    const validIds = imageIds.filter(Boolean);
+    await Promise.all(validIds.map((imageId) => deductCreditsViaApi(userHash, imageId)));
+  };
+
   const handleInitialGeneration = async (force = false) => {
     console.log('[Generate] handleInitialGeneration called', { 
       isApiReady, 
@@ -2063,7 +2063,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       }
       
       if (!hasCredits) {
-        setError(t({ pl: 'Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jedną generację.', en: 'You do not have enough credits. You need 10 credits for one generation.' }));
+        setError(t({ pl: 'Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jeden obraz.', en: 'You do not have enough credits. You need 10 credits for one image.' }));
         setStatusMessage({ pl: 'Brak kredytów', en: 'No credits' });
         return;
       }
@@ -2286,18 +2286,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           // Odejmij kredyty po udanej generacji (użyj API route - działa po stronie serwera z service_role)
           if (userHash) {
             try {
-              const response = await fetch('/api/credits/deduct', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userHash, generationId: jobId }),
-              });
-              
-              if (!response.ok) {
-                const errorData = await response.json();
-                console.warn('[Credits] Failed to deduct credits:', errorData.error || 'Unknown error');
-              } else {
-                console.log('[Credits] Credits deducted successfully via API');
-              }
+              await deductCreditsForImages(userHash, newImages.map((image) => image.id));
+              console.log(`[Credits] Credits deducted successfully for ${newImages.length} image(s)`);
             } catch (creditError) {
               console.warn('[Credits] Error deducting credits (tables may not exist yet):', creditError);
               // Nie blokuj aplikacji jeśli odejmowanie kredytów się nie powiodło
@@ -2592,6 +2582,14 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       }
 
       try { if (jobId) await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 }); } catch {}
+      if (userHash) {
+        try {
+          await deductCreditsViaApi(userHash, newImage.id);
+          console.log('[Credits] Credits deducted successfully for modification image');
+        } catch (creditError) {
+          console.warn('[Credits] Error deducting credits for modification:', creditError);
+        }
+      }
     } catch (err) {
       console.error('Modification failed:', err);
       setIsGenerating(false);
