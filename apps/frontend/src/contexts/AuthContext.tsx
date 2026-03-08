@@ -24,7 +24,7 @@ interface AuthContextType {
   session: AuthSession | null;
   isLoading: boolean;
   signInWithGoogle: (nextPath?: string) => Promise<void>;
-  signInWithEmail: (email: string, nextPath?: string) => Promise<{ error: any }>;
+  signInWithEmail: (email: string, nextPath?: string) => Promise<{ error: any; dev_link?: string }>;
   signOut: () => Promise<void>;
   linkUserHashToAuth: (userHash: string) => Promise<void>;
 }
