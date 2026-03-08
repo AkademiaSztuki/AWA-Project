@@ -25,6 +25,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [devLink, setDevLink] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -110,13 +111,14 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
     e.preventDefault();
     setIsLoading(true);
     setError('');
-    
+    setDevLink(null);
     try {
-      const { error } = await signInWithEmail(email, getEffectiveRedirectPath());
-      if (error) {
-        setError(error.message);
+      const result = await signInWithEmail(email, getEffectiveRedirectPath());
+      if (result.error) {
+        setError(result.error.message);
       } else {
         setEmailSent(true);
+        if (result.dev_link) setDevLink(result.dev_link);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to send magic link');
@@ -188,11 +190,19 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                 <h3 className="text-lg font-nasalization text-graphite mb-2">
                   {language === 'pl' ? 'Sprawdź Swoją Skrzynkę!' : 'Check Your Inbox!'}
                 </h3>
-                <p className="text-sm text-graphite font-modern">
+                <p className="text-sm text-graphite font-modern mb-4">
                   {language === 'pl'
                     ? `Wysłaliśmy link magiczny na ${email}. Kliknij w link aby się zalogować.`
                     : `We sent a magic link to ${email}. Click the link to sign in.`}
                 </p>
+                {devLink && (
+                  <p className="text-xs text-silver-dark font-modern mt-2">
+                    {language === 'pl' ? 'Tryb dev – link: ' : 'Dev mode – link: '}
+                    <a href={devLink} className="text-gold hover:underline break-all" target="_blank" rel="noopener noreferrer">
+                      {devLink.slice(0, 40)}…
+                    </a>
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-4">

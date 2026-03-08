@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (hash) safeLocalStorage.setItem('aura_user_hash', hash);
             const authUser: AuthUser = {
               id: storedAuthId,
-              email: undefined,
+              email: storedAuthId.startsWith('email:') ? storedAuthId.slice(6) : undefined,
               user_metadata: {},
               app_metadata: {},
               aud: '',
@@ -120,14 +120,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithEmail = async (
-    _email: string,
-    _nextPath?: string,
-  ): Promise<{ error: any }> => {
+    email: string,
+    nextPath?: string,
+  ): Promise<{ error: any; dev_link?: string }> => {
+    if (!gcpApi.isConfigured()) {
+      return {
+        error: { message: 'Backend nie jest skonfigurowany (NEXT_PUBLIC_GCP_API_BASE_URL).' },
+      };
+    }
+    const res = await gcpApi.auth.sendMagicLink({
+      email,
+      nextPath: nextPath || undefined,
+    });
+    if (res.ok) {
+      if (res.data?.dev_link) {
+        return { error: null, dev_link: res.data.dev_link };
+      }
+      return { error: null };
+    }
     return {
-      error: {
-        message:
-          'Email sign-in is not supported. Please use Google sign-in.',
-      },
+      error: { message: res.error || 'Nie udało się wysłać linku.' },
     };
   };
 

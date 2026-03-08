@@ -31,24 +31,7 @@ function sanitizeRow(row: Record<string, unknown>): Record<string, unknown> {
 
 export const participantsRouter = Router();
 
-// GET /api/debug/participants-auth-column – zwraca typ kolumny auth_user_id (do diagnostyki logowania)
-participantsRouter.get('/debug/participants-auth-column', async (_req, res) => {
-  try {
-    const client = await pool.connect();
-    try {
-      const { rows } = await client.query<{ data_type: string }>(
-        `SELECT data_type FROM information_schema.columns
-         WHERE table_schema = 'public' AND table_name = 'participants' AND column_name = 'auth_user_id'`
-      );
-      return res.json({ data_type: rows[0]?.data_type ?? 'column_not_found' });
-    } finally {
-      client.release();
-    }
-  } catch (e: unknown) {
-    const err = e as Error;
-    return res.status(500).json({ error: err?.message ?? String(e) });
-  }
-});
+// GET /api/debug/participants-auth-column jest w server.ts (na app), żeby uniknąć problemów z routingiem
 
 // GET/POST /api/debug/migrate-auth-user-id-to-text – jednorazowa migracja UUID→TEXT (idempotentna)
 // W przeglądarce: https://...run.app/api/debug/migrate-auth-user-id-to-text?key=awa-migrate-2025

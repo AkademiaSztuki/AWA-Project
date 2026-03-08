@@ -50,6 +50,19 @@ export const gcpApi = {
 
   health: () => apiFetch<{ ok: boolean; service: string }>('/health'),
 
+  auth: {
+    sendMagicLink: (payload: { email: string; nextPath?: string }) =>
+      apiFetch<{ ok: boolean; dev_link?: string }>('/api/auth/send-magic-link', {
+        method: 'POST',
+        body: payload,
+      }),
+    verifyMagicLink: (payload: { token: string }) =>
+      apiFetch<{ ok: boolean; user_hash?: string; auth_user_id?: string; email?: string }>(
+        '/api/auth/verify-magic-link',
+        { method: 'POST', body: payload }
+      ),
+  },
+
   participants: {
     ensure: (userHash: string) =>
       apiFetch<{ ok: boolean; created: boolean }>('/api/ensure', {

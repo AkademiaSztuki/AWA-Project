@@ -178,16 +178,19 @@ npm install
 npm run build
 ```
 
-Następnie (zamień placeholdery na swoje wartości):
+**Opcja A – skrypt (zalecane):** W katalogu `infra/gcp` uruchom `.\deploy-backend.ps1`. Skrypt bierze zmienne z **`apps/frontend/.env.local`** (albo z `infra/gcp/setup.env`, jeśli brak .env.local): PROJECT_ID, REGION, HASLO_BAZY, CLOUD_SQL_CONNECTION_NAME, GCS_IMAGES_BUCKET. Jedna komenda, jeden plik z konfiguracją.
+
+**Opcja B – ręcznie:** Następnie (zamień placeholdery). **Uwaga:** Użyj **dokładnie jednego** `--set-env-vars` ze wszystkimi zmiennymi; drugi `--set-env-vars` w tej samej komendzie **nadpisuje** poprzedni i wtedy np. znika `CLOUD_SQL_CONNECTION_NAME` i nadal będzie ETIMEDOUT.
 
 ```powershell
 $PROJECT_ID = "TWOJ_PROJECT_ID"
 $REGION = "europe-west4"
 $SA = "awa-backend@$PROJECT_ID.iam.gserviceaccount.com"
-$DATABASE_URL = "postgresql://awa_app:HASLO_BAZY@ADRES_IP_SQL:5432/awa_db"
+$CLOUD_SQL_CONNECTION_NAME = "TWOJ_PROJECT_ID:$REGION:awa-research-sql"
+$DATABASE_URL = "postgresql://awa_app:HASLO_BAZY@localhost:5432/awa_db"
 $BUCKET = "awa-research-images-TWOJ_PROJECT_ID"
 
-gcloud run deploy awa-backend-api --source=. --project=$PROJECT_ID --region=$REGION --service-account=$SA --allow-unauthenticated --set-env-vars="DATABASE_URL=$DATABASE_URL,GCS_IMAGES_BUCKET=$BUCKET"
+gcloud run deploy awa-backend-api --source=. --project=$PROJECT_ID --region=$REGION --service-account=$SA --allow-unauthenticated --add-cloudsql-instances=$CLOUD_SQL_CONNECTION_NAME --set-env-vars="DATABASE_URL=$DATABASE_URL,CLOUD_SQL_CONNECTION_NAME=$CLOUD_SQL_CONNECTION_NAME,GCS_IMAGES_BUCKET=$BUCKET"
 ```
 
 Po wdrożeniu konsola pokaże **URL usługi** (np. `https://awa-backend-api-xxxxx-ew.a.run.app`). Ten adres ustaw we frontendzie jako **`NEXT_PUBLIC_GCP_API_BASE_URL`**.
@@ -210,8 +213,11 @@ Zamień `BILLING_ACCOUNT` i `TWOJ_PROJECT_ID`. Kwotę (100 USD) dostosuj do wiel
 
 **Backend (Cloud Run)** – ustawiane przy deployu (Krok 7):
 
-- `DATABASE_URL` – connection string do Cloud SQL  
-- `GCS_IMAGES_BUCKET` – nazwa bucketa na obrazy  
+- `DATABASE_URL` – connection string (user/hasło/baza); na Cloud Run host jest ignorowany — łączenie przez socket gdy ustawione `CLOUD_SQL_CONNECTION_NAME`.  
+- `CLOUD_SQL_CONNECTION_NAME` – np. `projekt:europe-west4:awa-research-sql` (wymagane na Cloud Run, żeby uniknąć ETIMEDOUT).  
+- `GCS_IMAGES_BUCKET` – nazwa bucketa na obrazy.  
+- **Magic Link (logowanie mailem):** opcjonalnie `MAGIC_LINK_FRONTEND_URL` – URL frontendu (np. `https://www.project-ida.com` lub `http://localhost:3000`), żeby link w mailu działał. Bez SMTP backend zwraca link w odpowiedzi (tryb dev – użytkownik może kliknąć link w modalu). Aby wysyłać prawdziwe maile, ustaw w backendzie: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, ewentualnie `MAGIC_LINK_FROM`.  
+- **Tabela pod Magic Link:** wykonaj raz na bazie `awa_db` skrypt **`infra/gcp/sql/04_magic_link_tokens.sql`** (np. import z GCS lub w konsoli Cloud SQL).
 
 **Frontend** (np. w `apps/frontend/.env.local`):
 
@@ -253,6 +259,6 @@ Skrypt wykona kroki 3–6 (API, Cloud SQL, bucket, konto serwisowe). **Krok 4d**
 | Baza danych | Cloud SQL → instancja `awa-research-sql`, baza `awa_db` |
 | Obrazy | Cloud Storage → bucket `awa-research-images-*` |
 | Backend API | Cloud Run → usługa `awa-backend-api` |
-| Schemat tabel | `01_research_schema.sql` + `02_credits_billing.sql` – wykonaj na bazie `awa_db` (credits/subscriptions/webhook) |
+| Schemat tabel | `01_research_schema.sql`, `02_credits_billing.sql`, `04_magic_link_tokens.sql` – wykonaj na bazie `awa_db` |
 
 Jeśli coś nie zadziała (np. brak uprawnień, błąd API), sprawdź: czy projekt ma podpięty billing, czy włączone są wymagane API i czy w komendach wszędzie wstawiłeś swoje `PROJECT_ID`, `BILLING_ACCOUNT` i hasło.

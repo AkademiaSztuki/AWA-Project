@@ -168,14 +168,17 @@ SERVICE_NAME=awa-backend-api
 PROJECT_ID=PROJECT_ID
 SA=awa-backend@$PROJECT_ID.iam.gserviceaccount.com
 
+# Cloud Run connects to Cloud SQL via Unix socket (avoids ETIMEDOUT on public IP)
+CONNECTION_NAME=$PROJECT_ID:$REGION:awa-research-sql
+
 gcloud run deploy $SERVICE_NAME \
   --source=. \
   --project=$PROJECT_ID \
   --region=$REGION \
   --service-account=$SA \
   --allow-unauthenticated \
-  --set-env-vars="DATABASE_URL=postgresql://awa_app:STRONG_PASSWORD_HERE@HOST:PORT/awa_db" \
-  --set-env-vars="GCS_IMAGES_BUCKET=$BUCKET"
+  --add-cloudsql-instances=$CONNECTION_NAME \
+  --set-env-vars="DATABASE_URL=postgresql://awa_app:STRONG_PASSWORD_HERE@localhost:5432/awa_db,CLOUD_SQL_CONNECTION_NAME=$CONNECTION_NAME,GCS_IMAGES_BUCKET=$BUCKET"
 ```
 
 Later you can tighten `--allow-unauthenticated` and put an API gateway / auth in front.
@@ -210,7 +213,8 @@ You can refine notifications (email / Pub/Sub) in the Cloud Console billing UI.
 
 Once the infrastructure is provisioned, you will need to set:
 
-- `DATABASE_URL` (backend)
+- `DATABASE_URL` (backend; host ignored when `CLOUD_SQL_CONNECTION_NAME` is set)
+- `CLOUD_SQL_CONNECTION_NAME` (backend on Cloud Run, e.g. `project:region:awa-research-sql`)
 - `GCS_IMAGES_BUCKET` (backend)
 - Vertex AI / Google credentials variables already used in:
   - `apps/frontend/src/lib/google-ai/client.ts`

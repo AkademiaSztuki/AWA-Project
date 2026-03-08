@@ -244,12 +244,17 @@ ALTER TABLE participant_images
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'participant_images_space_fk'
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = 'public' AND t.relname = 'participant_images' AND c.conname = 'participant_images_space_fk'
   ) THEN
     ALTER TABLE participant_images
       ADD CONSTRAINT participant_images_space_fk
       FOREIGN KEY (space_id) REFERENCES participant_spaces(id) ON DELETE SET NULL;
   END IF;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;  /* constraint already exists, np. inna baza/schema */
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_participant_images_space ON participant_images(space_id);
