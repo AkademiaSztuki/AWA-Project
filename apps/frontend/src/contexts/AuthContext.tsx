@@ -5,6 +5,12 @@ import { supabase, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { User, Session } from '@supabase/supabase-js';
 
+const USE_GOOGLE_NATIVE_AUTH =
+  typeof window !== 'undefined' &&
+  process.env.NEXT_PUBLIC_USE_GOOGLE_NATIVE_AUTH === '1' &&
+  !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+const GOOGLE_AUTH_USER_KEY = 'aura_google_auth_user_id';
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -23,7 +29,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
+    // Google native auth: restore session from localStorage
+    if (USE_GOOGLE_NATIVE_AUTH && typeof window !== 'undefined') {
+      const storedAuthId = safeLocalStorage.getItem(GOOGLE_AUTH_USER_KEY);
+      const storedHash = safeLocalStorage.getItem('aura_user_hash');
+      if (storedAuthId) {
+        gcpApi.participants
+          .fetchByAuth(storedAuthId)
+          .then((res) => {
+            if (res.ok && res.data?.participant) {
+              const hash = (res.data.participant as { user_hash?: string }).user_hash || storedHash;
+              if (hash) safeLocalStorage.setItem('aura_user_hash', hash);
+              setUser({
+                id: storedAuthId,
+                email: undefined,
+                user_metadata: {},
+                app_metadata: {},
+                aud: '',
+                created_at: '',
+              } as User);
+              setSession({ user: { id: storedAuthId } as User } as Session);
+            }
+            setIsLoading(false);
+          })
+          .catch(() => setIsLoading(false));
+        return;
+      }
+    }
+
+    // Get initial session (Supabase)
     console.log('[AuthContext] Initializing, checking session...');
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) console.error('[AuthContext] Initial session error:', error);
@@ -134,13 +168,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithGoogle = async (nextPath?: string) => {
+    // Logowanie bezpośrednio przez Google (bez Supabase) – brak quota Supabase
+    if (USE_GOOGLE_NATIVE_AUTH) {
+      const currentHash = safeLocalStorage.getItem('aura_user_hash');
+      const { signInWithGoogleNative } = await import('@/lib/google-auth');
+      const result = await signInWithGoogleNative({
+        currentUserHash: currentHash,
+        consentTimestamp: new Date().toISOString(),
+        onGrantFreeCredits: async (userHash) => {
+          const r = await fetch('/api/credits/grant-free', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userHash }),
+          });
+          const d = await r.json();
+          if (d.success) console.log('[AuthContext] Granted free credits (native):', userHash);
+        },
+      });
+      if (!result.ok) {
+        console.error('[AuthContext] Google native sign-in error:', result.error);
+        throw new Error(result.error);
+      }
+      const { user: nativeUser } = result;
+      safeLocalStorage.setItem('aura_user_hash', nativeUser.userHash);
+      safeLocalStorage.setItem(GOOGLE_AUTH_USER_KEY, nativeUser.authUserId);
+      setUser({
+        id: nativeUser.authUserId,
+        email: nativeUser.email ?? undefined,
+        user_metadata: { full_name: nativeUser.name },
+        app_metadata: {},
+        aud: '',
+        created_at: '',
+      } as User);
+      setSession({ user: { id: nativeUser.authUserId, email: nativeUser.email } as User } as Session);
+      const next = nextPath || safeSessionStorage.getItem('aura_auth_next') || '/';
+      safeSessionStorage.removeItem('aura_auth_next');
+      safeSessionStorage.removeItem('aura_auth_path_type');
+      window.location.href = next;
+      return;
+    }
+
     const redirectTo = `${window.location.origin}/auth/callback`;
-    
-    // Store nextPath in sessionStorage instead of URL to keep the OAuth URL clean
     if (nextPath) {
       safeSessionStorage.setItem('aura_auth_next', nextPath);
-      
-      // If the next path implies a specific path type, store it too
       if (nextPath.includes('/flow/onboarding')) {
         safeSessionStorage.setItem('aura_auth_path_type', 'fast');
       } else if (nextPath.includes('/setup/profile')) {
@@ -151,7 +221,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       safeSessionStorage.removeItem('aura_auth_path_type');
     }
 
-    // Agent log: starting OAuth
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -182,7 +251,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
 
-    // Fallback: If for some reason auto-redirect fails, try manual redirect
     if (data?.url) {
       console.log('[AuthContext] Manual redirect fallback to:', data.url);
       window.location.assign(data.url);
@@ -209,8 +277,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    if (USE_GOOGLE_NATIVE_AUTH) {
+      safeLocalStorage.removeItem(GOOGLE_AUTH_USER_KEY);
+      safeLocalStorage.removeItem('aura_session');
+      safeLocalStorage.removeItem('aura_user_hash');
+      safeSessionStorage.removeItem('aura_session');
+      safeSessionStorage.removeItem('aura_user_hash');
+      setUser(null);
+      setSession(null);
+      return;
+    }
     await supabase.auth.signOut();
-    // Clear local session
     safeLocalStorage.removeItem('aura_session');
     safeLocalStorage.removeItem('aura_user_hash');
     safeSessionStorage.removeItem('aura_session');

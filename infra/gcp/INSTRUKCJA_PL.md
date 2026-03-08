@@ -213,7 +213,16 @@ Zamień `BILLING_ACCOUNT` i `TWOJ_PROJECT_ID`. Kwotę (100 USD) dostosuj do wiel
 **Frontend** (np. w `apps/frontend/.env.local`):
 
 - `NEXT_PUBLIC_GCP_API_BASE_URL` – URL usługi Cloud Run (np. `https://awa-backend-api-xxxxx-ew.a.run.app`)  
+- `NEXT_PUBLIC_GCP_PERSISTENCE_MODE=primary` – włącza tryb GCP (credits, spaces, uczestnicy, ankiety) zamiast Supabase.  
 - Zmienne Google/Vertex (np. `GOOGLE_CLOUD_PROJECT`, `GOOGLE_AI_API_KEY`, credentials) – tak jak dziś w `lib/google-ai/client.ts`.
+
+**Logowanie bezpośrednio przez Google (bez Supabase):** żeby nie używać Supabase do auth i uniknąć quota, ustaw w `.env.local`:
+- `NEXT_PUBLIC_USE_GOOGLE_NATIVE_AUTH=1`
+- `NEXT_PUBLIC_GOOGLE_CLIENT_ID=...` (OAuth 2.0 Client ID z GCP Console → APIs & Services → Credentials → Create → OAuth 2.0 Client ID, typ Web application; w origins dodaj `http://localhost:3000`, `https://www.project-ida.com`, ewentualnie `https://project-ida.com`).
+
+Szczegóły i flow: **`docs/migration/auth-google-native.md`**.
+
+**Jeśli nadal używasz Supabase OAuth:** przy stronie z quota wejdź w [Supabase Dashboard](https://supabase.com/dashboard) → projekt → **Authentication** → **Providers** → Google i sprawdź limit MAU / plan.
 
 ---
 
@@ -241,6 +250,6 @@ Skrypt wykona kroki 3–6 (API, Cloud SQL, bucket, konto serwisowe). **Krok 4d**
 | Baza danych | Cloud SQL → instancja `awa-research-sql`, baza `awa_db` |
 | Obrazy | Cloud Storage → bucket `awa-research-images-*` |
 | Backend API | Cloud Run → usługa `awa-backend-api` |
-| Schemat tabel | Plik `infra/gcp/sql/01_research_schema.sql` – wykonaj na bazie `awa_db` |
+| Schemat tabel | `01_research_schema.sql` + `02_credits_billing.sql` – wykonaj na bazie `awa_db` (credits/subscriptions/webhook) |
 
 Jeśli coś nie zadziała (np. brak uprawnień, błąd API), sprawdź: czy projekt ma podpięty billing, czy włączone są wymagane API i czy w komendach wszędzie wstawiłeś swoje `PROJECT_ID`, `BILLING_ACCOUNT` i hasło.
