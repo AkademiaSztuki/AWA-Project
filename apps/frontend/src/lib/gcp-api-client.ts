@@ -28,10 +28,15 @@ async function apiFetch<T = unknown>(
       },
       body: body != null ? JSON.stringify(body) : undefined,
     });
-    const data = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      detail?: string;
+      hint?: string;
+    };
     if (!res.ok) {
       const msg = data.detail || data.error || res.statusText;
-      return { ok: false, error: msg };
+      const full = data.hint ? `${msg}\n\n${data.hint}` : msg;
+      return { ok: false, error: full };
     }
     return { ok: true, data: data as T };
   } catch (e) {

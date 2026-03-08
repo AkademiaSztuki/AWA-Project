@@ -266,11 +266,11 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                 {error && (
                   <div 
                     id="email-error"
-                    className="mt-4 p-3 bg-red-100/20 border border-red-300/30 rounded-lg"
+                    className="mt-4 p-3 bg-red-100/20 border border-red-300/30 rounded-lg max-h-40 overflow-y-auto"
                     role="alert"
                     aria-live="polite"
                   >
-                    <p className="text-xs text-red-600 font-modern">{error}</p>
+                    <p className="text-xs text-red-600 font-modern whitespace-pre-wrap">{error}</p>
                   </div>
                 )}
 

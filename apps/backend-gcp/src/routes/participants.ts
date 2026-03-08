@@ -31,6 +31,76 @@ function sanitizeRow(row: Record<string, unknown>): Record<string, unknown> {
 
 export const participantsRouter = Router();
 
+// GET /api/debug/participants-auth-column – zwraca typ kolumny auth_user_id (do diagnostyki logowania)
+participantsRouter.get('/debug/participants-auth-column', async (_req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query<{ data_type: string }>(
+        `SELECT data_type FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'participants' AND column_name = 'auth_user_id'`
+      );
+      return res.json({ data_type: rows[0]?.data_type ?? 'column_not_found' });
+    } finally {
+      client.release();
+    }
+  } catch (e: unknown) {
+    const err = e as Error;
+    return res.status(500).json({ error: err?.message ?? String(e) });
+  }
+});
+
+// GET/POST /api/debug/migrate-auth-user-id-to-text – jednorazowa migracja UUID→TEXT (idempotentna)
+// W przeglądarce: https://...run.app/api/debug/migrate-auth-user-id-to-text?key=awa-migrate-2025
+async function runMigrateAuthUserIdToText(
+  res: import('express').Response
+): Promise<void> {
+  try {
+    const client = await pool.connect();
+    try {
+      const { rows: check } = await client.query<{ data_type: string }>(
+        `SELECT data_type FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'participants' AND column_name = 'auth_user_id'`
+      );
+      if (check[0]?.data_type === 'text') {
+        res.json({ ok: true, message: 'already text' });
+        return;
+      }
+      await client.query(
+        `ALTER TABLE public.participants ALTER COLUMN auth_user_id TYPE TEXT USING auth_user_id::TEXT`
+      );
+      res.json({ ok: true, message: 'migrated to TEXT' });
+    } finally {
+      client.release();
+    }
+  } catch (e: unknown) {
+    const err = e as Error & { code?: string };
+    console.error('migrate-auth-user-id error', err?.message, err?.code);
+    res.status(500).json({
+      ok: false,
+      error: err?.message ?? String(e),
+      code: err?.code,
+      hint: 'If permission denied, run the ALTER in Cloud SQL Console.',
+    });
+  }
+}
+
+participantsRouter.get('/debug/migrate-auth-user-id-to-text', async (req, res) => {
+  const secret = process.env.MIGRATE_SECRET || 'awa-migrate-2025';
+  if (req.query?.key !== secret) {
+    return res.status(403).json({ ok: false, error: 'forbidden' });
+  }
+  await runMigrateAuthUserIdToText(res);
+});
+
+participantsRouter.post('/debug/migrate-auth-user-id-to-text', async (req, res) => {
+  const secret = process.env.MIGRATE_SECRET || 'awa-migrate-2025';
+  if (req.query?.key !== secret && req.body?.key !== secret) {
+    return res.status(403).json({ ok: false, error: 'forbidden' });
+  }
+  await runMigrateAuthUserIdToText(res);
+});
+
 // POST /participants/ensure
 participantsRouter.post('/ensure', async (req, res) => {
   const { userHash } = req.body as { userHash?: string };
@@ -125,10 +195,24 @@ participantsRouter.post('/participants/link-auth', async (req, res) => {
   } catch (error: unknown) {
     const err = error as Error & { code?: string; detail?: string };
     const message = err?.message ?? String(error);
-    console.error('participants/link-auth error', message, err?.code, err?.detail);
-    // Return short detail so client can show it (e.g. "column auth_user_id is of type uuid...")
-    const safeDetail = message.slice(0, 200);
-    return res.status(500).json({ ok: false, error: 'internal_error', detail: safeDetail });
+    const code = err?.code ?? '';
+    console.error('participants/link-auth error', message, code, err?.detail);
+    const safeDetail = message.slice(0, 300);
+    const isUuidError =
+      code === '42804' ||
+      /uuid|type.*text|invalid input syntax for type uuid/i.test(message);
+    const hint = isUuidError
+      ? ' Wywołaj w przeglądarce: POST ' +
+        (req.get('origin') || 'https://awa-backend-api-986280192250.europe-west4.run.app') +
+        '/api/debug/migrate-auth-user-id-to-text?key=awa-migrate-2025 (albo w Cloud SQL: ALTER TABLE public.participants ALTER COLUMN auth_user_id TYPE TEXT USING auth_user_id::TEXT;)'
+      : undefined;
+    return res.status(500).json({
+      ok: false,
+      error: 'internal_error',
+      detail: safeDetail,
+      code,
+      hint,
+    });
   }
 });
 
