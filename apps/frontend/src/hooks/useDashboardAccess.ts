@@ -24,7 +24,7 @@ export function useDashboardAccess() {
       };
     }
 
-    let userHash = sessionData?.userHash;
+    let userHash: string | null | undefined = sessionData?.userHash;
     setIsLoading(true);
     setIsResolved(false);
 
