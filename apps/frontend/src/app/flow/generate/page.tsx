@@ -980,10 +980,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       }
 
       const requiredCredits = synthesisResult.generatedSources.length * 10;
-      if (userHash) {
+      const matrixUserHash = typedSessionData?.userHash;
+      if (matrixUserHash) {
         let hasCredits = true;
         try {
-          hasCredits = await checkCreditsViaApi(userHash, requiredCredits);
+          hasCredits = await checkCreditsViaApi(matrixUserHash, requiredCredits);
         } catch (creditError) {
           console.warn('[6-Image Matrix] Error checking credits:', creditError);
         }
