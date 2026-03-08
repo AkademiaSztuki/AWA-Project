@@ -14,6 +14,7 @@ Otwórz plik **`infra/gcp/setup.env.example`**, skopiuj go jako **`setup.env`** 
 | `BILLING_ACCOUNT` | ID konta rozliczeniowego z kredytami EDU | Billing → Manage billing accounts → skopiuj **ID konta** (np. `01234A-BCDEF5-678901`). |
 | `REGION` | Region (zostaw `europe-west4` jeśli nie wiesz) | `europe-west4` = Holandia, niskie opóźnienia do Polski. |
 | `HASLO_BAZY` | Silne hasło do użytkownika bazy Postgres | Wymyśl hasło (min. 12 znaków); zapisz je w menedżerze haseł. |
+| `CLOUD_SQL_CONNECTION_NAME` | Connection name instancji Cloud SQL | SQL → Twoja instancja → **Connection name** (np. `project-a2c75857-73b0-4982-acf:europe-west4:awa-research-sql`). Potrzebne do Cloud SQL Proxy i importu z konsoli. |
 
 **Uwaga:** Plik `setup.env` jest w `.gitignore` – nie trafi do repozytorium (nie wrzucasz tam haseł).
 
@@ -120,6 +121,8 @@ Get-Content infra\gcp\sql\01_research_schema.sql | psql "postgresql://awa_app:HA
 ```
 
 Plik schematu: **`infra/gcp/sql/01_research_schema.sql`** w Twoim repozytorium.
+
+**Jeśli baza była wcześniej utworzona i logowanie przez Google zwraca błąd 500:** wykonaj migrację **`infra/gcp/sql/03_auth_user_id_to_text.sql`** (kolumna `auth_user_id` musi być typu TEXT dla Google OAuth).
 
 ---
 

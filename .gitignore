@@ -15,6 +15,7 @@ __pycache__/
 .env
 .env.local
 infra/gcp/setup.env
+infra/gcp/ENV_ZMIENNE_DO_WKLEJENIA.txt
 .env.development.local
 .env.test.local
 .env.production.local

@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS participants (
   user_hash TEXT PRIMARY KEY,
-  auth_user_id UUID,
+  auth_user_id TEXT,  /* Google OAuth sub (numeric string), not UUID */
   consent_timestamp TIMESTAMPTZ NOT NULL,
   path_type TEXT CHECK (path_type IN ('fast', 'full')),
   current_step TEXT,
@@ -241,9 +241,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_participant_spaces_default
 ALTER TABLE participant_images
   ADD COLUMN IF NOT EXISTS space_id UUID;
 
-ALTER TABLE participant_images
-  ADD CONSTRAINT participant_images_space_fk
-  FOREIGN KEY (space_id) REFERENCES participant_spaces(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'participant_images_space_fk'
+  ) THEN
+    ALTER TABLE participant_images
+      ADD CONSTRAINT participant_images_space_fk
+      FOREIGN KEY (space_id) REFERENCES participant_spaces(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_participant_images_space ON participant_images(space_id);
 
