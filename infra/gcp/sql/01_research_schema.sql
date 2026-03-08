@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS participants (
   implicit_material_1 TEXT,
   implicit_material_2 TEXT,
   implicit_material_3 TEXT,
+  implicit_warmth NUMERIC,
+  implicit_brightness NUMERIC,
+  implicit_complexity NUMERIC,
   dna_accuracy_score NUMERIC,
 
   -- Explicit
@@ -129,6 +132,8 @@ CREATE TABLE IF NOT EXISTS participants (
   -- Profile status
   core_profile_complete BOOLEAN DEFAULT FALSE,
   core_profile_completed_at TIMESTAMPTZ,
+  free_grant_used BOOLEAN DEFAULT FALSE,
+  free_grant_used_at TIMESTAMPTZ,
 
   -- Metadata
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -138,6 +143,8 @@ CREATE TABLE IF NOT EXISTS participants (
 CREATE INDEX IF NOT EXISTS idx_participants_created ON participants(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_participants_path ON participants(path_type);
 CREATE INDEX IF NOT EXISTS idx_participants_consent ON participants(consent_timestamp) WHERE consent_timestamp IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_participants_auth_user_id
+  ON participants(auth_user_id) WHERE auth_user_id IS NOT NULL;
 
 -- ============================================
 -- TABLE: participant_swipes
@@ -241,6 +248,70 @@ ALTER TABLE participant_images
 CREATE INDEX IF NOT EXISTS idx_participant_images_space ON participant_images(space_id);
 
 -- ============================================
+-- TABLE: subscriptions
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_hash TEXT NOT NULL REFERENCES participants(user_hash) ON DELETE CASCADE,
+  stripe_subscription_id TEXT UNIQUE NOT NULL,
+  stripe_customer_id TEXT NOT NULL,
+  plan_id TEXT NOT NULL CHECK (plan_id IN ('basic', 'pro', 'studio')),
+  billing_period TEXT NOT NULL CHECK (billing_period IN ('monthly', 'yearly')),
+  status TEXT NOT NULL CHECK (status IN ('active', 'cancelled', 'past_due', 'unpaid')),
+  current_period_start TIMESTAMPTZ NOT NULL,
+  current_period_end TIMESTAMPTZ NOT NULL,
+  cancel_at_period_end BOOLEAN DEFAULT FALSE,
+  credits_allocated INTEGER DEFAULT 0,
+  credits_used INTEGER DEFAULT 0,
+  subscription_credits_remaining INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_hash ON subscriptions(user_hash);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_subscription_id ON subscriptions(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+
+-- ============================================
+-- TABLE: credit_transactions
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS credit_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_hash TEXT NOT NULL REFERENCES participants(user_hash) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('grant', 'used', 'subscription_allocated', 'expired')),
+  amount INTEGER NOT NULL,
+  source TEXT,
+  generation_id TEXT,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_hash ON credit_transactions(user_hash);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_type ON credit_transactions(type);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_generation_id ON credit_transactions(generation_id);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_expires_at ON credit_transactions(expires_at);
+
+-- ============================================
+-- TABLE: stripe_webhook_events
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stripe_event_id TEXT UNIQUE NOT NULL,
+  event_type TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  processed BOOLEAN DEFAULT FALSE,
+  retry_count INTEGER DEFAULT 0,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_processed ON stripe_webhook_events(processed);
+CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_event_type ON stripe_webhook_events(event_type);
+
+-- ============================================
 -- TABLE: research_consents
 -- ============================================
 
@@ -340,6 +411,13 @@ DROP TRIGGER IF EXISTS update_participants_updated_at ON participants;
 
 CREATE TRIGGER update_participants_updated_at
   BEFORE UPDATE ON participants
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_subscriptions_updated_at ON subscriptions;
+
+CREATE TRIGGER update_subscriptions_updated_at
+  BEFORE UPDATE ON subscriptions
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 

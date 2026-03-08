@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../db';
+import { ensureParticipantRecord, grantFreeCredits } from '../services/billing';
 
 export const participantsRouter = Router();
 
@@ -24,17 +25,182 @@ participantsRouter.post('/ensure', async (req, res) => {
       }
 
       await client.query(
-        'INSERT INTO participants (user_hash, consent_timestamp) VALUES ($1, NOW())',
+        'INSERT INTO participants (user_hash, consent_timestamp, updated_at) VALUES ($1, NOW(), NOW())',
         [userHash],
       );
 
-      // NOTE: free credits logic is intentionally not reproduced here yet.
+      await grantFreeCredits(client, userHash);
       return res.json({ ok: true, created: true });
     } finally {
       client.release();
     }
   } catch (error) {
     console.error('participants/ensure error', error);
+    return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
+
+participantsRouter.post('/participants/link-auth', async (req, res) => {
+  const {
+    userHash,
+    authUserId,
+    consentTimestamp,
+  } = req.body as { userHash?: string; authUserId?: string; consentTimestamp?: string };
+
+  if (!userHash || !authUserId) {
+    return res.status(400).json({ ok: false, error: 'userHash and authUserId are required' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: existingForAuth } = await client.query<{ user_hash: string }>(
+        `
+          SELECT user_hash
+          FROM participants
+          WHERE auth_user_id = $1
+          LIMIT 1
+        `,
+        [authUserId]
+      );
+
+      if (existingForAuth[0] && existingForAuth[0].user_hash !== userHash) {
+        await client.query('ROLLBACK');
+        return res.json({
+          ok: true,
+          existingUserHash: existingForAuth[0].user_hash,
+        });
+      }
+
+      await ensureParticipantRecord(client, userHash, {
+        authUserId,
+        consentTimestamp: consentTimestamp || null,
+      });
+
+      await client.query(
+        `
+          UPDATE participants
+          SET auth_user_id = $2, updated_at = NOW()
+          WHERE user_hash = $1
+        `,
+        [userHash, authUserId]
+      );
+
+      await client.query('COMMIT');
+      return res.json({ ok: true, existingUserHash: userHash });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('participants/link-auth error', error);
+    return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
+
+participantsRouter.get('/participants/by-auth/:authUserId', async (req, res) => {
+  const { authUserId } = req.params;
+
+  if (!authUserId) {
+    return res.status(400).json({ ok: false, error: 'authUserId is required' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM participants
+          WHERE auth_user_id = $1
+          ORDER BY core_profile_complete DESC, core_profile_completed_at DESC NULLS LAST, updated_at DESC
+          LIMIT 1
+        `,
+        [authUserId]
+      );
+
+      return res.json({ ok: true, participant: rows[0] || null });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('participants/by-auth error', error);
+    return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
+
+participantsRouter.get('/participants/completion-status', async (req, res) => {
+  const authUserId =
+    typeof req.query.authUserId === 'string' ? req.query.authUserId : undefined;
+  const userHash = typeof req.query.userHash === 'string' ? req.query.userHash : undefined;
+
+  if (!authUserId && !userHash) {
+    return res.status(400).json({ ok: false, error: 'authUserId or userHash is required' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      if (authUserId) {
+        const { rows } = await client.query(
+          `
+            SELECT core_profile_complete, core_profile_completed_at
+            FROM participants
+            WHERE auth_user_id = $1
+            ORDER BY core_profile_complete DESC, core_profile_completed_at DESC NULLS LAST, updated_at DESC
+            LIMIT 1
+          `,
+          [authUserId]
+        );
+
+        if (rows[0]) {
+          return res.json({
+            ok: true,
+            completion: {
+              coreProfileComplete: !!rows[0].core_profile_complete,
+              coreProfileCompletedAt: rows[0].core_profile_completed_at,
+            },
+          });
+        }
+      }
+
+      if (userHash) {
+        const { rows } = await client.query(
+          `
+            SELECT core_profile_complete, core_profile_completed_at
+            FROM participants
+            WHERE user_hash = $1
+            LIMIT 1
+          `,
+          [userHash]
+        );
+
+        if (rows[0]) {
+          return res.json({
+            ok: true,
+            completion: {
+              coreProfileComplete: !!rows[0].core_profile_complete,
+              coreProfileCompletedAt: rows[0].core_profile_completed_at,
+            },
+          });
+        }
+      }
+
+      return res.json({
+        ok: true,
+        completion: {
+          coreProfileComplete: false,
+          coreProfileCompletedAt: null,
+        },
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('participants/completion-status error', error);
     return res.status(500).json({ ok: false, error: 'internal_error' });
   }
 });

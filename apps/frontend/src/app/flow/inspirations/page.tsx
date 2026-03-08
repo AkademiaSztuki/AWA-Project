@@ -13,6 +13,7 @@ import { analyzeInspirationsWithGamma, type InspirationTaggingResult } from "@/l
 import { fileToNormalizedDataUrl } from "@/lib/utils";
 import { saveParticipantImages } from "@/lib/remote-spaces";
 import { supabase } from "@/lib/supabase";
+import { gcpApi } from "@/lib/gcp-api-client";
 import { 
   Upload, 
   X, 
@@ -265,11 +266,14 @@ export default function InspirationsPage() {
       
       setItems(itemsWithBase64);
 
-      // Upload files to Supabase Storage (participant-images bucket)
+      const useGcpPrimary = gcpApi.isConfigured() && process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE === 'primary';
+
+      // Upload files to Supabase Storage (participant-images bucket) only outside GCP primary mode
       const userHash = (sessionData as any)?.userHash || 'anonymous';
       const uploads = await Promise.all(itemsWithBase64.map(async (i) => {
         try {
           if (!i.file) return { id: i.id };
+          if (useGcpPrimary) return { id: i.id };
           const path = `${userHash}/inspiration/${i.id}`;
           const { data, error } = await supabase
             .storage

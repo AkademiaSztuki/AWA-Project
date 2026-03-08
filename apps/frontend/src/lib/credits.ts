@@ -1,9 +1,14 @@
 import { supabase } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase';
+import { gcpApi } from './gcp-api-client';
 
 const CREDITS_PER_GENERATION = 10;
 const FREE_GRANT_CREDITS = 600;
+const GCP_PERSISTENCE_MODE = process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE ?? 'off';
+
+const isGcpPrimaryEnabled = (): boolean =>
+  gcpApi.isConfigured() && GCP_PERSISTENCE_MODE === 'primary';
 
 // Supabase client z service_role key dla operacji które wymagają omijania RLS
 function getSupabaseAdmin() {
@@ -202,16 +207,61 @@ export async function checkCreditsAvailableAdmin(
  * Pobiera aktualny bilans kredytów użytkownika
  */
 export async function getCreditBalance(userHash: string): Promise<CreditBalance> {
+  if (isGcpPrimaryEnabled()) {
+    const result = await gcpApi.credits.balance(userHash);
+    if (!result.ok || !result.data) {
+      return {
+        balance: 0,
+        generationsAvailable: 0,
+        hasActiveSubscription: false,
+        subscriptionCreditsRemaining: 0,
+      };
+    }
+
+    return {
+      balance: result.data.balance || 0,
+      generationsAvailable: result.data.generationsAvailable || 0,
+      hasActiveSubscription: !!result.data.hasActiveSubscription,
+      subscriptionCreditsRemaining: result.data.subscriptionCreditsRemaining || 0,
+    };
+  }
   const overview = await fetchCreditBalanceWithClient(supabase, userHash);
   return overview.balance;
 }
 
 export async function getCreditBalanceAdmin(userHash: string): Promise<CreditBalance> {
+  if (isGcpPrimaryEnabled()) {
+    return getCreditBalance(userHash);
+  }
   const overview = await fetchCreditBalanceWithClient(getSupabaseAdmin(), userHash);
   return overview.balance;
 }
 
 export async function getCreditOverviewAdmin(userHash: string): Promise<CreditOverview> {
+  if (isGcpPrimaryEnabled()) {
+    const result = await gcpApi.credits.balance(userHash);
+    if (!result.ok || !result.data) {
+      return {
+        balance: {
+          balance: 0,
+          generationsAvailable: 0,
+          hasActiveSubscription: false,
+          subscriptionCreditsRemaining: 0,
+        },
+        subscription: null,
+      };
+    }
+
+    return {
+      balance: {
+        balance: result.data.balance || 0,
+        generationsAvailable: result.data.generationsAvailable || 0,
+        hasActiveSubscription: !!result.data.hasActiveSubscription,
+        subscriptionCreditsRemaining: result.data.subscriptionCreditsRemaining || 0,
+      },
+      subscription: (result.data.subscription as SubscriptionSummary | null) || null,
+    };
+  }
   return fetchCreditBalanceWithClient(getSupabaseAdmin(), userHash);
 }
 
@@ -219,6 +269,10 @@ export async function getCreditOverviewAdmin(userHash: string): Promise<CreditOv
  * Odejmuje kredyty po udanej generacji
  */
 export async function deductCredits(userHash: string, generationId: string): Promise<boolean> {
+  if (isGcpPrimaryEnabled()) {
+    const result = await gcpApi.credits.deduct({ userHash, generationId });
+    return !!result.ok;
+  }
   // Użyj service_role client dla operacji które wymagają omijania RLS
   const supabaseAdmin = getSupabaseAdmin();
 
@@ -403,6 +457,10 @@ export async function allocateSubscriptionCredits(
  * Przyznaje darmowy grant kredytów (600 kredytów = 60 obrazów)
  */
 export async function grantFreeCredits(userHash: string): Promise<boolean> {
+  if (isGcpPrimaryEnabled()) {
+    const result = await gcpApi.credits.grantFree({ userHash });
+    return !!result.ok && !!result.data?.granted;
+  }
   // Użyj service_role client dla operacji które wymagają omijania RLS
   // Na serwerze (np. w API routes) używamy supabaseAdmin
   // Na kliencie ta funkcja i tak by nie zadziałała ze względu na brak klucza service_role

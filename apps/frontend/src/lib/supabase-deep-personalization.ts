@@ -10,7 +10,8 @@ import {
   EnhancedSwipeData,
   SwipePattern
 } from '@/types/deep-personalization';
-import { supabase, ensureParticipantExists } from '@/lib/supabase'; // Use shared Supabase client to avoid multiple instances
+import { supabase, ensureParticipantExists, isGcpPrimaryEnabled } from '@/lib/supabase'; // Use shared Supabase client to avoid multiple instances
+import { gcpApi } from '@/lib/gcp-api-client';
 
 // =========================
 // USER PROFILE
@@ -19,11 +20,25 @@ import { supabase, ensureParticipantExists } from '@/lib/supabase'; // Use share
 export async function getUserProfile(userHash: string): Promise<UserProfile | null> {
   try {
     // New source of truth after refactor: participants (+ aggregates updated from participant_swipes)
-    const { data, error } = await supabase
-      .from('participants')
-      .select('*')
-      .eq('user_hash', userHash)
-      .maybeSingle(); // Use maybeSingle() instead of single() to avoid 406 errors
+    let data: any = null;
+    let error: any = null;
+
+    if (isGcpPrimaryEnabled()) {
+      const result = await gcpApi.participants.fetchSession(userHash);
+      if (!result.ok) {
+        console.warn('Error fetching GCP user profile:', result.error);
+        return null;
+      }
+      data = result.data?.participant || null;
+    } else {
+      const response = await supabase
+        .from('participants')
+        .select('*')
+        .eq('user_hash', userHash)
+        .maybeSingle();
+      data = response.data;
+      error = response.error;
+    }
 
     if (error) {
       // PGRST116 means no rows found - this is normal for new users
@@ -206,13 +221,27 @@ export async function getUserProfile(userHash: string): Promise<UserProfile | nu
  */
 export async function getUserProfileFromAuth(authUserId: string): Promise<UserProfile | null> {
   try {
-    const { data, error } = await supabase
-      .from('participants')
-      .select('*')
-      .eq('auth_user_id', authUserId)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    let data: any = null;
+    let error: any = null;
+
+    if (isGcpPrimaryEnabled()) {
+      const result = await gcpApi.participants.fetchByAuth(authUserId);
+      if (!result.ok) {
+        console.warn('Error fetching GCP user profile from auth:', result.error);
+        return null;
+      }
+      data = result.data?.participant || null;
+    } else {
+      const response = await supabase
+        .from('participants')
+        .select('*')
+        .eq('auth_user_id', authUserId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      data = response.data;
+      error = response.error;
+    }
 
     if (error) {
       if (error.code === 'PGRST116') {
@@ -282,11 +311,25 @@ export async function getBestProfileForAuth(authUserId: string): Promise<UserPro
     }).catch(() => {});
     // #endregion
 
-    const { data, error } = await supabase
-      .from('participants')
-      .select('*')
-      .eq('auth_user_id', authUserId)
-      .order('updated_at', { ascending: false });
+    let data: any[] | null = null;
+    let error: any = null;
+
+    if (isGcpPrimaryEnabled()) {
+      const result = await gcpApi.participants.fetchByAuth(authUserId);
+      if (!result.ok) {
+        console.warn('Error fetching GCP best profile from auth:', result.error);
+        return null;
+      }
+      data = result.data?.participant ? [result.data.participant as any] : [];
+    } else {
+      const response = await supabase
+        .from('participants')
+        .select('*')
+        .eq('auth_user_id', authUserId)
+        .order('updated_at', { ascending: false });
+      data = response.data;
+      error = response.error;
+    }
 
     if (error) {
       if (error.code === 'PGRST116') return null;
@@ -379,12 +422,28 @@ export async function getUserHashFromAuth(authUserId: string): Promise<string | 
     }).catch(() => {});
     // #endregion
 
-    const { data, error } = await supabase
-      .from('participants')
-      .select('user_hash')
-      .eq('auth_user_id', authUserId)
-      .order('updated_at', { ascending: false })
-      .limit(1);
+    let data: Array<{ user_hash: string }> | null = null;
+    let error: any = null;
+
+    if (isGcpPrimaryEnabled()) {
+      const result = await gcpApi.participants.fetchByAuth(authUserId);
+      if (!result.ok) {
+        console.warn('Error fetching GCP user_hash from auth:', result.error);
+        return null;
+      }
+      data = result.data?.participant?.user_hash
+        ? [{ user_hash: String((result.data?.participant as any).user_hash) }]
+        : [];
+    } else {
+      const response = await supabase
+        .from('participants')
+        .select('user_hash')
+        .eq('auth_user_id', authUserId)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      data = response.data as any;
+      error = response.error;
+    }
 
     if (error) {
       console.warn('Error fetching user_hash from auth:', error);
@@ -696,15 +755,34 @@ export async function getCoreProfileCompletionStatus(options: {
 
   try {
     if (authUserId) {
-      const { data, error } = await supabase
-        .from('participants')
-        .select('core_profile_complete, core_profile_completed_at, updated_at, user_hash')
-        .eq('auth_user_id', authUserId)
-        .order('core_profile_complete', { ascending: false })
-        .order('core_profile_completed_at', { ascending: false })
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      let data: any = null;
+      let error: any = null;
+
+      if (isGcpPrimaryEnabled()) {
+        const result = await gcpApi.participants.completionStatus({ authUserId });
+        if (!result.ok) {
+          console.warn('getCoreProfileCompletionStatus (GCP auth_user_id) error:', result.error);
+        }
+        const completion = result.data?.completion;
+        if (completion) {
+          return {
+            coreProfileComplete: !!completion.coreProfileComplete,
+            coreProfileCompletedAt: completion.coreProfileCompletedAt,
+          };
+        }
+      } else {
+        const response = await supabase
+          .from('participants')
+          .select('core_profile_complete, core_profile_completed_at, updated_at, user_hash')
+          .eq('auth_user_id', authUserId)
+          .order('core_profile_complete', { ascending: false })
+          .order('core_profile_completed_at', { ascending: false })
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        data = response.data;
+        error = response.error;
+      }
 
       if (error && error.code !== 'PGRST116') {
         console.warn('getCoreProfileCompletionStatus (auth_user_id) error:', error);
@@ -719,11 +797,31 @@ export async function getCoreProfileCompletionStatus(options: {
     }
 
     if (userHash) {
-      const { data, error } = await supabase
-        .from('participants')
-        .select('core_profile_complete, core_profile_completed_at')
-        .eq('user_hash', userHash)
-        .maybeSingle();
+      let data: any = null;
+      let error: any = null;
+
+      if (isGcpPrimaryEnabled()) {
+        const result = await gcpApi.participants.completionStatus({ userHash });
+        if (!result.ok) {
+          console.warn('getCoreProfileCompletionStatus (GCP user_hash) error:', result.error);
+          return null;
+        }
+        const completion = result.data?.completion;
+        if (completion) {
+          return {
+            coreProfileComplete: !!completion.coreProfileComplete,
+            coreProfileCompletedAt: completion.coreProfileCompletedAt,
+          };
+        }
+      } else {
+        const response = await supabase
+          .from('participants')
+          .select('core_profile_complete, core_profile_completed_at')
+          .eq('user_hash', userHash)
+          .maybeSingle();
+        data = response.data;
+        error = response.error;
+      }
 
       if (error) {
         console.warn('getCoreProfileCompletionStatus (user_hash) error:', error);

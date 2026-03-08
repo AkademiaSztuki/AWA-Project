@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { deductCredits } from '@/lib/credits';
+import { gcpApi } from '@/lib/gcp-api-client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,8 +17,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Sprawdź czy SUPABASE_SERVICE_ROLE_KEY jest ustawione
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const isGcpPrimaryEnabled =
+      gcpApi.isConfigured() && (process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE ?? 'off') === 'primary';
+
+    // Sprawdź czy SUPABASE_SERVICE_ROLE_KEY jest ustawione tylko dla trybu Supabase
+    if (!isGcpPrimaryEnabled && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.error('[API Credits Deduct] SUPABASE_SERVICE_ROLE_KEY is not set!');
       return NextResponse.json(
         { error: 'Server configuration error: SUPABASE_SERVICE_ROLE_KEY is missing' },

@@ -4,7 +4,6 @@
  */
 
 const getBaseUrl = (): string | null => {
-  if (typeof window === 'undefined') return null;
   const url = process.env.NEXT_PUBLIC_GCP_API_BASE_URL;
   return url && url.length > 0 ? url.replace(/\/$/, '') : null;
 };
@@ -60,6 +59,26 @@ export const gcpApi = {
 
     fetchSession: (userHash: string) =>
       apiFetch<{ participant?: Record<string, unknown> | null }>(`/api/session/${encodeURIComponent(userHash)}`),
+
+    linkAuth: (payload: { userHash: string; authUserId: string; consentTimestamp?: string }) =>
+      apiFetch<{ ok: boolean; existingUserHash?: string }>('/api/participants/link-auth', {
+        method: 'POST',
+        body: payload,
+      }),
+
+    fetchByAuth: (authUserId: string) =>
+      apiFetch<{ participant?: Record<string, unknown> | null }>(
+        `/api/participants/by-auth/${encodeURIComponent(authUserId)}`
+      ),
+
+    completionStatus: (params: { authUserId?: string; userHash?: string }) => {
+      const search = new URLSearchParams();
+      if (params.authUserId) search.set('authUserId', params.authUserId);
+      if (params.userHash) search.set('userHash', params.userHash);
+      return apiFetch<{ completion?: { coreProfileComplete: boolean; coreProfileCompletedAt?: string | null } }>(
+        `/api/participants/completion-status?${search.toString()}`
+      );
+    },
   },
 
   swipes: {
@@ -146,6 +165,66 @@ export const gcpApi = {
         method: 'POST',
         body: payload,
       }),
+
+    list: (userHash: string) =>
+      apiFetch<{ images?: Array<Record<string, unknown>> }>(
+        `/api/participants/${encodeURIComponent(userHash)}/images`
+      ),
+
+    update: (
+      imageId: string,
+      payload: {
+        userHash: string;
+        is_favorite?: boolean;
+        tags_styles?: string[];
+        tags_colors?: string[];
+        tags_materials?: string[];
+        tags_biophilia?: number | null;
+        description?: string | null;
+        space_id?: string | null;
+      }
+    ) =>
+      apiFetch<{ ok: boolean }>(`/api/images/${encodeURIComponent(imageId)}`, {
+        method: 'PATCH',
+        body: payload,
+      }),
+
+    delete: (imageId: string, userHash: string) =>
+      apiFetch<{ ok: boolean }>(
+        `/api/images/${encodeURIComponent(imageId)}?userHash=${encodeURIComponent(userHash)}`,
+        { method: 'DELETE' }
+      ),
+  },
+
+  spaces: {
+    list: (userHash: string) =>
+      apiFetch<{ spaces?: Array<Record<string, unknown>> }>(
+        `/api/participants/${encodeURIComponent(userHash)}/spaces`
+      ),
+
+    create: (
+      userHash: string,
+      payload: { name: string; type?: string; is_default?: boolean }
+    ) =>
+      apiFetch<{ ok: boolean; space?: Record<string, unknown> | null }>(
+        `/api/participants/${encodeURIComponent(userHash)}/spaces`,
+        { method: 'POST', body: payload }
+      ),
+
+    update: (
+      spaceId: string,
+      payload: { userHash: string; name?: string; type?: string }
+    ) =>
+      apiFetch<{ ok: boolean }>(`/api/spaces/${encodeURIComponent(spaceId)}`, {
+        method: 'PATCH',
+        body: payload,
+      }),
+
+    delete: (spaceId: string, userHash: string) =>
+      apiFetch<{ ok: boolean }>(
+        `/api/spaces/${encodeURIComponent(spaceId)}?userHash=${encodeURIComponent(userHash)}`,
+        { method: 'DELETE' }
+      ),
   },
 
   research: {
@@ -172,6 +251,74 @@ export const gcpApi = {
 
     regenerationEvent: (payload: Record<string, unknown>) =>
       apiFetch<{ ok: boolean }>('/api/research/regeneration-event', {
+        method: 'POST',
+        body: payload,
+      }),
+
+    survey: (payload: {
+      userHash: string;
+      type: 'sus' | 'clarity' | 'agency' | 'satisfaction';
+      answers: Record<string, number>;
+      score: number;
+    }) =>
+      apiFetch<{ ok: boolean }>('/api/research/survey', {
+        method: 'POST',
+        body: payload,
+      }),
+  },
+
+  credits: {
+    balance: (userHash: string) =>
+      apiFetch<{
+        balance: number;
+        generationsAvailable: number;
+        hasActiveSubscription: boolean;
+        subscriptionCreditsRemaining: number;
+        subscription?: Record<string, unknown> | null;
+      }>(`/api/credits/balance/${encodeURIComponent(userHash)}`),
+
+    check: (payload: { userHash: string; amount?: number }) =>
+      apiFetch<{ ok: boolean; available?: boolean }>('/api/credits/check', {
+        method: 'POST',
+        body: payload,
+      }),
+
+    deduct: (payload: { userHash: string; generationId: string }) =>
+      apiFetch<{ ok: boolean; success?: boolean }>('/api/credits/deduct', {
+        method: 'POST',
+        body: payload,
+      }),
+
+    grantFree: (payload: { userHash: string }) =>
+      apiFetch<{ ok: boolean; granted?: boolean }>('/api/credits/grant-free', {
+        method: 'POST',
+        body: payload,
+      }),
+  },
+
+  billing: {
+    checkoutCompleted: (payload: Record<string, unknown>) =>
+      apiFetch<{ ok: boolean }>('/api/billing/stripe/checkout-completed', {
+        method: 'POST',
+        body: payload,
+      }),
+    subscriptionUpdated: (payload: Record<string, unknown>) =>
+      apiFetch<{ ok: boolean }>('/api/billing/stripe/subscription-updated', {
+        method: 'POST',
+        body: payload,
+      }),
+    subscriptionDeleted: (payload: Record<string, unknown>) =>
+      apiFetch<{ ok: boolean }>('/api/billing/stripe/subscription-deleted', {
+        method: 'POST',
+        body: payload,
+      }),
+    invoicePaymentSucceeded: (payload: Record<string, unknown>) =>
+      apiFetch<{ ok: boolean }>('/api/billing/stripe/invoice-payment-succeeded', {
+        method: 'POST',
+        body: payload,
+      }),
+    invoicePaymentFailed: (payload: Record<string, unknown>) =>
+      apiFetch<{ ok: boolean }>('/api/billing/stripe/invoice-payment-failed', {
         method: 'POST',
         body: payload,
       }),

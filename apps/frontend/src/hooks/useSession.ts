@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { SessionData, FlowStep } from '@/types';
 import { fetchLatestSessionSnapshot, saveFullSessionToSupabase, supabase, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
 import { uploadSpaceImage, saveSpaceImagesMetadata, fetchParticipantImages } from '@/lib/remote-spaces';
+import { gcpApi } from '@/lib/gcp-api-client';
 
 const SESSION_STORAGE_KEY = 'aura_session';
 const USER_HASH_STORAGE_KEY = 'aura_user_hash';
@@ -573,13 +574,25 @@ export const useSession = (): UseSessionReturn => {
               const existingHash = await getUserHashFromAuth(authUserId);
               if (!existingHash) {
                 // No mapping yet — link this userHash to auth_user_id (participants is source of truth)
-                const { error } = await supabase
-                  .from('participants')
-                  .upsert({
-                    user_hash: userHash,
-                    auth_user_id: authUserId,
-                    updated_at: new Date().toISOString()
-                  } as any, { onConflict: 'user_hash' } as any);
+                let error: { message?: string } | null = null;
+                if (gcpApi.isConfigured() && process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE === 'primary') {
+                  const linked = await gcpApi.participants.linkAuth({
+                    userHash,
+                    authUserId,
+                  });
+                  if (!linked.ok) {
+                    error = { message: linked.error };
+                  }
+                } else {
+                  const response = await supabase
+                    .from('participants')
+                    .upsert({
+                      user_hash: userHash,
+                      auth_user_id: authUserId,
+                      updated_at: new Date().toISOString()
+                    } as any, { onConflict: 'user_hash' } as any);
+                  error = response.error;
+                }
 
                 // #region agent log
                 fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:link-userHash',message:'Linking userHash to auth_user_id',data:{userHash,authUserId,hadExisting:!!existingHash,upsertError:!!error,errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I11'})}).catch(()=>{});

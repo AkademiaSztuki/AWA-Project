@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
 import { allocateSubscriptionCredits } from '@/lib/credits';
+import { gcpApi } from '@/lib/gcp-api-client';
 
 /**
  * TEST ONLY - Ręczne przydzielenie kredytów dla testów
@@ -41,15 +41,33 @@ export async function POST(request: NextRequest) {
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
     }
 
+    const subscriptionId = `test_sub_${Date.now()}`;
+    const isGcpPrimaryEnabled =
+      gcpApi.isConfigured() && (process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE ?? 'off') === 'primary';
+
     // Przydziel kredyty
-    const success = await allocateSubscriptionCredits(
-      userHash,
-      planId as 'basic' | 'pro' | 'studio',
-      billingPeriod as 'monthly' | 'yearly',
-      credits,
-      expiresAt,
-      `test_sub_${Date.now()}` // Test subscription ID
-    );
+    const success = isGcpPrimaryEnabled
+      ? (await gcpApi.billing.checkoutCompleted({
+          eventId: `test_evt_${Date.now()}`,
+          userHash,
+          subscriptionId,
+          customerId: `test_customer_${Date.now()}`,
+          planId,
+          billingPeriod,
+          credits,
+          status: 'active',
+          currentPeriodStart: new Date().toISOString(),
+          currentPeriodEnd: expiresAt.toISOString(),
+          cancelAtPeriodEnd: false,
+        })).ok
+      : await allocateSubscriptionCredits(
+          userHash,
+          planId as 'basic' | 'pro' | 'studio',
+          billingPeriod as 'monthly' | 'yearly',
+          credits,
+          expiresAt,
+          subscriptionId
+        );
 
     if (!success) {
       return NextResponse.json(

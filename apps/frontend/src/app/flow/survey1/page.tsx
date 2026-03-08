@@ -7,6 +7,7 @@ import GlassSurface from '@/components/ui/GlassSurface';
 import { GlassSlider } from '@/components/ui/GlassSlider';
 import { useSessionData } from '@/hooks/useSessionData';
 import { supabase } from '@/lib/supabase';
+import { gcpApi } from '@/lib/gcp-api-client';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { AwaDialogue } from '@/components/awa';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -211,17 +212,26 @@ export default function Survey1Page() {
       }
     });
     
-    // Zapis do Supabase (survey_results)
+    // Detailed survey persistence
     try {
-      await supabase.from('survey_results').insert([
-        {
-          session_id: sessionData?.userHash || '',
+      if (gcpApi.isConfigured() && process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE === 'primary') {
+        await gcpApi.research.survey({
+          userHash: sessionData?.userHash || '',
           type: 'sus',
-          answers: answers,
-          sus_score: susScore,
-          timestamp: new Date().toISOString(),
-        }
-      ]);
+          answers,
+          score: susScore,
+        });
+      } else {
+        await supabase.from('survey_results').insert([
+          {
+            session_id: sessionData?.userHash || '',
+            type: 'sus',
+            answers: answers,
+            sus_score: susScore,
+            timestamp: new Date().toISOString(),
+          }
+        ]);
+      }
     } catch (e) {
       console.error('Error saving SUS survey:', e);
       // ignore

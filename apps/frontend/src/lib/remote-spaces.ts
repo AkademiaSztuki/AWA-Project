@@ -1,4 +1,5 @@
-import { supabase, saveParticipantImage } from '@/lib/supabase';
+import { supabase, saveParticipantImage, isGcpPrimaryEnabled } from '@/lib/supabase';
+import { gcpApi } from '@/lib/gcp-api-client';
 
 export type SpaceImageInput = {
   id: string;
@@ -35,6 +36,15 @@ export async function getOrCreateSpaceId(
   const name = opts?.name || 'Moja Przestrzeń';
   const type = opts?.type || 'personal';
 
+  if (isGcpPrimaryEnabled()) {
+    const created = await gcpApi.spaces.create(userHash, {
+      name,
+      type,
+      is_default: false,
+    });
+    return created.ok ? ((created.data?.space as any)?.id ?? null) : null;
+  }
+
   // After radical refactor we do NOT persist spaces in Supabase.
   // Return a stable local-only id.
   try {
@@ -51,6 +61,10 @@ export async function uploadSpaceImage(
   imageUrl: string
 ): Promise<{ publicUrl: string; path: string } | null> {
   if (!userHash || !spaceId || !imageUrl) return null;
+
+  if (isGcpPrimaryEnabled()) {
+    return { publicUrl: imageUrl, path: imageUrl };
+  }
 
   // If already an http(s) URL, skip upload
   if (imageUrl.startsWith('http')) {
@@ -115,6 +129,59 @@ export async function saveParticipantImages(
   }
   
   try {
+    if (isGcpPrimaryEnabled()) {
+      let savedCount = 0;
+      let failedCount = 0;
+
+      for (const img of images) {
+        const tags = img.tags || {};
+        const tagsStyles = Array.isArray(tags.styles) ? tags.styles : (tags.style ? [tags.style] : []);
+        const tagsColors = Array.isArray(tags.colors) ? tags.colors : [];
+        const tagsMaterials = Array.isArray(tags.materials) ? tags.materials : [];
+        const tagsBiophilia = typeof tags.biophilia === 'number' ? tags.biophilia : null;
+        const descriptionToSave = img.description || tags.description || null;
+
+        const result = img.url.startsWith('data:')
+          ? await gcpApi.images.uploadAndRegister({
+              userHash,
+              type: img.type,
+              base64Image: img.url,
+              space_id: img.space_id,
+              tags_styles: tagsStyles,
+              tags_colors: tagsColors,
+              tags_materials: tagsMaterials,
+              tags_biophilia: tagsBiophilia,
+              description: descriptionToSave || undefined,
+              source: img.source || undefined,
+              generation_id: img.generation_id || undefined,
+            })
+          : await gcpApi.images.register(userHash, {
+              type: img.type,
+              storage_path: img.url,
+              public_url: img.url,
+              thumbnail_url: img.thumbnail_url,
+              is_favorite: img.is_favorite || false,
+              space_id: img.space_id,
+              tags_styles: tagsStyles,
+              tags_colors: tagsColors,
+              tags_materials: tagsMaterials,
+              tags_biophilia: tagsBiophilia,
+              description: descriptionToSave || undefined,
+              source: img.source || undefined,
+              generation_id: img.generation_id || undefined,
+            });
+
+        if (result.ok) {
+          savedCount++;
+        } else {
+          failedCount++;
+          console.warn('[remote-spaces] GCP save failed', result.error);
+        }
+      }
+
+      return failedCount === 0 || savedCount > 0;
+    }
+
     let savedCount = 0;
     let failedCount = 0;
     
@@ -261,6 +328,14 @@ export async function toggleParticipantImageFavorite(
   isFavorite: boolean
 ): Promise<boolean> {
   if (!userHash || !imageId) return false;
+
+  if (isGcpPrimaryEnabled()) {
+    const result = await gcpApi.images.update(imageId, {
+      userHash,
+      is_favorite: isFavorite,
+    });
+    return result.ok;
+  }
   
   const { error } = await supabase
     .from('participant_images')
@@ -309,6 +384,32 @@ export async function fetchParticipantImages(userHash: string): Promise<Array<{
   }
   
   try {
+    if (isGcpPrimaryEnabled()) {
+      const result = await gcpApi.images.list(userHash);
+      if (!result.ok) {
+        console.warn('[remote-spaces] GCP fetchParticipantImages failed', result.error);
+        return [];
+      }
+
+      return ((result.data?.images as any[]) || []).map((img: any) => ({
+        id: img.id,
+        type: img.type,
+        url: img.public_url || img.storage_path,
+        thumbnailUrl: img.thumbnail_url,
+        isFavorite: img.is_favorite || false,
+        spaceId: img.space_id || null,
+        tags: {
+          styles: img.tags_styles || [],
+          colors: img.tags_colors || [],
+          materials: img.tags_materials || [],
+          biophilia: img.tags_biophilia
+        },
+        description: img.description || undefined,
+        source: img.source,
+        createdAt: img.created_at
+      }));
+    }
+
     const { data, error } = await supabase
       .from('participant_images')
       .select('*')
@@ -369,6 +470,21 @@ export async function fetchParticipantSpaces(userHash: string): Promise<Array<{
   updatedAt: string;
 }>> {
   if (!userHash) return [];
+  if (isGcpPrimaryEnabled()) {
+    const result = await gcpApi.spaces.list(userHash);
+    if (!result.ok) {
+      console.warn('[remote-spaces] GCP fetchParticipantSpaces failed', result.error);
+      return [];
+    }
+    return (((result.data?.spaces as any[]) || [])).map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      type: s.type || 'personal',
+      isDefault: !!s.is_default,
+      createdAt: s.created_at,
+      updatedAt: s.updated_at || s.created_at
+    }));
+  }
   const { data, error } = await supabase
     .from('participant_spaces')
     .select('*')
@@ -395,6 +511,15 @@ export async function createParticipantSpace(
   if (!userHash || !space?.name) {
     console.warn('[remote-spaces] createParticipantSpace: missing userHash or space name');
     return null;
+  }
+  if (isGcpPrimaryEnabled()) {
+    const result = await gcpApi.spaces.create(userHash, space);
+    if (!result.ok) {
+      console.error('❌ [GCP] createParticipantSpace failed', result.error);
+      return null;
+    }
+    const id = ((result.data?.space as any)?.id) || null;
+    return id ? { id } : null;
   }
   const { data, error } = await supabase
     .from('participant_spaces')
@@ -537,6 +662,11 @@ export async function deleteSpace(userHash: string, spaceId: string): Promise<bo
   }
   
   try {
+    if (isGcpPrimaryEnabled()) {
+      const result = await gcpApi.spaces.delete(spaceId, userHash);
+      return result.ok;
+    }
+
     // Best-effort: delete images belonging to this space first to avoid orphaned images being remapped elsewhere
     try {
       const { error: imgError } = await supabase
@@ -579,6 +709,11 @@ export async function deleteParticipantImage(
   imageId: string
 ): Promise<boolean> {
   if (!userHash || !imageId) return false;
+
+  if (isGcpPrimaryEnabled()) {
+    const result = await gcpApi.images.delete(imageId, userHash);
+    return result.ok;
+  }
   
   try {
     // First, get the image to find storage path
@@ -640,6 +775,20 @@ export async function updateParticipantImageMetadata(
   if (!userHash || !imageId) return false;
 
   try {
+    if (isGcpPrimaryEnabled()) {
+      const tags = patch.tags || {};
+      const result = await gcpApi.images.update(imageId, {
+        userHash,
+        tags_styles: Array.isArray(tags.styles) ? tags.styles : (tags.style ? [tags.style] : []),
+        tags_colors: Array.isArray(tags.colors) ? tags.colors : [],
+        tags_materials: Array.isArray(tags.materials) ? tags.materials : [],
+        tags_biophilia: typeof tags.biophilia === 'number' ? tags.biophilia : null,
+        description: patch.description ?? (tags.description || null),
+        space_id: patch.space_id,
+      });
+      return result.ok;
+    }
+
     const tags = patch.tags || {};
     const tagsStyles = Array.isArray(tags.styles) ? tags.styles : (tags.style ? [tags.style] : []);
     const tagsColors = Array.isArray(tags.colors) ? tags.colors : [];

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
+import { gcpApi } from '@/lib/gcp-api-client';
 import { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -223,6 +224,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      if (gcpApi.isConfigured() && process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE === 'primary') {
+        const linked = await gcpApi.participants.linkAuth({
+          userHash,
+          authUserId: user.id,
+        });
+        if (linked.ok) {
+          safeLocalStorage.setItem('aura_user_hash', linked.data?.existingUserHash || userHash);
+          return;
+        }
+        console.warn('GCP linkUserHashToAuth failed, falling back to Supabase:', linked.error);
+      }
+
       // First, check if this auth_user_id is already linked to ANOTHER user_hash
       const { data: existingForAuth } = await supabase
         .from('participants')

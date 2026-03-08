@@ -7,6 +7,7 @@ import GlassSurface from '../ui/GlassSurface';
 import { GlassSlider } from '../ui/GlassSlider';
 import { useSessionData } from '@/hooks/useSessionData';
 import { supabase } from '@/lib/supabase';
+import { gcpApi } from '@/lib/gcp-api-client';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { AwaDialogue } from '@/components/awa';
 
@@ -59,16 +60,25 @@ export function Survey2Screen() {
       }
     });
 
-    // Zapisz do supabase
-    await supabase.from('survey_results').insert([
-      {
-        session_id: sessionData.userHash,
+    // Persist detailed survey answers
+    if (gcpApi.isConfigured() && process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE === 'primary') {
+      await gcpApi.research.survey({
+        userHash: sessionData.userHash,
         type: 'clarity',
-        answers: answers,
-        clarity_score: clarityScore,
-        timestamp: new Date().toISOString()
-      }
-    ]);
+        answers,
+        score: clarityScore,
+      });
+    } else {
+      await supabase.from('survey_results').insert([
+        {
+          session_id: sessionData.userHash,
+          type: 'clarity',
+          answers: answers,
+          clarity_score: clarityScore,
+          timestamp: new Date().toISOString()
+        }
+      ]);
+    }
 
     stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
     router.push('/flow/thanks');

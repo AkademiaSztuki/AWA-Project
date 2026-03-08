@@ -8,6 +8,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
 import { analyzeInspirationsWithGamma } from "@/lib/vision/gamma-tagging";
 import { supabase } from "@/lib/supabase";
+import { gcpApi } from "@/lib/gcp-api-client";
 import { 
   Upload, 
   ArrowRight, 
@@ -121,6 +122,15 @@ export function InspirationsStep({ data, onUpdate, onNext, onBack }: Inspiration
   };
 
   const uploadToSupabase = async (file: File, fileId: string): Promise<string> => {
+    if (gcpApi.isConfigured() && process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE === 'primary') {
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+    }
+
     const { data: uploadData, error } = await supabase.storage
       .from('aura-assets')
       .upload(`inspirations/${fileId}`, file, {

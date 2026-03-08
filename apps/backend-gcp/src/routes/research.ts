@@ -64,6 +64,54 @@ researchRouter.post('/research/consent', async (req, res) => {
   }
 });
 
+researchRouter.post('/research/survey', async (req, res) => {
+  const payload = req.body as {
+    userHash?: string;
+    type?: 'sus' | 'clarity' | 'agency' | 'satisfaction';
+    answers?: Record<string, number>;
+    score?: number;
+  };
+
+  if (!payload.userHash || !payload.type || typeof payload.score !== 'number') {
+    return res.status(400).json({ ok: false, error: 'invalid_payload' });
+  }
+
+  const columnMap: Record<
+    NonNullable<typeof payload.type>,
+    { score: string; answers: string }
+  > = {
+    sus: { score: 'sus_score', answers: 'sus_answers' },
+    clarity: { score: 'clarity_score', answers: 'clarity_answers' },
+    agency: { score: 'agency_score', answers: 'agency_answers' },
+    satisfaction: { score: 'satisfaction_score', answers: 'satisfaction_answers' },
+  };
+
+  const target = columnMap[payload.type];
+
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query(
+        `
+          UPDATE participants
+          SET ${target.score} = $2,
+              ${target.answers} = $3,
+              updated_at = NOW()
+          WHERE user_hash = $1
+        `,
+        [payload.userHash, payload.score, payload.answers || {}]
+      );
+
+      return res.json({ ok: true });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('research/survey error', error);
+    return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
+
 // POST /research/generation-feedback
 researchRouter.post('/research/generation-feedback', async (req, res) => {
   const feedback = req.body as {
