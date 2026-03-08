@@ -138,40 +138,6 @@ export function PreferencesOverviewSection({
 }) {
   const { language } = useLanguage();
 
-  // #region agent log
-  React.useEffect(() => {
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'dashboard-render',
-        hypothesisId: 'D1',
-        location: 'ProfileSections.tsx:PreferencesOverviewSection',
-        message: 'PreferencesOverviewSection render data',
-        data: {
-          hasVisualDNA: !!visualDNA,
-          visualDNAStyle: visualDNA?.dominantStyle,
-          visualDNAColors: visualDNA?.preferences?.colors,
-          visualDNAMaterials: visualDNA?.preferences?.materials,
-          hasColorsAndMaterials: !!sessionData?.colorsAndMaterials,
-          colorsAndMaterialsStyle: sessionData?.colorsAndMaterials?.selectedStyle,
-          colorsAndMaterialsStyleType: typeof sessionData?.colorsAndMaterials?.selectedStyle,
-          colorsAndMaterialsStyleIsEmpty: sessionData?.colorsAndMaterials?.selectedStyle === '',
-          colorsAndMaterialsPalette: sessionData?.colorsAndMaterials?.selectedPalette,
-          colorsAndMaterialsMaterials: sessionData?.colorsAndMaterials?.topMaterials,
-          hasSemanticDifferential: !!sessionData?.semanticDifferential,
-          semanticWarmth: sessionData?.semanticDifferential?.warmth,
-          semanticBrightness: sessionData?.semanticDifferential?.brightness,
-          semanticComplexity: sessionData?.semanticDifferential?.complexity,
-          hasSensoryPreferences: !!sessionData?.sensoryPreferences
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-  }, [visualDNA, sessionData]);
-  // #endregion
-
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
 
   const colorsAndMaterials = sessionData?.colorsAndMaterials;
@@ -185,11 +151,6 @@ export function PreferencesOverviewSection({
   const implicitWarmth = visualDNA?.preferences?.warmth ?? visualDNA?.implicitScores?.warmth;
   const implicitBrightness = visualDNA?.preferences?.brightness ?? visualDNA?.implicitScores?.brightness;
   const implicitComplexity = visualDNA?.preferences?.complexity ?? visualDNA?.implicitScores?.complexity;
-  // #region agent log
-  React.useEffect(() => {
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProfileSections.tsx:PreferencesOverviewSection-display-values',message:'Displaying semantic values in dashboard',data:{implicitWarmth,implicitBrightness,implicitComplexity,explicitWarmth:semantic?.warmth,explicitBrightness:semantic?.brightness,explicitComplexity:semantic?.complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'dashboard-display',hypothesisId:'F'})}).catch(()=>{});
-  }, [implicitWarmth, implicitBrightness, implicitComplexity, semantic]);
-  // #endregion
 
   // CRITICAL: Check if selectedStyle exists and is not empty string
   const explicitStyleLabel = colorsAndMaterials?.selectedStyle && colorsAndMaterials.selectedStyle.length > 0

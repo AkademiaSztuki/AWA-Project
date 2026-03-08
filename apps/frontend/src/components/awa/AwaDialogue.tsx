@@ -416,22 +416,9 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
   const { playAnimation } = useAnimation();
 
-  // #region agent log
-  useEffect(() => {
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2',location:'AwaDialogue.tsx:mount',message:'AwaDialogue mounted',data:{currentStep,language,hasCustomMessage:!!customMessage,customMessageLen:customMessage?.length||0,dialoguesLen:dialogues?.length||0,audioFile:audioFile||null,voiceEnabled},timestamp:Date.now()})}).catch(()=>{});
-    return () => {
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2',location:'AwaDialogue.tsx:unmount',message:'AwaDialogue unmounted',data:{currentStep,language,hasCustomMessage:!!customMessage,customMessageLen:customMessage?.length||0,dialoguesLen:dialogues?.length||0,audioFile:audioFile||null},timestamp:Date.now()})}).catch(()=>{});
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // #endregion
-
   // console.log('AwaDialogue: useDialogueVoice hook returned:', { voiceVolume, voiceEnabled });
 
   const handleSentenceComplete = () => {
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D1',location:'AwaDialogue.tsx:handleSentenceComplete',message:'handleSentenceComplete called',data:{currentStep,currentSentenceIndex,dialoguesLength:dialogues.length,audioEnded,allSentencesCompleted,voiceEnabled,hasAudioFile:!!audioFile},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     
     // Prevent double-triggering
     if (isTransitioningRef.current) {
@@ -471,9 +458,6 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       console.log('[AwaDialogue] All sentences completed');
       setIsDone(true);
       setAllSentencesCompleted(true);
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D2',location:'AwaDialogue.tsx:handleSentenceComplete-last',message:'Last sentence completed',data:{currentStep,audioEnded,voiceEnabled,hasAudioFile:!!audioFile,hasOnDialogueEnd:!!onDialogueEnd,autoHide},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       
       // For landing / room_analysis / room_furniture_suggestion: wait for audio to finish before calling onDialogueEnd
       // For path_selection: if autoHide, hide after audio ends
@@ -481,38 +465,23 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       if (waitForAudioSteps.includes(String(currentStep)) && onDialogueEnd && !onDialogueEndCalledRef.current) {
         // Wait for audio to end, or timeout after delay (no audio / voice disabled)
         if (audioEnded || !voiceEnabled || !audioFile) {
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D3',location:'AwaDialogue.tsx:handleSentenceComplete-landing-immediate',message:'Landing: calling onDialogueEnd immediately',data:{audioEnded,voiceEnabled,hasAudioFile:!!audioFile},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           onDialogueEndCalledRef.current = true;
           const delay = currentStep === 'landing' ? PAUSE_AFTER_LANDING : (currentStep === 'room_analysis' ? PAUSE_AFTER_ROOM_ANALYSIS : PAUSE_AFTER_ALL_SENTENCES);
           setTimeout(() => {
-            // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D4',location:'AwaDialogue.tsx:handleSentenceComplete-landing-call',message:'Landing: calling onDialogueEnd',data:{},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             if (currentStep === 'landing') {
               window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
             }
             onDialogueEnd();
           }, delay);
         } else {
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D5',location:'AwaDialogue.tsx:handleSentenceComplete-landing-wait',message:'Landing: waiting for audio to end',data:{audioEnded},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
         }
         // If audio is still playing, onDialogueEnd will be called in handleAudioEnded
       } else if (autoHide && !hideScheduledRef.current) {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D6',location:'AwaDialogue.tsx:handleSentenceComplete-auto-hide',message:'Scheduling hide',data:{autoHide,currentStep,audioEnded,voiceEnabled,hasAudioFile:!!audioFile},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         hideScheduledRef.current = true;
         // For path_selection or other steps with autoHide, hide after delay
         // But also wait for audio to end if it's still playing
         if (audioEnded || !voiceEnabled || !audioFile) {
           setTimeout(() => {
-            // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D7',location:'AwaDialogue.tsx:handleSentenceComplete-hide-call',message:'Hiding dialogue',data:{currentStep},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             console.log('AwaDialogue: Hiding dialogue after completion');
             setIsVisible(false);
           }, PAUSE_AFTER_ALL_SENTENCES);
@@ -545,24 +514,15 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   }, [currentSentenceIndex, dialogues, hasStarted, audioReady, onSentenceStart]);
 
   const handleAudioEnded = () => {
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D8',location:'AwaDialogue.tsx:handleAudioEnded',message:'Audio ended',data:{currentStep,allSentencesCompleted,hasOnDialogueEnd:!!onDialogueEnd,autoHide,onDialogueEndCalled:onDialogueEndCalledRef.current,hideScheduled:hideScheduledRef.current},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     console.log('[AwaDialogue] Audio completed for entire dialogue', { currentStep, allSentencesCompleted, autoHide });
     setAudioEnded(true);
     
     // If all sentences completed and audio ended, call onDialogueEnd for landing / room_analysis / room_furniture_suggestion
     const waitForAudioSteps = ['landing', 'room_analysis', 'room_furniture_suggestion'];
     if (waitForAudioSteps.includes(String(currentStep)) && allSentencesCompleted && onDialogueEnd && !onDialogueEndCalledRef.current) {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D9',location:'AwaDialogue.tsx:handleAudioEnded-landing',message:'Landing: audio ended, calling onDialogueEnd',data:{},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       onDialogueEndCalledRef.current = true;
       const delay = currentStep === 'landing' ? PAUSE_AFTER_LANDING : (currentStep === 'room_analysis' ? PAUSE_AFTER_ROOM_ANALYSIS : PAUSE_AFTER_ALL_SENTENCES);
       setTimeout(() => {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D10',location:'AwaDialogue.tsx:handleAudioEnded-landing-call',message:'Landing: calling onDialogueEnd after delay',data:{},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (currentStep === 'landing') {
           window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
         }
@@ -572,26 +532,14 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     
     // For autoHide, hide after audio ends
     if (autoHide && allSentencesCompleted && !hideScheduledRef.current) {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D11',location:'AwaDialogue.tsx:handleAudioEnded-auto-hide',message:'Audio ended, hiding',data:{currentStep},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       hideScheduledRef.current = true;
       setTimeout(() => {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D12',location:'AwaDialogue.tsx:handleAudioEnded-hide-call',message:'Hiding dialogue after delay',data:{currentStep},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         console.log('AwaDialogue: Hiding dialogue after audio ended');
         setIsVisible(false);
       }, PAUSE_AFTER_ALL_SENTENCES);
     } else if (autoHide && allSentencesCompleted && hideScheduledRef.current) {
       // If hide was already scheduled from handleSentenceComplete, execute it now after audio ends
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D13',location:'AwaDialogue.tsx:handleAudioEnded-already-scheduled',message:'Hide already scheduled, executing now',data:{currentStep},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setTimeout(() => {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'D14',location:'AwaDialogue.tsx:handleAudioEnded-execute-hide',message:'Executing hide after audio ended',data:{currentStep},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         console.log('AwaDialogue: Executing hide after audio ended');
         setIsVisible(false);
       }, PAUSE_AFTER_ALL_SENTENCES);
@@ -652,21 +600,6 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
               isResettingRef.current = false;
               setHasStarted(true);
               setAudioReady(true);
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  sessionId: 'debug-session',
-                  runId: 'animation-check',
-                  hypothesisId: 'H1',
-                  location: 'AwaDialogue.tsx:useEffect-auto-start',
-                  message: 'AwaDialogue considering talk animation',
-                  data: { currentStep, isMobile },
-                  timestamp: Date.now()
-                })
-              }).catch(() => {});
-              // #endregion
 
               // Skip talk animation on mobile for non-landing steps 
               // (because model is exiting or already gone)

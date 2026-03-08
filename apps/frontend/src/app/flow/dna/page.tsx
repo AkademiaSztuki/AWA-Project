@@ -51,14 +51,11 @@ export default function VisualDNAPage() {
     const likes = tinderData?.swipes?.filter((s: any) => s.direction === 'right') || [];
 
     const weighted = computeWeightedDNAFromSwipes(likes, tinderData?.totalImages || likes.length || 30);
-    // #region agent log
     const styleWeights = weighted.top.styles.map(s => ({ style: s, weight: weighted.weights[s] || 0 }));
     const styleWeightRatio = styleWeights.length >= 2 && styleWeights[0].weight > 0
       ? styleWeights[1].weight / styleWeights[0].weight
       : 0;
-    const shouldUseTwoStyles = styleWeights.length >= 2 && styleWeightRatio >= 0.7; // If second style is within 30% of first (ratio >= 0.7)
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dna/page.tsx:analyzeDNA:style-selection',message:'Style selection decision',data:{availableStyles:weighted.top.styles,styleWeights,selectedStyle:weighted.top.styles[0],secondStyle:weighted.top.styles[1],styleWeightRatio:styleWeightRatio.toFixed(3),shouldUseTwoStyles,usingOnlyFirst:!shouldUseTwoStyles,reason:shouldUseTwoStyles?'two styles close in weight':'single dominant style'},timestamp:Date.now(),sessionId:'debug-session',runId:'style-aggregation-check'})}).catch(()=>{});
-    // #endregion
+    const shouldUseTwoStyles = styleWeights.length >= 2 && styleWeightRatio >= 0.7;
     // Use two styles if they're close in weight (within 30%), otherwise use only the first
     const dominantStyle = shouldUseTwoStyles && weighted.top.styles.length >= 2
       ? `${weighted.top.styles[0]} with ${weighted.top.styles[1]} accents`

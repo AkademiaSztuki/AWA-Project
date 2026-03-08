@@ -35,9 +35,6 @@ function transformRoomAnalysis(
 }
 
 export function buildPromptInputsFromSession(sessionData: SessionData): PromptInputs {
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:buildPromptInputsFromSession:start',message:'STARTING: Building PromptInputs from SessionData',data:{hasVisualDNA:!!sessionData.visualDNA,hasTinderData:!!(sessionData as any).tinderData,hasBigFive:!!sessionData.bigFive,hasInspirations:!!sessionData.inspirations,hasRoomPreferences:!!sessionData.roomPreferences,hasSemanticDifferential:!!sessionData.semanticDifferential,roomType:sessionData.roomType},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
 
   const semantic = sessionData.semanticDifferential;
   const lifestyle = sessionData.lifestyle;
@@ -52,15 +49,9 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
   // Colors and materials - check both roomPreferences and top-level
   const colorsAndMaterials = roomPrefs?.colorsAndMaterials || sessionData.colorsAndMaterials;
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:buildPromptInputsFromSession:colors-and-materials',message:'Colors and Materials source determination',data:{hasRoomPrefs:!!roomPrefs,hasRoomPrefsColors:!!roomPrefs?.colorsAndMaterials,hasTopLevelColors:!!sessionData.colorsAndMaterials,selectedStyle:colorsAndMaterials?.selectedStyle,selectedPalette:colorsAndMaterials?.selectedPalette,topMaterials:colorsAndMaterials?.topMaterials},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   // Biophilia score - check roomPreferences first, then top-level, default to 1
   const biophiliaScore = roomPrefs?.biophiliaScore ?? sessionData.biophiliaScore ?? 1;
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:buildPromptInputsFromSession:biophilia-source',message:'Biophilia score source determination',data:{roomPrefsBiophilia:roomPrefs?.biophiliaScore,sessionDataBiophilia:sessionData.biophiliaScore,finalBiophiliaScore:biophiliaScore,hasRoomPrefs:!!roomPrefs},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   // Calculate implicit biophilia from Tinder swipes (avgBiophilia from liked images)
   // This will be used for Implicit source instead of global biophiliaScore
@@ -75,18 +66,11 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
       const analysis = analyzeSwipePatterns(swipes);
       // Round to nearest integer (0-3 scale, same as biophiliaScore)
       implicitBiophiliaScore = Math.round(analysis.avgBiophilia);
-      // #region prompt debug
-      const likedCount = swipes.filter((s: { direction: string }) => s.direction === 'right').length;
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:buildPromptInputsFromSession:implicit-biophilia',message:'Calculated implicit biophilia from Tinder swipes',data:{swipesCount:tinderData.swipes.length,avgBiophilia:analysis.avgBiophilia,implicitBiophiliaScore,likedCount},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-      // #endregion
       console.log('[InputBuilder] Calculated implicitBiophiliaScore from Tinder:', implicitBiophiliaScore, '(avgBiophilia:', analysis.avgBiophilia, ')');
     } catch (error) {
       console.warn('[InputBuilder] Could not calculate implicitBiophiliaScore from Tinder:', error);
     }
   } else {
-    // #region prompt debug
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:buildPromptInputsFromSession:no-tinder-data',message:'No Tinder data for implicit biophilia calculation',data:{hasTinderData:!!tinderData,swipesCount:tinderData?.swipes?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-    // #endregion
   }
   
   // Nature metaphor - check roomPreferences first
@@ -123,11 +107,6 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
     })));
   }
   console.log('  - tinderData swipes:', (sessionData as any).tinderData?.swipes?.length || 0);
-
-  // #region agent log
-  // Log final PromptInputs psychologicalBaseline
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:PromptInputs-psychologicalBaseline',message:'Final PromptInputs psychologicalBaseline',data:{biophiliaScore:biophiliaScore,implicitBiophiliaScore:implicitBiophiliaScore,prsIdeal:sessionData.prsIdeal||defaultPRS},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E10'})}).catch(()=>{});
-  // #endregion
 
   const result: PromptInputs = {
     aestheticDNA: {
@@ -180,9 +159,6 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
         domains: scores.domains,
         facets: scores.facets
       };
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:144',message:'Building personality from sessionData.bigFive.scores',data:{hasScores:!!scores,hasDomains:!!scores.domains,domainsFromDomains:scores.domains?{O:scores.domains.O,C:scores.domains.C,E:scores.domains.E,A:scores.domains.A,N:scores.domains.N}:null,domainsFromLegacy:scores.openness?{O:scores.openness,C:scores.conscientiousness,E:scores.extraversion,A:scores.agreeableness,N:scores.neuroticism}:null,resultPersonality:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism}},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P2'})}).catch(()=>{});
-      // #endregion
       return personality;
     })(),
     inspirations: sessionData.inspirations?.map((item) => ({
@@ -216,9 +192,6 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
     activityContext: sessionData.roomActivityContext
   };
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'input-builder.ts:buildPromptInputsFromSession:final',message:'FINAL PromptInputs built from SessionData',data:{aestheticDNA:{implicit:{dominantStyles:result.aestheticDNA.implicit.dominantStyles,colors:result.aestheticDNA.implicit.colors,materials:result.aestheticDNA.implicit.materials,complexity:result.aestheticDNA.implicit.complexity,warmth:result.aestheticDNA.implicit.warmth,brightness:result.aestheticDNA.implicit.brightness},explicit:{selectedPalette:result.aestheticDNA.explicit.selectedPalette,selectedStyle:result.aestheticDNA.explicit.selectedStyle,topMaterials:result.aestheticDNA.explicit.topMaterials}},psychologicalBaseline:{biophiliaScore:result.psychologicalBaseline.biophiliaScore,implicitBiophiliaScore:result.psychologicalBaseline.implicitBiophiliaScore,prsIdeal:result.psychologicalBaseline.prsIdeal},hasPersonality:!!result.personality,personalityDomains:result.personality?{O:result.personality.openness,C:result.personality.conscientiousness,E:result.personality.extraversion,A:result.personality.agreeableness,N:result.personality.neuroticism}:null,roomType:result.roomType,prsCurrent:result.prsCurrent,prsTarget:result.prsTarget,activitiesCount:result.activities?.length||0,painPointsCount:result.painPoints?.length||0,inspirationsCount:result.inspirations?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   return result;
 }

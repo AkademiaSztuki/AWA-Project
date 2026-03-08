@@ -158,33 +158,6 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   const waitingForTtsToShowFurnitureSuggestionRef = useRef<boolean>(false);
   const geminiTextPendingSeenRef = useRef<string | null>(null);
 
-  // #region agent log
-  const prevStepRef = useRef<string | null>(null);
-  useEffect(() => {
-    const prev = prevStepRef.current;
-    prevStepRef.current = currentStep;
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H5',location:'RoomSetup.tsx:step-change',message:'RoomSetup step changed',data:{prevStep:prev,nextStep:currentStep,language},timestamp:Date.now()})}).catch(()=>{});
-  }, [currentStep, language]);
-
-  const prevRoomAnalysisSigRef = useRef<string | null>(null);
-  useEffect(() => {
-    const ra = (sessionData as any)?.roomAnalysis;
-    const sigObj = {
-      hasRA: !!ra,
-      humanLen: ra?.human_comment?.length || 0,
-      commentLen: ra?.comment?.length || 0,
-      descLen: ra?.room_description?.length || 0,
-      detected: ra?.detected_room_type || null,
-      hasEmpty: !!(sessionData as any)?.roomImageEmpty
-    };
-    const sig = JSON.stringify(sigObj);
-    if (sig !== prevRoomAnalysisSigRef.current) {
-      prevRoomAnalysisSigRef.current = sig;
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H6',location:'RoomSetup.tsx:roomAnalysis-sig',message:'roomAnalysis/customMessage inputs changed',data:{sig:sigObj,currentStep},timestamp:Date.now()})}).catch(()=>{});
-    }
-  }, [sessionData, currentStep]);
-  // #endregion
-
   const shouldShowPreferenceQuestions = roomData.preferenceSource === 'complete';
   const steps = useMemo(
     () =>
@@ -422,9 +395,6 @@ export function RoomSetup({ householdId }: { householdId: string }) {
       // Save room photos to participant_images in background (do not block navigation)
       try {
         const userHash = (sessionData as any)?.userHash;
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleComplete',message:'Saving room photo to participant_images',data:{userHash,hasRoomImage:!!roomImageBase64,roomImageLength:roomImageBase64?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H10'})}).catch(()=>{});
-        // #endregion
         if (userHash && roomImageBase64) {
           // Convert base64 to data URL for saveParticipantImages
           const dataUrl = `data:image/jpeg;base64,${roomImageBase64}`;
@@ -433,13 +403,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
             type: 'room_photo',
             is_favorite: false
           }]).then(() => {
-            // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleComplete-complete',message:'Room photo saved successfully',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H10'})}).catch(()=>{});
-            // #endregion
           }).catch((e) => {
-            // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleComplete-error',message:'Error saving room photo',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H10'})}).catch(()=>{});
-            // #endregion
             console.warn('[RoomSetup] Failed to save room photo to participant_images:', e);
           });
         }
@@ -1055,9 +1019,6 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
     setIsAnalyzing(true);
     try {
       console.log('Starting room analysis for file:', file.name);
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8',location:'RoomSetup.tsx:PhotoUploadStep:analyzeImage:start',message:'Room analysis started',data:{uploadId:lastUploadIdRef.current||null,fileName:file?.name||null,fileType:file?.type||null,fileSize:file?.size||null,step:'photo_upload'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       
       // Convert file to base64
       const base64 = await fileToNormalizedBase64(file);
@@ -1078,12 +1039,6 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         hasComment: !!analysis.comment,
         comment: analysis.comment
       });
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8',location:'RoomSetup.tsx:PhotoUploadStep:analyzeImage:before-updateSessionData',message:'About to update sessionData.roomAnalysis',data:{uploadId:lastUploadIdRef.current||null,detectedRoomType:analysis?.detected_room_type||null,commentLen:analysis?.comment?.length||0,humanCommentLen:analysis?.human_comment?.length||0,descLen:analysis?.room_description?.length||0},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2',location:'RoomSetup.tsx:PhotoUploadStep:analyzeImage',message:'Room analysis ready -> saving to sessionData',data:{detectedRoomType:analysis?.detected_room_type||null,hasHumanComment:!!analysis?.human_comment,humanCommentLen:analysis?.human_comment?.length||0,hasComment:!!analysis?.comment,commentLen:analysis?.comment?.length||0,hasRoomDescription:!!analysis?.room_description,roomDescriptionLen:analysis?.room_description?.length||0},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       updateSessionData({ roomAnalysis: analysis } as any);
       
       // Auto-generate room name from detected type
@@ -1174,9 +1129,6 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       // The prompt and system instruction control the behavior, not strength/steps/guidance
       // These parameters are kept for type compatibility but not actually used by Google API
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleRemoveFurniture',message:'Starting furniture removal',data:{prompt:removeFurniturePrompt.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'removal-debug',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
 
       const baseParams = getGenerationParameters('micro', 0);
       const response = await generateSixImagesParallelWithGoogle({
@@ -1200,28 +1152,17 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
 
       const processedBase64 = response.results[0].image;
       
-      // #region agent log
-      const beforeSaveStorageCheck = typeof window !== 'undefined' ? sessionStorage.getItem('aura_session_room_image_empty') : null;
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleRemoveFurniture:before-save',message:'About to save roomImageEmpty to sessionData',data:{processedBase64Length:processedBase64?.length||0,hasProcessedBase64:!!processedBase64,hasBeforeSaveStorage:!!beforeSaveStorageCheck,beforeSaveStorageLength:beforeSaveStorageCheck?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'removal-debug',hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
       
       // Create data URL for display
       const processedDataUrl = `data:image/jpeg;base64,${processedBase64}`;
       setProcessedImage(processedDataUrl);
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleRemoveFurniture:before-updateSessionData',message:'About to call updateSessionData',data:{processedBase64Length:processedBase64?.length||0,hasProcessedBase64:!!processedBase64},timestamp:Date.now(),sessionId:'debug-session',runId:'removal-debug',hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
       
       // Save to sessionData for use in generation
       await updateSessionData({ 
         roomImageEmpty: processedBase64 
       } as any);
       
-      // #region agent log
-      const afterSaveStorageCheck = typeof window !== 'undefined' ? sessionStorage.getItem('aura_session_room_image_empty') : null;
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:handleRemoveFurniture:after-save',message:'roomImageEmpty saved to sessionData',data:{processedBase64Length:processedBase64?.length||0,hasProcessedBase64:!!processedBase64,hasAfterSaveStorage:!!afterSaveStorageCheck,afterSaveStorageLength:afterSaveStorageCheck?.length||0,storageMatches:processedBase64===afterSaveStorageCheck},timestamp:Date.now(),sessionId:'debug-session',runId:'removal-debug',hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
       
       console.log('[PhotoUploadStep] Successfully removed furniture from image');
     } catch (error) {
@@ -1237,9 +1178,6 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
   const handleExampleSelect = async (imageUrl: string) => {
     try {
       lastUploadIdRef.current = `example_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8',location:'RoomSetup.tsx:PhotoUploadStep:handleExampleSelect',message:'Example image selected',data:{uploadId:lastUploadIdRef.current,imageUrl,step:'photo_upload'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       // Pre-computed metadata for example images - NO ANALYSIS NEEDED!
       // comment_pl / comment_en ensure correct language for display and TTS.
       const exampleMetadata: { [key: string]: any } = {
@@ -1385,9 +1323,6 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
     try {
       console.log(`Przetwarzam plik: ${file.name}, typ: ${file.type}, rozmiar: ${file.size} bytes`);
       lastUploadIdRef.current = `upload_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8',location:'RoomSetup.tsx:PhotoUploadStep:handleFileUpload',message:'User uploaded file selected',data:{uploadId:lastUploadIdRef.current,fileName:file?.name||null,fileType:file?.type||null,fileSize:file?.size||null,step:'photo_upload'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       
       // Convert to base64 for API
       const base64 = await fileToNormalizedBase64(file);
@@ -1437,7 +1372,6 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
             ? 'Prześlij zdjęcie obecnego stanu pomieszczenia. IDA przeanalizuje je i automatycznie rozpozna typ pomieszczenia.'
             : 'Upload a photo of the current space state. IDA will analyze it and automatically detect the room type.'}
         </p>
-
 
         {/* Room Analysis Results */}
         {isAnalyzing && (
@@ -1495,7 +1429,6 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
             </div>
           </div>
         )}
-
 
         {/* Room type selection - hidden until "Zmień" is clicked */}
         {showRoomTypeSelection && (
@@ -2056,14 +1989,8 @@ function PreferenceQuestionsStep({
                     className="object-cover"
                     style={{ objectPosition: 'center 30%' }}
                     onLoad={() => {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:leftImage-onLoad',message:'Semantic differential left image loaded',data:{questionId:visualQuestions[currentVisualQuestion].id,imageUrl:visualQuestions[currentVisualQuestion].leftImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H1'})}).catch(()=>{});
-                      // #endregion
                     }}
                     onError={() => {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:leftImage-onError',message:'Semantic differential left image failed',data:{questionId:visualQuestions[currentVisualQuestion].id,imageUrl:visualQuestions[currentVisualQuestion].leftImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H2'})}).catch(()=>{});
-                      // #endregion
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
@@ -2085,14 +2012,8 @@ function PreferenceQuestionsStep({
                     className="object-cover"
                     style={{ objectPosition: 'center 30%' }}
                     onLoad={() => {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:rightImage-onLoad',message:'Semantic differential right image loaded',data:{questionId:visualQuestions[currentVisualQuestion].id,imageUrl:visualQuestions[currentVisualQuestion].rightImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H1'})}).catch(()=>{});
-                      // #endregion
                     }}
                     onError={() => {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RoomSetup.tsx:rightImage-onError',message:'Semantic differential right image failed',data:{questionId:visualQuestions[currentVisualQuestion].id,imageUrl:visualQuestions[currentVisualQuestion].rightImage},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H2'})}).catch(()=>{});
-                      // #endregion
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">

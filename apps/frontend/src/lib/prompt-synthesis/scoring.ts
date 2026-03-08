@@ -211,9 +211,6 @@ export interface PromptWeights {
 // =========================
 
 export function calculatePromptWeights(inputs: PromptInputs, sourceType?: GenerationSource | string): PromptWeights {
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:start',message:'STARTING: Calculating prompt weights',data:{sourceType,prsCurrent:inputs.prsCurrent,prsTarget:inputs.prsTarget,hasPersonality:!!inputs.personality,hasInspirations:!!inputs.inspirations,inspirationsCount:inputs.inspirations?.length||0,aestheticDNA:{implicit:{styles:inputs.aestheticDNA.implicit.dominantStyles,colors:inputs.aestheticDNA.implicit.colors},explicit:{style:inputs.aestheticDNA.explicit.selectedStyle,palette:inputs.aestheticDNA.explicit.selectedPalette}}},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
 
   // 1. PRS GAP ANALYSIS (highest weight: 25%)
   // IMPORTANT: Some sources have PRS zeroed in modes.ts (Implicit, Explicit, Personality)
@@ -221,9 +218,6 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
   // Only Mixed and MixedFunctional should use real PRS data
   const prsWeights = analyzePRSGap(inputs.prsCurrent, inputs.prsTarget);
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:prs-weights',message:'PRS weights calculated',data:{sourceType,prsCurrent:inputs.prsCurrent,prsTarget:inputs.prsTarget,needsCalming:prsWeights.needsCalming,needsEnergizing:prsWeights.needsEnergizing,needsInspiration:prsWeights.needsInspiration,needsGrounding:prsWeights.needsGrounding},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   // Pre-calculate inspiration biophilia if tags are present (for InspirationReference)
   // Średnia biophilia z inspiracji liczone względem wszystkich inspiracji (brak taga = 0)
@@ -267,9 +261,6 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     sourceType
   );
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:style-weights',message:'Style weights calculated',data:{sourceType,dominantStyle:styleWeights.dominantStyle,styleConfidence:styleWeights.confidence,materials:styleWeights.materials,complexity:styleWeights.complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   // 3. COLOR INTEGRATION (with personality and style fallback)
   const colorWeights = integrateColorPreferences(
@@ -281,17 +272,11 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     sourceType // Pass source type for Mixed/MixedFunctional differentiation
   );
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:color-weights',message:'Color weights calculated',data:{sourceType,colorPalette:colorWeights.palette,colorTemperature:colorWeights.temperature},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   // 4. BIOPHILIA SCORING
   // Each source type uses different biophilia data (as filtered in modes.ts)
   let biophiliaScoreToUse: number;
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:biophilia-before-switch',message:'Biophilia scoring - before switch',data:{sourceType,explicitBiophilia:inputs.psychologicalBaseline.biophiliaScore,implicitBiophilia:inputs.psychologicalBaseline.implicitBiophiliaScore,inspirationBiophiliaRaw,inspirationBiophiliaNormalized,explicitBiophiliaNormalized},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   switch (sourceType) {
     case GenerationSource.Implicit:
@@ -305,18 +290,12 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     case GenerationSource.Explicit:
       // Explicit source: use ONLY explicit biophiliaScore from test
       biophiliaScoreToUse = inputs.psychologicalBaseline.biophiliaScore ?? 0;
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Explicit-biophilia',message:'Explicit source - using ONLY explicit biophiliaScore',data:{biophiliaScore:biophiliaScoreToUse,inputBiophiliaScore:inputs.psychologicalBaseline.biophiliaScore,ignoredImplicitBiophilia:true},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E11'})}).catch(()=>{});
-      // #endregion
       console.log('[Biophilia] Explicit source - using test biophilia:', biophiliaScoreToUse);
       break;
       
     case GenerationSource.Personality:
       // Personality source: derive biophilia from Big Five personality traits
       biophiliaScoreToUse = deriveBiophiliaFromPersonality(inputs.personality);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Personality-biophilia','message':'Personality source - using ONLY Big Five for biophilia','data':{'personalityDomains':inputs.personality?{'O':inputs.personality.openness,'C':inputs.personality.conscientiousness,'E':inputs.personality.extraversion,'A':inputs.personality.agreeableness,'N':inputs.personality.neuroticism}:null,'biophiliaScore':biophiliaScoreToUse,'ignoredExplicitBiophilia':true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'B2'})}).catch(()=>{});
-      // #endregion
       console.log('[Biophilia] Personality source - derived from Big Five:', biophiliaScoreToUse);
       break;
       
@@ -352,9 +331,6 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
         biophiliaScoreToUse = explicitBiophilia; // Fallback to explicit
       }
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Mixed-biophilia',message:'Mixed source - blending ALL biophilia sources',data:{implicitBiophilia:implicitBiophilia,explicitBiophilia:explicitBiophilia,personalityBiophilia:personalityBiophilia,weights:{implicit:0.4,explicit:0.3,personality:0.3},totalWeight:totalWeight,biophiliaScore:biophiliaScoreToUse},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E12'})}).catch(()=>{});
-      // #endregion
       console.log('[Biophilia] Mixed source - blending implicit:', implicitBiophilia, '+ explicit:', explicitBiophilia, '+ personality:', personalityBiophilia, '→', biophiliaScoreToUse);
       break;
       
@@ -439,9 +415,6 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     colorPalette: (() => {
       const isPersonality = sourceType === GenerationSource.Personality || sourceType === 'personality';
       if (isPersonality) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:384',message:'Personality source - using ONLY personality colors',data:{personalityColors:colorWeights.palette,inspirationColors:inspirationWeights.additionalColors,ignoredInspirations:true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P6'})}).catch(()=>{});
-        // #endregion
         return colorWeights.palette; // Only personality colors, no inspirations
       }
       return [...colorWeights.palette, ...inspirationWeights.additionalColors];
@@ -453,9 +426,6 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     primaryMaterials: (() => {
       const isPersonality = sourceType === GenerationSource.Personality || sourceType === 'personality';
       if (isPersonality) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:388',message:'Personality source - using ONLY personality materials',data:{personalityMaterials:styleWeights.materials,inspirationMaterials:inspirationWeights.additionalMaterials,ignoredInspirations:true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P5'})}).catch(()=>{});
-        // #endregion
         return styleWeights.materials; // Only personality materials, no inspirations
       }
       return [...styleWeights.materials, ...inspirationWeights.additionalMaterials];
@@ -497,9 +467,6 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
         // Both styleWeights.complexity and personalityWeights.visualComplexity come from personality
         // Average them for final complexity
         const result = (styleWeights.complexity + personalityWeights.visualComplexity) / 2;
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:418',message:'Personality source - using ONLY personality complexity',data:{styleComplexity:styleWeights.complexity,personalityComplexity:personalityWeights.visualComplexity,result,fromPersonalityOnly:true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P7'})}).catch(()=>{});
-        // #endregion
         return result;
       }
       return (styleWeights.complexity + personalityWeights.visualComplexity) / 2;
@@ -524,9 +491,6 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     activityNeeds: activityNeeds
   };
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:calculatePromptWeights:final',message:'FINAL PROMPT WEIGHTS calculated',data:{sourceType,weights:{dominantStyle:finalWeights.dominantStyle,styleConfidence:finalWeights.styleConfidence,colorPalette:finalWeights.colorPalette,colorTemperature:finalWeights.colorTemperature,primaryMaterials:finalWeights.primaryMaterials,natureDensity:finalWeights.natureDensity,biophilicElements:finalWeights.biophilicElements,needsCalming:finalWeights.needsCalming,needsEnergizing:finalWeights.needsEnergizing,needsInspiration:finalWeights.needsInspiration,needsGrounding:finalWeights.needsGrounding,lightingMood:finalWeights.lightingMood,naturalLightImportance:finalWeights.naturalLightImportance,visualComplexity:finalWeights.visualComplexity,primaryActivity:finalWeights.primaryActivity}},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   return finalWeights;
 }
@@ -747,17 +711,11 @@ function integrateStylePreferences(
   materials: string[];
   complexity: number;
 } {
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:integrateStylePreferences:start',message:'Integrating style preferences',data:{sourceType,hasImplicitStyles:aestheticDNA.implicit.dominantStyles?.length>0,implicitStyles:aestheticDNA.implicit.dominantStyles,hasExplicitStyle:!!aestheticDNA.explicit.selectedStyle,explicitStyle:aestheticDNA.explicit.selectedStyle,hasPersonality:!!personality,hasLifestyle:!!lifestyle},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
 
   // CRITICAL: Personality source uses ONLY Big Five data, no other sources
   const isPersonality = sourceType === GenerationSource.Personality || sourceType === 'personality';
   if (isPersonality && personality) {
     const personalityStyle = deriveStyleFromPersonality(personality);
-    // #region prompt debug
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:integrateStylePreferences:personality-only',message:'Personality source - using ONLY Big Five for style',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},result:personalityStyle,ignoredAestheticDNA:true,ignoredLifestyle:true,ignoredSensory:true},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-    // #endregion
     return {
       ...personalityStyle,
       secondaryStyles: []
@@ -921,9 +879,6 @@ function integrateStylePreferences(
         }
       const blendedComplexity = totalComplexityWeight > 0 ? weightedComplexitySum / totalComplexityWeight : aestheticDNA.explicit.complexityPreference;
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Mixed-style',message:'Mixed source - blending ALL style sources',data:{implicitStyle:implicitStyle,explicitStyle:explicitStyle,personalityStyle:personalityBaseStyle,weights:{implicit:0.4,explicit:0.3,personality:0.3},blendedStyle:blendedStyle,materials:finalMaterials,complexity:blendedComplexity},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E13'})}).catch(()=>{});
-      // #endregion
       
         console.log('[StylePreferences] Mixed: blending ALL sources:', availableStyles.map(s => `${s.style} (${s.source}, ${s.weight})`).join(' + '), '→', blendedStyle);
         
@@ -983,13 +938,7 @@ function integrateStylePreferences(
   // PRIORITY 1: If we have personality data and NO aesthetic data, derive from personality
   // This is for the Personality source where all aesthetic data is zeroed
   if (!hasImplicitStyles && !hasExplicitStyle && !hasExplicitPalette && personality) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:815',message:'Personality source - deriving style from personality',data:{personalityScores:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},hasFacets:!!personality.facets,facetCount:personality.facets?Object.values(personality.facets).reduce((sum:number,domain:any)=>sum+Object.keys(domain||{}).length,0):0,sourceType},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     const personalityStyle = deriveStyleFromPersonality(personality);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:819',message:'Personality source - derived style result',data:{dominantStyle:personalityStyle.dominantStyle,confidence:personalityStyle.confidence,materials:personalityStyle.materials,complexity:personalityStyle.complexity,researchBasis:personalityStyle.researchBasis},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     // Logging is already done in deriveStyleFromPersonality with research basis
     return {
       ...personalityStyle,
@@ -1012,9 +961,6 @@ function integrateStylePreferences(
         finalStyle = `${selectedStyle} with ${secondStyle} accents`;
       }
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:integrateStylePreferences:implicit-only',message:'Implicit source - style selection',data:{sourceType,availableStyles:aestheticDNA.implicit.dominantStyles,validStyles:implicitValidStyles,selectedStyle,secondStyle,hasStyleWeights:!!styleWeights,styleWeights:styleWeights?{[selectedStyle]:styleWeights[selectedStyle],...(secondStyle?{[secondStyle]:styleWeights[secondStyle]}:{})}:undefined,shouldUseTwo,usingOnlyFirst:!shouldUseTwo,reason:shouldUseTwo?'two styles close in weight':'single dominant style',finalStyle},timestamp:Date.now(),sessionId:'debug-session',runId:'style-aggregation-check'})}).catch(()=>{});
-    // #endregion
     console.log('[StylePreferences] Using implicit style:', finalStyle, '(from', aestheticDNA.implicit.dominantStyles, ')');
     return {
       dominantStyle: finalStyle,
@@ -1278,9 +1224,6 @@ function deriveStyleFromPersonality(personality: NonNullable<PromptInputs['perso
     researchBasis: researchBasis
   };
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:1076',message:'Deriving style, materials, complexity from personality',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},result},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C3'})}).catch(()=>{});
-  // #endregion
   
   return result;
 }
@@ -1367,9 +1310,6 @@ function deriveColorsFromPersonality(personality: NonNullable<PromptInputs['pers
     temperature
   };
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:1162',message:'Deriving colors from personality',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},collectedColorsCount:collectedColors.length,palette:result.palette,temperature:result.temperature,matchedMappingsCount:BIGFIVE_COLOR_MAPPINGS.filter(m=>{const v=getTraitValue(m.trait,m.facet);return v!==null&&evalCondition(v,m.condition);}).length},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C1'})}).catch(()=>{});
-  // #endregion
   
   return result;
 }
@@ -1477,9 +1417,6 @@ function integrateColorPreferences(
   const isPersonality = sourceType === GenerationSource.Personality || sourceType === 'personality';
   if (isPersonality && personality) {
     const personalityColors = deriveColorsFromPersonality(personality);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:1284',message:'Personality source - using ONLY Big Five for colors',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},result:personalityColors,ignoredAestheticDNA:true,ignoredRoomVisualDNA:true,ignoredSensory:true,ignoredDominantStyle:true},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P4'})}).catch(()=>{});
-    // #endregion
     return personalityColors;
   }
   
@@ -1601,9 +1538,6 @@ function integrateColorPreferences(
         finalPalette.push(...styleColors.palette.filter(c => !finalPalette.includes(c)).slice(0, 4 - finalPalette.length));
       }
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:Mixed-colors',message:'Mixed source - blending ALL color sources',data:{implicitColors:implicitColors.length,explicitColors:explicitColors.length,personalityColors:personalityColors.length,weights:{implicit:0.4,explicit:0.3,personality:0.3},blendedPalette:finalPalette,temperature},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E14'})}).catch(()=>{});
-      // #endregion
       
       return {
         palette: finalPalette.length > 0 ? finalPalette : ['#FFFFFF', '#F5F5DC', '#808080', '#2C3E50'],
@@ -1741,9 +1675,6 @@ function deriveBiophiliaFromPersonality(personality?: PromptInputs['personality'
   // Clamp to 0-3 scale
   biophiliaScore = Math.max(0, Math.min(3, biophiliaScore));
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:deriveBiophiliaFromPersonality','message':'Deriving biophilia from personality','data':{'personalityDomains':{'O':personality.openness,'C':personality.conscientiousness,'E':personality.extraversion,'A':personality.agreeableness,'N':personality.neuroticism},'matchedMappingsCount':matchedMappings.length,'matchedMappings':matchedMappings,'biophiliaScore':biophiliaScore},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'B1'})}).catch(()=>{});
-  // #endregion
   
   return biophiliaScore;
 }
@@ -1963,9 +1894,6 @@ function mapBigFiveToPromptWeights(personality: PromptInputs['personality']): {
     harmonyLevel: Math.max(0, Math.min(1, harmonyLevel))
   };
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'scoring.ts:1605',message:'Mapping Big Five to prompt weights',data:{personalityDomains:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},opennessFactor,conscientiousnessFactor,result},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'C2'})}).catch(()=>{});
-  // #endregion
   
   return result;
 }

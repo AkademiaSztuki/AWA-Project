@@ -30,30 +30,6 @@ export default function PathSelectionScreen() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [pendingPath, setPendingPath] = useState<'fast' | 'full' | null>(null);
 
-  // #region agent log
-  React.useEffect(() => {
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'auth-check',
-        hypothesisId: 'A0',
-        location: 'PathSelectionScreen.tsx:component-render',
-        message: 'PathSelectionScreen rendered',
-        data: {
-          hasUser: !!user,
-          userId: user?.id || null,
-          authLoading,
-          showLoginModal,
-          pendingPath
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-  }, [user, authLoading, showLoginModal, pendingPath]);
-  // #endregion
-
   const fastCompleted = searchParams.get('fast_completed') === 'true';
   
   const pathTexts = {
@@ -136,68 +112,13 @@ export default function PathSelectionScreen() {
   const handlePathSelection = async (pathType: 'fast' | 'full') => {
     stopAllDialogueAudio();
 
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'auth-check',
-        hypothesisId: 'A1',
-        location: 'PathSelectionScreen.tsx:handlePathSelection',
-        message: 'Path selection attempted',
-        data: {
-          pathType,
-          isAuthenticated: !!user,
-          authLoading,
-          userObject: user ? { id: user.id, email: user.email } : null
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
-
     // Wait for auth to finish loading
     if (authLoading) {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'auth-check',
-          hypothesisId: 'A1a',
-          location: 'PathSelectionScreen.tsx:handlePathSelection',
-          message: 'Auth still loading - waiting',
-          data: {
-            pathType
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
       return; // Wait for auth to finish
     }
 
     // Check if user is authenticated
     if (!user) {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'auth-check',
-          hypothesisId: 'A2',
-          location: 'PathSelectionScreen.tsx:handlePathSelection',
-          message: 'User not authenticated - showing login modal',
-          data: {
-            pathType
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
 
       // Store the selected path and determine destination
       setPendingPath(pathType);
@@ -208,24 +129,6 @@ export default function PathSelectionScreen() {
     }
 
     // User is authenticated, proceed with path selection
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'auth-check',
-        hypothesisId: 'A3',
-        location: 'PathSelectionScreen.tsx:handlePathSelection',
-        message: 'User authenticated - proceeding with path selection',
-        data: {
-          pathType,
-          userId: user?.id
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
 
     if (pathType === 'fast') {
       await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
@@ -240,24 +143,6 @@ export default function PathSelectionScreen() {
 
   // Handle successful login - continue with pending path
   const handleLoginSuccess = async () => {
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'auth-check',
-        hypothesisId: 'A4',
-        location: 'PathSelectionScreen.tsx:handleLoginSuccess',
-        message: 'Login successful - continuing with pending path',
-        data: {
-          pendingPath,
-          redirectFromUrl: searchParams.get('redirect')
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
 
     setShowLoginModal(false);
     
@@ -300,23 +185,6 @@ export default function PathSelectionScreen() {
   // Watch for auth state changes - if user logs in while modal is open, continue
   useEffect(() => {
     if (user && showLoginModal && pendingPath) {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'auth-check',
-          hypothesisId: 'A5',
-          location: 'PathSelectionScreen.tsx:useEffect-auth-change',
-          message: 'User authenticated while modal open - auto-continuing',
-          data: {
-            pendingPath
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
 
       setShowLoginModal(false);
       
@@ -336,31 +204,6 @@ export default function PathSelectionScreen() {
       }, 500);
     }
   }, [user, showLoginModal, pendingPath, updateSessionData, router]);
-
-  // #region agent log
-  // Log render
-  React.useEffect(() => {
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'auth-check',
-        hypothesisId: 'A0',
-        location: 'PathSelectionScreen.tsx:render',
-        message: 'PathSelectionScreen rendering',
-        data: {
-          hasUser: !!user,
-          userId: user?.id || null,
-          authLoading,
-          showLoginModal,
-          pendingPath
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-  }, []);
-  // #endregion
 
   return (
     <div className="min-h-screen flex relative">

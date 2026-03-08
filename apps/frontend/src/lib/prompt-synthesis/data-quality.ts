@@ -243,20 +243,11 @@ export function assessSourceQuality(
       warnings.push('No Big Five personality data');
       status = 'insufficient';
       shouldGenerate = false;
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'data-quality.ts:183',message:'Personality source - NO DATA, should NOT generate',data:{hasBigFive,shouldGenerate,status},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
     } else if (isFallback) {
       warnings.push('Big Five data appears to be fallback values (all domains 50' + (allFacetsAre50 ? ' and all facets 50' : '') + ') - not reliable');
       status = 'insufficient';
       shouldGenerate = false; // DO NOT generate with fallback values
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'data-quality.ts:200',message:'Personality source - FALLBACK VALUES DETECTED (all 50), should NOT generate',data:{hasBigFive,allDomainsAre50,allFacetsAre50,hasFacetData,facetCount,isComplete,shouldGenerate,status,domainScores,facetValueSample},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
     } else {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'data-quality.ts:207',message:'Personality source - VALID DATA, should generate',data:{hasBigFive,allDomainsAre50,allFacetsAre50,hasFacetData,facetCount,isComplete,shouldGenerate,status,domainScores,facetValueSample},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
     }
     
     // Data points: prefer facet granularity, else domain count

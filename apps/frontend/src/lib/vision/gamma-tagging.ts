@@ -50,17 +50,11 @@ export async function analyzeInspirationsWithGamma(files: File[]): Promise<Inspi
     const results: InspirationTaggingResult[] = [];
 
     for (const file of files) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gamma-tagging.ts:beforeAPI',message:'About to call Gemini API for tagging',data:{fileName:file.name,fileSize:file.size,fileType:file.type},timestamp:Date.now(),sessionId:'debug-session',runId:'gemini-tags',hypothesisId:'H0'})}).catch(()=>{});
-      // #endregion
       
       try {
         const base64 = await fileToNormalizedBase64(file);
         const response = await callInspirationAPI(base64);
         
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gamma-tagging.ts:callInspirationAPI',message:'RAW Gemini response from API',data:{rawResponse:JSON.stringify(response),hasStyles:!!response.styles,stylesValue:response.styles,hasColors:!!response.colors,colorsValue:response.colors,hasMaterials:!!response.materials,materialsValue:response.materials,hasBiophilia:response.biophilia!==undefined,biophiliaValue:response.biophilia,hasDescription:!!response.description,descriptionValue:response.description},timestamp:Date.now(),sessionId:'debug-session',runId:'gemini-tags',hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
         
         // Gemini zwraca biophilia 0-3; jeśli brak, ustaw 0 (nie windowaj na 1)
         const biophilia = typeof response.biophilia === 'number' && !Number.isNaN(response.biophilia)
@@ -80,9 +74,6 @@ export async function analyzeInspirationsWithGamma(files: File[]): Promise<Inspi
           biophilia
         };
         
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gamma-tagging.ts:buildTagsObject',message:'Built tags object from Gemini response',data:{tagsObject:JSON.stringify(tagsObject),stylesCount:tagsObject.styles.length,colorsCount:tagsObject.colors.length,materialsCount:tagsObject.materials.length,biophilia:tagsObject.biophilia,description:response.description||'default'},timestamp:Date.now(),sessionId:'debug-session',runId:'gemini-tags',hypothesisId:'H2'})}).catch(()=>{});
-        // #endregion
         
         results.push({
           tags: tagsObject,
@@ -91,9 +82,6 @@ export async function analyzeInspirationsWithGamma(files: File[]): Promise<Inspi
       } catch (error: any) {
         console.error('[GoogleAI] Error analyzing inspiration:', error);
         
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gamma-tagging.ts:catch',message:'ERROR in Gemini tagging',data:{errorMessage:error?.message||String(error),errorName:error?.name,errorStack:error?.stack?.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'gemini-tags',hypothesisId:'H-ERROR'})}).catch(()=>{});
-        // #endregion
         
         results.push({
           tags: {
@@ -107,9 +95,6 @@ export async function analyzeInspirationsWithGamma(files: File[]): Promise<Inspi
       }
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gamma-tagging.ts:finalResults',message:'Final results from Gemini tagging',data:{resultsCount:results.length,results:results.map((r,i)=>({index:i,hasTags:!!r.tags,tagsKeys:r.tags?Object.keys(r.tags):[],stylesCount:r.tags?.styles?.length||0,colorsCount:r.tags?.colors?.length||0,materialsCount:r.tags?.materials?.length||0,biophilia:r.tags?.biophilia,hasDescription:!!r.description}))},timestamp:Date.now(),sessionId:'debug-session',runId:'gemini-tags',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
     
     return results;
   };
@@ -121,5 +106,4 @@ export async function analyzeInspirationsWithGamma(files: File[]): Promise<Inspi
   );
   return queuedTask;
 }
-
 

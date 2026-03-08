@@ -32,14 +32,8 @@ const LandingScreen: React.FC = () => {
   }, [setHeaderVisible]);
 
   const handleDialogueEnd = () => {
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'L1',location:'LandingScreen.tsx:handleDialogueEnd',message:'handleDialogueEnd called',data:{showAuraSection},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     // 500ms delay for quick transition
     setTimeout(() => {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'L2',location:'LandingScreen.tsx:handleDialogueEnd-setShow',message:'Setting showAuraSection to true',data:{},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setShowAuraSection(true);
       setHeaderVisible(true);
     }, 500);

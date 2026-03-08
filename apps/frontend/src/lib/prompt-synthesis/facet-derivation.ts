@@ -188,9 +188,6 @@ function calculateMappingScore(
       // Penalize default mapping heavily when we have facet data
       // This ensures facet-based mappings win over default
       const defaultScore = 0.3; // Lower than penalized transitional (0.42) and boosted japandi (0.48)
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'facet-derivation.ts:188',message:'Penalizing default mapping (modern_classic) - all domains neutral but has facets',data:{mappingId:mapping.id,style:mapping.style,defaultScore,allDomainsNeutral,hasFacets},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
       return defaultScore;
     }
     return 0.5;
@@ -221,9 +218,6 @@ function calculateMappingScore(
     if (usesDomains && !usesFacets) {
       const originalScore = finalScore;
       finalScore *= 0.7; // Reduce score by 30% for domain-only mappings
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'facet-derivation.ts:207',message:'Penalizing domain-only mapping (all domains neutral)',data:{mappingId:mapping.id,style:mapping.style,originalScore,penalizedScore:finalScore,usesDomains,usesFacets},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
     }
     // Boost mappings that use facets - with diversity bonus
     if (usesFacets) {
@@ -283,9 +277,6 @@ function calculateMappingScore(
       finalScore *= boostMultiplier;
       finalScore = Math.min(1.0, finalScore); // Cap at 1.0
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'facet-derivation.ts:215',message:'Boosting facet-based mapping with diversity bonus',data:{mappingId:mapping.id,style:mapping.style,originalScore,boostedScore:finalScore,usesDomains,usesFacets,uniqueFacetsCount:uniqueFacets.size,uniqueDomainsCount:uniqueDomains.size,uniqueDomains:Array.from(uniqueDomains),avgExtremity,boostMultiplier},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
     }
   }
   
@@ -307,32 +298,6 @@ export function deriveStyleFromFacets(
   // Sort by score (highest first)
   mappingScores.sort((a, b) => b.score - a.score);
   
-  // #region agent log - Log top 5 mappings for debugging
-  const topMappings = mappingScores.slice(0, 5).map(m => {
-    // Calculate which conditions matched for this mapping
-    const matchedConditions: string[] = [];
-    const failedConditions: string[] = [];
-    for (const [key, condition] of Object.entries(m.mapping.conditions)) {
-      const value = getValue(personality, key);
-      if (value !== null) {
-        if (evaluateCondition(value, condition)) {
-          matchedConditions.push(`${key}:${condition} (value: ${value.toFixed(2)})`);
-        } else {
-          failedConditions.push(`${key}:${condition} (value: ${value.toFixed(2)})`);
-        }
-      }
-    }
-    return {
-      id: m.mapping.id,
-      style: m.mapping.style,
-      score: m.score,
-      conditions: m.mapping.conditions,
-      matchedConditions,
-      failedConditions
-    };
-  });
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'facet-derivation.ts:195',message:'Top 5 style mappings scores with condition details',data:{personalityScores:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},normalizedScores:{O:(personality.openness/100).toFixed(2),C:(personality.conscientiousness/100).toFixed(2),E:(personality.extraversion/100).toFixed(2),A:(personality.agreeableness/100).toFixed(2),N:(personality.neuroticism/100).toFixed(2)},topMappings},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'E'})}).catch(()=>{});
-  // #endregion
   
   // Get best match
   const bestMatch = mappingScores[0];
@@ -340,9 +305,6 @@ export function deriveStyleFromFacets(
   if (!bestMatch || bestMatch.score < 0.3) {
     // No good match - use default
     const defaultMapping = BIGFIVE_STYLE_MAPPINGS.find(m => m.id === 'modern_classic')!;
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'facet-derivation.ts:200',message:'FALLBACK: Using default modern_classic style - no good personality match',data:{bestMatchScore:bestMatch?.score||0,hasBestMatch:!!bestMatch,personalityScores:{O:personality.openness,C:personality.conscientiousness,E:personality.extraversion,A:personality.agreeableness,N:personality.neuroticism},hasFacets:!!personality.facets,facetCount:personality.facets?Object.values(personality.facets).reduce((sum:number,domain:any)=>sum+Object.keys(domain||{}).length,0):0,allMappingsScores:mappingScores.slice(0,3).map(m=>({id:m.mapping.id,score:m.score}))},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     return {
       dominantStyle: defaultMapping.style,
       confidence: 0.5,

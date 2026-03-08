@@ -139,9 +139,6 @@ export default function BigFivePage() {
     if (sessionData.bigFive.completedAt && savedScores && !retake) {
       // If fewer than 120 responses, treat as incomplete and continue the test
       if (responseCount < IPIP_120_ITEMS.length) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'big-five/page.tsx:80',message:'Loaded saved scores but responses incomplete, continuing test',data:{responseCount,totalItems:IPIP_120_ITEMS.length,hasSavedScores:Boolean(savedScores)},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H2'})}).catch(()=>{});
-        // #endregion
         setResponses(storedResponses);
         setShowResults(false);
         setScores(null);
@@ -197,9 +194,6 @@ export default function BigFivePage() {
       const prevCount = Object.keys(prev).length;
       const nextCount = already ? prevCount : prevCount + 1;
       setAnsweredCount(nextCount);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'big-five/page.tsx:106',message:'handleResponse setResponses',data:{questionIndex:currentQuestion,itemId:item.id,value,prevCount,nextCount,already,isLastQuestion,nextCountTotal:Object.keys(next).length},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
       
       // If this is the last question, calculate scores and show results
       if (isLastQuestion) {
@@ -269,10 +263,6 @@ export default function BigFivePage() {
     const missingItems = IPIP_120_ITEMS.filter(i => responses[i.id] === undefined);
     const missingIndices = missingItems.map(item => IPIP_120_ITEMS.findIndex(i => i.id === item.id) + 1);
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'big-five/page.tsx:145',message:'handleSave validation',data:{responseCount,totalItems:IPIP_120_ITEMS.length,hasAllResponses,missingCount:missingItems.length,missingIndices:missingIndices.slice(0,10)},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
-
     if (!hasAllResponses) {
       const missingText = missingIndices.length <= 5 
         ? missingIndices.join(', ')
@@ -284,9 +274,6 @@ export default function BigFivePage() {
         )
       );
       goToFirstMissing();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'big-five/page.tsx:155',message:'handleSave missing items',data:{missingCount:IPIP_120_ITEMS.length-responseCount,missingIndices:missingIndices.slice(0,20)},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
       return;
     }
 
@@ -312,9 +299,6 @@ export default function BigFivePage() {
       // NOTE: After radical refactor, data is saved via updateSessionData -> saveFullSessionToSupabase
       // which writes to participants table. No need for direct saveUserProfile call.
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'big-five/page.tsx:209',message:'handleSave redirect',data:{fromDashboard,retake,shouldGoDashboard,redirectingTo:'/dashboard'},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H5'})}).catch(()=>{});
-      // #endregion
 
       // Always redirect to dashboard after completing Big Five test
       router.push("/dashboard");
@@ -365,14 +349,8 @@ export default function BigFivePage() {
           // Don't fail the whole operation if Supabase save fails - useProfileSync will retry
         }
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'big-five/page.tsx:auto-save',message:'Auto-saved Big Five after 120/120 responses',data:{responseCount:Object.keys(responses).length,hasScores:!!scores},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H10'})}).catch(()=>{});
-        // #endregion
       } catch (error) {
         autoSavedRef.current = false; // allow retry
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'big-five/page.tsx:auto-save-error',message:'Auto-save failed',data:{errorMessage:(error as Error)?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'H10e'})}).catch(()=>{});
-        // #endregion
       }
     };
 

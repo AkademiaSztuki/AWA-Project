@@ -292,18 +292,12 @@ export default function InspirationsPage() {
         return rest;
       });
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:347',message:'Inspirations save - trusting UI state',data:{payloadCount:payload.length,payloadIds:payload.map((i:any)=>i.id)},timestamp:Date.now(),sessionId:'debug-session',runId:'inspiration-debug',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
 
       await updateSessionData({ inspirations: finalInspirations } as any);
       
       // Save inspirations to participant_images with tags
       try {
         const userHash = (sessionData as any)?.userHash;
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:handleSave',message:'Saving inspirations to participant_images',data:{userHash,inspirationCount:finalInspirations.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H9'})}).catch(()=>{});
-        // #endregion
         if (userHash) {
           const { fetchParticipantImages, deleteParticipantImage, updateParticipantImageMetadata } = await import('@/lib/remote-spaces');
           const existing = await fetchParticipantImages(userHash);
@@ -365,14 +359,8 @@ export default function InspirationsPage() {
             await saveParticipantImages(userHash, imagesForInsert);
           }
 
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:handleSave-sync-complete',message:'Inspirations synced to participant_images (delete+dedup+insert/update)',data:{userHash,desiredCount:desiredUrls.size,existingBefore:existingInspirations.length,deletedCount:toDelete.length,insertedCount:imagesForInsert.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H9'})}).catch(()=>{});
-          // #endregion
         }
       } catch (e) {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inspirations/page.tsx:handleSave-error',message:'Error saving inspirations',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H9'})}).catch(()=>{});
-        // #endregion
         console.warn('[Inspirations] Failed to save to participant_images:', e);
       }
       
@@ -635,5 +623,4 @@ export default function InspirationsPage() {
     </div>
   );
 }
-
 

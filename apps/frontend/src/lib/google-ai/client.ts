@@ -34,13 +34,7 @@ export class GoogleAIClient {
   private auth: GoogleAuth | undefined;
 
   constructor() {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:constructor',message:'Constructor called',data:{hasApiKey:!!GOOGLE_AI_API_KEY,apiKeyLength:GOOGLE_AI_API_KEY?.length||0,hasProjectId:!!GOOGLE_CLOUD_PROJECT,location:GOOGLE_CLOUD_LOCATION},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
     if (!GOOGLE_AI_API_KEY) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:constructor:no-key',message:'API key missing',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
       throw new Error('GOOGLE_AI_API_KEY environment variable is not set');
     }
     this.apiKey = GOOGLE_AI_API_KEY;
@@ -174,10 +168,6 @@ EXAMPLE:
       // Parse response from Gemini
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       
-      // #region agent log
-      console.log('[GoogleAI] RAW Gemini text response:', text);
-      console.log('[GoogleAI] Full API response structure:', JSON.stringify(data).substring(0, 1000));
-      // #endregion
       
       // Parse the structured response
       return this.parseInspirationAnalysis(text);
@@ -355,9 +345,6 @@ EXAMPLE:
       });
 
       if (!this.projectId) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:no-project',message:'Missing GOOGLE_CLOUD_PROJECT',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H6'})}).catch(()=>{});
-        // #endregion
         throw new Error('GOOGLE_CLOUD_PROJECT environment variable is required for image generation');
       }
 
@@ -428,10 +415,6 @@ EXAMPLE:
                                   request.prompt.includes('Remove EVERYTHING') ||
                                   request.prompt.includes('empty room') ||
                                   request.prompt.includes('bare room');
-
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:detection',message:'Furniture removal detection',data:{isFurnitureRemoval,promptSnippet:request.prompt.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',runId:'removal-debug',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
 
       // Vertex AI payload format with response_modalities for image output
       // Add system instruction - different for furniture removal vs normal generation
@@ -537,18 +520,7 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
         console.log(`[GoogleAI] Added image_config with aspect_ratio: ${aspectRatio}`);
       }
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:payload',message:'Full payload sent to Vertex AI',data:{systemInstructionText:system_instruction.parts[0].text,prompt:request.prompt.substring(0,500),temperature:payload.generation_config.temperature,hasSystemInstruction:!!payload.system_instruction},timestamp:Date.now(),sessionId:'debug-session',runId:'geometry-debug',hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
-
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:final-payload-check',message:'VERIFYING PAYLOAD STRUCTURE',data:{fullPayload:JSON.stringify(payload).substring(0,2000)},timestamp:Date.now(),sessionId:'debug-session',runId:'vertex-payload-debug',hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
-
       console.log('[GoogleAI] Sending request to Vertex AI with OAuth 2.0...');
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:before-fetch',message:'About to call Vertex AI',data:{url,hasBaseImage:!!baseImageData,promptLength:request.prompt?.length||0,hasAccessToken:!!accessToken},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H8'})}).catch(()=>{});
-      // #endregion
       
       const response = await fetch(url, {
         method: 'POST',
@@ -560,15 +532,9 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
       });
 
       console.log('[GoogleAI] Response status:', response.status, response.statusText);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:response',message:'Vertex AI response',data:{status:response.status,statusText:response.statusText,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H8'})}).catch(()=>{});
-      // #endregion
 
       if (!response.ok) {
         const errorText = await response.text();
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:response-error',message:'Vertex AI returned error',data:{status:response.status,statusText:response.statusText,errorText:errorText.substring(0,1000)},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H8'})}).catch(()=>{});
-        // #endregion
         console.error('[GoogleAI] Vertex AI error response:', errorText);
         throw new Error(`Vertex AI API error: ${response.status} - ${errorText}`);
       }
@@ -581,9 +547,6 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
         hasParts: !!data.candidates?.[0]?.content?.parts,
         partsLength: data.candidates?.[0]?.content?.parts?.length || 0,
       });
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:response-parsed',message:'Response parsed',data:{hasCandidates:!!data.candidates,partsCount:data.candidates?.[0]?.content?.parts?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H8'})}).catch(()=>{});
-      // #endregion
       
       // Extract image from response - Vertex AI uses inlineData or inline_data
       const imagePart = data.candidates?.[0]?.content?.parts?.find(
@@ -596,9 +559,6 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
       const finishReason = data.candidates?.[0]?.finishReason;
       if (finishReason === 'NO_IMAGE') {
         console.warn('[GoogleAI] Model returned NO_IMAGE finishReason - will retry');
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:no-image-finish-reason',message:'NO_IMAGE finishReason detected',data:{finishReason,response:JSON.stringify(data).substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H5'})}).catch(()=>{});
-        // #endregion
         throw new Error('NO_IMAGE: Model refused to generate image');
       }
       
@@ -606,16 +566,10 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
       
       if (!imageData) {
         console.error('[GoogleAI] No image data in response. Full response:', JSON.stringify(data, null, 2));
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:no-image',message:'No image in response',data:{response:JSON.stringify(data).substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H5'})}).catch(()=>{});
-        // #endregion
         throw new Error('No image data in response');
       }
 
       console.log('[GoogleAI] Successfully extracted image data, length:', imageData.length);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'google-ai/client.ts:generateImageWithNanoBanana:success',message:'Image generated successfully',data:{imageLength:imageData.length},timestamp:Date.now(),sessionId:'debug-session',runId:'google-debug',hypothesisId:'H8'})}).catch(()=>{});
-      // #endregion
 
       return {
         image: imageData,
@@ -732,9 +686,6 @@ Original context: ${request.prompt}`,
    * Matches the format from Gemma 3 Modal endpoint
    */
   private parseInspirationAnalysis(text: string): InspirationAnalysisResponse {
-    // #region agent log
-    console.log('[GoogleAI] parseInspirationAnalysis input:', text.substring(0, 500));
-    // #endregion
     
     // Try JSON parsing first (new format)
     try {
@@ -746,9 +697,6 @@ Original context: ${request.prompt}`,
         cleanText = cleanText.replace(/^```\s*/, '').replace(/\s*```$/, '');
       }
       
-      // #region agent log
-      console.log('[GoogleAI] Cleaned text for JSON parsing:', cleanText.substring(0, 500));
-      // #endregion
       
       const parsed = JSON.parse(cleanText);
       

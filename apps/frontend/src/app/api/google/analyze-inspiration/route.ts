@@ -7,10 +7,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { image } = body;
 
-    // #region agent log
-    console.log('[analyze-inspiration] Received request, image length:', image?.length || 0);
-    // #endregion
-
     if (!image) {
       return NextResponse.json(
         { error: 'Image is required' },
@@ -21,10 +17,6 @@ export async function POST(request: NextRequest) {
     // Create client and analyze inspiration
     const client = new GoogleAIClient();
     const result = await client.analyzeInspirationWithFlashLite(image);
-
-    // #region agent log
-    console.log('[analyze-inspiration] Result from Gemini:', JSON.stringify(result));
-    // #endregion
 
     return NextResponse.json(result);
   } catch (error: any) {

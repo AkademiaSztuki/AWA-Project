@@ -606,9 +606,6 @@ export function CoreProfileWizard() {
         // Semantic differential (explicit warmth/brightness/complexity)
         semanticDifferential: (() => {
           const semantic = profileData.semanticDifferential;
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:handleComplete-semanticDifferential',message:'Saving semanticDifferential to sessionData',data:{warmth:semantic?.warmth,brightness:semantic?.brightness,complexity:semantic?.complexity,rawSemantic:semantic},timestamp:Date.now(),sessionId:'debug-session',runId:'session-save',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
           return semantic;
         })(),
         
@@ -783,10 +780,6 @@ export function CoreProfileWizard() {
                           }))
                         }
                         onComplete={async (results) => {
-                          // #region agent log
-                          const resultsAny = results as any;
-                          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory',message:'Saving explicit preferences to profile',data:{resultsKeys:Object.keys(results),biophiliaScore:results.biophiliaScore,music:results.music,texture:results.texture,light:results.light,natureMetaphor:results.natureMetaphor,hasStyle:!!resultsAny.style,resultsStyle:resultsAny.style||null,resultsStyleType:typeof resultsAny.style,resultsStyleIsEmpty:resultsAny.style==='',hasPalette:!!resultsAny.palette,resultsPalette:resultsAny.palette||null,profileDataStyle:profileData.colorsAndMaterials?.selectedStyle||null,profileDataStyleType:typeof profileData.colorsAndMaterials?.selectedStyle,sessionDataStyle:sessionData.colorsAndMaterials?.selectedStyle||null,sessionDataStyleType:typeof sessionData.colorsAndMaterials?.selectedStyle},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E5'})}).catch(()=>{});
-                          // #endregion
                           const currentStyle = profileData.colorsAndMaterials?.selectedStyle;
                           const finalStyle =
                             results.style ||
@@ -803,10 +796,6 @@ export function CoreProfileWizard() {
                             sessionData.colorsAndMaterials?.topMaterials ||
                             profileData.colorsAndMaterials?.topMaterials ||
                             [];
-
-                          // #region agent log
-                          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory-explicit',message:'Resolved explicit before persist',data:{finalStyle,finalPalette,materialsCount:finalMaterials.length},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E16'})}).catch(()=>{});
-                          // #endregion
 
                           updateProfile({
                             sensoryPreferences: {
@@ -839,9 +828,6 @@ export function CoreProfileWizard() {
                               topMaterials: finalMaterials
                             }
                           });
-                          // #region agent log
-                          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:onComplete-sensory-updateSessionData',message:'Immediately saving biophiliaScore to sessionData',data:{biophiliaScore:results.biophiliaScore,sessionDataUpdated:true},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E15'})}).catch(()=>{});
-                          // #endregion
                           handleNext();
                         }}
                       />
@@ -1579,14 +1565,8 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
   }, [currentIndex]);
 
   const handleSwipe = (direction: 'left' | 'right') => {
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:TinderSwipesStep:handleSwipe-entry',message:'handleSwipe called in CoreProfileWizard',data:{direction,hasCurrentImage:!!currentImage,currentImageId:currentImage?.id,userHash:(sessionData as any)?.userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H8'})}).catch(()=>{});
-    // #endregion
     
     if (!currentImage) {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:TinderSwipesStep:handleSwipe-no-image',message:'No currentImage, returning early',data:{direction},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H8'})}).catch(()=>{});
-      // #endregion
       return;
     }
     
@@ -1608,9 +1588,6 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
     (async () => {
       try {
         const userHash = (sessionData as any)?.userHash;
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:TinderSwipesStep:handleSwipe-saving',message:'Saving swipe to participant_swipes',data:{userHash,imageId:currentImage.id,direction,reactionTimeMs:reactionTime},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H8'})}).catch(()=>{});
-        // #endregion
         if (userHash) {
           await saveParticipantSwipes(userHash, [{
             imageId: currentImage.id,
@@ -1620,14 +1597,8 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
             tags: currentImage.tags,
             categories: currentImage.categories,
           }]);
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:TinderSwipesStep:handleSwipe-complete',message:'Swipe saved successfully',data:{userHash,imageId:currentImage.id,direction},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H8'})}).catch(()=>{});
-          // #endregion
         }
       } catch (e) {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:TinderSwipesStep:handleSwipe-error',message:'Error saving swipe',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H8'})}).catch(()=>{});
-        // #endregion
         console.error('Error saving swipe to participant_swipes:', e);
       }
     })();
@@ -1850,9 +1821,6 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
     const value = side === 'left' ? 0.2 : 0.8;
     const newAnswers = { ...answers, [currentQ.id]: value };
     setAnswers(newAnswers);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CoreProfileWizard.tsx:handleChoice',message:'Semantic differential choice captured',data:{questionId:currentQ.id,side,value,allAnswers:newAnswers},timestamp:Date.now(),sessionId:'debug-session',runId:'semantic-capture',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     onUpdate(newAnswers);
     
     if (currentQuestion + 1 < questions.length) {

@@ -211,20 +211,11 @@ export function UserDashboard() {
       // Pull freshest session snapshot from Supabase (used for completion flags)
       if (!DISABLE_SESSION_SYNC) {
       try {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-remoteSnapshot-start',message:'Fetching remote participant snapshot for dashboard',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
-        // #endregion
         const remote = await fetchLatestSessionSnapshot(userHash);
         if (remote) {
           setRemoteSession(remote);
         }
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-remoteSnapshot-done',message:'Remote participant snapshot loaded for dashboard',data:{userHash,remoteFound:!!remote,remoteHasBigFive:!!remote?.bigFive,remoteHasVisualDNA:!!remote?.visualDNA,remoteHasColorsAndMaterials:!!remote?.colorsAndMaterials},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
-        // #endregion
       } catch (e) {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-remoteSnapshot-error',message:'Failed to load remote participant snapshot for dashboard',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
-        // #endregion
         console.warn('[Dashboard] Failed to load remote session snapshot', e);
         }
       }
@@ -275,9 +266,6 @@ export function UserDashboard() {
                 brightness: userProfile.aestheticDNA.explicit.brightnessPreference,
                 complexity: userProfile.aestheticDNA.explicit.complexityPreference
               };
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-semanticDifferential',message:'Mapping semanticDifferential for dashboard display',data:{warmth:semantic.warmth,brightness:semantic.brightness,complexity:semantic.complexity,hasExplicit:!!userProfile.aestheticDNA?.explicit,rawExplicit:userProfile.aestheticDNA?.explicit},timestamp:Date.now(),sessionId:'debug-session',runId:'dashboard-load',hypothesisId:'E'})}).catch(()=>{});
-              // #endregion
               return semantic;
             })();
             console.log('[Dashboard] Mapped explicit preferences:', {
@@ -307,27 +295,6 @@ export function UserDashboard() {
               }
             };
             
-            // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sessionId: 'debug-session',
-                runId: 'sync-check',
-                hypothesisId: 'H4',
-                location: 'UserDashboard.tsx:loadUserData-implicit',
-                message: 'Loaded implicit preferences from Supabase',
-                data: {
-                  hasImplicit: true,
-                  dominantStyle: mappedData.visualDNA.dominantStyle,
-                  colorsCount: mappedData.visualDNA.preferences.colors?.length || 0,
-                  materialsCount: mappedData.visualDNA.preferences.materials?.length || 0,
-                  stylesCount: mappedData.visualDNA.preferences.styles?.length || 0
-                },
-                timestamp: Date.now()
-              })
-            }).catch(() => {});
-            // #endregion
             
             console.log('[Dashboard] Mapped implicit preferences (UKRYTE):', {
               dominantStyle: mappedData.visualDNA.dominantStyle,
@@ -335,24 +302,6 @@ export function UserDashboard() {
               materialsCount: mappedData.visualDNA.preferences.materials?.length || 0
             });
           } else {
-            // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sessionId: 'debug-session',
-                runId: 'sync-check',
-                hypothesisId: 'H4',
-                location: 'UserDashboard.tsx:loadUserData-implicit-missing',
-                message: 'No implicit preferences in Supabase profile',
-                data: {
-                  hasImplicit: false,
-                  hasAestheticDNA: !!userProfile.aestheticDNA
-                },
-                timestamp: Date.now()
-              })
-            }).catch(() => {});
-            // #endregion
           }
           
           // Update sessionData with Supabase data
@@ -383,34 +332,11 @@ export function UserDashboard() {
 
       // Fetch spaces + images from participant_* (source of truth)
       try {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-fetch',message:'Fetching participant spaces+images for dashboard',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H11'})}).catch(()=>{});
-        // #endregion
 
         const [participantSpaces, participantImages] = await Promise.all([
           fetchParticipantSpaces(userHash),
           fetchParticipantImages(userHash)
         ]);
-
-        // #region agent log
-        try {
-          const inspirations = (participantImages || []).filter((img: any) => img.type === 'inspiration');
-          const generated = (participantImages || []).filter((img: any) => img.type === 'generated');
-          const missingSpaceId = (participantImages || []).filter((img: any) => !img.spaceId);
-          const dupByUrl = new Map<string, number>();
-          inspirations.forEach((img: any) => {
-            const u = img.url || '';
-            if (!u) return;
-            dupByUrl.set(u, (dupByUrl.get(u) || 0) + 1);
-          });
-          const dupUrls = Array.from(dupByUrl.entries()).filter(([, c]) => c > 1).slice(0, 20);
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-images-diagnostics',message:'Participant_images diagnostics (duplicates/missing spaceId)',data:{userHash,total:(participantImages||[]).length,inspirations:inspirations.length,generated:generated.length,missingSpaceId:missingSpaceId.length,dupInspirationUrls:dupUrls.length,dupSamples:dupUrls.map(([u,c])=>({count:c,urlPrefix:u.substring(0,60)}))},timestamp:Date.now(),sessionId:'debug-session',runId:'dash-debug',hypothesisId:'DB1'})}).catch(()=>{});
-        } catch {}
-        // #endregion
-
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:loadUserData-fetched',message:'Fetched participant spaces+images',data:{userHash,spaceCount:participantSpaces?.length||0,imageCount:participantImages?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H11'})}).catch(()=>{});
-        // #endregion
 
         // Build spaces from participant_spaces, fallback to default if missing
         const fallbackName = (sessionData as any)?.roomName || 'Moja Przestrzeń';
@@ -484,10 +410,6 @@ export function UserDashboard() {
           mappedSpaces.push(...spacesWithImages);
         }
 
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:spaces-grouped',message:'Grouped participant_images into participant_spaces',data:{userHash,spaceCount:mappedSpaces.length,imageCount:participantImages?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SP1'})}).catch(()=>{});
-        // #endregion
-
         setSpaces(sortSpacesDescending(mappedSpaces));
         updateSessionData({ spaces: mappedSpaces } as any);
         setIsLoading(false);
@@ -545,10 +467,6 @@ export function UserDashboard() {
       const created = await createParticipantSpace(userHash, { name: newSpaceName, type: (sessionData as any)?.roomType || 'personal' });
       const newSpaceId = created?.id;
       if (!newSpaceId) return;
-
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:handleAddSpace-created',message:'Created participant_space',data:{userHash,spaceId:newSpaceId,spaceName:newSpaceName},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SP2'})}).catch(()=>{});
-      // #endregion
 
       const newSpace: Space = {
         id: newSpaceId,
@@ -616,10 +534,6 @@ export function UserDashboard() {
         !!str && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(str);
 
       const imageIdsToDelete = candidateImageIds.filter((id: string) => isUuid(id));
-
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserDashboard.tsx:handleDeleteSpace:pre-delete-images',message:'Deleting images for space before deleting space',data:{userHash,spaceId,spaceImageCount:(targetSpace?.images||[]).length,uuidImageIds:imageIdsToDelete.length},timestamp:Date.now(),sessionId:'debug-session',runId:'dash-delete',hypothesisId:'DB2'})}).catch(()=>{});
-      // #endregion
 
       for (const imageId of imageIdsToDelete) {
         try {
@@ -753,7 +667,6 @@ export function UserDashboard() {
       }
     }
   };
-
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -900,33 +813,6 @@ export function UserDashboard() {
 
           {/* Połączone preferencje (ukryte + jawne) */}
           {(() => {
-            // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sessionId: 'debug-session',
-                runId: 'dashboard-render',
-                hypothesisId: 'D2',
-                location: 'UserDashboard.tsx:render-PreferencesOverviewSection',
-                message: 'UserDashboard sessionData before render',
-                data: {
-                  hasVisualDNA: !!(sessionData as any)?.visualDNA,
-                  visualDNAStyle: (sessionData as any)?.visualDNA?.dominantStyle,
-                  visualDNAColors: (sessionData as any)?.visualDNA?.preferences?.colors,
-                  visualDNAMaterials: (sessionData as any)?.visualDNA?.preferences?.materials,
-                  hasColorsAndMaterials: !!sessionData?.colorsAndMaterials,
-                  colorsAndMaterialsPalette: sessionData?.colorsAndMaterials?.selectedPalette,
-                  colorsAndMaterialsMaterials: sessionData?.colorsAndMaterials?.topMaterials,
-                  hasSemanticDifferential: !!sessionData?.semanticDifferential,
-                  semanticWarmth: sessionData?.semanticDifferential?.warmth,
-                  semanticBrightness: sessionData?.semanticDifferential?.brightness,
-                  semanticComplexity: sessionData?.semanticDifferential?.complexity
-                },
-                timestamp: Date.now()
-              })
-            }).catch(() => {});
-            // #endregion
             return null;
           })()}
           <PreferencesOverviewSection
@@ -1346,8 +1232,6 @@ function SpaceCard({ space, index, onOpenSpace, onRenameSpace, onDeleteSpace, is
     </motion.div>
   );
 }
-
-
 
 function EmptyState({ onAddSpace }: { onAddSpace: () => void }) {
   const { language } = useLanguage();

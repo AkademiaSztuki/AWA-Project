@@ -24,30 +24,6 @@ export default function PersonalityDetailPage() {
         // Priority 1: Check sessionData (already loaded from Supabase user_profiles)
         const sessionBigFive = (sessionData as any)?.bigFive;
         if (sessionBigFive?.scores) {
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'sync-check',
-              hypothesisId: 'H16',
-              location: 'dashboard/personality/page.tsx:sessionData-check',
-              message: 'Using sessionData.bigFive',
-              data: {
-                hasSessionBigFive: !!sessionBigFive,
-                hasScores: !!sessionBigFive?.scores,
-                hasDomains: !!sessionBigFive?.scores?.domains,
-                domainsKeys: sessionBigFive?.scores?.domains ? Object.keys(sessionBigFive.scores.domains) : [],
-                domainsValues: sessionBigFive?.scores?.domains ? Object.values(sessionBigFive.scores.domains) : [],
-                scoresKeys: sessionBigFive?.scores ? Object.keys(sessionBigFive.scores) : [],
-                scoresO: sessionBigFive?.scores?.O,
-                scoresC: sessionBigFive?.scores?.C
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
           
           // Check if scores has direct O/C/E/A/N keys (old format) or domains object (new format)
           let normalizedBigFive = sessionBigFive;
@@ -131,36 +107,6 @@ export default function PersonalityDetailPage() {
               completedAt: userProfile.personality.completedAt
             };
             
-            // #region agent log
-            void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sessionId: 'debug-session',
-                runId: 'sync-check',
-                hypothesisId: 'H14',
-                location: 'dashboard/personality/page.tsx:load-from-user_profiles',
-                message: 'Loaded Big Five from user_profiles.personality',
-                data: {
-                  hasPersonality: true,
-                  originalInstrument: userProfile.personality.instrument,
-                  hasOCEANFormat: hasOCEANFormat,
-                  hasFacets: !!hasFacets,
-                  finalInstrument: mappedBigFive.instrument,
-                  rawDomainsKeys: Object.keys(rawDomains),
-                  rawDomainsValues: Object.values(rawDomains),
-                  mappedDomainsKeys: Object.keys(domains),
-                  mappedDomainsValues: Object.values(domains),
-                  domainsO: domains.O,
-                  domainsC: domains.C,
-                  domainsE: domains.E,
-                  domainsA: domains.A,
-                  domainsN: domains.N
-                },
-                timestamp: Date.now()
-              })
-            }).catch(() => {});
-            // #endregion
             
             if (mounted) {
               setBigFiveData(mappedBigFive);
@@ -230,37 +176,6 @@ export default function PersonalityDetailPage() {
       </div>
     );
   }
-
-  // #region agent log
-  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: 'debug-session',
-      runId: 'sync-check',
-      hypothesisId: 'H17',
-      location: 'dashboard/personality/page.tsx:before-BigFiveDetailed',
-      message: 'Passing data to BigFiveDetailed',
-      data: {
-        hasBigFiveData: !!bigFiveData,
-        hasScores: !!bigFiveData?.scores,
-        scoresType: typeof bigFiveData?.scores,
-        hasDomains: !!bigFiveData?.scores?.domains,
-        domainsKeys: bigFiveData?.scores?.domains ? Object.keys(bigFiveData.scores.domains) : [],
-        domainsValues: bigFiveData?.scores?.domains ? Object.values(bigFiveData.scores.domains) : [],
-        scoresKeys: bigFiveData?.scores ? Object.keys(bigFiveData.scores) : [],
-        instrument: bigFiveData?.instrument,
-        domainsO: bigFiveData?.scores?.domains?.O,
-        domainsC: bigFiveData?.scores?.domains?.C,
-        domainsE: bigFiveData?.scores?.domains?.E,
-        domainsA: bigFiveData?.scores?.domains?.A,
-        domainsN: bigFiveData?.scores?.domains?.N,
-        scoresStringified: JSON.stringify(bigFiveData?.scores)
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
 
   return (
     <BigFiveDetailed

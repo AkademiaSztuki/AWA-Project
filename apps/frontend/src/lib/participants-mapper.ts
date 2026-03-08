@@ -177,23 +177,14 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     // Explicit
     explicit_warmth: (() => {
       const val = sessionData.semanticDifferential?.warmth;
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'participants-mapper.ts:mapSessionDataToParticipant-explicit_warmth',message:'Mapping warmth to Supabase column',data:{sessionWarmth:val,hasSemanticDifferential:!!sessionData.semanticDifferential,rawSemantic:sessionData.semanticDifferential},timestamp:Date.now(),sessionId:'debug-session',runId:'supabase-mapping',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       return val;
     })(),
     explicit_brightness: (() => {
       const val = sessionData.semanticDifferential?.brightness;
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'participants-mapper.ts:mapSessionDataToParticipant-explicit_brightness',message:'Mapping brightness to Supabase column',data:{sessionBrightness:val,hasSemanticDifferential:!!sessionData.semanticDifferential},timestamp:Date.now(),sessionId:'debug-session',runId:'supabase-mapping',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       return val;
     })(),
     explicit_complexity: (() => {
       const val = sessionData.semanticDifferential?.complexity;
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'participants-mapper.ts:mapSessionDataToParticipant-explicit_complexity',message:'Mapping complexity to Supabase column',data:{sessionComplexity:val,hasSemanticDifferential:!!sessionData.semanticDifferential},timestamp:Date.now(),sessionId:'debug-session',runId:'supabase-mapping',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       return val;
     })(),
     explicit_texture: sessionData.semanticDifferential?.texture,
@@ -405,9 +396,6 @@ export function mapParticipantToSessionData(row: any): SessionData {
         complexity: row.explicit_complexity || 0.5,
         texture: row.explicit_texture || 0.5
       } : undefined;
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'participants-mapper.ts:mapParticipantToSessionData-semanticDifferential',message:'Retrieving semanticDifferential from Supabase',data:{hasWarmth,dbWarmth:row.explicit_warmth,dbBrightness:row.explicit_brightness,dbComplexity:row.explicit_complexity,mappedWarmth:result?.warmth,mappedBrightness:result?.brightness,mappedComplexity:result?.complexity},timestamp:Date.now(),sessionId:'debug-session',runId:'supabase-retrieve',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
       return result;
     })(),
     

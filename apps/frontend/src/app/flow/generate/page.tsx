@@ -275,9 +275,6 @@ export default function GeneratePage() {
 
     // Check if we have generated images in sessionData
     if (savedGeneratedImages.length > 0 && generatedImages.length === 0) {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:restore-generatedImages',message:'Restoring generatedImages from sessionData into state',data:{savedCount:savedGeneratedImages.length,savedFirst:savedGeneratedImages[0]?.url?.substring(0,80)||null,hadStateGenerated:generatedImages.length>0,currentSpaceId:(typedSessionData?.currentSpaceId||null),pathname:(typeof window!=='undefined'?window.location.pathname:'ssr')},timestamp:Date.now(),sessionId:'debug-session',runId:'gen-'+Date.now(),hypothesisId:'G1'})}).catch(()=>{});
-      // #endregion
       console.log('[Generate] Restoring state from sessionData:', {
         savedImagesCount: savedGeneratedImages.length,
         savedGenerationsCount: savedGenerations.length,
@@ -694,15 +691,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       newRunId: generationRunId
     });
     
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-entry',message:'Entered handleMatrixGeneration',data:{isApiReady,wasGenerating:isGenerating,wasGeneratingRef:isGeneratingRef.current,currentRunId:currentGenerationRunIdRef.current,newRunId:generationRunId,sessionHasRoomImage:!!(sessionData as any)?.roomImage,sessionHasRoomImageEmpty:!!(sessionData as any)?.roomImageEmpty,sessionInspirationsCount:((sessionData as any)?.inspirations||[]).length,sessionGeneratedImagesCount:((sessionData as any)?.generatedImages||[]).length,currentSpaceId:(sessionData as any)?.currentSpaceId||null,pathname:(typeof window!=='undefined'?window.location.pathname:'ssr')},timestamp:Date.now(),sessionId:'debug-session',runId:generationRunId,hypothesisId:'G2'})}).catch(()=>{});
-    // #endregion
     
     if (!isApiReady) {
       console.log("[6-Image Matrix] API not ready, generation cancelled.");
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-not-ready',message:'Generation cancelled because API not ready',data:{isApiReady},timestamp:Date.now(),sessionId:'debug-session',runId:generationRunId,hypothesisId:'G3'})}).catch(()=>{});
-      // #endregion
       return;
     }
 
@@ -714,9 +705,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         newRunId: generationRunId,
         isGeneratingState: isGenerating 
       });
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:handleMatrixGeneration-already-generating',message:'Generation skipped because already in progress',data:{isGenerating,isGeneratingRef:isGeneratingRef.current,existingRunId,newRunId:generationRunId},timestamp:Date.now(),sessionId:'debug-session',runId:generationRunId,hypothesisId:'G4'})}).catch(()=>{});
-      // #endregion
       return;
     }
 
@@ -767,26 +755,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     
     // CRITICAL: Also check sessionStorage directly as fallback
     let roomImageEmptyFromStorage: string | null = null;
-    let storageReadError: string | null = null;
-    let allStorageKeys: string[] = [];
     if (typeof window !== 'undefined') {
       try {
-        // #region agent log - check all sessionStorage keys
-        allStorageKeys = Object.keys(sessionStorage);
-        const hasKey = sessionStorage.getItem('aura_session_room_image_empty') !== null;
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:room-image-selection:storage-check',message:'Checking sessionStorage before read',data:{allStorageKeysCount:allStorageKeys.length,allStorageKeys:allStorageKeys.filter(k=>k.includes('room')||k.includes('image')),hasKey,key:'aura_session_room_image_empty'},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
-        
         roomImageEmptyFromStorage = sessionStorage.getItem('aura_session_room_image_empty');
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:room-image-selection:storage-read',message:'Read roomImageEmpty from sessionStorage',data:{hasRoomImageEmptyFromStorage:!!roomImageEmptyFromStorage,roomImageEmptyFromStorageLength:roomImageEmptyFromStorage?.length||0,key:'aura_session_room_image_empty',firstChars:roomImageEmptyFromStorage?.substring(0,50)||'null'},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
       } catch (e) {
-        storageReadError = String(e);
         console.warn('[generate] Failed to read roomImageEmpty from sessionStorage', e);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:room-image-selection:storage-read-error',message:'Failed to read roomImageEmpty from sessionStorage',data:{error:storageReadError,allStorageKeysCount:allStorageKeys.length,allStorageKeys:allStorageKeys.filter(k=>k.includes('room')||k.includes('image'))},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
       }
     }
     
@@ -808,9 +781,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     // Only use sessionStorage fallback if it matches the current roomImage signature (prevents stale wrong-room usage).
     const finalRoomImageEmpty = roomImageEmpty || (sigMatches ? roomImageEmptyFromStorage : null);
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecbb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:room-image-selection',message:'Checking which room image to use',data:{hasRoomImageEmpty:!!roomImageEmpty,roomImageEmptyLength:roomImageEmpty?.length||0,hasRoomImageEmptyFromStorage:!!roomImageEmptyFromStorage,roomImageEmptyFromStorageLength:roomImageEmptyFromStorage?.length||0,hasFinalRoomImageEmpty:!!finalRoomImageEmpty,finalRoomImageEmptyLength:finalRoomImageEmpty?.length||0,roomImageLength:roomImage?.length||0,willUseEmpty:!!finalRoomImageEmpty,source:finalRoomImageEmpty?(roomImageEmpty===finalRoomImageEmpty?'sessionData':'sessionStorage'):'none',storageReadError,hasEmptySourceSig:!!emptySourceSig,sigMatches},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
     
     if (finalRoomImageEmpty) {
       console.log("[6-Image Matrix] Using pre-processed empty room image (furniture removed by user)");
@@ -822,9 +792,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       processedRoomImage = roomImage.includes(',') ? roomImage.split(',')[1] : roomImage;
     }
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:processedRoomImage-set',message:'processedRoomImage set after selection',data:{hasProcessedRoomImage:!!processedRoomImage,processedRoomImageLength:processedRoomImage?.length||0,hasFinalRoomImageEmpty:!!finalRoomImageEmpty,finalRoomImageEmptyLength:finalRoomImageEmpty?.length||0,hasRoomImage:!!roomImage,roomImageLength:roomImage?.length||0,isUsingEmpty:!!finalRoomImageEmpty,processedRoomImageFirstChars:processedRoomImage?.substring(0,50)||'null'},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
     
     // Create new AbortController for this generation
     const controller = new AbortController();
@@ -923,9 +890,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       const qualityReports = assessAllSourcesQuality(inputs, tinderSwipes);
       setQualityReport(qualityReports);
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:quality-reports',message:'Quality reports for all sources',data:{reportsCount:qualityReports.length,reports:qualityReports.map(r=>({source:r.source,shouldGenerate:r.shouldGenerate,status:r.status,dataPoints:r.dataPoints,confidence:r.confidence,warningsCount:r.warnings.length,warnings:r.warnings})),shouldGenerateCount:qualityReports.filter(r=>r.shouldGenerate).length,skippedCount:qualityReports.filter(r=>!r.shouldGenerate).length},timestamp:Date.now(),sessionId:'debug-session',runId:'description-flow',hypothesisId:'H6'})}).catch(()=>{});
-      // #endregion
       
       // DEBUG: Log quality reports with full details
       console.log("[6-Image Matrix] DEBUG - Quality reports:");
@@ -954,9 +918,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Store synthesis result for UI display
       setSynthesisResult(synthesisResult);
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:synthesis-result',message:'Synthesis result after synthesizeSixPrompts',data:{generatedSourcesCount:synthesisResult.generatedSources.length,generatedSources:synthesisResult.generatedSources,skippedSourcesCount:synthesisResult.skippedSources.length,skippedSources:synthesisResult.skippedSources,displayOrder:synthesisResult.displayOrder,hasInspirationImages:!!synthesisResult.inspirationImages,resultsKeys:Object.keys(synthesisResult.results||{}),resultsCount:Object.keys(synthesisResult.results||{}).length},timestamp:Date.now(),sessionId:'debug-session',runId:'description-flow',hypothesisId:'H6'})}).catch(()=>{});
-      // #endregion
       
       console.log("[6-Image Matrix] Synthesis complete:", {
         generatedSources: synthesisResult.generatedSources,
@@ -1257,31 +1218,14 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           baseImage = baseImage.split(',')[1];
         }
         
-        // #region agent log - verify baseImage matches expected
-        const isUsingEmpty = !!finalRoomImageEmpty;
-        const isSameAsOriginal = baseImageForGeneration === roomImage;
-        const baseImageFirstChars = baseImage?.substring(0, 50) || 'null';
-        const roomImageFirstChars = roomImage?.substring(0, 50) || 'null';
-        const finalRoomImageEmptyFirstChars = finalRoomImageEmpty?.substring(0, 50) || 'null';
-        const baseImageMatchesEmpty = finalRoomImageEmpty ? baseImage === finalRoomImageEmpty.split(',')[1] || baseImage === finalRoomImageEmpty : false;
-        const baseImageMatchesOriginal = baseImage === (roomImage.includes(',') ? roomImage.split(',')[1] : roomImage);
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:base-image-verification',message:'Verifying baseImage before API call',data:{hasBaseImage:!!baseImage,baseImageLength:baseImage?.length||0,isUsingEmpty,isSameAsOriginal,baseImageMatchesEmpty,baseImageMatchesOriginal,baseImageFirstChars,roomImageFirstChars,finalRoomImageEmptyFirstChars,processedRoomImageLength:processedRoomImage?.length||0,roomImageLength:roomImage?.length||0,finalRoomImageEmptyLength:finalRoomImageEmpty?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
-        
         console.log("[6-Image Matrix] Using processed room image (furniture removed, cleaned):", {
           hasImage: !!baseImage,
           length: baseImage?.length || 0,
           startsWith: baseImage?.substring(0, 50) || 'N/A',
           isBase64: baseImage && !baseImage.startsWith('http') && !baseImage.startsWith('blob:'),
           isProcessed: !!finalRoomImageEmpty || baseImageForGeneration !== roomImage,
-          isUsingEmpty,
-          baseImageMatchesEmpty,
-          baseImageMatchesOriginal
         });
         
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:base-image-final',message:'Final base image being sent to generation',data:{hasBaseImage:!!baseImage,baseImageLength:baseImage?.length||0,isProcessed:!!finalRoomImageEmpty,isSameAsOriginal:baseImageForGeneration===roomImage,hasRoomImageEmpty:!!finalRoomImageEmpty,isUsingEmpty,baseImageMatchesEmpty,baseImageMatchesOriginal},timestamp:Date.now(),sessionId:'debug-session',runId:'room-image-debug',hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
       } else {
         console.error("[6-Image Matrix] ERROR: processedRoomImage is missing or empty!");
         setError(t({ pl: "Brak zdjęcia pokoju w sesji. Proszę wrócić do kroku uploadu zdjęcia.", en: "No room photo in session. Please return to the photo upload step." }));
@@ -1671,9 +1615,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         });
 
         if (spaceId) {
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:save-matrix-images',message:'Saving matrix images to participant_images',data:{userHash,imageCount:newMatrixImages.length,spaceId},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H7'})}).catch(()=>{});
-          // #endregion
           
           // Save all generated images to participant_images
           const imagesToSave = newMatrixImages.map(img => ({
@@ -1686,9 +1627,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           }));
           await saveParticipantImages(userHash, imagesToSave);
           
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:save-matrix-images-complete',message:'Finished saving matrix images',data:{userHash,imageCount:imagesToSave.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H7'})}).catch(()=>{});
-          // #endregion
 
           // Keep local minimal spaces snapshot
           updatedSpaces = addGeneratedImageToSpace(
@@ -2214,9 +2152,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       });
 
       if (spaceId) {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:save-initial-images',message:'Saving initial images to participant_images',data:{userHash,imageCount:newImages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H7'})}).catch(()=>{});
-        // #endregion
         
         // Save all generated images to participant_images
         const imagesToSave = newImages.map(img => ({
@@ -2228,9 +2163,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         }));
         await saveParticipantImages(userHash, imagesToSave);
         
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate/page.tsx:save-initial-images-complete',message:'Finished saving initial images',data:{userHash,imageCount:imagesToSave.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H7'})}).catch(()=>{});
-        // #endregion
 
         const updatedSpaces = addGeneratedImageToSpace(
           (sessionData as any)?.spaces || [],
@@ -2365,9 +2297,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           modification_label: t(modification.label),
         });
       }
-      // #region prompt debug
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:start',message:'Starting modification with Google API',data:{modificationLabel:t(modification.label),isMacro,modificationPrompt,hasBaseImage:!!baseImageSource,baseImageLength:baseImageSource?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-      // #endregion
 
       // Update progress during API call
       setLoadingProgress(60);
@@ -2387,10 +2316,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Update progress after API response
       setLoadingProgress(85);
       setStatusMessage({ pl: "Finalizuję zmodyfikowany obraz...", en: "Finalizing modified image..." });
-
-      // #region prompt debug
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'flow/generate/page.tsx:handleModification:response',message:'Modification response received',data:{hasResponse:!!response,hasImages:!!response?.results,imagesCount:response?.results?.length||0,successfulCount:response?.successful_count,failedCount:response?.failed_count},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-      // #endregion
 
       // Check for errors in response
       if (!response) {
@@ -3952,7 +3877,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                           )}
                         </AnimatePresence>
 
-
                         <AnimatePresence>
                           {!hasAnsweredInteriorQuestion && (
                             <motion.div
@@ -4196,7 +4120,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   </motion.div>
                 )}
               </AnimatePresence>
-
 
                 <div className="flex justify-center">
                   <AnimatePresence>

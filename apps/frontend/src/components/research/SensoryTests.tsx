@@ -31,16 +31,6 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
   
-  // #region agent log
-  useEffect(() => {
-    const options = type === 'texture' ? TEXTURE_PREFERENCES : type === 'light' ? LIGHT_PREFERENCES : MUSIC_PREFERENCES;
-    options.forEach(opt => {
-      if (opt.imageUrl) {
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:useEffect',message:'Rendering option with imageUrl',data:{type,optionId:opt.id,imageUrl:opt.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H3'})}).catch(()=>{});
-      }
-    });
-  }, [type]);
-  // #endregion
 
   const options = type === 'music' ? MUSIC_PREFERENCES :
                   type === 'texture' ? TEXTURE_PREFERENCES :
@@ -179,14 +169,8 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
                     className="object-cover"
                     style={{ objectPosition: type === 'texture' ? 'center center' : type === 'light' ? 'center 77%' : 'center 30%' }}
                     onLoad={() => {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:onLoad',message:'Image loaded successfully',data:{type,optionId:option.id,imageUrl:option.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H1'})}).catch(()=>{});
-                      // #endregion
                     }}
                     onError={() => {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:onError',message:'Image failed to load',data:{type,optionId:option.id,imageUrl:option.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H2'})}).catch(()=>{});
-                      // #endregion
                       setImageErrors(prev => new Set(prev).add(option.imageUrl!));
                     }}
                   />
@@ -601,9 +585,6 @@ export function SensoryTestSuite({
       !finalResults.light ||
       !finalResults.natureMetaphor
     ) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:triggerComplete-incomplete',message:'Cannot complete - missing data',data:{hasBiophilia:finalBiophilia!==undefined,hasMusic:!!finalResults.music,hasTexture:!!finalResults.texture,hasLight:!!finalResults.light,hasNature:!!finalResults.natureMetaphor},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E3'})}).catch(()=>{});
-      // #endregion
       return;
     }
     const payload = {
@@ -618,9 +599,6 @@ export function SensoryTestSuite({
       // CRITICAL: Add palette to payload (same logic as style)
       ...(selectedPalette && { palette: selectedPalette })
     };
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:triggerComplete',message:'SensoryTests complete - calling onComplete',data:{payload:payload,payloadKeys:Object.keys(payload),biophiliaScore:finalBiophilia,hasStyle:!!selectedStyle,selectedStyle:selectedStyle||null,payloadStyle:payload.style||null,hasPalette:!!selectedPalette,selectedPalette:selectedPalette||null,payloadPalette:payload.palette||null,finalResultsStyle:finalResults.style||null,finalResultsKeys:Object.keys(finalResults)},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E4'})}).catch(()=>{});
-    // #endregion
     setTimeout(() => onComplete(payload), 300);
   };
 
@@ -639,9 +617,6 @@ export function SensoryTestSuite({
       // CRITICAL: Update results with selected style immediately
       const newResults = { ...results, style: value as string };
       setResults(newResults);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:handleSelect-style',message:'Style selected in SensoryTests',data:{selectedStyle:value,newResultsStyle:newResults.style,canComplete:canComplete(newResults,biophiliaScore),hasBiophilia:biophiliaScore!==undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E18'})}).catch(()=>{});
-      // #endregion
       goToNext(testType);
       if (canComplete(newResults, biophiliaScore)) {
         triggerComplete(newResults, biophiliaScore);
@@ -651,9 +626,6 @@ export function SensoryTestSuite({
 
     if (testType === 'biophilia') {
       const score = typeof value === 'number' ? value : Number(value);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SensoryTests.tsx:handleSelect-biophilia',message:'Biophilia score set in SensoryTests',data:{score:score,valueType:typeof value,canComplete:canComplete(results,score)},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E2'})}).catch(()=>{});
-      // #endregion
       setBiophiliaScore(score);
       if (canComplete(results, score)) {
         triggerComplete(results, score);
@@ -814,5 +786,4 @@ export function SensoryTestSuite({
     </div>
   );
 }
-
 

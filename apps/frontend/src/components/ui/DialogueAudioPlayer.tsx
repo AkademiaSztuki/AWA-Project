@@ -94,9 +94,6 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
       const wasPlaying = audioRef.current && !audioRef.current.paused && audioRef.current.currentTime > 0;
       const isNearEnd = audioRef.current.duration > 0 && (audioRef.current.duration - audioRef.current.currentTime) < 0.5;
       
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'A20',location:'DialogueAudioPlayer.tsx:src-change',message:'Src change detected',data:{previousSrc,newSrc:src,srcChanged,wasPlaying,isNearEnd,currentTime:audioRef.current?.currentTime||0,duration:audioRef.current?.duration||0},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       
       // If src changed and previous audio was playing and not near end, wait for it to finish
       if (srcChanged && wasPlaying && !isNearEnd && previousSrc) {
@@ -266,9 +263,6 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
     if (!audio || !onEnded) return;
     
     const handleEnded = () => {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'audio-debug',hypothesisId:'A19',location:'DialogueAudioPlayer.tsx:audio-ended',message:'Audio ended event fired',data:{src,currentTime:audio.currentTime,duration:audio.duration,ended:audio.ended},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       // Reset retry flag when audio ends
       retryOnInteractionRef.current = false;
       playAttemptedRef.current = false;

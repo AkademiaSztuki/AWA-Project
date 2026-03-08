@@ -265,9 +265,6 @@ export async function synthesizePrompt(
     verbose = false
   } = options;
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:257',message:'Pre-synthesis personality snapshot',data:{mode:options.sourceType,hasPersonality:!!inputs.personality,domains:inputs.personality?{O:inputs.personality.openness,C:inputs.personality.conscientiousness,E:inputs.personality.extraversion,A:inputs.personality.agreeableness,N:inputs.personality.neuroticism}:null,hasFacets:!!inputs.personality?.facets,facetSamples:inputs.personality?.facets?{O:inputs.personality.facets.O?Object.values(inputs.personality.facets.O).slice(0,3):[],C:inputs.personality.facets.C?Object.values(inputs.personality.facets.C).slice(0,3):[],E:inputs.personality.facets.E?Object.values(inputs.personality.facets.E).slice(0,3):[],A:inputs.personality.facets.A?Object.values(inputs.personality.facets.A).slice(0,3):[],N:inputs.personality.facets.N?Object.values(inputs.personality.facets.N).slice(0,3):[]}:null},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'P1'})}).catch(()=>{});
-  // #endregion
 
   if (verbose) {
     console.log('[Prompt Synthesis] Starting synthesis pipeline...');
@@ -595,20 +592,6 @@ export async function synthesizeSixPrompts(
       } : null
     });
     
-    // #region agent log - Personality source detailed check
-    if (source === GenerationSource.Personality) {
-      const p = filteredInputs.personality;
-      const hasPersonality = !!p;
-      const domainScores = p ? [p.openness, p.conscientiousness, p.extraversion, p.agreeableness, p.neuroticism] : [];
-      const allDomainsAre50 = domainScores.length === 5 && domainScores.every(v => v === 50);
-      const facetsObj = p?.facets;
-      const facetCount = facetsObj ? Object.values(facetsObj).reduce((sum: number, domainFacets: any) => sum + Object.keys(domainFacets || {}).length, 0) : 0;
-      const hasFacetData = facetCount > 0;
-      const isComplete = hasPersonality && (!allDomainsAre50 || hasFacetData);
-      
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:550',message:'Personality source - detailed data check',data:{hasPersonality,domainScores,allDomainsAre50,hasFacetData,facetCount,isComplete,personalityData:p?{O:p.openness,C:p.conscientiousness,E:p.extraversion,A:p.agreeableness,N:p.neuroticism,hasFacets:!!p.facets}:null},timestamp:Date.now(),sessionId:'debug-session',runId:'personality-check',hypothesisId:'B'})}).catch(()=>{});
-    }
-    // #endregion
     
     // DEBUG: For InspirationReference, also log full inspirations structure
     if (source === GenerationSource.InspirationReference) {
@@ -707,9 +690,6 @@ export async function synthesizeSixPrompts(
       console.log('[InspirationReference] Count:', filteredInputs.inspirations?.length || 0);
       console.log('[InspirationReference] Full structure:', JSON.stringify(filteredInputs.inspirations, null, 2));
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:659',message:'Inspirations before extraction - full structure',data:{count:filteredInputs.inspirations?.length||0,inspirations:filteredInputs.inspirations?.map((i:any,idx:number)=>({index:idx,hasTags:!!i.tags,tagsType:typeof i.tags,tagsIsObject:i.tags&&typeof i.tags==='object',tagsIsEmptyObject:i.tags&&typeof i.tags==='object'&&Object.keys(i.tags).length===0,tagsKeys:i.tags?Object.keys(i.tags):[],tagsValue:JSON.stringify(i.tags),hasDescription:!!i.description}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
       
       if (filteredInputs.inspirations && filteredInputs.inspirations.length > 0) {
         filteredInputs.inspirations.forEach((insp: any, idx: number) => {
@@ -730,17 +710,8 @@ export async function synthesizeSixPrompts(
       }
       console.log('[InspirationReference] ========================================');
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:621',message:'Inspirations before tag extraction',data:{count:filteredInputs.inspirations?.length||0,inspirations:filteredInputs.inspirations?.map((i:any)=>({id:i.id,styles:i.tags?.styles,description:i.description}))},timestamp:Date.now(),sessionId:'debug-session',runId:'inspiration-debug',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:621',message:'Inspirations before tag extraction',data:{count:filteredInputs.inspirations?.length||0,inspirations:filteredInputs.inspirations?.map((i:any)=>({id:i.id,styles:i.tags?.styles,description:i.description}))},timestamp:Date.now(),sessionId:'debug-session',runId:'inspiration-debug',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
       const inspirationTags = extractInspirationTags(filteredInputs.inspirations);
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:682',message:'Extracted inspiration tags result',data:{stylesCount:inspirationTags.additionalStyles.length,colorsCount:inspirationTags.additionalColors.length,materialsCount:inspirationTags.additionalMaterials.length,biophiliaBoost:inspirationTags.biophiliaBoost,hasBiophiliaTags:inspirationTags.hasBiophiliaTags,descriptionsCount:inspirationTags.descriptions.length,extractedTags:inspirationTags},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
       
       // DEBUG: Log extracted tags
       console.log('[InspirationReference] Extracted tags from Gemini:', {
@@ -879,9 +850,6 @@ export async function synthesizeSixPrompts(
       // Add concrete tags from Gemini analysis - ONLY from inspirations  
       // These tags come from Supabase user_profiles.inspirations (generated by Gemini 2.5 Flash-Lite)
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/index.ts:InspirationReference-simplified',message:'InspirationReference: Simplified JSON built',data:{primary_style:promptJson.primary_style,secondary_styles:promptJson.secondary_styles,colorsCount:promptJson.colors.length,materialsCount:promptJson.materials.length,plants:promptJson.plants},timestamp:Date.now(),sessionId:'debug-session',runId:'inspiration-prompt',hypothesisId:'H3'})}).catch(()=>{});
-      // #endregion
       
       console.log('[InspirationReference] Built simplified JSON prompt:', {
         primary_style: promptJson.primary_style,

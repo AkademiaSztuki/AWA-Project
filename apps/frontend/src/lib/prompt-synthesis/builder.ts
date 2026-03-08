@@ -77,9 +77,6 @@ export function buildPromptFromWeights(
     weights: PromptWeights;
   };
 } {
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildPromptFromWeights:start',message:'Starting prompt building from weights',data:{roomType,weights:{dominantStyle:weights.dominantStyle,styleConfidence:weights.styleConfidence,colorPalette:weights.colorPalette,colorTemperature:weights.colorTemperature,primaryMaterials:weights.primaryMaterials,natureDensity:weights.natureDensity,biophilicElements:weights.biophilicElements,needsCalming:weights.needsCalming,needsEnergizing:weights.needsEnergizing}},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
 
   const components: PromptComponents = {
     roomType: buildRoomTypePhrase(roomType),
@@ -93,9 +90,6 @@ export function buildPromptFromWeights(
     layout: buildLayoutPhrase(weights, roomType)
   };
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildPromptFromWeights:components-built',message:'All components built',data:{components:{roomType:components.roomType,style:components.style,mood:components.mood,colors:components.colors,materials:components.materials,lighting:components.lighting,biophilia:components.biophilia,functional:components.functional,layout:components.layout}},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   // Assemble full prompt with prioritization
   const prompt = assemblePrompt(components, weights);
@@ -103,9 +97,6 @@ export function buildPromptFromWeights(
   // Token count estimation (rough)
   const tokenCount = prompt.split(/\s+/).length;
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildPromptFromWeights:final',message:'FINAL PROMPT assembled',data:{prompt,promptLength:prompt.length,tokenCount,componentsCount:Object.values(components).filter(c=>c).length},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   return {
     prompt,
@@ -134,17 +125,11 @@ function buildRoomTypePhrase(roomType: string): string {
   };
   
   const result = `A ${roomTypeMap[roomType] || roomTypeMap.default}`;
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildRoomTypePhrase',message:'Room type phrase built',data:{roomType,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   return result;
 }
 
 function buildStylePhrase(weights: PromptWeights): string {
   if (!weights.dominantStyle) {
-    // #region prompt debug
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildStylePhrase',message:'No dominant style found',data:{hasDominantStyle:false,styleConfidence:weights.styleConfidence},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-    // #endregion
     return '';
   }
   
@@ -158,9 +143,6 @@ function buildStylePhrase(weights: PromptWeights): string {
     result = `with eclectic, ${weights.dominantStyle}-inspired design`;
   }
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildStylePhrase',message:'Style phrase built',data:{dominantStyle:weights.dominantStyle,styleConfidence:weights.styleConfidence,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   return result;
 }
 
@@ -191,9 +173,6 @@ function buildMoodPhrase(weights: PromptWeights): string {
     ? 'with balanced, comfortable atmosphere'
     : `featuring ${moods.slice(0, 2).join(' and ')}`;
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildMoodPhrase',message:'Mood phrase built',data:{needsCalming:weights.needsCalming,needsEnergizing:weights.needsEnergizing,needsInspiration:weights.needsInspiration,needsGrounding:weights.needsGrounding,privateVsShared:weights.privateVsShared,moods,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   return result;
 }
 
@@ -223,17 +202,11 @@ function buildColorPhrase(weights: PromptWeights): string {
     }
   }
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildColorPhrase',message:'Color phrase built',data:{colorPalette:weights.colorPalette,colorTemperature:weights.colorTemperature,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   return result;
 }
 
 function buildMaterialsPhrase(weights: PromptWeights): string {
   if (!weights.primaryMaterials || weights.primaryMaterials.length === 0) {
-    // #region prompt debug
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildMaterialsPhrase',message:'No materials found',data:{hasMaterials:false},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-    // #endregion
     return '';
   }
   
@@ -244,9 +217,6 @@ function buildMaterialsPhrase(weights: PromptWeights): string {
     ? `with rich textures including ${materials}`
     : `featuring ${materials}`;
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildMaterialsPhrase',message:'Materials phrase built',data:{primaryMaterials:weights.primaryMaterials,visualComplexity:weights.visualComplexity,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   return result;
 }
 
@@ -275,23 +245,14 @@ function buildLightingPhrase(weights: PromptWeights): string {
   
   const result = lightPhrases.length === 0 ? '' : `with ${lightPhrases.join(' and ')}`;
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildLightingPhrase',message:'Lighting phrase built',data:{lightingMood:weights.lightingMood,naturalLightImportance:weights.naturalLightImportance,lightPhrases,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   return result;
 }
 
 function buildBiophiliaPhrase(weights: PromptWeights): string {
   const descriptor = getBiophiliaDescriptors(weights.natureDensity, weights.biophilicElements);
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildBiophiliaPhrase:start',message:'Building biophilia phrase',data:{natureDensity:weights.natureDensity,biophilicElements:weights.biophilicElements,descriptorTier:descriptor.tier,descriptorShortPhrase:descriptor.shortPhrase},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   if (descriptor.tier === 'none') {
-    // #region prompt debug
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildBiophiliaPhrase:no-biophilia',message:'No biophilia (tier=none)',data:{natureDensity:weights.natureDensity},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-    // #endregion
     return '';
   }
 
@@ -300,9 +261,6 @@ function buildBiophiliaPhrase(weights: PromptWeights): string {
     ? `${descriptor.shortPhrase}, including ${extraElements.join(' and ')}`
     : descriptor.shortPhrase;
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildBiophiliaPhrase:result',message:'Biophilia phrase built',data:{descriptorTier:descriptor.tier,extraElements,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   return result;
 }
 
@@ -336,9 +294,6 @@ function buildFunctionalPhrase(weights: PromptWeights, roomType: string): string
   
   const result = phrases.length > 0 ? phrases.join(', ') : '';
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildFunctionalPhrase',message:'Functional phrase built',data:{roomType,primaryActivity:weights.primaryActivity,functionalPriorities:weights.functionalPriorities,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   return result;
 }
 
@@ -370,9 +325,6 @@ function buildLayoutPhrase(weights: PromptWeights, roomType: string): string {
   
   const result = phrases.length > 0 ? phrases.join(', ') : '';
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildLayoutPhrase',message:'Layout phrase built',data:{roomType,requiresZoning:weights.requiresZoning,addressPainPoints:weights.addressPainPoints,visualComplexity:weights.visualComplexity,result},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   return result;
 }
 
@@ -384,9 +336,6 @@ function assemblePrompt(
   components: PromptComponents,
   weights: PromptWeights
 ): string {
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:assemblePrompt:start',message:'Starting prompt assembly',data:{components,partsCount:Object.values(components).filter(c=>c).length},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   // Priority-based assembly to stay under token limit
   const parts: string[] = [];
@@ -408,9 +357,6 @@ function assemblePrompt(
   if (components.functional) parts.push(components.functional);
   if (components.layout) parts.push(components.layout);
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:assemblePrompt:parts-assembled',message:'Parts assembled before joining',data:{parts,partsCount:parts.length},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   // Join with proper punctuation
   let prompt = parts.join(', ');
@@ -421,10 +367,6 @@ function assemblePrompt(
     prompt += '.';
   }
   
-  // #region prompt debug
-  const tokens = prompt.split(/\s+/);
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:assemblePrompt:final',message:'FINAL ASSEMBLED PROMPT',data:{prompt,promptLength:prompt.length,wordCount:tokens.length,partsCount:parts.length},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
   
   return prompt;
 }
@@ -1218,9 +1160,6 @@ function getFurnitureForRoom(
   // Apply style descriptor to the base item
   const result = getStyleDescriptor(primaryStyle, baseItem);
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:getFurnitureForRoom:mapping',message:'Furniture item style applied',data:{primaryStyle,baseItem,result},timestamp:Date.now(),sessionId:'debug-session',runId:'furniture-debug',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
   
   return result;
 });
@@ -1364,9 +1303,6 @@ export function buildFlux2Prompt(
     return 12;
   })();
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildFlux2Prompt:style-extraction',message:'Using primary and secondary styles',data:{dominantStyle:finalStyle,secondaryStyles,roomType:roomName,sourceType},timestamp:Date.now(),sessionId:'debug-session',runId:'style-coherence-debug',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
   
   // Get furniture list for this source (especially important for MixedFunctional)
   const furnitureList = getFurnitureForRoom(roomName, primaryStyle, weights, sourceType);
@@ -1381,9 +1317,6 @@ export function buildFlux2Prompt(
     };
   }
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildFlux2Prompt:functional-check',message:'Checking functional requirements and furniture',data:{isMixedFunctional,hasFunctionalRequirements:!!functionalRequirements,functionalRequirements,furnitureListCount:furnitureList.length,furnitureList},timestamp:Date.now(),sessionId:'debug-session',runId:'functional-debug',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
   
   // MINIMAL JSON - only the fields we want the model to follow
   const promptJson: any = {
@@ -1407,9 +1340,6 @@ export function buildFlux2Prompt(
     promptJson.furniture = furnitureList; // Add furniture list for MixedFunctional
   }
   
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildFlux2Prompt:result',message:'Clean narrative JSON prompt built',data:{promptJson:JSON.stringify(promptJson).substring(0,1000)},timestamp:Date.now(),sessionId:'debug-session',runId:'geometry-debug',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
 
   return JSON.stringify(promptJson, null, 2);
 }
@@ -1422,9 +1352,6 @@ export function buildFlux2Prompt(
  * @returns JSON string formatted for Google Nano Banana (sent as text in prompt)
  */
 export function buildGoogleNanoBananaPrompt(jsonPrompt: string): string {
-  // #region prompt debug
-  fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildGoogleNanoBananaPrompt:start',message:'Starting Google Nano Banana prompt conversion',data:{jsonPromptLength:jsonPrompt.length,isJson:jsonPrompt.trim().startsWith('{')},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-  // #endregion
 
   // Check if it's JSON
   if (!jsonPrompt.trim().startsWith('{')) {
@@ -1459,9 +1386,6 @@ export function buildGoogleNanoBananaPrompt(jsonPrompt: string): string {
     const colorList = colors.slice(0, 3).join(', ');
     const materialList = materials.slice(0, 2).join(' and ');
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildGoogleNanoBananaPrompt:final-prompt',message:'Final prompt with room type and style',data:{roomType,style,secondaryStyles,hasRoomType:!!roomType,hasFunctionalRequirements:!!functionalRequirements,furnitureListCount:furnitureList.length},timestamp:Date.now(),sessionId:'debug-session',runId:'style-coherence-debug',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
     
     // Build functional requirements text (for MixedFunctional)
     let functionalText = '';
@@ -1507,10 +1431,6 @@ CHANGE:
 ${functionalText ? `- Functional requirements: ${functionalText}\n` : ''}- REMOVE COMPLETELY: all furniture, rugs/carpets, curtains/blinds, lamps, wall art, shelves, TVs/monitors, plants, clutter, accessories. Inpaint surfaces behind them.
 - NEW INTERIOR: Add entirely NEW furniture + decor (new shapes, new layout) matching the ${style} style${functionalText ? ' and functional requirements' : ''}.
 - Rugs: REMOVE all. Floor must be visible unless the style REQUIRES a new rug.`;
-
-    // #region prompt debug
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prompt-synthesis/builder.ts:buildGoogleNanoBananaPrompt:final',message:'Google Nano Banana simplified prompt built',data:{finalPromptLength:finalPrompt.length,finalPromptPreview:finalPrompt,style,colorsCount:colors.length,materialsCount:materials.length},timestamp:Date.now(),sessionId:'debug-session',runId:'prompt-debug'})}).catch(()=>{});
-    // #endregion
 
     return finalPrompt;
   } catch (error) {

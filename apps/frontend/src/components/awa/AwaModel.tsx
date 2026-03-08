@@ -558,25 +558,6 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   useEffect(() => {
     if (!mixer || !scene || allAnimations.length === 0) return;
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'animation-check',
-        hypothesisId: 'H2',
-        location: 'AwaModel.tsx:useEffect-animation',
-        message: 'Animation effect triggered',
-        data: { 
-          currentAnimation, 
-          previousAnimation: previousAnimationRef.current,
-          isRunning: currentActionRef.current?.isRunning()
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
 
     // Only switch if animation actually changed
     if (currentAnimation === previousAnimationRef.current && currentActionRef.current?.isRunning()) {
@@ -644,28 +625,6 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
           // Oblicz postęp animacji (0-1)
           const progress = Math.min(action.time / clip.duration, 1);
           
-          // #region agent log
-          if (Math.random() < 0.05) { // Loguj co ~20 klatek żeby nie zapchać pliku
-            fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sessionId: 'debug-session',
-                runId: 'animation-check',
-                hypothesisId: 'H6',
-                location: 'AwaModel.tsx:useFrame-interpolation',
-                message: 'Interpolation progress',
-                data: { 
-                  time: action.time, 
-                  duration: clip.duration, 
-                  progress,
-                  currentX: meshRef.current.position.x
-                },
-                timestamp: Date.now()
-              })
-            }).catch(() => {});
-          }
-          // #endregion
 
           // Interpoluj pozycję liniowo od [0, -0.9, 0] do [-1.4, -0.9, 0]
           const startX = 0;
@@ -690,21 +649,6 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
         if (action.time >= clip.duration) {
           console.log('[AwaModel] Animation finished in useFrame:', currentAnimation);
           
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'animation-check',
-              hypothesisId: 'H5',
-              location: 'AwaModel.tsx:useFrame-completion-check',
-              message: 'Animation reached duration',
-              data: { currentAnimation, isMobile: position[0] === 0 },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
 
           shouldReturnToIdleRef.current = false;
           
@@ -720,20 +664,6 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
           
           // After wyjsciewlewo on mobile, hide model and disable particles (don't return to idle)
           if (isMobile && currentAnimation === 'wyjsciewlewo') {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sessionId: 'debug-session',
-                runId: 'animation-check',
-                hypothesisId: 'H5',
-                location: 'AwaModel.tsx:useFrame-completion',
-                message: 'Wyjsciewlewo completed',
-                timestamp: Date.now()
-              })
-            }).catch(() => {});
-            // #endregion
             // Disable particles on mobile after wyjsciewlewo
             setParticlesDisabled(true);
             // Call callback which will dispatch event to hide model

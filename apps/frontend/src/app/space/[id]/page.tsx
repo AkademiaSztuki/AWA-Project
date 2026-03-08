@@ -58,9 +58,6 @@ export default function SpaceDetailPage() {
 
       // NOTE: After radical refactor, Space view is derived from participant_images (source of truth).
       try {
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:load-space-entry',message:'Loading space detail',data:{spaceId,hasUserHash:!!userHash,userHash:userHash||null,sessionSpaceCount:((sessionData as any)?.spaces||[]).length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD1'})}).catch(()=>{});
-        // #endregion
 
         const [participantImages, participantSpaces] = await Promise.all([
           userHash ? fetchParticipantImages(userHash) : Promise.resolve([]),
@@ -75,10 +72,6 @@ export default function SpaceDetailPage() {
 
         // Normalize spaceId: remove "space_" prefix if present, for matching
         const normalizedSpaceId = spaceId?.startsWith('space_') ? spaceId.substring(6) : spaceId;
-
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:load-space-fetched',message:'Fetched participant_images for space detail',data:{spaceId,normalizedSpaceId,userHash:userHash||null,imageCount:participantImages.length,generatedCount:participantImages.filter(i=>i.type==='generated').length,inspirationCount:participantImages.filter(i=>i.type==='inspiration').length,imagesWithSpaceId:participantImages.filter((i:any)=>i.spaceId).length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD2'})}).catch(()=>{});
-        // #endregion
 
         const mergedImages = (() => {
           const byKey = new Map<string, SpaceImage>();
@@ -116,9 +109,6 @@ export default function SpaceDetailPage() {
           
           const result = sortImagesDescending(Array.from(byKey.values()));
           
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:load-space-filtered',message:'Filtered images by spaceId',data:{spaceId,normalizedSpaceId,filteredCount:result.length,generatedCount:result.filter(i=>i.type==='generated').length,inspirationCount:result.filter(i=>i.type==='inspiration').length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD4'})}).catch(()=>{});
-          // #endregion
           
           return result;
         })();
@@ -134,10 +124,6 @@ export default function SpaceDetailPage() {
           createdAt: mergedImages.length > 0 ? mergedImages[mergedImages.length - 1].addedAt : new Date().toISOString(),
           updatedAt: mergedImages.length > 0 ? mergedImages[0].addedAt : new Date().toISOString()
         };
-
-        // #region agent log
-        void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:load-space-set',message:'Setting space state from participant_images',data:{spaceId,userHash:userHash||null,totalImages:newSpace.images.length,totalGenerated:newSpace.images.filter(i=>i.type==='generated').length,totalInspirations:newSpace.images.filter(i=>i.type==='inspiration').length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD3'})}).catch(()=>{});
-        // #endregion
 
         setSpace(newSpace);
         return;
@@ -203,9 +189,6 @@ export default function SpaceDetailPage() {
       /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(id);
 
     (async () => {
-      // #region agent log
-      void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'space/[id]/page.tsx:delete-image',message:'Deleting image from space detail',data:{spaceId,userHash:userHash||null,imageId,isUuid:isUuid(imageId)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'SD4'})}).catch(()=>{});
-      // #endregion
 
       if (userHash && isUuid(imageId)) {
         await deleteParticipantImage(userHash, imageId);

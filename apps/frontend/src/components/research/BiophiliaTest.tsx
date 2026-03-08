@@ -30,52 +30,9 @@ export function BiophiliaTest({ onSelect, className = '', frameless = false, ste
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   
-  // #region agent log
-  useEffect(() => {
-    const measureHeights = () => {
-      const buttons = document.querySelectorAll('[data-biophilia-button]');
-      const heights: number[] = [];
-      const textHeights: number[] = [];
-      buttons.forEach((btn, idx) => {
-        const height = (btn as HTMLElement).offsetHeight;
-        heights.push(height);
-        const textSection = (btn as HTMLElement).querySelector('[data-biophilia-text]') as HTMLElement;
-        const textHeight = textSection?.offsetHeight || 0;
-        textHeights.push(textHeight);
-        const h4 = textSection?.querySelector('h4') as HTMLElement;
-        const p = textSection?.querySelector('p') as HTMLElement;
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BiophiliaTest.tsx:measureHeights',message:'Biophilia button height measured',data:{buttonIndex:idx,buttonHeight:height,textSectionHeight:textHeight,h4Height:h4?.offsetHeight||0,pHeight:p?.offsetHeight||0,optionId:BIOPHILIA_OPTIONS[idx]?.id,gridCols:'1x2'},timestamp:Date.now(),sessionId:'debug-session',runId:'height-measurement',hypothesisId:'H1'})}).catch(()=>{});
-      });
-      if (heights.length > 0) {
-        const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
-        const minHeight = Math.min(...heights);
-        const maxHeight = Math.max(...heights);
-        const avgTextHeight = textHeights.reduce((a, b) => a + b, 0) / textHeights.length;
-        const minTextHeight = Math.min(...textHeights);
-        const maxTextHeight = Math.max(...textHeights);
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BiophiliaTest.tsx:measureHeights',message:'Biophilia button heights summary',data:{avgHeight,minHeight,maxHeight,heightDiff:maxHeight-minHeight,avgTextHeight,minTextHeight,maxTextHeight,textHeightDiff:maxTextHeight-minTextHeight,count:heights.length},timestamp:Date.now(),sessionId:'debug-session',runId:'height-measurement',hypothesisId:'H1'})}).catch(()=>{});
-      }
-    };
-    const timeout = setTimeout(measureHeights, 500);
-    return () => clearTimeout(timeout);
-  }, [selectedId]);
-  // #endregion
-
-  // #region agent log
-  useEffect(() => {
-    BIOPHILIA_OPTIONS.forEach(opt => {
-      if (opt.imageUrl) {
-        fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BiophiliaTest.tsx:useEffect',message:'Rendering biophilia option with imageUrl',data:{optionId:opt.id,score:opt.score,imageUrl:opt.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H3'})}).catch(()=>{});
-      }
-    });
-  }, []);
-  // #endregion
 
   const handleSelect = (option: BiophiliaOption) => {
     setSelectedId(option.id);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BiophiliaTest.tsx:handleSelect',message:'User selected biophilia option',data:{optionId:option.id,score:option.score,label:option.label},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E1'})}).catch(()=>{});
-    // #endregion
     onSelect(option.score, option.id);
   };
 
@@ -145,14 +102,8 @@ export function BiophiliaTest({ onSelect, className = '', frameless = false, ste
                     className="object-cover"
                     style={{ objectPosition: 'center 65%' }}
                     onLoad={() => {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BiophiliaTest.tsx:onLoad',message:'Biophilia image loaded successfully',data:{optionId:option.id,score:option.score,imageUrl:option.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H1'})}).catch(()=>{});
-                      // #endregion
                     }}
                     onError={() => {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'BiophiliaTest.tsx:onError',message:'Biophilia image failed to load',data:{optionId:option.id,score:option.score,imageUrl:option.imageUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'image-load-check',hypothesisId:'H2'})}).catch(()=>{});
-                      // #endregion
                     }}
                   />
                 ) : (

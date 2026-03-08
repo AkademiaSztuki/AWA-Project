@@ -36,31 +36,6 @@ export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserP
     const raw = sessionData.bigFive;
     const scores: any = raw.scores || {};
 
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'sync-check',
-        hypothesisId: 'H7',
-        location: 'profile-mapper.ts:bigFive-mapping',
-        message: 'Mapping Big Five to profile',
-        data: {
-          hasBigFive: true,
-          instrument: raw.instrument,
-          hasScores: !!scores,
-          scoresKeys: scores ? Object.keys(scores) : [],
-          hasDomains: !!scores.domains,
-          hasFacets: !!scores.facets,
-          domainsKeys: scores.domains ? Object.keys(scores.domains) : [],
-          facetsKeys: scores.facets ? Object.keys(scores.facets) : []
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
-
     // Always use IPIP-NEO-120 (IPIP-60 removed)
     const instrument: 'IPIP-NEO-120' = 'IPIP-NEO-120';
 
@@ -120,87 +95,13 @@ export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserP
       completedAt: raw.completedAt
     };
     
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'sync-check',
-        hypothesisId: 'H7',
-        location: 'profile-mapper.ts:bigFive-mapped',
-        message: 'Big Five mapped to personality',
-        data: {
-          instrument: personality.instrument,
-          hasDomains: !!personality.domains,
-          domainsKeys: personality.domains ? Object.keys(personality.domains) : [],
-          hasFacets: !!personality.facets,
-          facetsKeys: personality.facets ? Object.keys(personality.facets) : [],
-          completedAt: personality.completedAt
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
   } else {
-    // #region agent log
-    void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'sync-check',
-        hypothesisId: 'H7',
-        location: 'profile-mapper.ts:bigFive-missing',
-        message: 'No Big Five in sessionData',
-        data: {
-          hasBigFive: false
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
   }
 
   // Biophilia score: check roomPreferences first (room-specific), then top-level (global profile)
   // This matches the logic in input-builder.ts: roomPrefs?.biophiliaScore ?? sessionData.biophiliaScore ?? 1
   const biophiliaScore = sessionData.roomPreferences?.biophiliaScore ?? sessionData.biophiliaScore ?? 0;
   
-  // #region agent log
-  // Log biophiliaScore mapping
-  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: 'debug-session',
-      runId: 'explicit-check',
-      hypothesisId: 'E6',
-      location: 'profile-mapper.ts:biophilia-mapping',
-      message: 'Mapping biophiliaScore from sessionData to UserProfile',
-      data: {
-        roomPreferencesBiophiliaScore: sessionData.roomPreferences?.biophiliaScore,
-        roomPreferencesBiophiliaScoreType: typeof sessionData.roomPreferences?.biophiliaScore,
-        sessionDataBiophiliaScore: sessionData.biophiliaScore,
-        sessionDataBiophiliaScoreType: typeof sessionData.biophiliaScore,
-        sessionDataBiophiliaScoreUndefined: sessionData.biophiliaScore === undefined,
-        sessionDataBiophiliaScoreNull: sessionData.biophiliaScore === null,
-        mappedBiophiliaScore: biophiliaScore,
-        hasRoomPreferences: !!sessionData.roomPreferences,
-        hasPrsIdeal: !!sessionData.prsIdeal,
-        sessionDataKeys: Object.keys(sessionData).filter(k => k.includes('biophilia') || k.includes('sensory') || k.includes('nature') || k.includes('roomPreferences'))
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
-
-  // #region agent log
-  const explicitStyle = sessionData.colorsAndMaterials?.selectedStyle || '';
-  const explicitPalette = sessionData.colorsAndMaterials?.selectedPalette || '';
-  const explicitMaterials = sessionData.colorsAndMaterials?.topMaterials || [];
-  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'profile-mapper.ts:explicit-mapping',message:'Mapping explicit to UserProfile',data:{selectedPalette:explicitPalette,selectedStyle:explicitStyle,selectedStyleType:typeof explicitStyle,selectedStyleIsEmpty:explicitStyle==='',materialsCount:explicitMaterials.length},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E11'})}).catch(()=>{});
-  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'profile-mapper.ts:explicit-mapping-2',message:'Explicit payload snapshot',data:{selectedPalette:explicitPalette||null,selectedStyle:explicitStyle||null,selectedStyleType:typeof explicitStyle,selectedStyleIsEmpty:explicitStyle==='',materials:explicitMaterials.slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'explicit-check',hypothesisId:'E12'})}).catch(()=>{});
-  // #endregion
 
   return {
     userHash: sessionData.userHash,
@@ -225,30 +126,6 @@ export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserP
           if (!style || style === '') {
             return undefined;
           }
-          // #region agent log
-          void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'explicit-check',
-              hypothesisId: 'E19',
-              location: 'profile-mapper.ts:selectedStyle-mapping',
-              message: 'Mapping selectedStyle to UserProfile',
-              data: {
-                rawStyle: style,
-                rawStyleType: typeof style,
-                rawStyleIsEmpty: style === '',
-                rawStyleIsNull: style === null,
-                rawStyleIsUndefined: style === undefined,
-                hasColorsAndMaterials: !!sessionData.colorsAndMaterials,
-                colorsAndMaterialsKeys: sessionData.colorsAndMaterials ? Object.keys(sessionData.colorsAndMaterials) : [],
-                mappedStyle: style
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
           return style;
         })(),
         warmthPreference: sessionData.semanticDifferential?.warmth || 0.5,
@@ -396,43 +273,6 @@ export function mapUserProfileToSessionData(userProfile: UserProfile): Partial<S
     sessionUpdates.coreProfileComplete = true;
     sessionUpdates.coreProfileCompletedAt = userProfile.profileCompletedAt;
   }
-
-  // #region agent log
-  void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: 'debug-session',
-      runId: 'profile-load',
-      hypothesisId: 'P1',
-      location: 'profile-mapper.ts:mapUserProfileToSessionData',
-      message: 'Mapping UserProfile to SessionData',
-      data: {
-        hasPersonality: !!sessionUpdates.bigFive,
-        hasImplicit: !!sessionUpdates.visualDNA,
-        hasExplicit: !!sessionUpdates.colorsAndMaterials,
-        hasSensory: !!sessionUpdates.sensoryPreferences,
-        hasBiophilia: sessionUpdates.biophiliaScore !== undefined,
-        biophiliaScore: sessionUpdates.biophiliaScore,
-        hasLifestyle: !!sessionUpdates.lifestyle,
-        profileCompletedAt: userProfile.profileCompletedAt,
-        implicitStyle: sessionUpdates.visualDNA?.dominantStyle,
-        implicitColorsCount: sessionUpdates.visualDNA?.preferences?.colors?.length || 0,
-        implicitMaterialsCount: sessionUpdates.visualDNA?.preferences?.materials?.length || 0,
-        explicitPalette: sessionUpdates.colorsAndMaterials?.selectedPalette,
-        explicitStyle: sessionUpdates.colorsAndMaterials?.selectedStyle,
-        explicitStyleType: typeof sessionUpdates.colorsAndMaterials?.selectedStyle,
-        explicitStyleIsEmpty: sessionUpdates.colorsAndMaterials?.selectedStyle === '',
-        explicitStyleIsNull: sessionUpdates.colorsAndMaterials?.selectedStyle === null,
-        explicitStyleIsUndefined: sessionUpdates.colorsAndMaterials?.selectedStyle === undefined,
-        explicitMaterialsCount: sessionUpdates.colorsAndMaterials?.topMaterials?.length || 0,
-        profileExplicitSelectedStyle: (userProfile.aestheticDNA?.explicit as any)?.selectedStyle,
-        profileExplicitSelectedStyleType: typeof (userProfile.aestheticDNA?.explicit as any)?.selectedStyle
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
 
   return sessionUpdates;
 }
