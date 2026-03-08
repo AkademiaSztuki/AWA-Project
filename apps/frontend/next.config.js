@@ -2,9 +2,8 @@
 const nextConfig = {
   images: {
     domains: [
-      'zcaaqbbcqpkzunepnhpb.supabase.co',  // Supabase storage
-      'your-supabase-project.supabase.co', 
-      'modal-api-domain.com'
+      'modal-api-domain.com',
+      'storage.googleapis.com',
     ],
     // Optymalizacja obrazów - konwersja na WebP/AVIF i kompresja
     formats: ['image/avif', 'image/webp'],

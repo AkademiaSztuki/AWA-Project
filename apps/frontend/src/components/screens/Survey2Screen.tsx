@@ -6,7 +6,6 @@ import { GlassCard } from '../ui/GlassCard';
 import GlassSurface from '../ui/GlassSurface';
 import { GlassSlider } from '../ui/GlassSlider';
 import { useSessionData } from '@/hooks/useSessionData';
-import { supabase } from '@/lib/supabase';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { AwaDialogue } from '@/components/awa';
@@ -69,15 +68,13 @@ export function Survey2Screen() {
         score: clarityScore,
       });
     } else {
-      await supabase.from('survey_results').insert([
-        {
-          session_id: sessionData.userHash,
-          type: 'clarity',
-          answers: answers,
-          clarity_score: clarityScore,
-          timestamp: new Date().toISOString()
-        }
-      ]);
+      // Fallback: try gcpApi when not in primary mode (supabase client removed)
+      await gcpApi.research.survey({
+        userHash: sessionData.userHash,
+        type: 'clarity',
+        answers,
+        score: clarityScore,
+      }).catch(() => {});
     }
 
     stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją

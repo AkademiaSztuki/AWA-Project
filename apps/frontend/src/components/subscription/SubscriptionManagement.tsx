@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { supabase } from '@/lib/supabase';
 
 interface Subscription {
   id: string;
@@ -40,27 +39,18 @@ export function SubscriptionManagement({ userHash, className }: SubscriptionMana
     const fetchSubscription = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('user_hash', userHash)
-          .eq('status', 'active')
-          .maybeSingle();
+        const response = await fetch(`/api/credits/balance?userHash=${encodeURIComponent(userHash)}`);
+        const data = await response.json();
 
-        if (error) {
-          // Jeśli błąd RLS lub brak dostępu, po prostu nie ma subskrypcji
-          if (error.code === 'PGRST301' || error.message?.includes('permission') || error.message?.includes('RLS')) {
-            console.log('No subscription access or RLS policy issue - this is OK for new users');
-            setSubscription(null);
-          } else {
-            throw error;
-          }
-        } else {
-          setSubscription(data);
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch');
         }
+
+        // subscription comes from credits API (GCP backend)
+        setSubscription(data.subscription || null);
       } catch (error) {
         console.error('Error fetching subscription:', error);
-        setSubscription(null); // Ustaw null zamiast pozostawić undefined
+        setSubscription(null);
       } finally {
         setLoading(false);
       }

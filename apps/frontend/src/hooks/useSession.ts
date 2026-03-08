@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { SessionData, FlowStep } from '@/types';
-import { fetchLatestSessionSnapshot, saveFullSessionToSupabase, supabase, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
+import { fetchLatestSessionSnapshot, saveFullSessionToSupabase, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
 import { uploadSpaceImage, saveSpaceImagesMetadata, fetchParticipantImages } from '@/lib/remote-spaces';
 import { gcpApi } from '@/lib/gcp-api-client';
 
@@ -522,89 +522,51 @@ export const useSession = (): UseSessionReturn => {
       // Set initial session immediately (for fast render)
       setSessionStoreState({ sessionData: initialSession, isInitialized: true });
 
-      // STEP 2: Load from Supabase in background (async, can take time)
+      // STEP 2: Load from GCP in background (async, can take time)
       let authUserId: string | undefined;
 
-      // If no userHash in localStorage, try to restore it from Supabase if user is authenticated
+      // If no userHash in localStorage, try to restore it from GCP if user is authenticated
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        authUserId = session?.user?.id ?? undefined;
+        const storedGoogleAuthId = safeLocalStorage.getItem('aura_google_auth_user_id');
+        authUserId = storedGoogleAuthId ?? undefined;
         if (!userHash && authUserId) {
           const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
           const restoredUserHash = await getUserHashFromAuth(authUserId);
           if (restoredUserHash) {
             userHash = restoredUserHash;
             safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:restore-userHash',message:'Restored userHash from Supabase',data:{userHash:userHash,hasAuthUser:!!session?.user,userId:session?.user?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I1'})}).catch(()=>{});
-            // #endregion
-            console.log('[useSession] Restored userHash from Supabase:', userHash);
+            console.log('[useSession] Restored userHash from GCP:', userHash);
           }
         }
       } catch (error) {
-        console.warn('[useSession] Failed to restore userHash from Supabase:', error);
+        console.warn('[useSession] Failed to restore userHash from GCP:', error);
       }
 
       // If authenticated, check if there's an existing profile with data linked to auth_user_id
       // If yes, use that userHash instead of creating a new one
       if (authUserId && userHash) {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user?.id === authUserId) {
-            const { getBestProfileForAuth, getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
-            
-            // First, check if there's a profile with data linked to auth_user_id
-            const bestProfile = await getBestProfileForAuth(authUserId);
-            if (bestProfile && bestProfile.userHash) {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:best-profile-found',message:'Best profile for auth_user_id found',data:{authUserId,foundUserHash:bestProfile.userHash,hasPersonality:!!bestProfile.personality,hasImplicit:!!bestProfile.aestheticDNA?.implicit,hasExplicit:!!bestProfile.aestheticDNA?.explicit,hasSensory:!!bestProfile.sensoryPreferences,hasBiophilia:bestProfile.psychologicalBaseline?.biophiliaScore!==undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I17'})}).catch(()=>{});
-              // #endregion
-              if (bestProfile.userHash !== userHash) {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:switch-to-profile-with-data',message:'Switching to userHash from profile with data',data:{oldUserHash:userHash,newUserHash:bestProfile.userHash,authUserId,hasPersonality:!!bestProfile.personality,hasImplicit:!!bestProfile.aestheticDNA?.implicit,hasExplicit:!!bestProfile.aestheticDNA?.explicit,hasSensory:!!bestProfile.sensoryPreferences,hasBiophilia:bestProfile.psychologicalBaseline?.biophiliaScore!==undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I13'})}).catch(()=>{});
-                // #endregion
-                userHash = bestProfile.userHash;
-                safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
+          const { getBestProfileForAuth, getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
+          
+          const bestProfile = await getBestProfileForAuth(authUserId);
+          if (bestProfile && bestProfile.userHash) {
+            if (bestProfile.userHash !== userHash) {
+              userHash = bestProfile.userHash;
+              safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
+            }
+          } else {
+            const existingHash = await getUserHashFromAuth(authUserId);
+            if (!existingHash) {
+              const linked = await gcpApi.participants.linkAuth({
+                userHash,
+                authUserId,
+              });
+              if (!linked.ok) {
+                console.warn('[useSession] link-auth failed:', linked.error);
               }
-            } else {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:no-best-profile',message:'No profile with data found for auth_user_id',data:{authUserId,currentUserHash:userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I18'})}).catch(()=>{});
-              // #endregion
-              // No profile with data — check if there's any mapping at all
-              const existingHash = await getUserHashFromAuth(authUserId);
-              if (!existingHash) {
-                // No mapping yet — link this userHash to auth_user_id (participants is source of truth)
-                let error: { message?: string } | null = null;
-                if (gcpApi.isConfigured() && process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE === 'primary') {
-                  const linked = await gcpApi.participants.linkAuth({
-                    userHash,
-                    authUserId,
-                  });
-                  if (!linked.ok) {
-                    error = { message: linked.error };
-                  }
-                } else {
-                  const response = await supabase
-                    .from('participants')
-                    .upsert({
-                      user_hash: userHash,
-                      auth_user_id: authUserId,
-                      updated_at: new Date().toISOString()
-                    } as any, { onConflict: 'user_hash' } as any);
-                  error = response.error;
-                }
-
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:link-userHash',message:'Linking userHash to auth_user_id',data:{userHash,authUserId,hadExisting:!!existingHash,upsertError:!!error,errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I11'})}).catch(()=>{});
-                // #endregion
-              } else if (existingHash !== userHash) {
-                // Mapping exists but different userHash — use the existing one
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:switch-to-existing-hash',message:'Switching to existing userHash from auth_user_id',data:{oldUserHash:userHash,newUserHash:existingHash,authUserId},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I14'})}).catch(()=>{});
-                // #endregion
-                userHash = existingHash;
-                safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
-              }
+            } else if (existingHash !== userHash) {
+              userHash = existingHash;
+              safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
             }
           }
         } catch (error) {
@@ -699,35 +661,22 @@ export const useSession = (): UseSessionReturn => {
           
           if (userProfile) {
             // Check if profile has auth_user_id and try to restore userHash if needed
-            if (userProfile.auth_user_id) {
+            if (userProfile.auth_user_id && authUserId === userProfile.auth_user_id) {
               try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session && session.user && session.user.id === userProfile.auth_user_id) {
-                  // Profile has auth_user_id matching current session
-                  // If current userHash doesn't match, try to restore the correct one
-                  const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
-                  const restoredUserHash = await getUserHashFromAuth(session.user.id);
-                  if (restoredUserHash && restoredUserHash !== userHash) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:restore-userHash-after-profile-load',message:'Restored userHash after profile load',data:{oldUserHash:userHash,newUserHash:restoredUserHash,authUserId:session.user.id},timestamp:Date.now(),sessionId:'debug-session',runId:'incognito-fix',hypothesisId:'I9'})}).catch(()=>{});
-                    // #endregion
-                    userHash = restoredUserHash;
-                    safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
-                    console.log('[useSession] Restored userHash after profile load:', userHash);
-                    // Reload profile with correct userHash
-                    const correctUserProfile = await getUserProfile(userHash);
-                    if (correctUserProfile) {
-                      const correctProfileSessionData = mapUserProfileToSessionData(correctUserProfile);
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSession.ts:profile-loaded-correct',message:'Loaded profile data with correct userHash',data:{hasBigFive:!!correctProfileSessionData.bigFive,hasImplicit:!!correctProfileSessionData.visualDNA,hasExplicit:!!correctProfileSessionData.colorsAndMaterials,hasSensory:!!correctProfileSessionData.sensoryPreferences,hasBiophilia:correctProfileSessionData.biophiliaScore!==undefined,biophiliaScore:correctProfileSessionData.biophiliaScore,hasLifestyle:!!correctProfileSessionData.lifestyle,profileCompletedAt:correctUserProfile.profileCompletedAt,implicitStyle:correctProfileSessionData.visualDNA?.dominantStyle,implicitColorsCount:correctProfileSessionData.visualDNA?.preferences?.colors?.length||0,implicitMaterialsCount:correctProfileSessionData.visualDNA?.preferences?.materials?.length||0,explicitPalette:correctProfileSessionData.colorsAndMaterials?.selectedPalette,explicitMaterialsCount:correctProfileSessionData.colorsAndMaterials?.topMaterials?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'profile-load',hypothesisId:'P3'})}).catch(()=>{});
-                      // #endregion
-                      // Update mergedSession with correct profile data
-                      mergedSession = {
-                        ...mergedSession,
-                        ...correctProfileSessionData,
-                        userHash
-                      };
-                    }
+                const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
+                const restoredUserHash = await getUserHashFromAuth(authUserId);
+                if (restoredUserHash && restoredUserHash !== userHash) {
+                  userHash = restoredUserHash;
+                  safeLocalStorage.setItem(USER_HASH_STORAGE_KEY, userHash);
+                  console.log('[useSession] Restored userHash after profile load:', userHash);
+                  const correctUserProfile = await getUserProfile(userHash);
+                  if (correctUserProfile) {
+                    const correctProfileSessionData = mapUserProfileToSessionData(correctUserProfile);
+                    mergedSession = {
+                      ...mergedSession,
+                      ...correctProfileSessionData,
+                      userHash,
+                    };
                   }
                 }
               } catch (error) {

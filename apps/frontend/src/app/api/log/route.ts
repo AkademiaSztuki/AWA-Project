@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, logBehavioralEvent } from '@/lib/supabase';
+import { logBehavioralEvent } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {

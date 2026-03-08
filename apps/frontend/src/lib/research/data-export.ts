@@ -1,13 +1,7 @@
 // Research Validation - Data Export Utilities
 // Export research data for analysis in R, Python, SPSS, etc.
 
-import { createClient } from '@supabase/supabase-js';
 import { UserProfile, Household, Room, DesignSession, EnhancedSwipeData } from '@/types/deep-personalization';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 // =========================
 // RESEARCH DATA EXPORT

@@ -6,7 +6,6 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import GlassSurface from '@/components/ui/GlassSurface';
 import { GlassSlider } from '@/components/ui/GlassSlider';
 import { useSessionData } from '@/hooks/useSessionData';
-import { supabase } from '@/lib/supabase';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { AwaDialogue } from '@/components/awa';
@@ -222,15 +221,13 @@ export default function Survey1Page() {
           score: susScore,
         });
       } else {
-        await supabase.from('survey_results').insert([
-          {
-            session_id: sessionData?.userHash || '',
-            type: 'sus',
-            answers: answers,
-            sus_score: susScore,
-            timestamp: new Date().toISOString(),
-          }
-        ]);
+        // Fallback: try gcpApi when not in primary mode (supabase client removed)
+        await gcpApi.research.survey({
+          userHash: sessionData?.userHash || '',
+          type: 'sus',
+          answers,
+          score: susScore,
+        }).catch(() => {});
       }
     } catch (e) {
       console.error('Error saving SUS survey:', e);

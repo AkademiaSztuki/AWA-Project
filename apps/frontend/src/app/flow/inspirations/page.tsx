@@ -12,7 +12,6 @@ import { useSessionData } from "@/hooks/useSessionData";
 import { analyzeInspirationsWithGamma, type InspirationTaggingResult } from "@/lib/vision/gamma-tagging";
 import { fileToNormalizedDataUrl } from "@/lib/utils";
 import { saveParticipantImages } from "@/lib/remote-spaces";
-import { supabase } from "@/lib/supabase";
 import { gcpApi } from "@/lib/gcp-api-client";
 import { 
   Upload, 
@@ -266,37 +265,9 @@ export default function InspirationsPage() {
       
       setItems(itemsWithBase64);
 
-      const useGcpPrimary = gcpApi.isConfigured() && process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE === 'primary';
+      // GCP handles image uploads via uploadAndRegister – skip local storage
+      const uploads = itemsWithBase64.map((i) => ({ id: i.id, url: undefined as string | undefined, fileId: undefined as string | undefined }));
 
-      // Upload files to Supabase Storage (participant-images bucket) only outside GCP primary mode
-      const userHash = (sessionData as any)?.userHash || 'anonymous';
-      const uploads = await Promise.all(itemsWithBase64.map(async (i) => {
-        try {
-          if (!i.file) return { id: i.id };
-          if (useGcpPrimary) return { id: i.id };
-          const path = `${userHash}/inspiration/${i.id}`;
-          const { data, error } = await supabase
-            .storage
-            .from('participant-images')
-            .upload(path, i.file, { upsert: true, contentType: i.file?.type || 'image/jpeg' });
-          
-          if (error) {
-            const status = (error as any)?.statusCode ?? (error as any)?.status;
-            if (error.message?.includes('Bucket not found') || status === 404 || status === '404') {
-              console.warn('Bucket participant-images not found - skipping upload');
-              return { id: i.id };
-            }
-            throw error;
-          }
-          const { data: pub } = supabase.storage.from('participant-images').getPublicUrl(path);
-          return { id: i.id, fileId: data?.path, url: pub?.publicUrl || undefined };
-        } catch (e) {
-          console.warn('Upload failed for', i.id, e);
-          return { id: i.id };
-        }
-      }));
-
-      // Create payload from UI state (trusting this as source of truth for deletions)
       const payload = itemsWithBase64.map(i => {
         const up = uploads.find(u => u.id === i.id);
         const persistedUrl = up?.url ? sanitizeUrl(up.url) : undefined;
@@ -417,11 +388,12 @@ export default function InspirationsPage() {
               );
               await updateSessionData({ inspirations: updatedInspirations } as any);
               
-              // Automatically save tags to Supabase if userHash is available
-              if (userHash && item.imageBase64) {
+              // Automatically save tags to GCP if userHash is available
+              const currentUserHash = (sessionData as any)?.userHash;
+              if (currentUserHash && item.imageBase64) {
                 try {
                   const { fetchParticipantImages, updateParticipantImageMetadata, saveParticipantImages } = await import('@/lib/remote-spaces');
-                  const existing = await fetchParticipantImages(userHash);
+                  const existing = await fetchParticipantImages(currentUserHash);
                   const itemUrl = item.imageBase64;
                   const existingInspiration = existing.find(img => 
                     img.type === 'inspiration' && 
@@ -429,25 +401,23 @@ export default function InspirationsPage() {
                   );
                   
                   if (existingInspiration) {
-                    // Update existing image with tags
-                    await updateParticipantImageMetadata(userHash, existingInspiration.id, {
+                    await updateParticipantImageMetadata(currentUserHash, existingInspiration.id, {
                       tags: analysis.tags,
                       description: analysis.description ?? null
                     });
-                    console.log('[Inspirations] Tags automatically saved to Supabase for:', existingInspiration.id);
+                    console.log('[Inspirations] Tags saved for:', existingInspiration.id);
                   } else if (itemUrl && !itemUrl.startsWith('blob:')) {
-                    // Save new image with tags if we have a valid URL
-                    await saveParticipantImages(userHash, [{
+                    await saveParticipantImages(currentUserHash, [{
                       url: itemUrl,
                       type: 'inspiration',
                       tags: analysis.tags,
                       description: analysis.description,
                       is_favorite: false
                     }]);
-                    console.log('[Inspirations] New image with tags automatically saved to Supabase');
+                    console.log('[Inspirations] New image with tags saved');
                   }
-                } catch (supabaseError) {
-                  console.warn('[Inspirations] Failed to auto-save tags to Supabase:', supabaseError);
+                } catch (saveError) {
+                  console.warn('[Inspirations] Failed to auto-save tags:', saveError);
                   // Don't fail the whole tagging process if Supabase save fails
                 }
               }

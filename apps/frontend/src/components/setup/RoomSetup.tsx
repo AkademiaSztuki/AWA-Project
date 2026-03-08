@@ -19,7 +19,6 @@ import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
 import { saveRoom } from '@/lib/supabase-deep-personalization';
 import { useSession, useSessionData } from '@/hooks';
 import { saveParticipantImages } from '@/lib/remote-spaces';
-import { supabase } from '@/lib/supabase';
 import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { SessionData } from '@/types';
