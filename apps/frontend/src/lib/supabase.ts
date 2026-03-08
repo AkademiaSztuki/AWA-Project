@@ -8,6 +8,26 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // Allow turning off full session sync to avoid RLS/CORS loops.
 // Default: ENABLE sync (set NEXT_PUBLIC_DISABLE_SESSION_SYNC=1 to disable).
 export const DISABLE_SESSION_SYNC = (process.env.NEXT_PUBLIC_DISABLE_SESSION_SYNC ?? '0') !== '0';
+const GCP_PERSISTENCE_MODE = process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE ?? 'off';
+
+const isGcpMirrorEnabled = (): boolean =>
+  gcpApi.isConfigured() && GCP_PERSISTENCE_MODE === 'mirror';
+
+async function runGcpMirror<T>(
+  label: string,
+  operation: () => Promise<{ ok: boolean; error?: string; data?: T }>
+): Promise<void> {
+  if (!isGcpMirrorEnabled()) return;
+
+  try {
+    const result = await operation();
+    if (!result.ok) {
+      console.warn(`[GCP Mirror] ${label} failed:`, result.error || 'unknown_error');
+    }
+  } catch (error) {
+    console.warn(`[GCP Mirror] ${label} threw:`, error);
+  }
+}
 
 // Helper (debug-safe): read a few JWT claims without logging the token
 async function getAuthClaimsSafe(): Promise<{ role?: string; aud?: string; sub?: string } | null> {
@@ -296,10 +316,6 @@ export const saveGenerationFeedback = async (
     userRating?: number;
   }
 ) => {
-  if (gcpApi.isConfigured()) {
-    const r = await gcpApi.research.generationFeedback(feedback);
-    return r.ok;
-  }
   const { error } = await supabase
     .from('generation_feedback')
     .insert({
@@ -321,6 +337,8 @@ export const saveGenerationFeedback = async (
     console.error('Błąd zapisywania feedbacku generacji:', error);
     return false;
   }
+
+  await runGcpMirror('generation-feedback', () => gcpApi.research.generationFeedback(feedback));
   return true;
 };
 
@@ -337,10 +355,6 @@ export const saveRegenerationEvent = async (
     implicitQuality?: any;
   }
 ) => {
-  if (gcpApi.isConfigured()) {
-    const r = await gcpApi.research.regenerationEvent(event);
-    return r.ok;
-  }
   const { error } = await supabase
     .from('regeneration_events')
     .insert({
@@ -359,6 +373,20 @@ export const saveRegenerationEvent = async (
     console.error('Błąd zapisywania eventu regeneracji:', error);
     return false;
   }
+
+  await runGcpMirror('regeneration-event', () =>
+    gcpApi.research.regenerationEvent({
+      sessionId: event.sessionId,
+      projectId: event.projectId,
+      previousSources: event.previousSources,
+      previousSelected: event.previousSelected,
+      regenerationCount: event.regenerationCount,
+      timeSinceLastMs: event.timeSinceLastGen,
+      interpretation: event.interpretation,
+      sourceQuality: event.sourceQuality,
+      implicitQuality: event.implicitQuality,
+    })
+  );
   return true;
 };
 
@@ -378,10 +406,6 @@ export const saveFullSessionToSupabase = async (sessionData: any) => {
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-no-hash',message:'No userHash provided',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
     // #endregion
     return;
-  }
-  if (gcpApi.isConfigured()) {
-    const r = await gcpApi.participants.saveSession(sessionData.userHash, sessionData);
-    return r.ok ? undefined : undefined;
   }
   try {
     // Map SessionData to participants format
@@ -431,6 +455,10 @@ export const saveFullSessionToSupabase = async (sessionData: any) => {
         savedCount: data?.length || 0
       });
     }
+
+    await runGcpMirror('participants-session', () =>
+      gcpApi.participants.saveSession(sessionData.userHash, { participantRow })
+    );
   } catch (err) {
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveFullSessionToSupabase-exception',message:'Exception in saveFullSessionToSupabase',data:{error:err instanceof Error?err.message:String(err)},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H1'})}).catch(()=>{});
@@ -449,12 +477,6 @@ export const fetchLatestSessionSnapshot = async (userHash: string) => {
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:fetchLatestSessionSnapshot-no-hash',message:'No userHash provided',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H12'})}).catch(()=>{});
     // #endregion
     return null;
-  }
-  if (gcpApi.isConfigured()) {
-    const r = await gcpApi.participants.fetchSession(userHash);
-    if (!r.ok || r.data?.participant == null) return null;
-    const { mapParticipantToSessionData } = await import('@/lib/participants-mapper');
-    return mapParticipantToSessionData(r.data.participant as any);
   }
   try {
     const { data, error } = await supabase
@@ -568,12 +590,6 @@ export const saveParticipantSwipes = async (userHash: string, swipes: Array<{
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-skipped',message:'No userHash or swipes',data:{hasUserHash:!!userHash,swipeCount:swipes.length},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
     // #endregion
-    return;
-  }
-  if (gcpApi.isConfigured()) {
-    const participantExists = await ensureParticipantExists(userHash);
-    if (!participantExists) return;
-    const r = await gcpApi.swipes.save(userHash, swipes);
     return;
   }
   // Ensure participant exists before inserting swipes
@@ -704,6 +720,8 @@ export const saveParticipantSwipes = async (userHash: string, swipes: Array<{
   // #region agent log
   void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantSwipes-success',message:'Successfully saved swipes',data:{savedCount:data?.length||0,userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H2'})}).catch(()=>{});
   // #endregion
+
+  await runGcpMirror('participant-swipes', () => gcpApi.swipes.save(userHash, swipes));
   return true;
 };
 
@@ -755,12 +773,6 @@ export const startParticipantGeneration = async (
     // #endregion
     return null;
   }
-  if (gcpApi.isConfigured()) {
-    const participantExists = await ensureParticipantExists(userHash);
-    if (!participantExists) return null;
-    const r = await gcpApi.generations.start(userHash, job);
-    return r.ok && r.data?.generationId ? r.data.generationId : null;
-  }
   // Ensure participant exists before inserting generation
   const participantExists = await ensureParticipantExists(userHash);
   if (!participantExists) {
@@ -807,10 +819,6 @@ export const endParticipantGeneration = async (
   // #region agent log
   void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:endParticipantGeneration-entry',message:'Ending participant generation',data:{jobId,status:outcome.status,latencyMs:outcome.latency_ms,hasError:!!outcome.error_message},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H3'})}).catch(()=>{});
   // #endregion
-  if (gcpApi.isConfigured()) {
-    const r = await gcpApi.generations.end(jobId, outcome);
-    return r.ok;
-  }
   const safeLatency = Math.min(Math.max(0, Math.round(outcome.latency_ms)), 2147483647);
   
   const { error } = await supabase
@@ -915,11 +923,6 @@ export const logErrorEvent = async (projectId: string, payload: { source: string
 export const ensureParticipantExists = async (userHash: string): Promise<boolean> => {
   if (!userHash) return false;
 
-  if (gcpApi.isConfigured()) {
-    const r = await gcpApi.participants.ensure(userHash);
-    return r.ok;
-  }
-
   try {
     // Check if participant exists
     const { data: existing } = await supabase
@@ -928,7 +931,10 @@ export const ensureParticipantExists = async (userHash: string): Promise<boolean
       .eq('user_hash', userHash)
       .maybeSingle();
     
-    if (existing) return true;
+    if (existing) {
+      await runGcpMirror('participants-ensure-existing', () => gcpApi.participants.ensure(userHash));
+      return true;
+    }
     
     // Create minimal participant if doesn't exist
     const { error } = await supabase
@@ -958,6 +964,8 @@ export const ensureParticipantExists = async (userHash: string): Promise<boolean
     // #region agent log
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:ensureParticipantExists-created',message:'Created participant',data:{userHash},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H14'})}).catch(()=>{});
     // #endregion
+
+    await runGcpMirror('participants-ensure-created', () => gcpApi.participants.ensure(userHash));
     return true;
   } catch (e) {
     // #region agent log
@@ -994,26 +1002,6 @@ export const saveParticipantImage = async (
     void fetch('http://127.0.0.1:7242/ingest/03aa0d24-0050-48c3-a4eb-4c5924b7ecb7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase.ts:saveParticipantImage-skipped',message:'No userHash or storage_path',data:{hasUserHash:!!userHash,hasStoragePath:!!image.storage_path},timestamp:Date.now(),sessionId:'debug-session',runId:'flow-debug',hypothesisId:'H4'})}).catch(()=>{});
     // #endregion
     return null;
-  }
-  if (gcpApi.isConfigured()) {
-    const participantExists = await ensureParticipantExists(userHash);
-    if (!participantExists) return null;
-    const r = await gcpApi.images.register(userHash, {
-      type: image.type,
-      storage_path: image.storage_path,
-      public_url: image.public_url,
-      thumbnail_url: image.thumbnail_url,
-      is_favorite: image.is_favorite,
-      space_id: image.space_id,
-      tags_styles: image.tags_styles,
-      tags_colors: image.tags_colors,
-      tags_materials: image.tags_materials,
-      tags_biophilia: image.tags_biophilia,
-      description: image.description,
-      source: image.source,
-      generation_id: image.generation_id,
-    });
-    return r.ok ? (r.data?.imageId ?? null) : null;
   }
   // Ensure participant exists before inserting image
   const participantExists = await ensureParticipantExists(userHash);
@@ -1061,6 +1049,24 @@ export const saveParticipantImage = async (
     userHash,
     imageType: image.type
   });
+
+  await runGcpMirror('participant-image', () =>
+    gcpApi.images.register(userHash, {
+      type: image.type,
+      storage_path: image.storage_path,
+      public_url: image.public_url,
+      thumbnail_url: image.thumbnail_url,
+      is_favorite: image.is_favorite,
+      space_id: image.space_id,
+      tags_styles: image.tags_styles,
+      tags_colors: image.tags_colors,
+      tags_materials: image.tags_materials,
+      tags_biophilia: image.tags_biophilia,
+      description: image.description,
+      source: image.source,
+      generation_id: image.generation_id,
+    })
+  );
   return data?.id || null;
 };
 
@@ -1093,15 +1099,6 @@ export const saveResearchConsent = async (
   },
   locale: 'pl' | 'en'
 ) => {
-  if (gcpApi.isConfigured()) {
-    const r = await gcpApi.research.consent({
-      userId,
-      consent,
-      locale,
-      consentVersion: CONSENT_VERSION,
-    });
-    return r.ok;
-  }
   console.info('[Supabase] Saving research consent', {
     userId,
     consentResearch: consent.consentResearch,
@@ -1139,6 +1136,15 @@ export const saveResearchConsent = async (
     consentId: data?.id,
     userId
   });
+
+  await runGcpMirror('research-consent', () =>
+    gcpApi.research.consent({
+      userId,
+      consent,
+      locale,
+      consentVersion: CONSENT_VERSION,
+    })
+  );
 
   return data;
 };

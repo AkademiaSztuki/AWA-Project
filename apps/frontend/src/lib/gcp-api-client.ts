@@ -1,6 +1,6 @@
 /**
  * Client for AWA backend-gcp API (Cloud Run).
- * Use when NEXT_PUBLIC_GCP_API_BASE_URL is set to switch from Supabase to GCP.
+ * This backend is currently safest as an optional mirror, not the primary store.
  */
 
 const getBaseUrl = (): string | null => {
@@ -52,10 +52,10 @@ export const gcpApi = {
         body: { userHash },
       }),
 
-    saveSession: (userHash: string, sessionData: Record<string, unknown>) =>
+    saveSession: (userHash: string, payload: { participantRow: Record<string, unknown> }) =>
       apiFetch<{ ok: boolean }>('/api/session', {
         method: 'POST',
-        body: { ...sessionData, userHash },
+        body: { userHash, ...payload },
       }),
 
     fetchSession: (userHash: string) =>
