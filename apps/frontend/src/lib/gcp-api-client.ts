@@ -10,7 +10,7 @@ const getBaseUrl = (): string | null => {
 
 async function apiFetch<T = unknown>(
   path: string,
-  options: RequestInit & { method?: string; body?: object } = {}
+  options: Omit<RequestInit, 'body'> & { body?: object } = {}
 ): Promise<{ data?: T; ok: boolean; error?: string }> {
   const base = getBaseUrl();
   if (!base) {
