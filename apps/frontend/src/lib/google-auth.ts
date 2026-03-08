@@ -84,8 +84,8 @@ export async function signInWithGoogleNative(options: {
     return { ok: false, error: 'NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set' };
   }
 
-  const { getBaseUrl } = await import('@/lib/gcp-api-client');
-  if (!getBaseUrl()) {
+  const { gcpApi } = await import('@/lib/gcp-api-client');
+  if (!gcpApi.isConfigured()) {
     return { ok: false, error: 'GCP API base URL is not set' };
   }
 

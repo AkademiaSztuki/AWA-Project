@@ -440,7 +440,7 @@ export const saveFullSessionToSupabase = async (sessionData: any) => {
       if (!participantRow.consent_timestamp) {
         participantRow.consent_timestamp = new Date().toISOString();
       }
-      const r = await gcpApi.participants.saveSession(sessionData.userHash, { participantRow });
+      const r = await gcpApi.participants.saveSession(sessionData.userHash, { participantRow: participantRow as unknown as Record<string, unknown> });
       return r.ok ? undefined : undefined;
     } catch (err) {
       console.error('GCP primary session save failed:', err);
@@ -497,7 +497,7 @@ export const saveFullSessionToSupabase = async (sessionData: any) => {
     }
 
     await runGcpMirror('participants-session', () =>
-      gcpApi.participants.saveSession(sessionData.userHash, { participantRow })
+      gcpApi.participants.saveSession(sessionData.userHash, { participantRow: participantRow as unknown as Record<string, unknown> })
     );
   } catch (err) {
     // #region agent log
