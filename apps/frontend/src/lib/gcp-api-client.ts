@@ -28,9 +28,10 @@ async function apiFetch<T = unknown>(
       },
       body: body != null ? JSON.stringify(body) : undefined,
     });
-    const data = await res.json().catch(() => ({}));
+    const data = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
     if (!res.ok) {
-      return { ok: false, error: (data as { error?: string }).error || res.statusText };
+      const msg = data.detail || data.error || res.statusText;
+      return { ok: false, error: msg };
     }
     return { ok: true, data: data as T };
   } catch (e) {

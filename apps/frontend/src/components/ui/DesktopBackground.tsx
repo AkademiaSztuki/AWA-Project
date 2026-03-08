@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
 
 export function DesktopBackground() {
   const [gradientPos, setGradientPos] = useState({ x: 50, y: 50 });
@@ -57,15 +56,12 @@ export function DesktopBackground() {
             srcSet="/images/background-desktop-1920.jpg 1920w"
             type="image/jpeg"
           />
-          <Image
+          <img
             src="/images/background-desktop-1920.jpg"
             alt=""
-            fill
-            priority
-            quality={85}
-            className="object-cover bg-image"
-            sizes="100vw"
+            className="object-cover bg-image w-full h-full"
             style={{ objectFit: 'cover' }}
+            fetchPriority="low"
           />
         </picture>
       </div>

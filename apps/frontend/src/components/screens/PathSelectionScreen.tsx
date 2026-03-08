@@ -9,6 +9,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
+import { safeSessionStorage } from '@/lib/supabase';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { 
   Zap, 
@@ -119,10 +120,9 @@ export default function PathSelectionScreen() {
 
     // Check if user is authenticated
     if (!user) {
-
-      // Store the selected path and determine destination
+      // Store the selected path so after login redirect we can apply it on the destination page
       setPendingPath(pathType);
-      
+      safeSessionStorage.setItem('aura_auth_path_type', pathType);
       // Show login modal
       setShowLoginModal(true);
       return;

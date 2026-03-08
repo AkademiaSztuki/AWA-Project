@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       safeSessionStorage.getItem('aura_auth_next') ||
       '/';
     safeSessionStorage.removeItem('aura_auth_next');
-    safeSessionStorage.removeItem('aura_auth_path_type');
+    // Keep aura_auth_path_type so destination page (/flow/onboarding or /setup/profile) can apply it
     window.location.href = next;
   };
 

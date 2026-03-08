@@ -2,6 +2,33 @@ import { Router } from 'express';
 import { pool } from '../db';
 import { ensureParticipantRecord, grantFreeCredits } from '../services/billing';
 
+/** Make a DB row JSON-serializable (Date → ISO string, BigInt → number, Buffer → skip or base64). */
+function sanitizeRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (v === null || v === undefined) {
+      out[k] = v;
+    } else if (typeof v === 'bigint') {
+      out[k] = Number(v);
+    } else if (v instanceof Date) {
+      out[k] = v.toISOString();
+    } else if (typeof Buffer !== 'undefined' && Buffer.isBuffer(v)) {
+      out[k] = (v as Buffer).toString('base64');
+    } else if (Array.isArray(v)) {
+      out[k] = v.map((item) =>
+        typeof item === 'object' && item !== null && !(item instanceof Date)
+          ? sanitizeRow(item as Record<string, unknown>)
+          : item
+      );
+    } else if (typeof v === 'object' && v !== null && !(v instanceof Date)) {
+      out[k] = sanitizeRow(v as Record<string, unknown>);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 export const participantsRouter = Router();
 
 // POST /participants/ensure
@@ -95,9 +122,13 @@ participantsRouter.post('/participants/link-auth', async (req, res) => {
     } finally {
       client.release();
     }
-  } catch (error) {
-    console.error('participants/link-auth error', error);
-    return res.status(500).json({ ok: false, error: 'internal_error' });
+  } catch (error: unknown) {
+    const err = error as Error & { code?: string; detail?: string };
+    const message = err?.message ?? String(error);
+    console.error('participants/link-auth error', message, err?.code, err?.detail);
+    // Return short detail so client can show it (e.g. "column auth_user_id is of type uuid...")
+    const safeDetail = message.slice(0, 200);
+    return res.status(500).json({ ok: false, error: 'internal_error', detail: safeDetail });
   }
 });
 
@@ -278,13 +309,20 @@ participantsRouter.get('/session/:userHash', async (req, res) => {
         return res.json({ ok: true, participant: null });
       }
 
-      return res.json({ ok: true, participant: rows[0] });
+      const row = rows[0] as Record<string, unknown>;
+      return res.json({ ok: true, participant: sanitizeRow(row) });
     } finally {
       client.release();
     }
-  } catch (error) {
-    console.error('participants/session GET error', error);
-    return res.status(500).json({ ok: false, error: 'internal_error' });
+  } catch (error: unknown) {
+    const err = error as Error & { code?: string; detail?: string };
+    const message = err?.message ?? String(error);
+    console.error('participants/session GET error', message, err?.code, err?.detail);
+    return res.status(500).json({
+      ok: false,
+      error: 'internal_error',
+      detail: message.slice(0, 200),
+    });
   }
 });
 

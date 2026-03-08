@@ -9,7 +9,7 @@ import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { saveResearchConsent } from '@/lib/supabase';
+import { saveResearchConsent, safeSessionStorage } from '@/lib/supabase';
 import { ChevronDown } from 'lucide-react';
 
 const getDefaultCountry = (language: 'pl' | 'en') => (language === 'pl' ? 'PL' : 'US');
@@ -126,6 +126,18 @@ const OnboardingScreen: React.FC = () => {
       country: prev.country || getDefaultCountry(language)
     }));
   }, [language]);
+
+  // Apply path_type from sessionStorage after login redirect (set by PathSelectionScreen)
+  useEffect(() => {
+    const stored = safeSessionStorage.getItem('aura_auth_path_type');
+    if (stored === 'fast') {
+      safeSessionStorage.removeItem('aura_auth_path_type');
+      updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
+    } else if (stored === 'full') {
+      safeSessionStorage.removeItem('aura_auth_path_type');
+      updateSessionData({ pathType: 'full' });
+    }
+  }, [updateSessionData]);
 
   useEffect(() => {
     // Redirect immediately when pathType is available - don't wait for full sessionData

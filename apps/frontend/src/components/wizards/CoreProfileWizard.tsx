@@ -19,7 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { computeWeightedDNAFromSwipes } from '@/lib/dna';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
-import { saveResearchConsent, saveParticipantSwipes } from '@/lib/supabase';
+import { saveResearchConsent, saveParticipantSwipes, safeSessionStorage } from '@/lib/supabase';
 import Link from 'next/link';
 
 const STEP_CARD_HEIGHT = "min-h-[500px] md:min-h-[650px] max-h-[min(90vh,800px)] md:max-h-[min(78vh,900px)]";
@@ -355,6 +355,15 @@ export function CoreProfileWizard() {
       country: prev.country || getDefaultCountry(language)
     }));
   }, [language]);
+
+  // Apply path_type from sessionStorage after login redirect (set by PathSelectionScreen)
+  useEffect(() => {
+    const stored = safeSessionStorage.getItem('aura_auth_path_type');
+    if (stored === 'full') {
+      safeSessionStorage.removeItem('aura_auth_path_type');
+      updateSessionData({ pathType: 'full' });
+    }
+  }, [updateSessionData]);
 
   const steps: WizardStep[] = [
     'consent',
