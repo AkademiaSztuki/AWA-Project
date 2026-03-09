@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { pool } from '../db';
 import { grantFreeCredits } from '../services/billing';
 
@@ -40,16 +41,57 @@ authRouter.post('/auth/send-magic-link', async (req, res) => {
       client.release();
     }
   } catch (e: unknown) {
-    console.error('send-magic-link insert', (e as Error)?.message);
-    return res.status(500).json({ ok: false, error: 'internal_error' });
+    const err = e as Error & { code?: string };
+    console.error('send-magic-link insert', err?.message);
+    const msg = err?.message ?? '';
+    const isMissingTable = msg.includes('magic_link_tokens') || err?.code === '42P01';
+    const isConnectionError = msg.includes('ETIMEDOUT') || msg.includes('ECONNREFUSED') || msg.includes('connect');
+    return res.status(500).json({
+      ok: false,
+      error: isMissingTable ? 'missing_table' : isConnectionError ? 'database_connection_failed' : 'internal_error',
+      hint: isMissingTable
+        ? 'Wykonaj na bazie awa_db skrypt 04_magic_link_tokens.sql (lub .\\run-magic-link-migration.ps1).'
+        : isConnectionError
+          ? 'Backend nie łączy się z bazą. Wdróż ponownie: infra/gcp/./deploy-backend.ps1 (CLOUD_SQL_CONNECTION_NAME + --add-cloudsql-instances).'
+          : undefined,
+    });
   }
 
+  const resendKey = process.env.RESEND_API_KEY;
+  const resendFrom = process.env.RESEND_FROM || 'AWA <onboarding@resend.dev>';
   const smtpHost = process.env.SMTP_HOST;
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
-  const from = process.env.MAGIC_LINK_FROM || process.env.SMTP_FROM || 'noreply@project-ida.com';
+  const smtpFrom = process.env.MAGIC_LINK_FROM || process.env.SMTP_FROM || 'noreply@project-ida.com';
 
-  if (smtpHost && smtpUser && smtpPass && link) {
+  const subject = 'Zaloguj się do AWA / Sign in to AWA';
+  const html = `<p>Kliknij aby się zalogować / Click to sign in:</p><p><a href="${link}">${link}</a></p><p>Link wygasa za ${MAGIC_LINK_EXPIRY_MINUTES} minut.</p>`;
+  const text = `Kliknij aby się zalogować: ${link}\n\nClick to sign in: ${link}`;
+
+  let emailSent = false;
+
+  if (link && resendKey) {
+    try {
+      const resend = new Resend(resendKey);
+      const { error } = await resend.emails.send({
+        from: resendFrom,
+        to: email,
+        subject,
+        html,
+        text,
+      });
+      if (error) {
+        console.error('send-magic-link Resend', error.message);
+        return res.status(500).json({ ok: false, error: 'email_send_failed', hint: error.message });
+      }
+      emailSent = true;
+    } catch (err: unknown) {
+      console.error('send-magic-link Resend', (err as Error)?.message);
+      return res.status(500).json({ ok: false, error: 'email_send_failed' });
+    }
+  }
+
+  if (!emailSent && smtpHost && smtpUser && smtpPass && link) {
     try {
       const transporter = nodemailer.createTransport({
         host: smtpHost,
@@ -58,21 +100,26 @@ authRouter.post('/auth/send-magic-link', async (req, res) => {
         auth: { user: smtpUser, pass: smtpPass },
       });
       await transporter.sendMail({
-        from,
+        from: smtpFrom,
         to: email,
-        subject: 'Zaloguj się do AWA / Sign in to AWA',
-        text: `Kliknij aby się zalogować: ${link}\n\nClick to sign in: ${link}`,
-        html: `<p>Kliknij aby się zalogować / Click to sign in:</p><p><a href="${link}">${link}</a></p><p>Link wygasa za ${MAGIC_LINK_EXPIRY_MINUTES} minut.</p>`,
+        subject,
+        text,
+        html,
       });
+      emailSent = true;
     } catch (err: unknown) {
-      console.error('send-magic-link email', (err as Error)?.message);
+      console.error('send-magic-link SMTP', (err as Error)?.message);
       return res.status(500).json({ ok: false, error: 'email_send_failed' });
     }
   }
 
   return res.json({
     ok: true,
-    ...(link && !smtpHost ? { dev_link: link } : {}),
+    emailSent,
+    via: emailSent ? (resendKey ? 'resend' : 'smtp') : 'none',
+    hasResendKey: !!resendKey,
+    hasLink: !!link,
+    dev_link: link || undefined,
   });
 });
 
