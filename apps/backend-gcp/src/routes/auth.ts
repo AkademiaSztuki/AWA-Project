@@ -24,7 +24,13 @@ authRouter.post('/auth/send-magic-link', async (req, res) => {
 
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRY_MINUTES * 60 * 1000);
-  const frontendUrl = (process.env.MAGIC_LINK_FRONTEND_URL || '').replace(/\/$/, '');
+
+  // Najpierw env, potem Origin z żądania, na końcu NEXT_PUBLIC_APP_URL (fallback).
+  const frontendUrl =
+    (process.env.MAGIC_LINK_FRONTEND_URL || '').replace(/\/$/, '') ||
+    (req.get('origin') || '').replace(/\/$/, '') ||
+    (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+
   const next = nextPath ? encodeURIComponent(nextPath) : '';
   const link = frontendUrl
     ? `${frontendUrl}/auth/verify?token=${token}${next ? `&next=${next}` : ''}`
