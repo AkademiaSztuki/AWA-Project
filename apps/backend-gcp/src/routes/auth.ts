@@ -119,6 +119,7 @@ authRouter.post('/auth/send-magic-link', async (req, res) => {
     via: emailSent ? (resendKey ? 'resend' : 'smtp') : 'none',
     hasResendKey: !!resendKey,
     hasLink: !!link,
+    frontendUrl: frontendUrl || null,
     dev_link: link || undefined,
   });
 });
