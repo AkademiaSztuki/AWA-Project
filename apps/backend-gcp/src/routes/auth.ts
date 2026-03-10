@@ -119,15 +119,7 @@ authRouter.post('/auth/send-magic-link', async (req, res) => {
     }
   }
 
-  return res.json({
-    ok: true,
-    emailSent,
-    via: emailSent ? (resendKey ? 'resend' : 'smtp') : 'none',
-    hasResendKey: !!resendKey,
-    hasLink: !!link,
-    frontendUrl: frontendUrl || null,
-    dev_link: link || undefined,
-  });
+  return res.json({ ok: true });
 });
 
 /** POST /api/auth/verify-magic-link – wymienia token na user_hash + auth_user_id */
