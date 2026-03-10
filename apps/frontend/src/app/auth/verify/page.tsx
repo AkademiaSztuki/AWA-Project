@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { safeLocalStorage } from '@/lib/supabase';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { GlassButton } from '@/components/ui/GlassButton';
+import { useAuth } from '@/contexts/AuthContext';
 
 const GOOGLE_AUTH_USER_KEY = 'aura_google_auth_user_id';
 
@@ -13,6 +14,7 @@ function AuthVerifyContent() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  const { hydrateFromMagicLink } = useAuth();
 
   useEffect(() => {
     const token = searchParams.get('token');
@@ -35,6 +37,7 @@ function AuthVerifyContent() {
         const { user_hash, auth_user_id, email } = res.data;
         safeLocalStorage.setItem('aura_user_hash', user_hash);
         safeLocalStorage.setItem(GOOGLE_AUTH_USER_KEY, auth_user_id);
+        hydrateFromMagicLink(auth_user_id, email);
         setStatus('ok');
         const redirect = next ? decodeURIComponent(next) : '/';
         window.location.replace(redirect);

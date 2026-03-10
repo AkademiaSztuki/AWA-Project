@@ -27,6 +27,7 @@ interface AuthContextType {
   signInWithEmail: (email: string, nextPath?: string) => Promise<{ error: any; dev_link?: string }>;
   signOut: () => Promise<void>;
   linkUserHashToAuth: (userHash: string) => Promise<void>;
+  hydrateFromMagicLink: (authUserId: string, email?: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -138,8 +139,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return { error: null };
     }
+    const msg = res.error || 'Nie udało się wysłać linku.';
     return {
-      error: { message: res.error || 'Nie udało się wysłać linku.' },
+      error: { message: typeof msg === 'string' ? msg : 'Nie udało się wysłać linku.' },
     };
   };
 
@@ -177,6 +179,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const hydrateFromMagicLink = (authUserId: string, email?: string) => {
+    const authUser: AuthUser = {
+      id: authUserId,
+      email: email ?? (authUserId.startsWith('email:') ? authUserId.slice(6) : undefined),
+      user_metadata: {},
+      app_metadata: {},
+      aud: '',
+      created_at: '',
+    };
+    setUser(authUser);
+    setSession({ user: authUser });
+  };
+
   const value = {
     user,
     session,
@@ -185,6 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signInWithEmail,
     signOut,
     linkUserHashToAuth,
+    hydrateFromMagicLink,
   };
 
   return (
