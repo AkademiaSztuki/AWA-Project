@@ -40,7 +40,7 @@ function AuthVerifyContent() {
         hydrateFromMagicLink(auth_user_id, email);
         setStatus('ok');
         const redirect = next ? decodeURIComponent(next) : '/';
-        window.location.replace(redirect);
+        router.replace(redirect);
       })
       .catch(() => {
         setStatus('error');
