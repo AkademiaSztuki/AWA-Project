@@ -1868,6 +1868,7 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
                 fill
                 className="object-cover"
                 style={{ objectPosition: 'center 30%' }}
+                sizes="(min-width: 768px) 50vw, 100vw"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
                 <p className="text-white font-modern text-sm font-semibold">
@@ -1887,6 +1888,7 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
                 fill
                 className="object-cover"
                 style={{ objectPosition: 'center 30%' }}
+                sizes="(min-width: 768px) 50vw, 100vw"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
                 <p className="text-white font-modern text-sm font-semibold">

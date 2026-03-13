@@ -3,7 +3,7 @@
 ## ⚠️ WAŻNE: Uwzględniono Cold Starts i Regeneracje
 
 ## Ceny GPU w Modal Labs (2024-2025)
-
+  
 | GPU | Cena za sekundę | Cena za godzinę |
 |-----|----------------|-----------------|
 | **A100 (40GB)** | $0.000583 | $2.10/h |

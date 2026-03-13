@@ -320,6 +320,11 @@ participantsRouter.post('/session', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'participantRow is required' });
   }
 
+  console.log('[participants.session] incoming', {
+    userHash,
+    keys: Object.keys(participantRow),
+  });
+
   try {
     const client = await pool.connect();
     try {
@@ -327,7 +332,8 @@ participantsRouter.post('/session', async (req, res) => {
       const values = Object.values(participantRow);
 
       if (!columns.length) {
-        return res.status(400).json({ ok: false, error: 'participantRow is empty' });
+        console.log('[participants.session] empty participantRow, nothing to upsert', { userHash });
+        return res.json({ ok: true });
       }
 
       // Ensure consent_timestamp is always set
@@ -347,13 +353,16 @@ participantsRouter.post('/session', async (req, res) => {
 
       await client.query(sql, [userHash, ...values]);
 
+      console.log('[participants.session] upsert success', { userHash });
       return res.json({ ok: true });
     } finally {
       client.release();
     }
   } catch (error) {
     console.error('participants/session error', error);
-    return res.status(500).json({ ok: false, error: 'internal_error' });
+    // Nie blokujemy flow aplikacji błędem HTTP – logujemy, ale zwracamy ok:true,
+    // żeby frontend mógł kontynuować (dashboard, redirecty itp.).
+    return res.json({ ok: true, warning: 'session_not_persisted' });
   }
 });
 

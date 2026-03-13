@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSessionData } from '@/hooks/useSessionData';
-import { useDashboardAccess } from '@/hooks/useDashboardAccess';
 import { LoginModal } from './LoginModal';
 
 interface ProtectedRouteProps {
@@ -17,8 +15,6 @@ export function ProtectedRoute({
   requireAuth = true 
 }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
-  const { sessionData } = useSessionData();
-  const { isComplete: hasDashboardAccess, isLoading: isDashboardAccessLoading, isResolved: isDashboardAccessResolved } = useDashboardAccess();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -42,15 +38,10 @@ export function ProtectedRoute({
       // Użytkownik zalogowany
       setShowLogin(false);
 
-      // DODATKOWA BLOKADA DASHBOARDU:
-      // Jeśli użytkownik jest zalogowany, ale nie ukończył pełnego profilu (long path),
-      // a próbuje wejść na dashboard, przekieruj go na stronę główną lub wybór ścieżki.
-      if (pathname === '/dashboard' && isDashboardAccessResolved && !isDashboardAccessLoading && !hasDashboardAccess) {
-        console.warn('[ProtectedRoute] Access to dashboard denied - core profile not complete');
-        router.replace('/');
-      }
+      // Dodatkowa logika dostępu do dashboardu została wyłączona –
+      // zalogowany użytkownik zawsze może wejść na /dashboard.
     }
-  }, [user, isLoading, requireAuth, pathname, searchParams, hasDashboardAccess, isDashboardAccessLoading, isDashboardAccessResolved, router]);
+  }, [user, isLoading, requireAuth, pathname, searchParams, router]);
 
   // Pokaż loading podczas sprawdzania autoryzacji
   if (isLoading) {

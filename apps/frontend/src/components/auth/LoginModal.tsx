@@ -19,13 +19,16 @@ interface LoginModalProps {
 }
 
 export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }: LoginModalProps) {
-  const { signInWithGoogle, signInWithEmail } = useAuth();
+  const { signInWithGoogle, signInWithEmail, registerWithEmail, loginWithEmail, resendVerificationEmail } = useAuth();
   const { language } = useLanguage();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [mode, setMode] = useState<'login' | 'register' | 'magic'>('login');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState('');
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [mounted, setMounted] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
   const firstFocusableRef = useRef<HTMLButtonElement>(null);
@@ -110,15 +113,41 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setEmailNotVerified(false);
     try {
-      const result = await signInWithEmail(email, getEffectiveRedirectPath());
-      if (result.error) {
-        setError(result.error.message);
+      if (mode === 'magic') {
+        const result = await signInWithEmail(email, getEffectiveRedirectPath());
+        if (result.error) {
+          setError(result.error.message);
+        } else {
+          setEmailSent(true);
+        }
+      } else if (mode === 'register') {
+        const result = await registerWithEmail(email, password);
+        if (result.error) {
+          setError(result.error.message);
+        } else {
+          setEmailSent(true);
+        }
       } else {
-        setEmailSent(true);
+        const result = await loginWithEmail(email, password);
+        if (result.error) {
+          const msg: string = result.error.message || '';
+          const isNotVerified =
+            msg.includes('email_not_verified') ||
+            msg.toLowerCase().includes('potwierdź maila') ||
+            msg.toLowerCase().includes('not verified');
+          if (isNotVerified) {
+            setEmailNotVerified(true);
+          }
+          setError(msg);
+        } else {
+          onClose();
+          onSuccess?.();
+        }
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to send magic link');
+      setError(err.message || 'Wystąpił błąd.');
     } finally {
       setIsLoading(false);
     }
@@ -189,8 +218,8 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                 </h3>
                 <p className="text-sm text-graphite font-modern mb-4">
                   {language === 'pl'
-                    ? `Wysłaliśmy link magiczny na ${email}. Sprawdź też folder Spam/Oferty.`
-                    : `We sent a magic link to ${email}. Please also check your Spam/Promotions folder.`}
+                    ? `Jeśli konto istnieje lub zostało utworzone, wysłaliśmy e‑mail na ${email}. Sprawdź też folder Spam/Oferty.`
+                    : `If the account exists or was created, we sent an email to ${email}. Please also check your Spam/Promotions folder.`}
                 </p>
               </div>
             ) : (
@@ -224,7 +253,44 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                   </div>
                 </div>
 
-                {/* Email Magic Link */}
+                {/* Mode switcher */}
+                <div className="grid grid-cols-3 gap-2 text-xs font-modern mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className={`px-2 py-1 rounded-full border ${
+                      mode === 'login'
+                        ? 'border-gold bg-gold/10 text-graphite'
+                        : 'border-white/20 text-silver-dark'
+                    }`}
+                  >
+                    {language === 'pl' ? 'Zaloguj' : 'Log in'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('register')}
+                    className={`px-2 py-1 rounded-full border ${
+                      mode === 'register'
+                        ? 'border-gold bg-gold/10 text-graphite'
+                        : 'border-white/20 text-silver-dark'
+                    }`}
+                  >
+                    {language === 'pl' ? 'Utwórz konto' : 'Sign up'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('magic')}
+                    className={`px-2 py-1 rounded-full border ${
+                      mode === 'magic'
+                        ? 'border-gold bg-gold/10 text-graphite'
+                        : 'border-white/20 text-silver-dark'
+                    }`}
+                  >
+                    Magic link
+                  </button>
+                </div>
+
+                {/* Email/password & magic link form */}
                 <form onSubmit={handleEmailSignIn}>
                   <div className="mb-4">
                     <label 
@@ -248,17 +314,63 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                     />
                   </div>
 
+                  {mode !== 'magic' && (
+                    <div className="mb-4">
+                      <label
+                        htmlFor="password-input"
+                        className="block text-sm font-semibold text-graphite mb-2 font-modern"
+                      >
+                        {language === 'pl' ? 'Hasło' : 'Password'}
+                      </label>
+                      <input
+                        id="password-input"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={language === 'pl' ? 'min. 8 znaków' : 'min. 8 characters'}
+                        required
+                        minLength={8}
+                        className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/30 text-graphite font-modern focus:border-gold/50 focus:ring-2 focus:ring-gold/20 outline-none transition-all"
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
+
                   <GlassButton
                     type="submit"
-                    disabled={isLoading || !email}
+                    disabled={isLoading || !email || (mode !== 'magic' && password.length < 8)}
                     className="w-full focus:ring-2 focus:ring-gold-400 focus:outline-none"
                     size="lg"
-                    aria-label={language === 'pl' ? 'Wyślij link logowania na email' : 'Send login link to email'}
+                    aria-label={
+                      mode === 'magic'
+                        ? language === 'pl'
+                          ? 'Wyślij link logowania na email'
+                          : 'Send login link to email'
+                        : mode === 'register'
+                          ? language === 'pl'
+                            ? 'Utwórz konto'
+                            : 'Create account'
+                          : language === 'pl'
+                            ? 'Zaloguj się e‑mailem i hasłem'
+                            : 'Log in with email and password'
+                    }
                   >
                     <Mail size={18} className="mr-2" />
-                    {isLoading 
-                      ? (language === 'pl' ? 'Wysyłanie...' : 'Sending...')
-                      : (language === 'pl' ? 'Wyślij Magic Link' : 'Send Magic Link')}
+                    {isLoading
+                      ? language === 'pl'
+                        ? 'Wysyłanie...'
+                        : 'Sending...'
+                      : mode === 'magic'
+                        ? language === 'pl'
+                          ? 'Wyślij Magic Link'
+                          : 'Send Magic Link'
+                        : mode === 'register'
+                          ? language === 'pl'
+                            ? 'Utwórz konto'
+                            : 'Create account'
+                          : language === 'pl'
+                            ? 'Zaloguj się'
+                            : 'Log in'}
                   </GlassButton>
                 </form>
 
@@ -270,6 +382,36 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                     aria-live="polite"
                   >
                     <p className="text-xs text-red-600 font-modern whitespace-pre-wrap">{error}</p>
+                    {emailNotVerified && (
+                      <div className="mt-3 text-left">
+                        <GlassButton
+                          type="button"
+                          size="sm"
+                          className="w-full"
+                          disabled={isLoading}
+                          onClick={async () => {
+                            setIsLoading(true);
+                            try {
+                              const result = await resendVerificationEmail(email);
+                              if (result.error) {
+                                setError(result.error.message);
+                              } else {
+                                setEmailSent(true);
+                                setEmailNotVerified(false);
+                              }
+                            } catch (e: any) {
+                              setError(e?.message || 'Nie udało się wysłać maila weryfikacyjnego.');
+                            } finally {
+                              setIsLoading(false);
+                            }
+                          }}
+                        >
+                          {language === 'pl'
+                            ? 'Wyślij ponownie mail weryfikacyjny'
+                            : 'Resend verification email'}
+                        </GlassButton>
+                      </div>
+                    )}
                   </div>
                 )}
 

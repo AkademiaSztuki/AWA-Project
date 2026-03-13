@@ -61,6 +61,31 @@ export const gcpApi = {
         '/api/auth/verify-magic-link',
         { method: 'POST', body: payload }
       ),
+    register: (payload: { email: string; password: string }) =>
+      apiFetch<{ ok: boolean }>('/api/auth/register', {
+        method: 'POST',
+        body: payload,
+      }),
+    verifyEmail: (payload: { token: string }) =>
+      apiFetch<{ ok: boolean; user_hash?: string; auth_user_id?: string; email?: string }>(
+        '/api/auth/verify-email',
+        { method: 'POST', body: payload }
+      ),
+    login: (payload: { email: string; password: string }) =>
+      apiFetch<{ ok: boolean; user_hash?: string; auth_user_id?: string; email?: string }>(
+        '/api/auth/login',
+        { method: 'POST', body: payload }
+      ),
+    resendVerification: (payload: { email: string }) =>
+      apiFetch<{ ok: boolean }>('/api/auth/resend-verification', {
+        method: 'POST',
+        body: payload,
+      }),
+    setPassword: (payload: { auth_user_id?: string; user_hash?: string; password: string }) =>
+      apiFetch<{ ok: boolean }>('/api/auth/set-password', {
+        method: 'POST',
+        body: payload,
+      }),
   },
 
   participants: {

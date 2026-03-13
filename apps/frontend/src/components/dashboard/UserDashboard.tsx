@@ -80,7 +80,6 @@ export function UserDashboard() {
   const { sessionData, updateSessionData } = useSessionData();
   const { language } = useLanguage();
   const { user, linkUserHashToAuth } = useAuth();
-  const { isComplete: hasDashboardAccess, isLoading: isDashboardAccessLoading, isResolved: isDashboardAccessResolved } = useDashboardAccess();
   
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [remoteSession, setRemoteSession] = useState<any>(null);
@@ -90,13 +89,8 @@ export function UserDashboard() {
   const [actionSpaceId, setActionSpaceId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
-  // DODATKOWA BLOKADA: Dashboard dostępny tylko dla użytkowników po pełnej ścieżce
-  useEffect(() => {
-    if (!isLoading && !isDashboardAccessLoading && isDashboardAccessResolved && !hasDashboardAccess) {
-      console.warn('[UserDashboard] Redirecting - profile not complete');
-      router.replace('/');
-    }
-  }, [hasDashboardAccess, isDashboardAccessLoading, isDashboardAccessResolved, isLoading, router]);
+  // Blokada dashboardu po core profile została wyłączona – dashboard jest dostępny
+  // dla każdego zalogowanego użytkownika, nawet jeśli profil nie jest w 100% kompletny.
 
   const getUserHash = useCallback((): string | undefined => {
     let userHash = sessionData?.userHash as string | undefined;

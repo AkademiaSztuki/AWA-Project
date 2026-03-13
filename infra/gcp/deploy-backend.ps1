@@ -50,10 +50,14 @@ $DATABASE_URL = "postgresql://awa_app:$HASLO_BAZY@localhost:5432/awa_db"
 $BUCKET = if ($GCS_BUCKET) { $GCS_BUCKET } else { "awa-research-images-$PROJECT_ID" }
 $SA = "awa-backend@${PROJECT_ID}.iam.gserviceaccount.com"
 $MAGIC_LINK_FRONTEND = $env:MAGIC_LINK_FRONTEND_URL
+$RESEND_KEY = $env:RESEND_API_KEY
+$RESEND_FROM = $env:RESEND_FROM
 
 # Jedna zmienna --set-env-vars ze wszystkimi wartosciami (drugi --set-env-vars nadpisalby poprzedni)
 $EnvVars = "DATABASE_URL=$DATABASE_URL,CLOUD_SQL_CONNECTION_NAME=$CLOUD_SQL_CONNECTION_NAME,GCS_IMAGES_BUCKET=$BUCKET"
 if ($MAGIC_LINK_FRONTEND) { $EnvVars += ",MAGIC_LINK_FRONTEND_URL=$MAGIC_LINK_FRONTEND" }
+if ($RESEND_KEY) { $EnvVars += ",RESEND_API_KEY=$RESEND_KEY" }
+if ($RESEND_FROM) { $EnvVars += ",RESEND_FROM=$RESEND_FROM" }
 
 Write-Host "Deploy: awa-backend-api, region $REGION, Cloud SQL: $CLOUD_SQL_CONNECTION_NAME" -ForegroundColor Cyan
 Push-Location $BackendDir

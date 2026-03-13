@@ -11,7 +11,7 @@ Aplikacja badawcza do eksploracji współpracy człowieka z AI w projektowaniu w
 - **Responsive Design** - optymalizacja dla wszystkich urządzeń
 
 ## Technologie
-
+...
 - Next.js 14 (App Router)
 - Three.js + React Three Fiber
 - Framer Motion

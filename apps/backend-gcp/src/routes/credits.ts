@@ -20,6 +20,25 @@ creditsRouter.get('/credits/balance/:userHash', async (req, res) => {
     const client = await pool.connect();
     try {
       const overview = await getCreditOverview(client, userHash);
+      console.log('[credits.balance] overview', { userHash, overview });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': '5e0063',
+        },
+        body: JSON.stringify({
+          sessionId: '5e0063',
+          runId: 'pre-fix',
+          hypothesisId: 'H4',
+          location: 'routes/credits.ts:credits.balance',
+          message: 'credits balance overview',
+          data: { userHash, overview },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion agent log
       return res.json({ ok: true, ...overview });
     } finally {
       client.release();

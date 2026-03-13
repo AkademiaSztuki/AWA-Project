@@ -216,8 +216,8 @@ Zamień `BILLING_ACCOUNT` i `TWOJ_PROJECT_ID`. Kwotę (100 USD) dostosuj do wiel
 - `DATABASE_URL` – connection string (user/hasło/baza); na Cloud Run host jest ignorowany — łączenie przez socket gdy ustawione `CLOUD_SQL_CONNECTION_NAME`.  
 - `CLOUD_SQL_CONNECTION_NAME` – np. `projekt:europe-west4:awa-research-sql` (wymagane na Cloud Run, żeby uniknąć ETIMEDOUT).  
 - `GCS_IMAGES_BUCKET` – nazwa bucketa na obrazy.  
-- **Magic Link (logowanie mailem):** opcjonalnie `MAGIC_LINK_FRONTEND_URL` – URL frontendu (np. `https://www.project-ida.com` lub `http://localhost:3000`), żeby link w mailu działał. Bez SMTP backend zwraca link w odpowiedzi (tryb dev – użytkownik może kliknąć link w modalu). Aby wysyłać prawdziwe maile, ustaw w backendzie: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, ewentualnie `MAGIC_LINK_FROM`.  
-- **Tabela pod Magic Link:** wykonaj raz na bazie `awa_db` skrypt **`infra/gcp/sql/04_magic_link_tokens.sql`** (np. import z GCS lub w konsoli Cloud SQL).
+- **Magic Link (logowanie mailem):** `MAGIC_LINK_FRONTEND_URL` – URL frontendu (link w mailu). Aby **wysyłać maile przez Resend** (zalecane): ustaw `RESEND_API_KEY` i opcjonalnie `RESEND_FROM` – szczegóły w **`infra/gcp/RESEND_SETUP.md`**. Alternatywnie: SMTP (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`).  
+- **Tabela pod Magic Link:** wykonaj raz na bazie `awa_db` skrypt **`04_magic_link_tokens.sql`**. **Przez CLI:** w katalogu `infra/gcp` uruchom `.\run-magic-link-migration.ps1`.
 
 **Frontend** (np. w `apps/frontend/.env.local`):
 

@@ -7,6 +7,8 @@ import { ProtectedRoute } from './ProtectedRoute';
 const PUBLIC_PATHS = [
   '/', // Landing page
   '/auth/callback', // Auth callback
+  '/auth/verify', // Magic link verification
+  '/auth/verify-email', // Email verification after registration
 ];
 
 const isPublicPath = (pathname: string): boolean => {

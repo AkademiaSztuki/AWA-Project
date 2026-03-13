@@ -5,7 +5,7 @@
 Nie musisz używać `project-ida.com` - możesz testować wszystko lokalnie na `localhost:3000`.
 
 ## 📋 Wymagania do testowania lokalnie:
-
+zmiana
 ### 1. Stripe Test Keys
 W `.env.local` użyj **test keys** (nie live):
 ```env

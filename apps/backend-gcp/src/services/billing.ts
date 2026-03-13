@@ -105,6 +105,25 @@ export async function checkCreditsAvailable(
 }
 
 export async function grantFreeCredits(client: PoolClient, userHash: string): Promise<boolean> {
+  console.log('[billing] grantFreeCredits start', { userHash });
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '5e0063',
+    },
+    body: JSON.stringify({
+      sessionId: '5e0063',
+      runId: 'pre-fix',
+      hypothesisId: 'H1',
+      location: 'services/billing.ts:grantFreeCredits:start',
+      message: 'grantFreeCredits called',
+      data: { userHash },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion agent log
   await ensureParticipantRecord(client, userHash);
 
   const participantResult = await client.query<{
@@ -121,8 +140,50 @@ export async function grantFreeCredits(client: PoolClient, userHash: string): Pr
   );
 
   const participant = participantResult.rows[0];
-  if (!participant) return false;
-  if (participant.free_grant_used) return false;
+  if (!participant) {
+    console.log('[billing] grantFreeCredits: participant not found', { userHash });
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '5e0063',
+      },
+      body: JSON.stringify({
+        sessionId: '5e0063',
+        runId: 'pre-fix',
+        hypothesisId: 'H1',
+        location: 'services/billing.ts:grantFreeCredits:no-participant',
+        message: 'participant not found when granting free credits',
+        data: { userHash },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
+    return false;
+  }
+  if (participant.free_grant_used) {
+    console.log('[billing] grantFreeCredits: already used on participant', { userHash });
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '5e0063',
+      },
+      body: JSON.stringify({
+        sessionId: '5e0063',
+        runId: 'pre-fix',
+        hypothesisId: 'H1',
+        location: 'services/billing.ts:grantFreeCredits:already-used',
+        message: 'free grant already used on this participant',
+        data: { userHash },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
+    return false;
+  }
 
   if (participant.auth_user_id) {
     const { rows: linkedRows } = await client.query<{ user_hash: string }>(
@@ -148,6 +209,29 @@ export async function grantFreeCredits(client: PoolClient, userHash: string): Pr
         `,
         [userHash]
       );
+      console.log('[billing] grantFreeCredits: authUserId already used on other participant, marking current as used without new credits', {
+        userHash,
+        authUserId: participant.auth_user_id,
+        otherUserHash: linkedRows[0].user_hash,
+      });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': '5e0063',
+        },
+        body: JSON.stringify({
+          sessionId: '5e0063',
+          runId: 'pre-fix',
+          hypothesisId: 'H2',
+          location: 'services/billing.ts:grantFreeCredits:auth-reused',
+          message: 'auth_user_id already consumed free grant on another participant',
+          data: { userHash, otherUserHash: linkedRows[0].user_hash },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion agent log
       return false;
     }
   }
@@ -164,6 +248,28 @@ export async function grantFreeCredits(client: PoolClient, userHash: string): Pr
   );
 
   if (duplicateCheck.rowCount === 0) {
+    console.log('[billing] grantFreeCredits: inserting free_grant credit transaction', {
+      userHash,
+      amount: FREE_GRANT_CREDITS,
+    });
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '5e0063',
+      },
+      body: JSON.stringify({
+        sessionId: '5e0063',
+        runId: 'pre-fix',
+        hypothesisId: 'H3',
+        location: 'services/billing.ts:grantFreeCredits:insert-transaction',
+        message: 'inserting free_grant credit transaction',
+        data: { userHash, amount: FREE_GRANT_CREDITS },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
     await client.query(
       `
         INSERT INTO credit_transactions (
@@ -191,7 +297,27 @@ export async function grantFreeCredits(client: PoolClient, userHash: string): Pr
     [userHash]
   );
 
-  return duplicateCheck.rowCount === 0;
+  const granted = duplicateCheck.rowCount === 0;
+  console.log('[billing] grantFreeCredits done', { userHash, granted });
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '5e0063',
+    },
+    body: JSON.stringify({
+      sessionId: '5e0063',
+      runId: 'pre-fix',
+      hypothesisId: 'H3',
+      location: 'services/billing.ts:grantFreeCredits:end',
+      message: 'grantFreeCredits finished',
+      data: { userHash, granted },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion agent log
+  return granted;
 }
 
 export async function deductCredits(

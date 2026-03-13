@@ -25,6 +25,10 @@ interface AuthContextType {
   isLoading: boolean;
   signInWithGoogle: (nextPath?: string) => Promise<void>;
   signInWithEmail: (email: string, nextPath?: string) => Promise<{ error: any; dev_link?: string }>;
+  registerWithEmail: (email: string, password: string) => Promise<{ error?: any }>;
+  loginWithEmail: (email: string, password: string) => Promise<{ error?: any }>;
+  resendVerificationEmail: (email: string) => Promise<{ error?: any }>;
+  setPassword: (password: string) => Promise<{ error?: any }>;
   signOut: () => Promise<void>;
   linkUserHashToAuth: (userHash: string) => Promise<void>;
   hydrateFromMagicLink: (authUserId: string, email?: string) => void;
@@ -145,6 +149,112 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
+  const registerWithEmail = async (
+    email: string,
+    password: string,
+  ): Promise<{ error?: any }> => {
+    if (!gcpApi.isConfigured()) {
+      return {
+        error: { message: 'Backend nie jest skonfigurowany (NEXT_PUBLIC_GCP_API_BASE_URL).' },
+      };
+    }
+    const res = await gcpApi.auth.register({ email, password });
+    if (res.ok) {
+      return {};
+    }
+
+    const raw = res.error || 'Nie udało się utworzyć konta.';
+    const msg = typeof raw === 'string' ? raw : 'Nie udało się utworzyć konta.';
+
+    let friendly = msg;
+    if (msg.includes('email_already_exists')) {
+      friendly =
+        'Ten adres e‑mail jest już używany. Zaloguj się lub użyj innego adresu.';
+    } else if (msg.includes('password_too_weak')) {
+      friendly =
+        'Hasło jest za słabe. Użyj co najmniej 8 znaków (litery, cyfry, znak specjalny).';
+    } else if (msg.includes('valid email required')) {
+      friendly = 'Podaj poprawny adres e‑mail.';
+    } else if (msg.includes('email_send_failed') || msg.includes('email_not_configured')) {
+      friendly =
+        'Konto zostało założone, ale nie udało się wysłać maila weryfikacyjnego. Spróbuj ponownie później lub skontaktuj się z nami.';
+    } else if (msg.includes('internal_error')) {
+      friendly =
+        'Coś poszło nie tak po naszej stronie. Spróbuj ponownie za chwilę.';
+    }
+
+    return {
+      error: { message: friendly },
+    };
+  };
+
+  const loginWithEmail = async (
+    email: string,
+    password: string,
+  ): Promise<{ error?: any }> => {
+    if (!gcpApi.isConfigured()) {
+      return {
+        error: { message: 'Backend nie jest skonfigurowany (NEXT_PUBLIC_GCP_API_BASE_URL).' },
+      };
+    }
+    const res = await gcpApi.auth.login({ email, password });
+    if (!res.ok || !res.data?.user_hash || !res.data?.auth_user_id) {
+      const msg = res.error || 'Nie udało się zalogować.';
+      return {
+        error: { message: typeof msg === 'string' ? msg : 'Nie udało się zalogować.' },
+      };
+    }
+    const { user_hash, auth_user_id, email: responseEmail } = res.data;
+    safeLocalStorage.setItem('aura_user_hash', user_hash);
+    safeLocalStorage.setItem(GOOGLE_AUTH_USER_KEY, auth_user_id);
+    hydrateFromMagicLink(auth_user_id, responseEmail || email);
+    return {};
+  };
+
+  const resendVerificationEmail = async (email: string): Promise<{ error?: any }> => {
+    if (!gcpApi.isConfigured()) {
+      return {
+        error: { message: 'Backend nie jest skonfigurowany (NEXT_PUBLIC_GCP_API_BASE_URL).' },
+      };
+    }
+    const res = await gcpApi.auth.resendVerification({ email });
+    if (res.ok) {
+      return {};
+    }
+    const msg = res.error || 'Nie udało się wysłać maila.';
+    return {
+      error: { message: typeof msg === 'string' ? msg : 'Nie udało się wysłać maila.' },
+    };
+  };
+
+  const setPassword = async (password: string): Promise<{ error?: any }> => {
+    if (!gcpApi.isConfigured()) {
+      return {
+        error: { message: 'Backend nie jest skonfigurowany (NEXT_PUBLIC_GCP_API_BASE_URL).' },
+      };
+    }
+    if (!user) {
+      return {
+        error: { message: 'Brak zalogowanego użytkownika.' },
+      };
+    }
+    const userHash = safeLocalStorage.getItem('aura_user_hash') || undefined;
+    const payload: { auth_user_id?: string; user_hash?: string; password: string } = {
+      password,
+    };
+    if (user.id) payload.auth_user_id = user.id;
+    if (userHash) payload.user_hash = userHash;
+
+    const res = await gcpApi.auth.setPassword(payload);
+    if (res.ok) {
+      return {};
+    }
+    const msg = res.error || 'Nie udało się ustawić hasła.';
+    return {
+      error: { message: typeof msg === 'string' ? msg : 'Nie udało się ustawić hasła.' },
+    };
+  };
+
   const signOut = async () => {
     safeLocalStorage.removeItem(GOOGLE_AUTH_USER_KEY);
     safeLocalStorage.removeItem('aura_session');
@@ -198,6 +308,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading,
     signInWithGoogle,
     signInWithEmail,
+    registerWithEmail,
+    loginWithEmail,
+    resendVerificationEmail,
+    setPassword,
     signOut,
     linkUserHashToAuth,
     hydrateFromMagicLink,
