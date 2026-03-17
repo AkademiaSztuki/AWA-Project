@@ -30,8 +30,10 @@ export async function POST(request: NextRequest) {
 
     inspirationCache.set(cacheKey, result);
     if (inspirationCache.size > MAX_CACHE_ENTRIES) {
-      const firstKey = inspirationCache.keys().next().value;
-      inspirationCache.delete(firstKey);
+      const firstKey = inspirationCache.keys().next().value as string | undefined;
+      if (firstKey !== undefined) {
+        inspirationCache.delete(firstKey);
+      }
     }
 
     return NextResponse.json(result);

@@ -186,6 +186,30 @@ const COUNTRY_OPTIONS = [
   { code: 'SI', label: { pl: 'Słowenia', en: 'Slovenia' } },
   { code: 'BG', label: { pl: 'Bułgaria', en: 'Bulgaria' } },
   { code: 'GR', label: { pl: 'Grecja', en: 'Greece' } },
+  // Southern Africa focus
+  { code: 'ZA', label: { pl: 'Republika Południowej Afryki', en: 'South Africa' } },
+  { code: 'NA', label: { pl: 'Namibia', en: 'Namibia' } },
+  { code: 'BW', label: { pl: 'Botswana', en: 'Botswana' } },
+  { code: 'ZW', label: { pl: 'Zimbabwe', en: 'Zimbabwe' } },
+  { code: 'MZ', label: { pl: 'Mozambik', en: 'Mozambique' } },
+  { code: 'LS', label: { pl: 'Lesotho', en: 'Lesotho' } },
+  { code: 'SZ', label: { pl: 'Eswatini', en: 'Eswatini' } },
+  // Other African countries
+  { code: 'NG', label: { pl: 'Nigeria', en: 'Nigeria' } },
+  { code: 'KE', label: { pl: 'Kenia', en: 'Kenya' } },
+  { code: 'GH', label: { pl: 'Ghana', en: 'Ghana' } },
+  { code: 'EG', label: { pl: 'Egipt', en: 'Egypt' } },
+  { code: 'MA', label: { pl: 'Maroko', en: 'Morocco' } },
+  { code: 'TN', label: { pl: 'Tunezja', en: 'Tunisia' } },
+  { code: 'DZ', label: { pl: 'Algieria', en: 'Algeria' } },
+  { code: 'ET', label: { pl: 'Etiopia', en: 'Ethiopia' } },
+  { code: 'TZ', label: { pl: 'Tanzania', en: 'Tanzania' } },
+  { code: 'UG', label: { pl: 'Uganda', en: 'Uganda' } },
+  { code: 'SN', label: { pl: 'Senegal', en: 'Senegal' } },
+  { code: 'CM', label: { pl: 'Kamerun', en: 'Cameroon' } },
+  { code: 'CI', label: { pl: 'Wybrzeże Kości Słoniowej', en: 'Côte d’Ivoire' } },
+  { code: 'ZM', label: { pl: 'Zambia', en: 'Zambia' } },
+  { code: 'RW', label: { pl: 'Rwanda', en: 'Rwanda' } },
 ];
 
 function CountrySelect({
