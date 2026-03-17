@@ -207,7 +207,8 @@ const OnboardingScreen: React.FC = () => {
       });
       
       // Check path type and route accordingly
-      const pathType = (sessionData as any)?.pathType;
+      // Default to 'fast' when pathType is missing – onboarding screen is primarily for fast track
+      const pathType = ((sessionData as any)?.pathType ?? 'fast') as 'fast' | 'full';
       console.log('[Onboarding] Demographics complete');
       console.log('[Onboarding] pathType:', pathType);
       console.log('[Onboarding] pathType === "fast":', pathType === 'fast');
