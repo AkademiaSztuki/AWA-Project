@@ -9,6 +9,8 @@ const PUBLIC_PATHS = [
   '/auth/callback', // Auth callback
   '/auth/verify', // Magic link verification
   '/auth/verify-email', // Email verification after registration
+  '/dashboard', // Tymczasowo publiczny, bo stan auth nie zawsze jest poprawnie odtwarzany
+  '/dashboard/personality',
 ];
 
 const isPublicPath = (pathname: string): boolean => {
