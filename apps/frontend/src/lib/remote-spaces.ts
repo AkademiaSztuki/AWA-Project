@@ -213,6 +213,12 @@ export async function fetchParticipantImages(
 > {
   if (!userHash) return [];
 
+  const gcpBase =
+    process.env.NEXT_PUBLIC_GCP_API_BASE_URL &&
+    process.env.NEXT_PUBLIC_GCP_API_BASE_URL.length > 0
+      ? process.env.NEXT_PUBLIC_GCP_API_BASE_URL.replace(/\/$/, '')
+      : null;
+
   try {
     const result = await gcpApi.images.list(userHash);
     if (!result.ok) {
@@ -223,23 +229,32 @@ export async function fetchParticipantImages(
       return [];
     }
 
-    return ((result.data?.images as any[]) || []).map((img: any) => ({
-      id: img.id,
-      type: img.type,
-      url: img.public_url || img.storage_path,
-      thumbnailUrl: img.thumbnail_url,
-      isFavorite: img.is_favorite || false,
-      spaceId: img.space_id || null,
-      tags: {
-        styles: img.tags_styles || [],
-        colors: img.tags_colors || [],
-        materials: img.tags_materials || [],
-        biophilia: img.tags_biophilia,
-      },
-      description: img.description || undefined,
-      source: img.source,
-      createdAt: img.created_at,
-    }));
+    return ((result.data?.images as any[]) || []).map((img: any) => {
+      const rawId = img.id as string | undefined;
+      const backendImageUrl =
+        gcpBase && rawId
+          ? `${gcpBase}/api/images/${encodeURIComponent(rawId)}/raw`
+          : null;
+
+      return {
+        id: img.id,
+        type: img.type,
+        // Prefer signed_url; if brak, użyj proxy w backendzie zamiast gołego public_url.
+        url: img.signed_url || backendImageUrl || img.public_url || img.storage_path,
+        thumbnailUrl: img.thumbnail_url,
+        isFavorite: img.is_favorite || false,
+        spaceId: img.space_id || null,
+        tags: {
+          styles: img.tags_styles || [],
+          colors: img.tags_colors || [],
+          materials: img.tags_materials || [],
+          biophilia: img.tags_biophilia,
+        },
+        description: img.description || undefined,
+        source: img.source,
+        createdAt: img.created_at,
+      };
+    });
   } catch (e) {
     console.warn('[remote-spaces] fetchParticipantImages error', e);
     return [];

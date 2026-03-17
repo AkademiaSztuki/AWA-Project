@@ -4,6 +4,7 @@ const nextConfig = {
     domains: [
       'modal-api-domain.com',
       'storage.googleapis.com',
+      'awa-backend-api-986280192250.europe-west4.run.app',
     ],
     // Optymalizacja obrazów - konwersja na WebP/AVIF i kompresja
     formats: ['image/avif', 'image/webp'],

@@ -1,10 +1,73 @@
 import { Router } from 'express';
+import { Storage } from '@google-cloud/storage';
 import { pool } from '../db';
 
 export const imagesRouter = Router();
 
 // This route handles metadata insert into participant_images.
-// Actual image bytes upload to GCS will be wired in a later step.
+// Actual image bytes upload to GCS is handled in gcs-images.ts.
+
+const bucketName = process.env.GCS_IMAGES_BUCKET;
+let storageBucket: ReturnType<Storage['bucket']> | null = null;
+
+if (!bucketName) {
+  console.warn(
+    '[backend-gcp] GCS_IMAGES_BUCKET is not set; image listing routes will not be able to generate signed URLs.',
+  );
+} else {
+  try {
+    const storage = new Storage();
+    storageBucket = storage.bucket(bucketName);
+  } catch (e) {
+    console.error(
+      '[backend-gcp] Failed to initialize Storage for images routes',
+      (e as Error)?.message,
+    );
+  }
+}
+
+function normalizeGcsPath(rawPath: string): string | null {
+  if (!rawPath) return null;
+
+  let p = rawPath.trim();
+
+  // If we stored a full GCS URL, strip scheme/host/bucket.
+  // Examples:
+  // - https://storage.googleapis.com/my-bucket/path/to/file.webp
+  // - https://my-bucket.storage.googleapis.com/path/to/file.webp
+  if (p.startsWith('http://') || p.startsWith('https://')) {
+    try {
+      const url = new URL(p);
+      // Case 1: https://storage.googleapis.com/<bucket>/<path>
+      if (url.hostname === 'storage.googleapis.com') {
+        const parts = url.pathname.split('/').filter(Boolean);
+        if (parts.length >= 2) {
+          // [bucket, ...objectPath]
+          const [, ...objectParts] = parts;
+          p = objectParts.join('/');
+        } else {
+          return null;
+        }
+      } else {
+        // Case 2: https://<bucket>.storage.googleapis.com/<path>
+        // Hostname like "<bucket>.storage.googleapis.com"
+        p = url.pathname.replace(/^\/+/, '');
+      }
+    } catch {
+      // Fallback: treat as relative-ish path below.
+    }
+  }
+
+  // Drop leading slash if any.
+  p = p.replace(/^\/+/, '');
+
+  // In case something still contains the bucket name as a prefix, strip "bucketName/".
+  if (bucketName && p.startsWith(bucketName + '/')) {
+    p = p.substring(bucketName.length + 1);
+  }
+
+  return p || null;
+}
 
 imagesRouter.get('/participants/:userHash/images', async (req, res) => {
   const { userHash } = req.params;
@@ -25,8 +88,51 @@ imagesRouter.get('/participants/:userHash/images', async (req, res) => {
         `,
         [userHash]
       );
+      let images: any[] = rows;
 
-      return res.json({ ok: true, images: rows });
+      // Attach signed URLs so the browser can load private GCS objects.
+      if (storageBucket) {
+        try {
+          images = await Promise.all(
+            rows.map(async (row: any) => {
+              if (!row.storage_path) return row;
+
+              const objectPath = normalizeGcsPath(row.storage_path);
+              if (!objectPath) {
+                console.warn(
+                  'images signed_url skip: could not normalize storage_path',
+                  row.storage_path,
+                );
+                return row;
+              }
+
+              try {
+                const file = storageBucket!.file(objectPath);
+                const [signedUrl] = await file.getSignedUrl({
+                  action: 'read',
+                  // 7 days should be enough for dashboard viewing
+                  expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+                });
+                return { ...row, signed_url: signedUrl };
+              } catch (e) {
+                console.error(
+                  'images signed_url error',
+                  (e as Error)?.message,
+                  'path=',
+                  row.storage_path,
+                  'normalized=',
+                  objectPath,
+                );
+                return row;
+              }
+            }),
+          );
+        } catch (e) {
+          console.error('images list signed_url batch error', (e as Error)?.message);
+        }
+      }
+
+      return res.json({ ok: true, images });
     } finally {
       client.release();
     }
@@ -228,6 +334,72 @@ imagesRouter.delete('/images/:imageId', async (req, res) => {
   } catch (error) {
     console.error('images delete error', error);
     return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
+
+imagesRouter.get('/images/:imageId/raw', async (req, res) => {
+  const { imageId } = req.params;
+
+  if (!imageId) {
+    return res.status(400).json({ ok: false, error: 'imageId is required' });
+  }
+
+  if (!storageBucket) {
+    console.error('images raw error: storage bucket not initialized');
+    return res.status(500).json({ ok: false, error: 'storage_not_configured' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      const { rows, rowCount } = await client.query(
+        `
+          SELECT storage_path
+          FROM participant_images
+          WHERE id = $1
+        `,
+        [imageId],
+      );
+
+      if (!rowCount || !rows[0]?.storage_path) {
+        return res.status(404).json({ ok: false, error: 'image_not_found' });
+      }
+
+      const objectPath = normalizeGcsPath(rows[0].storage_path);
+      if (!objectPath) {
+        console.error(
+          'images raw error: could not normalize storage_path',
+          rows[0].storage_path,
+        );
+        return res.status(500).json({ ok: false, error: 'invalid_storage_path' });
+      }
+
+      const file = storageBucket.file(objectPath);
+      const [metadata] = await file.getMetadata();
+
+      res.setHeader('Content-Type', metadata.contentType || 'image/webp');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+
+      file
+        .createReadStream()
+        .on('error', (err) => {
+          console.error('images raw stream error', err);
+          if (!res.headersSent) {
+            res.status(500).json({ ok: false, error: 'stream_error' });
+          } else {
+            res.end();
+          }
+        })
+        .pipe(res);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('images raw error', error);
+    if (!res.headersSent) {
+      return res.status(500).json({ ok: false, error: 'internal_error' });
+    }
+    res.end();
   }
 });
 
