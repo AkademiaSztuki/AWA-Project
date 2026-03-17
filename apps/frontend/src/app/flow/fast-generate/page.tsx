@@ -610,7 +610,7 @@ export default function FastGeneratePage() {
       const historyNode = {
         id: newImage.id,
         type: isMacro ? ('macro' as const) : ('micro' as const),
-        label: modification.label,
+        label: language === 'pl' ? modification.label.pl : modification.label.en,
         timestamp: Date.now(),
         imageUrl: newImage.url,
       };
@@ -628,9 +628,9 @@ export default function FastGeneratePage() {
           // }
           await logBehavioralEvent(projectId, 'generation_modification', {
             type: isMacro ? 'macro' : 'micro',
-            modification: modification.label,
+            modification: language === 'pl' ? modification.label.pl : modification.label.en,
             parameters,
-            path_type: 'fast'
+            path_type: 'fast',
           });
         }
       } catch (e) {
