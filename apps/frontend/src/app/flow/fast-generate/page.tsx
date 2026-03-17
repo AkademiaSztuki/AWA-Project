@@ -53,37 +53,42 @@ interface GeneratedImage {
   provider?: 'modal' | 'google';
 }
 
+interface LocalizedText {
+  pl: string;
+  en: string;
+}
+
 interface ModificationOption {
   id: string;
-  label: string;
+  label: LocalizedText;
   icon: React.ReactNode;
   category: 'micro' | 'macro';
 }
 
 const MICRO_MODIFICATIONS: ModificationOption[] = [
-  { id: 'warmer_colors', label: 'Cieplejsze kolory', icon: null, category: 'micro' },
-  { id: 'cooler_colors', label: 'Chłodniejsze kolory', icon: null, category: 'micro' },
-  { id: 'more_lighting', label: 'Więcej oświetlenia', icon: null, category: 'micro' },
-  { id: 'darker_mood', label: 'Ciemniejszy nastrój', icon: null, category: 'micro' },
-  { id: 'natural_materials', label: 'Naturalne materiały', icon: null, category: 'micro' },
-  { id: 'more_plants', label: 'Więcej roślin', icon: null, category: 'micro' },
-  { id: 'less_plants', label: 'Mniej roślin', icon: null, category: 'micro' },
-  { id: 'change_furniture', label: 'Zmień meble', icon: null, category: 'micro' },
-  { id: 'add_decorations', label: 'Dodaj dekoracje', icon: null, category: 'micro' },
-  { id: 'change_flooring', label: 'Zmień podłogę', icon: null, category: 'micro' },
+  { id: 'warmer_colors', label: { pl: 'Cieplejsze kolory', en: 'Warmer colors' }, icon: null, category: 'micro' },
+  { id: 'cooler_colors', label: { pl: 'Chłodniejsze kolory', en: 'Cooler colors' }, icon: null, category: 'micro' },
+  { id: 'more_lighting', label: { pl: 'Więcej oświetlenia', en: 'More lighting' }, icon: null, category: 'micro' },
+  { id: 'darker_mood', label: { pl: 'Ciemniejszy nastrój', en: 'Darker mood' }, icon: null, category: 'micro' },
+  { id: 'natural_materials', label: { pl: 'Naturalne materiały', en: 'Natural materials' }, icon: null, category: 'micro' },
+  { id: 'more_plants', label: { pl: 'Więcej roślin', en: 'More plants' }, icon: null, category: 'micro' },
+  { id: 'less_plants', label: { pl: 'Mniej roślin', en: 'Less plants' }, icon: null, category: 'micro' },
+  { id: 'change_furniture', label: { pl: 'Zmień meble', en: 'Change furniture' }, icon: null, category: 'micro' },
+  { id: 'add_decorations', label: { pl: 'Dodaj dekoracje', en: 'Add decorations' }, icon: null, category: 'micro' },
+  { id: 'change_flooring', label: { pl: 'Zmień podłogę', en: 'Change flooring' }, icon: null, category: 'micro' },
 ];
 
 const MACRO_MODIFICATIONS: ModificationOption[] = [
-  { id: 'scandinavian', label: 'Skandynawski', icon: null, category: 'macro' },
-  { id: 'minimalist', label: 'Minimalistyczny', icon: null, category: 'macro' },
-  { id: 'classic', label: 'Klasyczny', icon: null, category: 'macro' },
-  { id: 'industrial', label: 'Industrialny', icon: null, category: 'macro' },
-  { id: 'eclectic', label: 'Eklektyczny', icon: null, category: 'macro' },
-  { id: 'glamour', label: 'Glamour', icon: null, category: 'macro' },
-  { id: 'bohemian', label: 'Boho', icon: null, category: 'macro' },
-  { id: 'rustic', label: 'Rustykalny', icon: null, category: 'macro' },
-  { id: 'provencal', label: 'Prowansalski', icon: null, category: 'macro' },
-  { id: 'shabby_chic', label: 'Shabby Chic', icon: null, category: 'macro' },
+  { id: 'scandinavian', label: { pl: 'Skandynawski', en: 'Scandinavian' }, icon: null, category: 'macro' },
+  { id: 'minimalist', label: { pl: 'Minimalistyczny', en: 'Minimalist' }, icon: null, category: 'macro' },
+  { id: 'classic', label: { pl: 'Klasyczny', en: 'Classic' }, icon: null, category: 'macro' },
+  { id: 'industrial', label: { pl: 'Industrialny', en: 'Industrial' }, icon: null, category: 'macro' },
+  { id: 'eclectic', label: { pl: 'Eklektyczny', en: 'Eclectic' }, icon: null, category: 'macro' },
+  { id: 'glamour', label: { pl: 'Glamour', en: 'Glamour' }, icon: null, category: 'macro' },
+  { id: 'bohemian', label: { pl: 'Boho', en: 'Bohemian' }, icon: null, category: 'macro' },
+  { id: 'rustic', label: { pl: 'Rustykalny', en: 'Rustic' }, icon: null, category: 'macro' },
+  { id: 'provencal', label: { pl: 'Prowansalski', en: 'Provençal' }, icon: null, category: 'macro' },
+  { id: 'shabby_chic', label: { pl: 'Shabby Chic', en: 'Shabby Chic' }, icon: null, category: 'macro' },
 ];
 
 // Helper to get image dimensions
@@ -504,7 +509,11 @@ export default function FastGeneratePage() {
     setError(null);
     setLoadingStage(2);
     setLoadingProgress(30);
-    setStatusMessage(`Modyfikuję: ${modification.label}...`);
+    setStatusMessage(
+      language === 'pl'
+        ? `Modyfikuję: ${modification.label.pl}...`
+        : `Modifying: ${modification.label.en}...`,
+    );
     setEstimatedTime(60);
 
     const isMacro = modification.category === 'macro';
@@ -516,41 +525,58 @@ export default function FastGeneratePage() {
       // Special handling for change_furniture
       let modificationPrompt: string;
       if (modification.id === 'change_furniture') {
-        modificationPrompt = `SYSTEM INSTRUCTION: Image-to-image furniture replacement. KEEP: walls, windows, doors, floor, ceiling, lighting, decorations, camera angle, room layout - IDENTICAL. CHANGE: REPLACE all furniture with new furniture pieces that perfectly match the ${currentStyle} style. The new furniture must be stylistically appropriate, harmonize with the existing color palette and materials, maintain similar scale and proportions, and be placed in the same positions. Only furniture changes - everything else remains exactly the same.`;
+        modificationPrompt =
+          language === 'pl'
+            ? `SYSTEM INSTRUCTION (PL): Image-to-image furniture replacement. ZACHOWAJ: ściany, okna, drzwi, podłogę, sufit, oświetlenie, dekoracje, kadr kamery, układ pomieszczenia – IDENTYCZNE. ZMIEŃ: ZASTĄP wszystkie meble nowymi meblami, które idealnie pasują do stylu ${currentStyle}. Nowe meble muszą być spójne stylistycznie, harmonizować z paletą kolorów i materiałów, mieć podobną skalę i proporcje oraz znajdować się w tych samych miejscach. Zmieniamy tylko meble – wszystko inne pozostaje takie samo.`
+            : `SYSTEM INSTRUCTION: Image-to-image furniture replacement. KEEP: walls, windows, doors, floor, ceiling, lighting, decorations, camera angle, room layout - IDENTICAL. CHANGE: REPLACE all furniture with new furniture pieces that perfectly match the ${currentStyle} style. The new furniture must be stylistically appropriate, harmonize with the existing color palette and materials, maintain similar scale and proportions, and be placed in the same positions. Only furniture changes - everything else remains exactly the same.`;
       } else {
+        const localizedLabel = language === 'pl' ? modification.label.pl : modification.label.en;
         modificationPrompt = JSON.stringify({
-          instruction: `Apply ${modification.label} modification to the interior`,
+          instruction:
+            language === 'pl'
+              ? `Zastosuj modyfikację "${localizedLabel}" do wnętrza`
+              : `Apply "${localizedLabel}" modification to the interior`,
           style: modification.category === 'macro' ? modification.id : currentStyle,
           modification_type: modification.category,
-          preserve: [
-            'room structure',
-            'camera perspective',
-            'overall layout'
-          ],
-          modify: [modification.label]
+          preserve: ['room structure', 'camera perspective', 'overall layout'],
+          modify: [localizedLabel],
         });
       }
 
-      const baseImage = generatedImage.base64.includes(',') 
-        ? generatedImage.base64.split(',')[1] 
-        : generatedImage.base64;
+      const baseImageSource = generatedImage.base64;
 
       const response = await generateSixImagesParallelWithGoogle({
-        prompts: [{ source: GenerationSource.Explicit, prompt: modificationPrompt }],
-        base_image: baseImage,
-        style: (sessionData as any)?.visualDNA?.dominantStyle || 'modern',
+        prompts: [{ source: 'implicit' as GenerationSource, prompt: modificationPrompt }],
+        base_image: baseImageSource,
+        style: isMacro ? modification.id : (generatedImage.parameters?.style || currentStyle),
         parameters: {
           ...parameters,
           strength: parameters.strength ?? (isMacro ? 0.75 : 0.25),
-        }
+        },
       });
 
-      if (response.successful_count === 0) {
-        setError("Nie udało się zmodyfikować obrazu.");
+      if (!response || !response.results || response.results.length === 0) {
+        console.error('[FastGenerate] Empty response for modification:', response);
+        setError(
+          language === 'pl'
+            ? 'Nie udało się zmodyfikować obrazu. Spróbuj inną modyfikację lub wygeneruj nowy obraz.'
+            : 'Failed to modify the image. Try another modification or generate a new image.',
+        );
         return;
       }
 
-      const result = response.results[0];
+      const successfulResult = response.results.find((r: any) => r.success && r.image) ?? response.results[0];
+      if (!successfulResult?.image) {
+        console.error('[FastGenerate] No successful image in modification response:', response.results);
+        setError(
+          language === 'pl'
+            ? 'Nie udało się zmodyfikować obrazu. Wszystkie próby zakończyły się niepowodzeniem.'
+            : 'Failed to modify the image. All attempts failed.',
+        );
+        return;
+      }
+
+      const result = successfulResult;
       const newImage: GeneratedImage = {
         id: `mod-fast-${generationCount}-0`,
         url: `data:image/png;base64,${result.image}`,
@@ -558,7 +584,7 @@ export default function FastGeneratePage() {
         prompt: modificationPrompt,
         parameters: {
           modificationType: isMacro ? 'macro' : 'micro',
-          modifications: [modification.label],
+          modifications: [language === 'pl' ? modification.label.pl : modification.label.en],
           iterationCount: generationCount,
         },
         ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
@@ -568,14 +594,16 @@ export default function FastGeneratePage() {
       };
 
       setGeneratedImage(newImage);
-      setGeneratedImages(prev => [...prev, newImage]); // Add to array
-      setGenerationCount(prev => prev + 1);
+      setGeneratedImages((prev) => [...prev, newImage]); // Add to array
+      setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
       // Don't reset ratings after modification - user already answered
       // setHasAnsweredInteriorQuestion(false);
       // setHasCompletedRatings(false);
       setLoadingProgress(100);
-      setStatusMessage("Modyfikacja zakończona!");
+      setStatusMessage(
+        language === 'pl' ? 'Modyfikacja zakończona!' : 'Modification completed!',
+      );
       setEstimatedTime(0);
 
       // Add to history
@@ -743,11 +771,13 @@ export default function FastGeneratePage() {
                           transition={{ duration: 0.5, ease: "easeOut" }}
                         >
                           <div className="space-y-6">
-                            <h4 className="font-semibold text-graphite text-lg">Czy to Twoje wnętrze?</h4>
+                            <h4 className="font-semibold text-graphite text-lg">
+                              {language === 'pl' ? 'Czy to Twoje wnętrze?' : 'Is this your interior?'}
+                            </h4>
                             <div className="border-b border-gray-200/50 pb-4 last:border-b-0">
                               <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
-                                <span>To nie moje wnętrze (1)</span>
-                                <span>To moje wnętrze (5)</span>
+                                <span>{language === 'pl' ? 'To nie moje wnętrze (1)' : 'Not my interior (1)'}</span>
+                                <span>{language === 'pl' ? 'To moje wnętrze (5)' : 'This is my interior (5)'}</span>
                               </div>
 
                               <GlassSlider
@@ -835,7 +865,7 @@ export default function FastGeneratePage() {
                               <div>
                                 <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
                                   <Settings size={20} className="mr-3" />
-                                  Drobne zmiany
+                                  {language === 'pl' ? 'Drobne modyfikacje' : 'Minor modifications'}
                                 </h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                   {MICRO_MODIFICATIONS.map((mod) => (
@@ -846,7 +876,7 @@ export default function FastGeneratePage() {
                                       size="sm"
                                       disabled={isGenerating}
                                     >
-                                      {mod.label}
+                                      {language === 'pl' ? mod.label.pl : mod.label.en}
                                     </GlassButton>
                                   ))}
                                 </div>
@@ -855,7 +885,7 @@ export default function FastGeneratePage() {
                               <div>
                                 <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
                                   <RefreshCw size={20} className="mr-3" />
-                                  Zupełnie inny kierunek
+                                  {language === 'pl' ? 'Zupełnie inny kierunek' : 'Completely new direction'}
                                 </h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                   {MACRO_MODIFICATIONS.map((mod) => (
@@ -866,7 +896,7 @@ export default function FastGeneratePage() {
                                       size="sm"
                                       disabled={isGenerating}
                                     >
-                                      {mod.label}
+                                      {language === 'pl' ? mod.label.pl : mod.label.en}
                                     </GlassButton>
                                   ))}
                                 </div>

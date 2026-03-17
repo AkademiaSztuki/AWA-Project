@@ -153,63 +153,79 @@ const GOAL_OPTIONS = [
 ];
 
 const getDefaultCountry = (language: 'pl' | 'en') => (language === 'pl' ? 'PL' : 'US');
-const COUNTRY_OPTIONS = [
-  { code: 'PL', label: { pl: 'Polska', en: 'Poland' } },
-  { code: 'DE', label: { pl: 'Niemcy', en: 'Germany' } },
-  { code: 'CZ', label: { pl: 'Czechy', en: 'Czech Republic' } },
-  { code: 'SK', label: { pl: 'Słowacja', en: 'Slovakia' } },
-  { code: 'UA', label: { pl: 'Ukraina', en: 'Ukraine' } },
-  { code: 'GB', label: { pl: 'Wielka Brytania', en: 'United Kingdom' } },
-  { code: 'IE', label: { pl: 'Irlandia', en: 'Ireland' } },
-  { code: 'SE', label: { pl: 'Szwecja', en: 'Sweden' } },
-  { code: 'NO', label: { pl: 'Norwegia', en: 'Norway' } },
-  { code: 'FI', label: { pl: 'Finlandia', en: 'Finland' } },
-  { code: 'DK', label: { pl: 'Dania', en: 'Denmark' } },
-  { code: 'FR', label: { pl: 'Francja', en: 'France' } },
-  { code: 'ES', label: { pl: 'Hiszpania', en: 'Spain' } },
-  { code: 'PT', label: { pl: 'Portugalia', en: 'Portugal' } },
-  { code: 'IT', label: { pl: 'Włochy', en: 'Italy' } },
-  { code: 'NL', label: { pl: 'Holandia', en: 'Netherlands' } },
-  { code: 'BE', label: { pl: 'Belgia', en: 'Belgium' } },
-  { code: 'AT', label: { pl: 'Austria', en: 'Austria' } },
-  { code: 'CH', label: { pl: 'Szwajcaria', en: 'Switzerland' } },
-  { code: 'LT', label: { pl: 'Litwa', en: 'Lithuania' } },
-  { code: 'LV', label: { pl: 'Łotwa', en: 'Latvia' } },
-  { code: 'EE', label: { pl: 'Estonia', en: 'Estonia' } },
-  { code: 'US', label: { pl: 'Stany Zjednoczone', en: 'United States' } },
-  { code: 'CA', label: { pl: 'Kanada', en: 'Canada' } },
-  { code: 'AU', label: { pl: 'Australia', en: 'Australia' } },
-  { code: 'NZ', label: { pl: 'Nowa Zelandia', en: 'New Zealand' } },
-  { code: 'RO', label: { pl: 'Rumunia', en: 'Romania' } },
-  { code: 'HU', label: { pl: 'Węgry', en: 'Hungary' } },
-  { code: 'HR', label: { pl: 'Chorwacja', en: 'Croatia' } },
-  { code: 'SI', label: { pl: 'Słowenia', en: 'Slovenia' } },
-  { code: 'BG', label: { pl: 'Bułgaria', en: 'Bulgaria' } },
-  { code: 'GR', label: { pl: 'Grecja', en: 'Greece' } },
+
+type CountryRegion = 'PL' | 'Europe' | 'Africa' | 'Americas' | 'AsiaPacific';
+
+const COUNTRY_OPTIONS: Array<{
+  code: string;
+  region: CountryRegion;
+  label: { pl: string; en: string };
+}> = [
+  // Primary focus country
+  { code: 'PL', region: 'PL', label: { pl: 'Polska', en: 'Poland' } },
+
+  // Europe
+  { code: 'DE', region: 'Europe', label: { pl: 'Niemcy', en: 'Germany' } },
+  { code: 'CZ', region: 'Europe', label: { pl: 'Czechy', en: 'Czech Republic' } },
+  { code: 'SK', region: 'Europe', label: { pl: 'Słowacja', en: 'Slovakia' } },
+  { code: 'UA', region: 'Europe', label: { pl: 'Ukraina', en: 'Ukraine' } },
+  { code: 'GB', region: 'Europe', label: { pl: 'Wielka Brytania', en: 'United Kingdom' } },
+  { code: 'IE', region: 'Europe', label: { pl: 'Irlandia', en: 'Ireland' } },
+  { code: 'SE', region: 'Europe', label: { pl: 'Szwecja', en: 'Sweden' } },
+  { code: 'NO', region: 'Europe', label: { pl: 'Norwegia', en: 'Norway' } },
+  { code: 'FI', region: 'Europe', label: { pl: 'Finlandia', en: 'Finland' } },
+  { code: 'DK', region: 'Europe', label: { pl: 'Dania', en: 'Denmark' } },
+  { code: 'FR', region: 'Europe', label: { pl: 'Francja', en: 'France' } },
+  { code: 'ES', region: 'Europe', label: { pl: 'Hiszpania', en: 'Spain' } },
+  { code: 'PT', region: 'Europe', label: { pl: 'Portugalia', en: 'Portugal' } },
+  { code: 'IT', region: 'Europe', label: { pl: 'Włochy', en: 'Italy' } },
+  { code: 'NL', region: 'Europe', label: { pl: 'Holandia', en: 'Netherlands' } },
+  { code: 'BE', region: 'Europe', label: { pl: 'Belgia', en: 'Belgium' } },
+  { code: 'AT', region: 'Europe', label: { pl: 'Austria', en: 'Austria' } },
+  { code: 'CH', region: 'Europe', label: { pl: 'Szwajcaria', en: 'Switzerland' } },
+  { code: 'LT', region: 'Europe', label: { pl: 'Litwa', en: 'Lithuania' } },
+  { code: 'LV', region: 'Europe', label: { pl: 'Łotwa', en: 'Latvia' } },
+  { code: 'EE', region: 'Europe', label: { pl: 'Estonia', en: 'Estonia' } },
+  { code: 'RO', region: 'Europe', label: { pl: 'Rumunia', en: 'Romania' } },
+  { code: 'HU', region: 'Europe', label: { pl: 'Węgry', en: 'Hungary' } },
+  { code: 'HR', region: 'Europe', label: { pl: 'Chorwacja', en: 'Croatia' } },
+  { code: 'SI', region: 'Europe', label: { pl: 'Słowenia', en: 'Slovenia' } },
+  { code: 'BG', region: 'Europe', label: { pl: 'Bułgaria', en: 'Bulgaria' } },
+  { code: 'GR', region: 'Europe', label: { pl: 'Grecja', en: 'Greece' } },
+
   // Southern Africa focus
-  { code: 'ZA', label: { pl: 'Republika Południowej Afryki', en: 'South Africa' } },
-  { code: 'NA', label: { pl: 'Namibia', en: 'Namibia' } },
-  { code: 'BW', label: { pl: 'Botswana', en: 'Botswana' } },
-  { code: 'ZW', label: { pl: 'Zimbabwe', en: 'Zimbabwe' } },
-  { code: 'MZ', label: { pl: 'Mozambik', en: 'Mozambique' } },
-  { code: 'LS', label: { pl: 'Lesotho', en: 'Lesotho' } },
-  { code: 'SZ', label: { pl: 'Eswatini', en: 'Eswatini' } },
+  { code: 'ZA', region: 'Africa', label: { pl: 'Republika Południowej Afryki', en: 'South Africa' } },
+  { code: 'NA', region: 'Africa', label: { pl: 'Namibia', en: 'Namibia' } },
+  { code: 'BW', region: 'Africa', label: { pl: 'Botswana', en: 'Botswana' } },
+  { code: 'ZW', region: 'Africa', label: { pl: 'Zimbabwe', en: 'Zimbabwe' } },
+  { code: 'MZ', region: 'Africa', label: { pl: 'Mozambik', en: 'Mozambique' } },
+  { code: 'LS', region: 'Africa', label: { pl: 'Lesotho', en: 'Lesotho' } },
+  { code: 'SZ', region: 'Africa', label: { pl: 'Eswatini', en: 'Eswatini' } },
+
   // Other African countries
-  { code: 'NG', label: { pl: 'Nigeria', en: 'Nigeria' } },
-  { code: 'KE', label: { pl: 'Kenia', en: 'Kenya' } },
-  { code: 'GH', label: { pl: 'Ghana', en: 'Ghana' } },
-  { code: 'EG', label: { pl: 'Egipt', en: 'Egypt' } },
-  { code: 'MA', label: { pl: 'Maroko', en: 'Morocco' } },
-  { code: 'TN', label: { pl: 'Tunezja', en: 'Tunisia' } },
-  { code: 'DZ', label: { pl: 'Algieria', en: 'Algeria' } },
-  { code: 'ET', label: { pl: 'Etiopia', en: 'Ethiopia' } },
-  { code: 'TZ', label: { pl: 'Tanzania', en: 'Tanzania' } },
-  { code: 'UG', label: { pl: 'Uganda', en: 'Uganda' } },
-  { code: 'SN', label: { pl: 'Senegal', en: 'Senegal' } },
-  { code: 'CM', label: { pl: 'Kamerun', en: 'Cameroon' } },
-  { code: 'CI', label: { pl: 'Wybrzeże Kości Słoniowej', en: 'Côte d’Ivoire' } },
-  { code: 'ZM', label: { pl: 'Zambia', en: 'Zambia' } },
-  { code: 'RW', label: { pl: 'Rwanda', en: 'Rwanda' } },
+  { code: 'NG', region: 'Africa', label: { pl: 'Nigeria', en: 'Nigeria' } },
+  { code: 'KE', region: 'Africa', label: { pl: 'Kenia', en: 'Kenya' } },
+  { code: 'GH', region: 'Africa', label: { pl: 'Ghana', en: 'Ghana' } },
+  { code: 'EG', region: 'Africa', label: { pl: 'Egipt', en: 'Egypt' } },
+  { code: 'MA', region: 'Africa', label: { pl: 'Maroko', en: 'Morocco' } },
+  { code: 'TN', region: 'Africa', label: { pl: 'Tunezja', en: 'Tunisia' } },
+  { code: 'DZ', region: 'Africa', label: { pl: 'Algieria', en: 'Algeria' } },
+  { code: 'ET', region: 'Africa', label: { pl: 'Etiopia', en: 'Ethiopia' } },
+  { code: 'TZ', region: 'Africa', label: { pl: 'Tanzania', en: 'Tanzania' } },
+  { code: 'UG', region: 'Africa', label: { pl: 'Uganda', en: 'Uganda' } },
+  { code: 'SN', region: 'Africa', label: { pl: 'Senegal', en: 'Senegal' } },
+  { code: 'CM', region: 'Africa', label: { pl: 'Kamerun', en: 'Cameroon' } },
+  { code: 'CI', region: 'Africa', label: { pl: 'Wybrzeże Kości Słoniowej', en: 'Côte d’Ivoire' } },
+  { code: 'ZM', region: 'Africa', label: { pl: 'Zambia', en: 'Zambia' } },
+  { code: 'RW', region: 'Africa', label: { pl: 'Rwanda', en: 'Rwanda' } },
+
+  // Americas
+  { code: 'US', region: 'Americas', label: { pl: 'Stany Zjednoczone', en: 'United States' } },
+  { code: 'CA', region: 'Americas', label: { pl: 'Kanada', en: 'Canada' } },
+
+  // Asia-Pacific
+  { code: 'AU', region: 'AsiaPacific', label: { pl: 'Australia', en: 'Australia' } },
+  { code: 'NZ', region: 'AsiaPacific', label: { pl: 'Nowa Zelandia', en: 'New Zealand' } },
 ];
 
 function CountrySelect({
@@ -224,6 +240,44 @@ function CountrySelect({
   const [open, setOpen] = useState(false);
   const selectedLabel = COUNTRY_OPTIONS.find((option) => option.code === value)?.label[language] ?? value;
 
+  const [query, setQuery] = useState('');
+
+  const filteredOptions = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) {
+      return COUNTRY_OPTIONS;
+    }
+    return COUNTRY_OPTIONS.filter((option) => {
+      const label = option.label[language].toLowerCase();
+      return (
+        label.includes(term) ||
+        option.code.toLowerCase().includes(term)
+      );
+    });
+  }, [query, language]);
+
+  const groupedOptions = useMemo(() => {
+    const groups: Record<CountryRegion, typeof COUNTRY_OPTIONS> = {
+      PL: [],
+      Europe: [],
+      Africa: [],
+      Americas: [],
+      AsiaPacific: [],
+    };
+    for (const option of filteredOptions) {
+      groups[option.region].push(option);
+    }
+    return groups;
+  }, [filteredOptions]);
+
+  const regionLabel = (region: CountryRegion) => {
+    if (region === 'PL') return language === 'pl' ? 'Najczęściej wybierane' : 'Most common';
+    if (region === 'Europe') return language === 'pl' ? 'Europa' : 'Europe';
+    if (region === 'Africa') return language === 'pl' ? 'Afryka' : 'Africa';
+    if (region === 'Americas') return language === 'pl' ? 'Ameryki' : 'Americas';
+    return language === 'pl' ? 'Azja i Pacyfik' : 'Asia & Pacific';
+  };
+
   return (
     <div className="relative" tabIndex={0} onBlur={() => setOpen(false)}>
       <button
@@ -236,28 +290,50 @@ function CountrySelect({
       </button>
 
       {open && (
-        <div className="absolute z-40 bottom-full mb-3 max-h-64 w-full overflow-auto rounded-xl border border-white/25 bg-[#c7b07a] shadow-2xl ring-1 ring-gold/35 backdrop-blur-sm">
-          <ul className="py-1 space-y-0.5">
-            {COUNTRY_OPTIONS.map((option) => (
-              <li key={option.code}>
-                <button
-                  type="button"
-                  className={`w-full text-left px-4 py-2 text-sm font-modern rounded-lg transition ${
-                    value === option.code
-                      ? 'bg-gold/80 text-white font-semibold shadow-inner drop-shadow-sm'
-                      : 'text-graphite/90 hover:bg-gold/70 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.55)]'
-                  }`}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    onChange(option.code);
-                    setOpen(false);
-                  }}
-                >
-                  {option.label[language]}
-                </button>
-              </li>
-            ))}
-          </ul>
+        <div className="absolute z-40 bottom-full mb-3 max-h-80 w-full overflow-hidden rounded-xl border border-white/25 bg-[#c7b07a] shadow-2xl ring-1 ring-gold/35 backdrop-blur-sm">
+          <div className="border-b border-white/20 px-3 py-2 bg-[#c1a86e]/80">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={language === 'pl' ? 'Zacznij wpisywać kraj...' : 'Type to search country...'}
+              className="w-full rounded-lg bg-white/80 px-3 py-1.5 text-xs font-modern text-graphite placeholder:text-graphite/50 focus:outline-none focus:ring-2 focus:ring-gold"
+            />
+          </div>
+          <div className="max-h-60 overflow-auto px-1 py-1 space-y-2">
+            {(Object.entries(groupedOptions) as Array<[CountryRegion, typeof COUNTRY_OPTIONS]>).map(
+              ([region, options]) =>
+                options.length > 0 && (
+                  <div key={region}>
+                    <div className="px-3 py-1 text-[11px] font-modern uppercase tracking-wide text-graphite/70">
+                      {regionLabel(region as CountryRegion)}
+                    </div>
+                    <ul className="py-0.5 space-y-0.5">
+                      {options.map((option) => (
+                        <li key={option.code}>
+                          <button
+                            type="button"
+                            className={`w-full text-left px-4 py-1.5 text-sm font-modern rounded-lg transition ${
+                              value === option.code
+                                ? 'bg-gold/80 text-white font-semibold shadow-inner drop-shadow-sm'
+                                : 'text-graphite/90 hover:bg-gold/70 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.55)]'
+                            }`}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              onChange(option.code);
+                              setOpen(false);
+                              setQuery('');
+                            }}
+                          >
+                            {option.label[language]}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ),
+            )}
+          </div>
         </div>
       )}
     </div>
