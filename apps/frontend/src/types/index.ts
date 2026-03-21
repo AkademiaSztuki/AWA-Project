@@ -29,6 +29,16 @@ export interface SessionData {
   ladderPath?: string[];
   coreNeed?: string;
   generations: GenerationSet[];
+  /** 6-image matrix history (counts toward `generations_count` in `participants`) */
+  matrixHistory?: Array<{
+    id: string;
+    label?: string;
+    timestamp?: number;
+    imageUrl?: string;
+    source?: string;
+    isSelected?: boolean;
+    base64?: string;
+  }>;
   finalSurvey: SurveyResults;
   // Dashboard data - Spaces with images
   spaces?: Array<{

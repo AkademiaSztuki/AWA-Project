@@ -45,6 +45,51 @@ function mergeSensoryForParticipant(sessionData: SessionData) {
   };
 }
 
+/** Matrix flow fills `matrixHistory`; legacy flow uses `generations` / `generatedImages`. */
+function computeGenerationCount(sessionData: SessionData): number {
+  const genLen = Array.isArray(sessionData.generations) ? sessionData.generations.length : 0;
+  const matrixLen = Array.isArray(sessionData.matrixHistory) ? sessionData.matrixHistory.length : 0;
+  const genImgLen = Array.isArray(sessionData.generatedImages) ? sessionData.generatedImages.length : 0;
+  return Math.max(genLen, matrixLen, genImgLen);
+}
+
+/**
+ * Support both `scores.domains.{O,C,E,A,N}` and legacy flat keys on `scores` (openness, …).
+ */
+function extractBigFiveDomains(sessionData: SessionData): {
+  O?: number;
+  C?: number;
+  E?: number;
+  A?: number;
+  N?: number;
+} | undefined {
+  const bf = sessionData.bigFive;
+  if (!bf?.scores || typeof bf.scores !== 'object') return undefined;
+  const scores = bf.scores as Record<string, unknown>;
+  const domains = scores.domains as Record<string, unknown> | undefined;
+  if (domains && typeof domains === 'object') {
+    const pick = (k: string) => (typeof domains[k] === 'number' ? (domains[k] as number) : undefined);
+    const O = pick('O');
+    const C = pick('C');
+    const E = pick('E');
+    const A = pick('A');
+    const N = pick('N');
+    if ([O, C, E, A, N].some((x) => typeof x === 'number')) {
+      return { O, C, E, A, N };
+    }
+  }
+  const legacy = scores as Record<string, unknown>;
+  const O = typeof legacy.openness === 'number' ? legacy.openness : undefined;
+  const C = typeof legacy.conscientiousness === 'number' ? legacy.conscientiousness : undefined;
+  const E = typeof legacy.extraversion === 'number' ? legacy.extraversion : undefined;
+  const A = typeof legacy.agreeableness === 'number' ? legacy.agreeableness : undefined;
+  const N = typeof legacy.neuroticism === 'number' ? legacy.neuroticism : undefined;
+  if ([O, C, E, A, N].some((x) => typeof x === 'number')) {
+    return { O: O as number, C: C as number, E: E as number, A: A as number, N: N as number };
+  }
+  return undefined;
+}
+
 export interface ParticipantRow {
   user_hash: string;
   auth_user_id?: string;
@@ -180,6 +225,7 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
   const explicitSem = mergeExplicitSemanticsForParticipant(sessionData);
   const mergedCm = mergeColorsMaterialsForParticipant(sessionData);
   const mergedSensory = mergeSensoryForParticipant(sessionData);
+  const big5Domains = extractBigFiveDomains(sessionData);
 
   const row: ParticipantRow = {
     user_hash: sessionData.userHash,
@@ -195,11 +241,11 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     education: sessionData.demographics?.education,
     
     // Big Five
-    big5_openness: sessionData.bigFive?.scores?.domains?.O,
-    big5_conscientiousness: sessionData.bigFive?.scores?.domains?.C,
-    big5_extraversion: sessionData.bigFive?.scores?.domains?.E,
-    big5_agreeableness: sessionData.bigFive?.scores?.domains?.A,
-    big5_neuroticism: sessionData.bigFive?.scores?.domains?.N,
+    big5_openness: big5Domains?.O ?? sessionData.bigFive?.scores?.domains?.O,
+    big5_conscientiousness: big5Domains?.C ?? sessionData.bigFive?.scores?.domains?.C,
+    big5_extraversion: big5Domains?.E ?? sessionData.bigFive?.scores?.domains?.E,
+    big5_agreeableness: big5Domains?.A ?? sessionData.bigFive?.scores?.domains?.A,
+    big5_neuroticism: big5Domains?.N ?? sessionData.bigFive?.scores?.domains?.N,
     big5_completed_at: sessionData.bigFive?.completedAt,
     big5_responses: sessionData.bigFive?.responses,
     big5_facets: sessionData.bigFive?.scores?.facets,
@@ -297,8 +343,8 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     // Inspiration tags (aggregate from inspirations array)
     inspirations_count: sessionData.inspirations?.length || 0,
     
-    // Generation stats
-    generations_count: sessionData.generations?.length || 0,
+    // Generation stats (matrix uses `matrixHistory`, not always `generations[]`)
+    generations_count: computeGenerationCount(sessionData),
     session_image_ratings: sessionData.imageRatings as Record<string, unknown> | undefined,
 
     // Profile status
@@ -350,11 +396,45 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
   // Also filter out empty strings for timestamp fields (they cause SQL errors)
   const cleaned: any = {};
   const timestampFields = ['consent_timestamp', 'big5_completed_at', 'core_profile_completed_at'];
-  
+  /** Do not UPSERT '' over existing DB text (path, step, room, explicit labels, …) */
+  const skipEmptyStringKeys = new Set([
+    'path_type',
+    'current_step',
+    'room_type',
+    'room_name',
+    'room_usage_type',
+    'explicit_palette',
+    'explicit_style',
+    'explicit_material_1',
+    'explicit_material_2',
+    'explicit_material_3',
+    'implicit_dominant_style',
+    'implicit_style_1',
+    'implicit_style_2',
+    'implicit_style_3',
+    'implicit_color_1',
+    'implicit_color_2',
+    'implicit_color_3',
+    'implicit_material_1',
+    'implicit_material_2',
+    'implicit_material_3',
+    'sensory_music',
+    'sensory_texture',
+    'sensory_light',
+    'nature_metaphor',
+    'age_range',
+    'gender',
+    'country',
+    'education',
+  ]);
+
   for (const [key, value] of Object.entries(row)) {
     if (value !== undefined && value !== null) {
       // For timestamp fields, skip empty strings (they cause "invalid input syntax for type timestamp" errors)
       if (timestampFields.includes(key) && value === '') {
+        continue;
+      }
+      if (value === '' && skipEmptyStringKeys.has(key)) {
         continue;
       }
       cleaned[key] = value;

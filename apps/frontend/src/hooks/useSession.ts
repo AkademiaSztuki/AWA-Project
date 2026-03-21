@@ -754,12 +754,18 @@ export const useSession = (): UseSessionReturn => {
               return profileHasVisualDNA ? profileVisualDNA : (localHasVisualDNA ? mergedSession.visualDNA : profileVisualDNA || mergedSession.visualDNA);
             })();
             
-            // Merge profile data into session:
-            // - profile data takes precedence, BUT don't overwrite local bigFive if profile has none
+            // Merge profile data into session. Prefer local Big Five when the user completed the test in-session
+            // (profile built from `participants` may lag or omit columns until the next successful save).
+            const mergedBigFive =
+              mergedSession.bigFive?.completedAt &&
+              String(mergedSession.bigFive.completedAt).length > 0
+                ? mergedSession.bigFive
+                : (profileBigFive ?? mergedSession.bigFive);
+
             mergedSession = {
               ...mergedSession,
               ...profileRest,
-              ...(profileBigFive ? { bigFive: profileBigFive } : {}),
+              ...(mergedBigFive ? { bigFive: mergedBigFive } : {}),
               ...(mergedVisualDNA ? { visualDNA: mergedVisualDNA } : {}),
               colorsAndMaterials: mergedExplicit,
               userHash

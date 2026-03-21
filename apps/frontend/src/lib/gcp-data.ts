@@ -294,10 +294,12 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
     };
 
     let rawAuthUserId: string | null | undefined;
+    let rawParticipantRow: Record<string, unknown> | null = null;
     try {
       const fetchRes = await gcpApi.participants.fetchSession(sessionData.userHash);
       if (fetchRes.ok && fetchRes.data?.participant != null) {
         const raw = fetchRes.data.participant as Record<string, unknown>;
+        rawParticipantRow = raw;
         const aid = raw.auth_user_id;
         if (typeof aid === 'string' && aid.length > 0) {
           rawAuthUserId = aid;
@@ -323,6 +325,15 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
 
     if (!mergedRow.consent_timestamp) {
       mergedRow.consent_timestamp = new Date().toISOString();
+    }
+
+    // Never let a transient local count of 0 wipe a previously persisted count (remote remap uses empty generations).
+    const rawGc = rawParticipantRow?.generations_count;
+    const mergedGc = mergedRow.generations_count;
+    if (typeof rawGc === 'number' && typeof mergedGc === 'number') {
+      mergedRow.generations_count = Math.max(rawGc, mergedGc);
+    } else if (typeof rawGc === 'number' && mergedGc === undefined) {
+      mergedRow.generations_count = rawGc;
     }
 
     if (dbg) {
