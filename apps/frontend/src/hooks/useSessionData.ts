@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useSession } from './useSession';
+import { useSession, getSessionStoreSnapshot } from './useSession';
 import { SessionData } from '@/types';
 import { saveFullSessionToSupabase, DISABLE_SESSION_SYNC } from '@/lib/supabase';
 
@@ -20,15 +20,14 @@ export const useSessionData = (): UseSessionDataReturn => {
     }
     
     updateSession(normalizedUpdates);
-    // Zapisz całą sesję do supabase
+    // Zapisz całą sesję do GCP — po updateSession odczytujemy stan ze wspólnego store,
+    // żeby uniknąć wyścigu (stary sessionData z closure vs faktycznie zmergowany stan).
     if (!DISABLE_SESSION_SYNC) {
-      // Avoid setTimeout (can mask ordering/race issues); schedule microtask instead
       queueMicrotask(() => {
-        void saveFullSessionToSupabase({ ...sessionData, ...normalizedUpdates });
+        void saveFullSessionToSupabase(getSessionStoreSnapshot());
       });
-    } else {
     }
-  }, [sessionData, updateSession]);
+  }, [updateSession]);
 
   const exportSessionData = () => {
     try {

@@ -51,6 +51,8 @@ Aplikacja zbiera dane zgodnie z metodologią Research Through Design:
 - Dane behawioralne (interakcje z AWA)  
 - Dane wynikowe (parametry AI, generacje)
 
+Persystencja produkcyjna (Google Cloud SQL + Cloud Storage) i **plan weryfikacji zapisu** (checklisty, SQL, audyt stubów): zobacz [docs/gcp-data-verification/README.md](docs/gcp-data-verification/README.md).
+
 ## Akademia Sztuk Pięknych - Doktorat
 
 Projekt realizowany w ramach badań nad współpracą człowiek-AI w projektowaniu wnętrz.

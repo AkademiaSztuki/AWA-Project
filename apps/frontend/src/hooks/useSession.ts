@@ -938,7 +938,8 @@ function subscribeSessionStore(listener: SessionStoreListener) {
   return () => sessionStoreListeners.delete(listener);
 }
 
-function getSessionStoreSnapshot() {
+/** Latest session from the shared store (synchronous). Safe to call right after `updateSession`. */
+export function getSessionStoreSnapshot() {
   return sessionStoreState.sessionData;
 }
 

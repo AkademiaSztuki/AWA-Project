@@ -14,6 +14,7 @@
     "db:cleanup": "node scripts/cleanup-db.js",
     "export:csv": "node scripts/export-to-csv.js",
     "export:single": "node scripts/export-single-csv.js",
+    "verify:gcp-health": "node scripts/gcp-backend-health.mjs",
     "storage:create-bucket": "node scripts/create-storage-bucket.js",
     "storage:create-bucket-api": "node scripts/create-bucket-via-api.js",
     "generate:desktop-bg": "node scripts/generate-desktop-background.js"
