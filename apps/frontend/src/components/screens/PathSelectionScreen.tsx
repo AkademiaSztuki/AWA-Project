@@ -9,7 +9,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
-import { safeSessionStorage } from '@/lib/supabase';
+import { safeSessionStorage } from '@/lib/gcp-data';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { 
   Zap, 

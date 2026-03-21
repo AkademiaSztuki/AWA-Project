@@ -1,6 +1,7 @@
 import { SessionData } from '@/types';
 import { UserProfile } from '@/types/deep-personalization';
 import { computeWeightedDNAFromSwipes } from '@/lib/dna';
+import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
 
 export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserProfile> {
   // Analyze Tinder swipes to get implicit preferences
@@ -128,9 +129,16 @@ export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserP
           }
           return style;
         })(),
-        warmthPreference: sessionData.semanticDifferential?.warmth || 0.5,
-        brightnessPreference: sessionData.semanticDifferential?.brightness || 0.5,
-        complexityPreference: sessionData.semanticDifferential?.complexity || 0.5
+        ...(() => {
+          const w = normalizeSemanticTo01(sessionData.semanticDifferential?.warmth);
+          const b = normalizeSemanticTo01(sessionData.semanticDifferential?.brightness);
+          const c = normalizeSemanticTo01(sessionData.semanticDifferential?.complexity);
+          const o: Record<string, number> = {};
+          if (w !== undefined) o.warmthPreference = w;
+          if (b !== undefined) o.brightnessPreference = b;
+          if (c !== undefined) o.complexityPreference = c;
+          return o;
+        })(),
       } as any
     },
 
@@ -226,12 +234,19 @@ export function mapUserProfileToSessionData(userProfile: UserProfile): Partial<S
       // If it's empty string '', null, or undefined, don't overwrite existing value in sessionData                                                    
       ...((explicit as any).selectedStyle && (explicit as any).selectedStyle.length > 0 ? { selectedStyle: (explicit as any).selectedStyle } : {})
     };
-    sessionUpdates.semanticDifferential = {
-      warmth: explicit.warmthPreference ?? 0.5,
-      brightness: explicit.brightnessPreference ?? 0.5,
-      complexity: explicit.complexityPreference ?? 0.5,
-      texture: 0.5 // Not stored in UserProfile
-    };
+    const sem: Record<string, number> = {};
+    if (explicit.warmthPreference !== undefined && explicit.warmthPreference !== null) {
+      sem.warmth = explicit.warmthPreference;
+    }
+    if (explicit.brightnessPreference !== undefined && explicit.brightnessPreference !== null) {
+      sem.brightness = explicit.brightnessPreference;
+    }
+    if (explicit.complexityPreference !== undefined && explicit.complexityPreference !== null) {
+      sem.complexity = explicit.complexityPreference;
+    }
+    if (Object.keys(sem).length > 0) {
+      sessionUpdates.semanticDifferential = sem as SessionData['semanticDifferential'];
+    }
   }
 
   // Map sensory preferences

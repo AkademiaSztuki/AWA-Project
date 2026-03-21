@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Language, LocalizedText, getLocalizedText } from '@/lib/questions/validated-scales';
-import { safeLocalStorage } from '@/lib/supabase';
+import { safeLocalStorage } from '@/lib/gcp-data';
 
 interface LanguageContextType {
   language: Language;

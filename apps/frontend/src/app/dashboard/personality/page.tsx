@@ -7,8 +7,8 @@ import { useRouter } from 'next/navigation';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { getUserProfile } from '@/lib/supabase-deep-personalization';
-import { safeLocalStorage } from '@/lib/supabase';
+import { getUserProfile } from '@/lib/gcp-participant-profile';
+import { safeLocalStorage } from '@/lib/gcp-data';
 
 export default function PersonalityDetailPage() {
   const { sessionData } = useSessionData();

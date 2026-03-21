@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { safeLocalStorage } from '@/lib/supabase';
+import { safeLocalStorage } from '@/lib/gcp-data';
 
 interface DialogueVoiceControls {
   volume: number;

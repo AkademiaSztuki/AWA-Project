@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { safeLocalStorage } from '@/lib/supabase';
+import { safeLocalStorage } from '@/lib/gcp-data';
 
 interface ColorAdjustmentContextType {
   saturation: number; // 0-200 (100 = normal)

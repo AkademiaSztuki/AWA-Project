@@ -1,10 +1,6 @@
 /**
- * Data persistence layer – GCP backend only (Supabase removed).
- *
- * This module used to wrap the Supabase JS client. After decoupling from
- * Supabase the file keeps the same public API surface so that callers do
- * not need to change their imports, but every database / storage operation
- * now goes through the GCP Cloud Run backend via `gcpApi`.
+ * Client data layer for AWA: Cloud Run API → Cloud SQL / GCS (Google Cloud).
+ * All persistence goes through `gcpApi`; there is no Supabase runtime dependency.
  */
 
 import { gcpApi } from './gcp-api-client';
@@ -19,7 +15,7 @@ export const DISABLE_SESSION_SYNC =
 export const isGcpPrimaryEnabled = (): boolean => true;
 
 // ---------------------------------------------------------------------------
-// Safe localStorage / sessionStorage helpers (no Supabase dependency)
+// Safe localStorage / sessionStorage helpers
 // ---------------------------------------------------------------------------
 const memoryStorage: Record<string, string> = {};
 
@@ -151,43 +147,11 @@ export const saveRegenerationEvent = async (
 };
 
 // ---------------------------------------------------------------------------
-// Full session save / fetch (participants table)
+// Participant session snapshot (Cloud SQL `participants` via Cloud Run)
 // ---------------------------------------------------------------------------
-export const saveFullSessionToSupabase = async (sessionData: any) => {
-  if (DISABLE_SESSION_SYNC) return true;
-  if (!sessionData?.userHash) return;
-
-  try {
-    const { mapSessionDataToParticipant } = await import(
-      '@/lib/participants-mapper'
-    );
-
-    const googleAuthUserId =
-      typeof window !== 'undefined'
-        ? safeLocalStorage.getItem('aura_google_auth_user_id')
-        : null;
-
-    const participantRow = mapSessionDataToParticipant(
-      sessionData,
-      googleAuthUserId ?? undefined,
-    );
-    if (!participantRow.consent_timestamp) {
-      participantRow.consent_timestamp = new Date().toISOString();
-    }
-
-    const r = await gcpApi.participants.saveSession(sessionData.userHash, {
-      participantRow: participantRow as unknown as Record<string, unknown>,
-    });
-    if (!r.ok) {
-      console.error('[GCP] session save failed:', r.error);
-    }
-  } catch (err) {
-    console.error('saveFullSessionToSupabase error:', err);
-  }
-};
-
-export const fetchLatestSessionSnapshot = async (userHash: string) => {
+export const fetchSessionSnapshotFromGcp = async (userHash: string) => {
   if (!userHash) return null;
+  if (!gcpApi.isConfigured()) return null;
 
   try {
     const r = await gcpApi.participants.fetchSession(userHash);
@@ -197,8 +161,102 @@ export const fetchLatestSessionSnapshot = async (userHash: string) => {
     );
     return mapParticipantToSessionData(r.data.participant as any);
   } catch (err) {
-    console.error('fetchLatestSessionSnapshot error:', err);
+    console.error('fetchSessionSnapshotFromGcp error:', err);
     return null;
+  }
+};
+
+/** Prevents `{ ...remote, ...local }` from overwriting remote fields with `undefined` (spread assigns undefined). */
+function omitUndefinedValues(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
+  if (DISABLE_SESSION_SYNC) return true;
+  if (!sessionData?.userHash) return false;
+  if (!gcpApi.isConfigured()) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        '[GCP] saveSessionToGcp skipped: set NEXT_PUBLIC_GCP_API_BASE_URL (Cloud Run API)',
+      );
+    }
+    return false;
+  }
+
+  try {
+    const { mapSessionDataToParticipant, mapParticipantToSessionData } = await import(
+      '@/lib/participants-mapper'
+    );
+
+    const googleAuthUserId =
+      typeof window !== 'undefined'
+        ? safeLocalStorage.getItem('aura_google_auth_user_id')
+        : null;
+    const authId = googleAuthUserId ?? undefined;
+
+    const localRow = mapSessionDataToParticipant(sessionData, authId);
+    const localRowDefined = omitUndefinedValues(localRow as unknown as Record<string, unknown>);
+
+    let mergedRow: Record<string, unknown> = {
+      ...localRowDefined,
+    };
+
+    let rawAuthUserId: string | null | undefined;
+    try {
+      const fetchRes = await gcpApi.participants.fetchSession(sessionData.userHash);
+      if (fetchRes.ok && fetchRes.data?.participant != null) {
+        const raw = fetchRes.data.participant as Record<string, unknown>;
+        const aid = raw.auth_user_id;
+        if (typeof aid === 'string' && aid.length > 0) {
+          rawAuthUserId = aid;
+        }
+        const remoteSession = mapParticipantToSessionData(raw);
+        const remoteRow = mapSessionDataToParticipant(remoteSession, authId) as unknown as Record<
+          string,
+          unknown
+        >;
+        mergedRow = { ...omitUndefinedValues(remoteRow), ...localRowDefined };
+      }
+    } catch {
+      // merge is best-effort; local-only save still runs
+    }
+
+    if (
+      (mergedRow.auth_user_id === undefined || mergedRow.auth_user_id === null) &&
+      rawAuthUserId != null &&
+      rawAuthUserId !== ''
+    ) {
+      mergedRow.auth_user_id = rawAuthUserId;
+    }
+
+    if (!mergedRow.consent_timestamp) {
+      mergedRow.consent_timestamp = new Date().toISOString();
+    }
+
+    const payload = {
+      participantRow: mergedRow,
+    };
+
+    let r = await gcpApi.participants.saveSession(sessionData.userHash, payload);
+    if (!r.ok) {
+      console.error('[GCP] session save failed:', r.error);
+      await new Promise((res) => setTimeout(res, 400));
+      r = await gcpApi.participants.saveSession(sessionData.userHash, payload);
+    }
+    if (!r.ok) {
+      console.error('[GCP] session save failed after retry:', r.error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('saveSessionToGcp error:', err);
+    return false;
   }
 };
 

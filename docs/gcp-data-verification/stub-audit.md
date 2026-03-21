@@ -1,6 +1,6 @@
 # Audyt stubów (frontend → brak zapisu w GCP)
 
-Funkcje w [`apps/frontend/src/lib/supabase.ts`](../../apps/frontend/src/lib/supabase.ts) zachowują kompatybilny import, ale **część jest pusta** — wywołanie zwraca sukces lub „nic”, bez INSERT do Cloud SQL.
+Funkcje w [`apps/frontend/src/lib/gcp-data.ts`](../../apps/frontend/src/lib/gcp-data.ts): **część jest pusta** (legacy / no-op) — wywołanie zwraca sukces lub „nic”, bez INSERT do Cloud SQL.
 
 ## Brak persystencji w bazie
 

@@ -47,7 +47,7 @@ Stored images:
 Always call `ensureParticipantExists(userHash)` before inserting into related tables:
 
 ```typescript
-import { ensureParticipantExists } from '@/lib/supabase';
+import { ensureParticipantExists } from '@/lib/gcp-data';
 
 const participantExists = await ensureParticipantExists(userHash);
 if (!participantExists) {
@@ -61,7 +61,7 @@ if (!participantExists) {
 Swipes automatically update implicit aggregates in `participants`:
 
 ```typescript
-import { saveParticipantSwipes } from '@/lib/supabase';
+import { saveParticipantSwipes } from '@/lib/gcp-data';
 
 await saveParticipantSwipes(userHash, [
   {
@@ -83,7 +83,7 @@ await saveParticipantSwipes(userHash, [
 Track AI generation jobs:
 
 ```typescript
-import { startParticipantGeneration, endParticipantGeneration } from '@/lib/supabase';
+import { startParticipantGeneration, endParticipantGeneration } from '@/lib/gcp-data';
 
 const jobId = await startParticipantGeneration(userHash, {
   type: 'initial',
@@ -105,7 +105,7 @@ await endParticipantGeneration(jobId, {
 Save images with metadata:
 
 ```typescript
-import { saveParticipantImage } from '@/lib/supabase';
+import { saveParticipantImage } from '@/lib/gcp-data';
 
 const imageId = await saveParticipantImage(userHash, {
   type: 'generated',

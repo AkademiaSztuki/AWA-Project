@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
+import { safeLocalStorage, safeSessionStorage } from '@/lib/gcp-data';
 import { gcpApi } from '@/lib/gcp-api-client';
 
 const GOOGLE_AUTH_USER_KEY = 'aura_google_auth_user_id';

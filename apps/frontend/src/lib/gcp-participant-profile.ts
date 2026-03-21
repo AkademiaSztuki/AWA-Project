@@ -1,8 +1,6 @@
 /**
- * Deep Personalization helpers – GCP backend only (Supabase removed).
- *
- * CRUD operations for user profiles, households, rooms, design sessions.
- * Source of truth is the `participants` table exposed via GCP Cloud Run API.
+ * Participant profile & related helpers — GCP Cloud Run API only.
+ * Source of truth: Cloud SQL `participants` and related endpoints.
  */
 
 import {
@@ -14,8 +12,9 @@ import {
   EnhancedSwipeData,
   SwipePattern,
 } from '@/types/deep-personalization';
-import { ensureParticipantExists } from '@/lib/supabase';
+import { ensureParticipantExists } from '@/lib/gcp-data';
 import { gcpApi } from '@/lib/gcp-api-client';
+import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
 
 // =========================
 // USER PROFILE
@@ -75,9 +74,16 @@ export async function getUserProfile(
           selectedStyle: data.explicit_style || '',
           selectedPalette: data.explicit_palette || '',
           topMaterials: explicitMaterials,
-          warmthPreference: data.explicit_warmth ?? 0.5,
-          brightnessPreference: data.explicit_brightness ?? 0.5,
-          complexityPreference: data.explicit_complexity ?? 0.5,
+          ...((): Record<string, number> => {
+            const w = normalizeSemanticTo01(data.explicit_warmth);
+            const b = normalizeSemanticTo01(data.explicit_brightness);
+            const c = normalizeSemanticTo01(data.explicit_complexity);
+            const out: Record<string, number> = {};
+            if (w !== undefined) out.warmthPreference = w;
+            if (b !== undefined) out.brightnessPreference = b;
+            if (c !== undefined) out.complexityPreference = c;
+            return out;
+          })(),
         },
       },
       psychologicalBaseline: {

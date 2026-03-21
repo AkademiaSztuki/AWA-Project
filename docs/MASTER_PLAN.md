@@ -663,8 +663,8 @@ apps/frontend/src/
 │   ├── research/                  # 🗑️ Remove emojis or delete
 │   └── wizards/                   # 🗑️ Probably delete
 ├── lib/
-│   ├── supabase.ts                # ✅ Working
-│   ├── supabase-deep-personalization.ts  # 🔧 New helpers
+│   ├── gcp-data.ts                # ✅ GCP API client helpers
+│   ├── gcp-participant-profile.ts  # Profile / completion (GCP)
 │   ├── questions/                 # 🔧 Question library
 │   └── prompt-synthesis/          # 🔧 Prompt generation
 └── types/

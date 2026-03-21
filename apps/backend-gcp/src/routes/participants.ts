@@ -303,7 +303,7 @@ participantsRouter.get('/participants/completion-status', async (req, res) => {
   }
 });
 
-// POST /participants/session  (saveFullSessionToSupabase equivalent)
+// POST /participants/session  (frontend: saveSessionToGcp)
 participantsRouter.post('/session', async (req, res) => {
   const sessionData = req.body as any;
   const userHash: string | undefined = sessionData?.userHash;
@@ -328,8 +328,10 @@ participantsRouter.post('/session', async (req, res) => {
   try {
     const client = await pool.connect();
     try {
-      const columns = Object.keys(participantRow);
-      const values = Object.values(participantRow);
+      const row = { ...participantRow };
+      delete row.user_hash;
+      const columns = Object.keys(row);
+      const values = Object.values(row);
 
       if (!columns.length) {
         console.log('[participants.session] empty participantRow, nothing to upsert', { userHash });
@@ -359,14 +361,19 @@ participantsRouter.post('/session', async (req, res) => {
       client.release();
     }
   } catch (error) {
+    const err = error as Error & { code?: string; detail?: string };
     console.error('participants/session error', error);
-    // Nie blokujemy flow aplikacji błędem HTTP – logujemy, ale zwracamy ok:true,
-    // żeby frontend mógł kontynuować (dashboard, redirecty itp.).
-    return res.json({ ok: true, warning: 'session_not_persisted' });
+    const message = err?.message ?? String(error);
+    return res.status(500).json({
+      ok: false,
+      error: 'session_persist_failed',
+      detail: message,
+      code: err?.code,
+    });
   }
 });
 
-// GET /participants/session/:userHash (fetchLatestSessionSnapshot equivalent)
+// GET /participants/session/:userHash (frontend: fetchSessionSnapshotFromGcp)
 participantsRouter.get('/session/:userHash', async (req, res) => {
   const { userHash } = req.params;
 

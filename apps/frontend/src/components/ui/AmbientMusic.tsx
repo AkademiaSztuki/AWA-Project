@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { safeLocalStorage } from '@/lib/supabase';
+import { safeLocalStorage } from '@/lib/gcp-data';
 
 interface AmbientMusicProps {
   volume?: number; // 0-1, domyślnie 0.3 (30%)

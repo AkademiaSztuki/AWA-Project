@@ -142,10 +142,10 @@ export interface SessionData {
     goals: string[];
   };
   semanticDifferential?: {
-    warmth: number;
-    brightness: number;
-    complexity: number;
-    texture: number;
+    warmth?: number;
+    brightness?: number;
+    complexity?: number;
+    texture?: number;
   };
   colorsAndMaterials?: {
     selectedPalette: string;

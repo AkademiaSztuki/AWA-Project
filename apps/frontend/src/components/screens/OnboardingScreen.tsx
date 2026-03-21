@@ -9,7 +9,7 @@ import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { saveResearchConsent, safeSessionStorage } from '@/lib/supabase';
+import { saveResearchConsent, safeSessionStorage } from '@/lib/gcp-data';
 import { ChevronDown } from 'lucide-react';
 
 const getDefaultCountry = (language: 'pl' | 'en') => (language === 'pl' ? 'PL' : 'US');

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSessionData } from '@/hooks/useSessionData';
-import { getCoreProfileCompletionStatus, getUserHashFromAuth } from '@/lib/supabase-deep-personalization';
+import { getCoreProfileCompletionStatus, getUserHashFromAuth } from '@/lib/gcp-participant-profile';
 
 export function useDashboardAccess() {
   const { user } = useAuth();

@@ -43,7 +43,8 @@ if (-not $psqlCmd) {
 }
 
 # Jedna linia — meta-polecenie \copy dziala w psql -c
-$sql = '\copy (SELECT user_hash, path_type, auth_user_id::text AS auth_user_id, updated_at, implicit_warmth, implicit_brightness, implicit_complexity, explicit_warmth, explicit_brightness, explicit_complexity, big5_openness, big5_conscientiousness, big5_extraversion, big5_agreeableness, big5_neuroticism, sus_score, clarity_score FROM public.participants ORDER BY updated_at DESC LIMIT ' + $Limit + ') TO STDOUT WITH CSV HEADER'
+# Szerszy zestaw kolumn weryfikacyjnych (implicit_dominant_style, swipe’y itd. — wcześniej „puste” w CSV mogły być tylko w innych kolumnach).
+$sql = '\copy (SELECT user_hash, path_type, auth_user_id::text AS auth_user_id, current_step, consent_timestamp, updated_at, implicit_warmth, implicit_brightness, implicit_complexity, implicit_dominant_style, implicit_style_1, explicit_warmth, explicit_brightness, explicit_complexity, explicit_style, explicit_palette, explicit_material_1, explicit_material_2, explicit_material_3, big5_openness, big5_conscientiousness, big5_extraversion, big5_agreeableness, big5_neuroticism, big5_completed_at, sus_score, clarity_score, core_profile_complete, tinder_total_swipes, tinder_likes, tinder_dislikes, generations_count, session_image_ratings::text AS session_image_ratings FROM public.participants ORDER BY updated_at DESC LIMIT ' + $Limit + ') TO STDOUT WITH CSV HEADER'
 
 Write-Host "[cloud-sql-export-csv] Eksport (limit $Limit) -> $OutFile"
 & $psqlCmd -h $DbHost -p $Port -U $User -d $Database -v ON_ERROR_STOP=1 -c $sql | Set-Content -Path $OutFile -Encoding utf8

@@ -2,7 +2,7 @@
 
 import React, { useEffect, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { safeSessionStorage } from '@/lib/supabase';
+import { safeSessionStorage } from '@/lib/gcp-data';
 import { GlassButton } from '@/components/ui/GlassButton';
 
 /**
@@ -21,7 +21,8 @@ function AuthCallbackContent() {
   useEffect(() => {
     const next = params.get('next') || safeSessionStorage.getItem('aura_auth_next') || '/';
     safeSessionStorage.removeItem('aura_auth_next');
-    safeSessionStorage.removeItem('aura_auth_path_type');
+    // Do NOT remove aura_auth_path_type here — PathSelectionScreen sets it before OAuth;
+    // OnboardingScreen / CoreProfileWizard read it and clear after apply.
     window.location.replace(next);
   }, [router, params]);
 

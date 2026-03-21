@@ -85,10 +85,10 @@ export default function SpacePage({ params }: { params: { id: string } }) {
 
 ```typescript
 // app/api/data/page.tsx
-import { fetchLatestSessionSnapshot } from '@/lib/supabase';
+import { fetchSessionSnapshotFromGcp } from '@/lib/gcp-data';
 
 export default async function DataPage() {
-  const data = await fetchLatestSessionSnapshot(userHash);
+  const data = await fetchSessionSnapshotFromGcp(userHash);
   return <DataDisplay data={data} />;
 }
 ```

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { useSession } from '@/hooks';
-import { getOrCreateProjectId, saveDeviceContext, startPageView, endPageView } from '@/lib/supabase';
+import { getOrCreateProjectId, saveDeviceContext, startPageView, endPageView } from '@/lib/gcp-data';
 import GlassSurface from 'src/components/ui/GlassSurface';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { AwaContainer, AwaDialogue } from '@/components/awa';

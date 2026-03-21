@@ -8,7 +8,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { Home, Users, Target, ArrowRight, ArrowLeft } from 'lucide-react';
-import { saveHousehold } from '@/lib/supabase-deep-personalization';
+import { saveHousehold } from '@/lib/gcp-participant-profile';
 import { useSession } from '@/hooks';
 
 interface HouseholdData {

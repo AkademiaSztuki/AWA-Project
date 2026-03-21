@@ -173,7 +173,8 @@ export function PreferencesOverviewSection({
 
   const formatPercent = (value?: number) => {
     if (value === undefined || value === null) return null;
-    return Math.round(Math.max(0, Math.min(1, value)) * 100);
+    const unit = value > 1 ? value / 100 : value;
+    return Math.round(Math.max(0, Math.min(1, unit)) * 100);
   };
 
   const renderBar = (value?: number) => {

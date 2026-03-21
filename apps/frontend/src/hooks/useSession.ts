@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { SessionData, FlowStep } from '@/types';
-import { fetchLatestSessionSnapshot, saveFullSessionToSupabase, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
+import { fetchSessionSnapshotFromGcp, saveSessionToGcp, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/gcp-data';
 import { uploadSpaceImage, saveSpaceImagesMetadata, fetchParticipantImages } from '@/lib/remote-spaces';
 import { gcpApi } from '@/lib/gcp-api-client';
 
@@ -13,6 +13,38 @@ const STORAGE_SIZE_THRESHOLD = 4_500_000; // ~4,5MB
 const MAX_INLINE_DATA_LENGTH = 120_000; // ~120KB
 const MAX_GENERATIONS_HISTORY = 120;
 const MAX_TINDER_SWIPES = 250;
+const MAX_SESSION_INSPIRATIONS = 10;
+
+function inspirationMergeKey(item: any): string {
+  const u = item?.url || item?.imageBase64;
+  if (typeof u === 'string' && u.length > 0) return `u:${u.slice(0, 2048)}`;
+  if (item?.id != null && String(item.id).length > 0) return `id:${String(item.id)}`;
+  return '';
+}
+
+/** Union remote + local by URL/id, newest wins, cap at MAX_SESSION_INSPIRATIONS. */
+function mergeInspirationLists(a: any[], b: any[]): any[] {
+  const map = new Map<string, any>();
+  const put = (item: any) => {
+    const k = inspirationMergeKey(item);
+    if (!k) return;
+    const prev = map.get(k);
+    const tNew = new Date(item.addedAt || item.createdAt || 0).getTime();
+    const tOld = prev ? new Date(prev.addedAt || prev.createdAt || 0).getTime() : 0;
+    if (!prev || tNew >= tOld) {
+      map.set(k, { ...prev, ...item });
+    }
+  };
+  for (const x of a) put(x);
+  for (const x of b) put(x);
+  return Array.from(map.values())
+    .sort(
+      (x, y) =>
+        new Date(y.addedAt || y.createdAt || 0).getTime() -
+        new Date(x.addedAt || x.createdAt || 0).getTime(),
+    )
+    .slice(0, MAX_SESSION_INSPIRATIONS);
+}
 
 const makeImageSig = (img?: string | null): string => {
   if (!img) return 'none';
@@ -492,7 +524,7 @@ export const useSession = (): UseSessionReturn => {
         const storedGoogleAuthId = safeLocalStorage.getItem('aura_google_auth_user_id');
         authUserId = storedGoogleAuthId ?? undefined;
         if (!userHash && authUserId) {
-          const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
+          const { getUserHashFromAuth } = await import('@/lib/gcp-participant-profile');
           const restoredUserHash = await getUserHashFromAuth(authUserId);
           if (restoredUserHash) {
             userHash = restoredUserHash;
@@ -508,7 +540,7 @@ export const useSession = (): UseSessionReturn => {
       // If yes, use that userHash instead of creating a new one
       if (authUserId && userHash) {
         try {
-          const { getBestProfileForAuth, getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
+          const { getBestProfileForAuth, getUserHashFromAuth } = await import('@/lib/gcp-participant-profile');
           
           const bestProfile = await getBestProfileForAuth(authUserId);
           if (bestProfile && bestProfile.userHash) {
@@ -538,13 +570,13 @@ export const useSession = (): UseSessionReturn => {
 
       // Use mergedLocalSession from step 1 (already loaded from localStorage)
 
-      // Zawsze pobierz najnowszy snapshot z Supabase i połącz z danymi lokalnymi
+      // Zawsze pobierz najnowszy snapshot z GCP i połącz z danymi lokalnymi
       let remoteSession: SessionData | null = null;
       if (userHash && !DISABLE_SESSION_SYNC) {
         try {
-          remoteSession = await fetchLatestSessionSnapshot(userHash);
+          remoteSession = await fetchSessionSnapshotFromGcp(userHash);
         } catch (error) {
-          console.warn('[useSession] Nie udało się pobrać sesji z Supabase.', error);
+          console.warn('[useSession] Nie udało się pobrać sesji z GCP.', error);
         }
       }
 
@@ -575,7 +607,7 @@ export const useSession = (): UseSessionReturn => {
           mergedSession.coreProfileCompletedAt ||
           new Date().toISOString();
         queueMicrotask(() => {
-          void saveFullSessionToSupabase({
+          void saveSessionToGcp({
             ...mergedSession,
             userHash,
             coreProfileComplete: true,
@@ -595,7 +627,7 @@ export const useSession = (): UseSessionReturn => {
       // Load profile data (Big Five, explicit preferences, biophiliaScore, inspirations) from user_profiles
       if (userHash) {
         try {
-          const { getUserProfile } = await import('@/lib/supabase-deep-personalization');
+          const { getUserProfile } = await import('@/lib/gcp-participant-profile');
           const { mapUserProfileToSessionData } = await import('@/lib/profile-mapper');
           const userProfile = await getUserProfile(userHash);
           
@@ -603,7 +635,7 @@ export const useSession = (): UseSessionReturn => {
             // Check if profile has auth_user_id and try to restore userHash if needed
             if (userProfile.auth_user_id && authUserId === userProfile.auth_user_id) {
               try {
-                const { getUserHashFromAuth } = await import('@/lib/supabase-deep-personalization');
+                const { getUserHashFromAuth } = await import('@/lib/gcp-participant-profile');
                 const restoredUserHash = await getUserHashFromAuth(authUserId);
                 if (restoredUserHash && restoredUserHash !== userHash) {
                   userHash = restoredUserHash;
@@ -769,10 +801,12 @@ export const useSession = (): UseSessionReturn => {
               const hasSupabaseInspirations = inspirationsFromProfile.length > 0;
 
               if (hasSupabaseInspirations) {
-                // Use Supabase inspirations (with Gemini tags) if available
                 mergedSession = {
                   ...(mergedSession || {}),
-                  inspirations: inspirationsFromProfile
+                  inspirations: mergeInspirationLists(
+                    existingInspirations,
+                    inspirationsFromProfile,
+                  ),
                 };
                 console.log('[useSession] Loaded inspirations with Gemini tags from user_profiles.inspirations:', inspirationsFromProfile.length);
                 console.log('[useSession] Tags structure:', inspirationsFromProfile.map((i: any) => ({
@@ -829,14 +863,13 @@ export const useSession = (): UseSessionReturn => {
             ? ((mergedSession as any).inspirations as any[])
             : [];
 
-          if (effectiveRemoteInspirations.length > 0) {
-            mergedSession = {
-              ...(mergedSession || {}),
-              // participant_images is the source of truth once remote data exists;
-              // keeping stale local-only entries here causes old inspirations to reappear.
-              inspirations: effectiveRemoteInspirations,
-            };
-          }
+          mergedSession = {
+            ...(mergedSession || {}),
+            inspirations: mergeInspirationLists(
+              effectiveRemoteInspirations,
+              localInspirations,
+            ),
+          };
 
         } catch (e) {
           console.warn('[useSession] Failed to load inspirations from participant_images:', e);
@@ -882,6 +915,11 @@ export const useSession = (): UseSessionReturn => {
 
       if (isMounted) {
         setSessionStoreState({ sessionData: persisted, isInitialized: true });
+        if (!DISABLE_SESSION_SYNC && userHash) {
+          queueMicrotask(() => {
+            void saveSessionToGcp(getSessionStoreSnapshot());
+          });
+        }
       }
     };
 
@@ -909,6 +947,9 @@ export const useSession = (): UseSessionReturn => {
       
       return { ...prev, sessionData: persisted };
     });
+    if (!DISABLE_SESSION_SYNC) {
+      scheduleDebouncedGcpSave();
+    }
   };
 
   const setCurrentStep = (step: FlowStep) => {
@@ -958,4 +999,34 @@ function setSessionStoreState(
 
 function generateUserHash(): string {
   return 'user_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+
+/** Debounce rapid session updates into fewer POST /session calls; flush on tab hide / pagehide. */
+const GCP_SAVE_DEBOUNCE_MS = 450;
+let gcpSaveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let gcpSaveFlushListenersRegistered = false;
+
+function ensureGcpSaveFlushListeners(): void {
+  if (typeof window === 'undefined' || gcpSaveFlushListenersRegistered) return;
+  gcpSaveFlushListenersRegistered = true;
+  const flushPending = () => {
+    if (!gcpSaveDebounceTimer) return;
+    clearTimeout(gcpSaveDebounceTimer);
+    gcpSaveDebounceTimer = null;
+    void saveSessionToGcp(getSessionStoreSnapshot());
+  };
+  window.addEventListener('pagehide', flushPending);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPending();
+  });
+}
+
+function scheduleDebouncedGcpSave(): void {
+  if (typeof window === 'undefined' || DISABLE_SESSION_SYNC) return;
+  ensureGcpSaveFlushListeners();
+  if (gcpSaveDebounceTimer) clearTimeout(gcpSaveDebounceTimer);
+  gcpSaveDebounceTimer = setTimeout(() => {
+    gcpSaveDebounceTimer = null;
+    void saveSessionToGcp(getSessionStoreSnapshot());
+  }, GCP_SAVE_DEBOUNCE_MS);
 }

@@ -4,6 +4,7 @@
  */
 
 import { SessionData } from '@/types';
+import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
 
 export interface ParticipantRow {
   user_hash: string;
@@ -125,7 +126,9 @@ export interface ParticipantRow {
   
   // Generation stats
   generations_count?: number;
-  
+  /** Generate flow: per-image ratings (JSONB in DB) */
+  session_image_ratings?: Record<string, unknown>;
+
   // Profile status
   core_profile_complete?: boolean;
   core_profile_completed_at?: string;
@@ -174,20 +177,11 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     implicit_complexity: sessionData.visualDNA?.implicitScores?.complexity,
     dna_accuracy_score: sessionData.visualDNA?.accuracyScore ?? sessionData.dnaAccuracyScore,
     
-    // Explicit
-    explicit_warmth: (() => {
-      const val = sessionData.semanticDifferential?.warmth;
-      return val;
-    })(),
-    explicit_brightness: (() => {
-      const val = sessionData.semanticDifferential?.brightness;
-      return val;
-    })(),
-    explicit_complexity: (() => {
-      const val = sessionData.semanticDifferential?.complexity;
-      return val;
-    })(),
-    explicit_texture: sessionData.semanticDifferential?.texture,
+    // Explicit (0–1 in DB; accept legacy 0–100 from session and normalize)
+    explicit_warmth: normalizeSemanticTo01(sessionData.semanticDifferential?.warmth),
+    explicit_brightness: normalizeSemanticTo01(sessionData.semanticDifferential?.brightness),
+    explicit_complexity: normalizeSemanticTo01(sessionData.semanticDifferential?.complexity),
+    explicit_texture: normalizeSemanticTo01(sessionData.semanticDifferential?.texture),
     explicit_palette: sessionData.colorsAndMaterials?.selectedPalette,
     explicit_style: sessionData.colorsAndMaterials?.selectedStyle,
     explicit_material_1: sessionData.colorsAndMaterials?.topMaterials?.[0],
@@ -262,7 +256,8 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     
     // Generation stats
     generations_count: sessionData.generations?.length || 0,
-    
+    session_image_ratings: sessionData.imageRatings as Record<string, unknown> | undefined,
+
     // Profile status
     core_profile_complete: sessionData.coreProfileComplete,
     core_profile_completed_at: sessionData.coreProfileCompletedAt,
@@ -387,16 +382,21 @@ export function mapParticipantToSessionData(row: any): SessionData {
       accuracyScore: 0
     },
     
-    // Explicit
+    // Explicit (NULL-safe; legacy 0–100 from DB → 0–1)
     semanticDifferential: (() => {
-      const hasWarmth = row.explicit_warmth !== undefined;
-      const result = hasWarmth ? {
-        warmth: row.explicit_warmth || 0.5,
-        brightness: row.explicit_brightness || 0.5,
-        complexity: row.explicit_complexity || 0.5,
-        texture: row.explicit_texture || 0.5
-      } : undefined;
-      return result;
+      const warmth = normalizeSemanticTo01(row.explicit_warmth);
+      const brightness = normalizeSemanticTo01(row.explicit_brightness);
+      const complexity = normalizeSemanticTo01(row.explicit_complexity);
+      const texture = normalizeSemanticTo01(row.explicit_texture);
+      if (
+        warmth === undefined &&
+        brightness === undefined &&
+        complexity === undefined &&
+        texture === undefined
+      ) {
+        return undefined;
+      }
+      return { warmth, brightness, complexity, texture };
     })(),
     
     colorsAndMaterials: row.explicit_palette || row.explicit_style ? {
@@ -488,6 +488,8 @@ export function mapParticipantToSessionData(row: any): SessionData {
     
     // Generations (will be loaded separately from participant_generations)
     generations: [],
+
+    imageRatings: row.session_image_ratings || undefined,
     
     // Profile status
     coreProfileComplete: row.core_profile_complete || false,

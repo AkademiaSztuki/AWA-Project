@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
-import { useSession, getSessionStoreSnapshot } from './useSession';
+import { useSession } from './useSession';
 import { SessionData } from '@/types';
-import { saveFullSessionToSupabase, DISABLE_SESSION_SYNC } from '@/lib/supabase';
 
 interface UseSessionDataReturn {
   sessionData: SessionData;
@@ -20,13 +19,7 @@ export const useSessionData = (): UseSessionDataReturn => {
     }
     
     updateSession(normalizedUpdates);
-    // Zapisz całą sesję do GCP — po updateSession odczytujemy stan ze wspólnego store,
-    // żeby uniknąć wyścigu (stary sessionData z closure vs faktycznie zmergowany stan).
-    if (!DISABLE_SESSION_SYNC) {
-      queueMicrotask(() => {
-        void saveFullSessionToSupabase(getSessionStoreSnapshot());
-      });
-    }
+    // Persist: useSession.updateSession schedules saveSessionToGcp (see useSession.ts).
   }, [updateSession]);
 
   const exportSessionData = () => {

@@ -2,7 +2,7 @@
  * Remote spaces & images – GCP backend only (Supabase removed).
  */
 
-import { saveParticipantImage } from '@/lib/supabase';
+import { saveParticipantImage } from '@/lib/gcp-data';
 import { gcpApi } from '@/lib/gcp-api-client';
 
 export type SpaceImageInput = {

@@ -1,13 +1,15 @@
 ## Supabase usage inventory (AWA -> GCP migration)
 
+> **Update:** `supabase.ts` → [`gcp-data.ts`](../../apps/frontend/src/lib/gcp-data.ts); `supabase-deep-personalization.ts` → [`gcp-participant-profile.ts`](../../apps/frontend/src/lib/gcp-participant-profile.ts). No Supabase runtime client.
+
 ### 1. Core Supabase client and helpers
 
 - **Client & shared utilities**
-  - `apps/frontend/src/lib/supabase.ts`
-    - Exports: `supabase`, `DISABLE_SESSION_SYNC`, `safeLocalStorage`, `safeSessionStorage`
+  - `apps/frontend/src/lib/gcp-data.ts`
+    - Exports: `DISABLE_SESSION_SYNC`, `safeLocalStorage`, `safeSessionStorage`
     - Research helpers:
-      - `saveFullSessionToSupabase`
-      - `fetchLatestSessionSnapshot`
+      - `saveSessionToGcp`
+      - `fetchSessionSnapshotFromGcp`
       - `saveParticipantSwipes`
       - `startParticipantGeneration`, `endParticipantGeneration`
       - `saveParticipantImage`
@@ -24,13 +26,13 @@
       - `saveImageRatingEvent`, `logHealthCheck`, `logErrorEvent`
 
 - **Deep personalization**
-  - `apps/frontend/src/lib/supabase-deep-personalization.ts`
-    - Imports: `supabase`, `ensureParticipantExists`
+  - `apps/frontend/src/lib/gcp-participant-profile.ts`
+    - Imports: `ensureParticipantExists` from `gcp-data`
     - Uses participants and related tables for personalized dashboard / profile.
 
 - **Remote spaces & images**
   - `apps/frontend/src/lib/remote-spaces.ts`
-    - Imports: `supabase`, `saveParticipantImage`
+    - Imports: `saveParticipantImage` from `gcp-data`
     - Uses tables: `participant_spaces`, `participant_images`
     - Uses Storage buckets: `space-images`, `participant-images`
 
@@ -38,9 +40,9 @@
 
 - **Session & onboarding / profile**
   - `apps/frontend/src/hooks/useSession.ts`
-    - Uses: `supabase`, `DISABLE_SESSION_SYNC`, `safeLocalStorage`, `safeSessionStorage`, `fetchLatestSessionSnapshot`, `saveFullSessionToSupabase`
+    - Uses: `gcp-data`: `DISABLE_SESSION_SYNC`, `safeLocalStorage`, `safeSessionStorage`, `fetchSessionSnapshotFromGcp`, `saveSessionToGcp`
   - `apps/frontend/src/hooks/useSessionData.ts`
-    - Uses: `saveFullSessionToSupabase`, `DISABLE_SESSION_SYNC`
+    - Uses: `saveSessionToGcp`, `DISABLE_SESSION_SYNC`
   - `apps/frontend/src/components/screens/OnboardingScreen.tsx`
     - Uses: `saveResearchConsent`
   - `apps/frontend/src/components/wizards/CoreProfileWizard.tsx`
@@ -66,7 +68,7 @@
 
 - **Dashboard & spaces**
   - `apps/frontend/src/components/dashboard/UserDashboard.tsx`
-    - Uses: `supabase`, `fetchLatestSessionSnapshot`, `DISABLE_SESSION_SYNC`, `safeLocalStorage`, `safeSessionStorage`, plus deep-personalization helpers.
+    - Uses: `gcp-data`: `fetchSessionSnapshotFromGcp`, `DISABLE_SESSION_SYNC`, `safeLocalStorage`, `safeSessionStorage`, plus `gcp-participant-profile` helpers.
   - `apps/frontend/src/app/space/[id]/page.tsx`
     - Uses: `safeLocalStorage` (from Supabase lib) + `remote-spaces` helpers (which call `supabase`).
   - `apps/frontend/src/components/setup/RoomSetup.tsx`
@@ -159,7 +161,7 @@
 
 - **High-priority to replace with GCP API backend:**
   - Research-critical helpers:
-    - `saveFullSessionToSupabase`, `fetchLatestSessionSnapshot`
+    - `saveSessionToGcp`, `fetchSessionSnapshotFromGcp`
     - `saveParticipantSwipes` (+ implicit aggregate update on `participants`)
     - `startParticipantGeneration`, `endParticipantGeneration`
     - `saveParticipantImage`

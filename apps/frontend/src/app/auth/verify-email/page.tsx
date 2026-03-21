@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { safeLocalStorage } from '@/lib/supabase';
+import { safeLocalStorage } from '@/lib/gcp-data';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { useAuth } from '@/contexts/AuthContext';

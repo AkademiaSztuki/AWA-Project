@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LocalizedText } from '@/lib/questions/validated-scales';
-import { getOrCreateProjectId, startParticipantGeneration, endParticipantGeneration, safeSessionStorage } from '@/lib/supabase';
+import { getOrCreateProjectId, startParticipantGeneration, endParticipantGeneration, safeSessionStorage } from '@/lib/gcp-data';
 import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';

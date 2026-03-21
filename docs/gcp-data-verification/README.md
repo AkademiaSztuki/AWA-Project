@@ -9,7 +9,7 @@ Ten katalog zbiera **operacyjny zestaw** do wdrożeniowej kontroli zgodnie z pla
 | Zmienna | Wymagane | Uwagi |
 |---------|----------|--------|
 | `NEXT_PUBLIC_GCP_API_BASE_URL` | Tak | URL Cloud Run **bez** końcowego `/`. Bez tego `gcpApi` nie wyśle żądań. |
-| `NEXT_PUBLIC_DISABLE_SESSION_SYNC` | Nie ustawiać na `1` | Wartość `1` wyłącza `saveFullSessionToSupabase` — **brak zapisu profilu** w `participants`. |
+| `NEXT_PUBLIC_DISABLE_SESSION_SYNC` | Nie ustawiać na `1` | Wartość `1` wyłącza `saveSessionToGcp` — **brak zapisu profilu** w `participants`. |
 | `NEXT_PUBLIC_GCP_PERSISTENCE_MODE` | Zalecane `primary` | Dokumentacja: [apps/frontend/VERCEL_ENV_VARIABLES.md](../../apps/frontend/VERCEL_ENV_VARIABLES.md) |
 
 **Backend (Cloud Run / lokalnie)**
@@ -70,7 +70,7 @@ Dla **jednej** sesji testowej zapisz `user_hash` i po każdym kroku: DevTools (s
 | 7 | `/flow/generate` | `participant_generations`, obrazy `generated` w GCS |
 | 8 | Ankiety | `POST /api/research/survey` → kolumny ankiet na `participants` |
 | 9 | Zgoda | `research_consents` |
-| 10 | Dashboard / reload | `fetchLatestSessionSnapshot` zgodny z DB |
+| 10 | Dashboard / reload | `fetchSessionSnapshotFromGcp` zgodny z DB |
 
 ---
 

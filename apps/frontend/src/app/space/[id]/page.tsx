@@ -10,7 +10,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { ArrowLeft, Heart, Sparkles, Trash2, Download, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import { deleteParticipantImage, fetchParticipantImages, fetchParticipantSpaces } from '@/lib/remote-spaces';
-import { safeLocalStorage } from '@/lib/supabase';
+import { safeLocalStorage } from '@/lib/gcp-data';
 
 interface SpaceImage {
   id: string;

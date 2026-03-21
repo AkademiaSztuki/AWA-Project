@@ -8,7 +8,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import GlassSurface from 'src/components/ui/GlassSurface';
 import { Dna, Palette, Home, Lightbulb } from 'lucide-react';
 import { computeWeightedDNAFromSwipes, buildFluxPromptFromDNA } from '@/lib/dna';
-import { getOrCreateProjectId, updateDiscoverySession, saveTinderSwipes, saveDnaSnapshot, startPageView, endPageView } from '@/lib/supabase';
+import { getOrCreateProjectId, updateDiscoverySession, saveTinderSwipes, saveDnaSnapshot, startPageView, endPageView } from '@/lib/gcp-data';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 

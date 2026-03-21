@@ -9,8 +9,13 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { fetchLatestSessionSnapshot, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/supabase';
-import { getUserHouseholds, saveHousehold, getCompletionStatus, getUserProfile } from '@/lib/supabase-deep-personalization';
+import {
+  fetchSessionSnapshotFromGcp,
+  DISABLE_SESSION_SYNC,
+  safeLocalStorage,
+  safeSessionStorage,
+} from '@/lib/gcp-data';
+import { getUserHouseholds, saveHousehold, getCompletionStatus, getUserProfile } from '@/lib/gcp-participant-profile';
 import { fetchParticipantImages, fetchParticipantSpaces, createParticipantSpace, toggleParticipantImageFavorite, deleteParticipantImage, updateSpaceName, deleteSpace } from '@/lib/remote-spaces';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
@@ -77,7 +82,7 @@ function sortImagesDescending(images: SpaceImage[]): SpaceImage[] {
  */
 export function UserDashboard() {
   const router = useRouter();
-  const { sessionData, updateSessionData } = useSessionData();
+  const { sessionData, updateSessionData, isInitialized } = useSessionData();
   const { language } = useLanguage();
   const { user, linkUserHashToAuth } = useAuth();
   
@@ -202,10 +207,10 @@ export function UserDashboard() {
         }
       }
       
-      // Pull freshest session snapshot from Supabase (used for completion flags)
+      // Pull freshest session snapshot from GCP (used for completion flags)
       if (!DISABLE_SESSION_SYNC) {
       try {
-        const remote = await fetchLatestSessionSnapshot(userHash);
+        const remote = await fetchSessionSnapshotFromGcp(userHash);
         if (remote) {
           setRemoteSession(remote);
         }
@@ -214,7 +219,7 @@ export function UserDashboard() {
         }
       }
 
-      // Load user profile from Supabase (Big Five, explicit preferences, etc.)
+      // Load user profile from GCP participants (Big Five, explicit preferences, etc.)
       try {
         const userProfile = await getUserProfile(userHash);
         console.log('[Dashboard] getUserProfile result:', {
@@ -226,7 +231,7 @@ export function UserDashboard() {
         });
         
         if (userProfile) {
-          // Map Supabase profile data back to sessionData format
+          // Map profile data back to sessionData format
           const mappedData: any = {};
           
           // Big Five / Personality
@@ -255,12 +260,14 @@ export function UserDashboard() {
               selectedStyle: (userProfile.aestheticDNA.explicit as any).selectedStyle
             };
             mappedData.semanticDifferential = (() => {
-              const semantic = {
-                warmth: userProfile.aestheticDNA.explicit.warmthPreference,
-                brightness: userProfile.aestheticDNA.explicit.brightnessPreference,
-                complexity: userProfile.aestheticDNA.explicit.complexityPreference
-              };
-              return semantic;
+              const w = userProfile.aestheticDNA.explicit.warmthPreference;
+              const b = userProfile.aestheticDNA.explicit.brightnessPreference;
+              const c = userProfile.aestheticDNA.explicit.complexityPreference;
+              const partial: Record<string, number> = {};
+              if (w !== undefined) partial.warmth = w;
+              if (b !== undefined) partial.brightness = b;
+              if (c !== undefined) partial.complexity = c;
+              return Object.keys(partial).length > 0 ? partial : undefined;
             })();
             console.log('[Dashboard] Mapped explicit preferences:', {
               hasPalette: !!mappedData.colorsAndMaterials.selectedPalette,

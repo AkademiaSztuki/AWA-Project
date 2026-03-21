@@ -51,7 +51,7 @@ description: Research data collection and handling patterns for AWA project. Use
 ### Consent Management
 
 ```typescript
-import { saveResearchConsent, CONSENT_VERSION } from '@/lib/supabase';
+import { saveResearchConsent, CONSENT_VERSION } from '@/lib/gcp-data';
 
 await saveResearchConsent(userId, {
   consentResearch: true,
@@ -197,9 +197,9 @@ fetch('http://127.0.0.1:7242/ingest/...', {
 ### Saving Complete Session
 
 ```typescript
-import { saveFullSessionToSupabase } from '@/lib/supabase';
+import { saveSessionToGcp } from '@/lib/gcp-data';
 
-await saveFullSessionToSupabase({
+await saveSessionToGcp({
   userHash: '...',
   bigFive: { ... },
   visualDNA: { ... },
@@ -211,7 +211,7 @@ await saveFullSessionToSupabase({
 ### Tracking Behavioral Events
 
 ```typescript
-import { saveParticipantSwipes } from '@/lib/supabase';
+import { saveParticipantSwipes } from '@/lib/gcp-data';
 
 await saveParticipantSwipes(userHash, swipes);
 // Automatically updates participants.implicit_* fields

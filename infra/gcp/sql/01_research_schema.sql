@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS participants (
 
   -- Generation stats
   generations_count INTEGER DEFAULT 0,
+  session_image_ratings JSONB,
 
   -- Profile status
   core_profile_complete BOOLEAN DEFAULT FALSE,

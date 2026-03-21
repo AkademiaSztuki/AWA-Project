@@ -24,9 +24,10 @@ export interface UserProfile {
     explicit: {
       selectedPalette: string;
       topMaterials: string[];
-      warmthPreference: number;
-      brightnessPreference: number;
-      complexityPreference: number;
+      /** 0–1; omitted when not set in DB */
+      warmthPreference?: number;
+      brightnessPreference?: number;
+      complexityPreference?: number;
     };
   };
   

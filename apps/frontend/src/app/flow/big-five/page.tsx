@@ -296,7 +296,7 @@ export default function BigFivePage() {
         }
       } as any);
       
-      // NOTE: After radical refactor, data is saved via updateSessionData -> saveFullSessionToSupabase
+      // NOTE: After radical refactor, data is saved via updateSessionData -> saveSessionToGcp
       // which writes to participants table. No need for direct saveUserProfile call.
       
 
@@ -342,7 +342,7 @@ export default function BigFivePage() {
               completedAt: new Date().toISOString()
             }
           };
-          // NOTE: After radical refactor, data is saved via updateSessionData -> saveFullSessionToSupabase
+          // NOTE: After radical refactor, data is saved via updateSessionData -> saveSessionToGcp
           // which writes to participants table. No need for direct saveUserProfile call.
         } catch (supabaseError) {
           console.warn('[BigFive] Failed to auto-save to Supabase (useProfileSync will handle it):', supabaseError);

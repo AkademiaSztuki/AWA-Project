@@ -16,7 +16,7 @@ import { useModalAPI } from '@/hooks/useModalAPI';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
-import { saveRoom } from '@/lib/supabase-deep-personalization';
+import { saveRoom } from '@/lib/gcp-participant-profile';
 import { useSession, useSessionData } from '@/hooks';
 import { saveParticipantImages } from '@/lib/remote-spaces';
 import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
@@ -34,6 +34,7 @@ import {
   LIGHT_PREFERENCES
 } from '@/lib/questions/validated-scales';
 import { mapActivitiesToRecommendations } from '@/lib/preferences/activity-mapping';
+import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
 
 // Helper function to generate a room name based on its type
 
@@ -1663,10 +1664,10 @@ const DEFAULT_SEMANTIC_VALUE = 0.5;
 
 const buildDefaultPreferences = (source?: RoomPreferencePayload): RoomPreferencePayload => ({
   semanticDifferential: {
-    warmth: source?.semanticDifferential?.warmth ?? DEFAULT_SEMANTIC_VALUE,
-    brightness: source?.semanticDifferential?.brightness ?? DEFAULT_SEMANTIC_VALUE,
-    complexity: source?.semanticDifferential?.complexity ?? DEFAULT_SEMANTIC_VALUE,
-    texture: source?.semanticDifferential?.texture ?? DEFAULT_SEMANTIC_VALUE
+    warmth: normalizeSemanticTo01(source?.semanticDifferential?.warmth) ?? DEFAULT_SEMANTIC_VALUE,
+    brightness: normalizeSemanticTo01(source?.semanticDifferential?.brightness) ?? DEFAULT_SEMANTIC_VALUE,
+    complexity: normalizeSemanticTo01(source?.semanticDifferential?.complexity) ?? DEFAULT_SEMANTIC_VALUE,
+    texture: normalizeSemanticTo01(source?.semanticDifferential?.texture) ?? DEFAULT_SEMANTIC_VALUE,
   },
   colorsAndMaterials: {
     selectedPalette: source?.colorsAndMaterials?.selectedPalette ?? '',
@@ -1713,8 +1714,10 @@ function PreferenceSourceStep({
     profileStyleLabel
       ? `${language === 'pl' ? 'Styl' : 'Style'}: ${profileStyleLabel}`
       : null,
-    profileSemantic
-      ? `${language === 'pl' ? 'Ciepło' : 'Warmth'} ${Math.round((profileSemantic.warmth ?? 0) * 100)}%`
+    profileSemantic && profileSemantic.warmth !== undefined && profileSemantic.warmth !== null
+      ? `${language === 'pl' ? 'Ciepło' : 'Warmth'} ${Math.round(
+          (profileSemantic.warmth > 1 ? profileSemantic.warmth / 100 : profileSemantic.warmth) * 100,
+        )}%`
       : null,
     profileSensory?.music
       ? `${language === 'pl' ? 'Muzyka' : 'Music'}: ${profileSensory.music}`
@@ -1839,10 +1842,11 @@ function PreferenceQuestionsStep({
   const [biophiliaScore, setBiophiliaScore] = useState<number | undefined>(explicitPreferences?.biophiliaScore);
   const [currentVisualQuestion, setCurrentVisualQuestion] = useState(0);
   const [visualAnswers, setVisualAnswers] = useState<Record<string, number>>(() => {
+    const sem = explicitPreferences?.semanticDifferential;
     return {
-      warmth: explicitPreferences?.semanticDifferential?.warmth ?? 50,
-      brightness: explicitPreferences?.semanticDifferential?.brightness ?? 50,
-      complexity: explicitPreferences?.semanticDifferential?.complexity ?? 50
+      warmth: normalizeSemanticTo01(sem?.warmth) ?? 0.5,
+      brightness: normalizeSemanticTo01(sem?.brightness) ?? 0.5,
+      complexity: normalizeSemanticTo01(sem?.complexity) ?? 0.5,
     };
   });
 
@@ -1879,7 +1883,7 @@ function PreferenceQuestionsStep({
 
   const handleVisualChoice = (side: 'left' | 'right') => {
     const currentQ = visualQuestions[currentVisualQuestion];
-    const value = side === 'left' ? 20 : 80; // Mapowanie: left = 20, right = 80 (na skali 0-100)
+    const value = side === 'left' ? 0.2 : 0.8; // skala 0–1 (jak CoreProfileWizard)
     const newAnswers = { ...visualAnswers, [currentQ.id]: value };
     setVisualAnswers(newAnswers);
     
@@ -1887,10 +1891,10 @@ function PreferenceQuestionsStep({
     setLocalPrefs(curr => ({
       ...curr,
       semanticDifferential: {
-        warmth: currentQ.id === 'warmth' ? value : (curr.semanticDifferential?.warmth ?? 50),
-        brightness: currentQ.id === 'brightness' ? value : (curr.semanticDifferential?.brightness ?? 50),
-        complexity: currentQ.id === 'complexity' ? value : (curr.semanticDifferential?.complexity ?? 50),
-        texture: curr.semanticDifferential?.texture ?? 50
+        warmth: currentQ.id === 'warmth' ? value : (curr.semanticDifferential?.warmth ?? 0.5),
+        brightness: currentQ.id === 'brightness' ? value : (curr.semanticDifferential?.brightness ?? 0.5),
+        complexity: currentQ.id === 'complexity' ? value : (curr.semanticDifferential?.complexity ?? 0.5),
+        texture: curr.semanticDifferential?.texture ?? 0.5
       }
     }));
     
