@@ -13,6 +13,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (eventType === 'session_persist_failed') {
+      console.error('[api/log] session_persist_failed', { projectId, eventData });
+    }
+
     await logBehavioralEvent(projectId, eventType, eventData);
 
     return NextResponse.json({ success: true });

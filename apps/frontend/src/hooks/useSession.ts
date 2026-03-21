@@ -1,6 +1,13 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { SessionData, FlowStep } from '@/types';
-import { fetchSessionSnapshotFromGcp, saveSessionToGcp, DISABLE_SESSION_SYNC, safeLocalStorage, safeSessionStorage } from '@/lib/gcp-data';
+import {
+  fetchSessionSnapshotFromGcp,
+  saveSessionToGcp,
+  DISABLE_SESSION_SYNC,
+  isSessionSyncDebugEnabled,
+  safeLocalStorage,
+  safeSessionStorage,
+} from '@/lib/gcp-data';
 import { uploadSpaceImage, saveSpaceImagesMetadata, fetchParticipantImages } from '@/lib/remote-spaces';
 import { gcpApi } from '@/lib/gcp-api-client';
 
@@ -347,6 +354,7 @@ const persistSessionData = (data: SessionData): SessionData => {
     if (existingRaw) {
       const existing = JSON.parse(existingRaw) as SessionData;
       const willPreserveBigFive = !data.bigFive && !!existing.bigFive;
+      const willPreservePathType = !data.pathType && !!existing.pathType;
       const willPreserveUserHash = !data.userHash && !!existing.userHash;
       
       // CRITICAL: Check if data.colorsAndMaterials has actual data (not just empty values)
@@ -377,6 +385,14 @@ const persistSessionData = (data: SessionData): SessionData => {
       const willPreserveVisualDNA = !dataHasVisualDNA && existingHasVisualDNA;
       if (willPreserveBigFive) {
         data = { ...data, bigFive: existing.bigFive };
+      }
+      if (willPreservePathType) {
+        data = { ...data, pathType: existing.pathType };
+        if (isSessionSyncDebugEnabled()) {
+          console.log('[session-sync:debug] preserved pathType from localStorage', {
+            pathType: existing.pathType,
+          });
+        }
       }
       if (willPreserveUserHash) {
         data = { ...data, userHash: existing.userHash };
@@ -1013,6 +1029,9 @@ function ensureGcpSaveFlushListeners(): void {
     if (!gcpSaveDebounceTimer) return;
     clearTimeout(gcpSaveDebounceTimer);
     gcpSaveDebounceTimer = null;
+    if (isSessionSyncDebugEnabled()) {
+      console.log('[session-sync:debug] flush GCP save (pagehide / hidden tab)');
+    }
     void saveSessionToGcp(getSessionStoreSnapshot());
   };
   window.addEventListener('pagehide', flushPending);
@@ -1025,6 +1044,12 @@ function scheduleDebouncedGcpSave(): void {
   if (typeof window === 'undefined' || DISABLE_SESSION_SYNC) return;
   ensureGcpSaveFlushListeners();
   if (gcpSaveDebounceTimer) clearTimeout(gcpSaveDebounceTimer);
+  if (isSessionSyncDebugEnabled()) {
+    console.log('[session-sync:debug] debounced GCP save scheduled', {
+      ms: GCP_SAVE_DEBOUNCE_MS,
+      step: getSessionStoreSnapshot().currentStep,
+    });
+  }
   gcpSaveDebounceTimer = setTimeout(() => {
     gcpSaveDebounceTimer = null;
     void saveSessionToGcp(getSessionStoreSnapshot());

@@ -1,6 +1,65 @@
+import type { PoolClient } from 'pg';
 import { Router } from 'express';
 import { pool } from '../db';
 import { ensureParticipantRecord, grantFreeCredits } from '../services/billing';
+
+/** Lazily loaded; cleared on schema mismatch so new migrations are picked up after deploy. */
+let participantsTableColumns: Set<string> | null = null;
+
+async function getParticipantsTableColumns(client: PoolClient): Promise<Set<string>> {
+  if (participantsTableColumns) {
+    return participantsTableColumns;
+  }
+  const { rows } = await client.query<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'participants'`,
+  );
+  participantsTableColumns = new Set(rows.map((r) => r.column_name));
+  return participantsTableColumns;
+}
+
+function isSessionPersistDebug(): boolean {
+  return process.env.DEBUG_SESSION_SYNC === '1';
+}
+
+function summarizeParticipantRowForDebug(row: Record<string, unknown>) {
+  const has = (k: string) => {
+    const v = row[k];
+    if (v === null || v === undefined) return false;
+    if (typeof v === 'string') return v.length > 0;
+    return true;
+  };
+  return {
+    path_type: row.path_type,
+    current_step: row.current_step,
+    generations_count: row.generations_count,
+    big5_completed_at: row.big5_completed_at,
+    explicit_any:
+      has('explicit_warmth') ||
+      has('explicit_brightness') ||
+      has('explicit_complexity') ||
+      has('explicit_style'),
+    room_any: has('room_type') || has('room_name'),
+    session_image_ratings: has('session_image_ratings'),
+    tinder_total_swipes: row.tinder_total_swipes,
+  };
+}
+
+function filterParticipantRowToExistingColumns(
+  row: Record<string, unknown>,
+  allowed: Set<string>,
+): { filtered: Record<string, unknown>; droppedKeys: string[] } {
+  const filtered: Record<string, unknown> = {};
+  const droppedKeys: string[] = [];
+  for (const [k, v] of Object.entries(row)) {
+    if (allowed.has(k)) {
+      filtered[k] = v;
+    } else {
+      droppedKeys.push(k);
+    }
+  }
+  return { filtered, droppedKeys };
+}
 
 /** Make a DB row JSON-serializable (Date → ISO string, BigInt → number, Buffer → skip or base64). */
 function sanitizeRow(row: Record<string, unknown>): Record<string, unknown> {
@@ -312,8 +371,6 @@ participantsRouter.post('/session', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'userHash is required' });
   }
 
-  // For now we store sessionData as a full participant row update by mapping on the client;
-  // backend assumes the body already matches participants columns.
   const participantRow = sessionData.participantRow as Record<string, unknown> | undefined;
 
   if (!participantRow) {
@@ -324,39 +381,82 @@ participantsRouter.post('/session', async (req, res) => {
     userHash,
     keys: Object.keys(participantRow),
   });
+  if (isSessionPersistDebug()) {
+    console.log('[participants.session:debug] incoming row summary', {
+      userHash,
+      ...summarizeParticipantRowForDebug(participantRow),
+    });
+  }
 
   try {
     const client = await pool.connect();
     try {
-      const row = { ...participantRow };
-      delete row.user_hash;
-      const columns = Object.keys(row);
-      const values = Object.values(row);
+      const rawRow = { ...participantRow };
+      delete rawRow.user_hash;
 
-      if (!columns.length) {
-        console.log('[participants.session] empty participantRow, nothing to upsert', { userHash });
-        return res.json({ ok: true });
-      }
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const allowed = await getParticipantsTableColumns(client);
+        const { filtered, droppedKeys } = filterParticipantRowToExistingColumns(rawRow, allowed);
+        if (droppedKeys.length) {
+          console.warn('[participants.session] dropped unknown columns (not in participants table)', {
+            userHash,
+            droppedKeys,
+          });
+        }
 
-      // Ensure consent_timestamp is always set
-      if (!columns.includes('consent_timestamp')) {
-        columns.push('consent_timestamp');
-        values.push(new Date().toISOString());
-      }
+        const row = { ...filtered };
+        const columns = Object.keys(row);
+        const values = Object.values(row);
 
-      const assignments = columns.map((col, idx) => `${col} = $${idx + 2}`);
+        if (!columns.length) {
+          console.log('[participants.session] empty participantRow, nothing to upsert', { userHash });
+          return res.json({ ok: true });
+        }
 
-      const sql = `
+        if (isSessionPersistDebug()) {
+          console.log('[participants.session:debug] after column filter', {
+            userHash,
+            upsertColumnCount: columns.length,
+            droppedKeyCount: droppedKeys.length,
+            ...summarizeParticipantRowForDebug(row),
+          });
+        }
+
+        if (!columns.includes('consent_timestamp')) {
+          columns.push('consent_timestamp');
+          values.push(new Date().toISOString());
+        }
+
+        const assignments = columns.map((col, idx) => `${col} = $${idx + 2}`);
+
+        const sql = `
         INSERT INTO participants (user_hash, ${columns.join(', ')})
         VALUES ($1, ${columns.map((_, idx) => `$${idx + 2}`).join(', ')})
         ON CONFLICT (user_hash) DO UPDATE
         SET ${assignments.join(', ')}, updated_at = NOW()
       `;
 
-      await client.query(sql, [userHash, ...values]);
-
-      console.log('[participants.session] upsert success', { userHash });
-      return res.json({ ok: true });
+        try {
+          await client.query(sql, [userHash, ...values]);
+          console.log('[participants.session] upsert success', { userHash });
+          if (isSessionPersistDebug()) {
+            console.log('[participants.session:debug] upsert OK', {
+              userHash,
+              columnCount: columns.length,
+            });
+          }
+          return res.json({ ok: true });
+        } catch (queryErr) {
+          const qe = queryErr as Error & { code?: string };
+          if (qe.code === '42703' && attempt === 0) {
+            console.warn('[participants.session] schema mismatch, refreshing column cache and retrying');
+            participantsTableColumns = null;
+            continue;
+          }
+          throw queryErr;
+        }
+      }
+      return res.status(500).json({ ok: false, error: 'session_persist_failed', detail: 'retry_exhausted' });
     } finally {
       client.release();
     }

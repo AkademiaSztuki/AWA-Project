@@ -11,6 +11,13 @@ import { gcpApi } from './gcp-api-client';
 export const DISABLE_SESSION_SYNC =
   (process.env.NEXT_PUBLIC_DISABLE_SESSION_SYNC ?? '0') !== '0';
 
+/**
+ * Włącz szczegółowe logi zapisu sesji → Cloud Run w konsoli przeglądarki.
+ * W `.env.local`: `NEXT_PUBLIC_DEBUG_SESSION_SYNC=1` (wymaga restartu dev server / przebudowy).
+ */
+export const isSessionSyncDebugEnabled = (): boolean =>
+  process.env.NEXT_PUBLIC_DEBUG_SESSION_SYNC === '1';
+
 /** Always true – GCP is the only backend now. */
 export const isGcpPrimaryEnabled = (): boolean => true;
 
@@ -177,19 +184,98 @@ function omitUndefinedValues(obj: Record<string, unknown>): Record<string, unkno
   return out;
 }
 
+function summarizeParticipantRowForDebug(row: Record<string, unknown>) {
+  const has = (k: string) => {
+    const v = row[k];
+    if (v === null || v === undefined) return false;
+    if (typeof v === 'string') return v.length > 0;
+    return true;
+  };
+  return {
+    columnCount: Object.keys(row).length,
+    path_type: row.path_type,
+    current_step: row.current_step,
+    generations_count: row.generations_count,
+    big5_completed_at: row.big5_completed_at,
+    explicit_any:
+      has('explicit_warmth') ||
+      has('explicit_brightness') ||
+      has('explicit_complexity') ||
+      has('explicit_style'),
+    room_any: has('room_type') || has('room_name') || has('room_usage_type'),
+    session_image_ratings: has('session_image_ratings'),
+    tinder_total_swipes: row.tinder_total_swipes,
+    tinder_likes: row.tinder_likes,
+  };
+}
+
+async function reportSessionPersistFailure(
+  userHash: string,
+  detail: { stage: string; error: unknown },
+): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    const msg =
+      detail.error instanceof Error
+        ? detail.error.message
+        : typeof detail.error === 'string'
+          ? detail.error
+          : JSON.stringify(detail.error);
+    await fetch('/api/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: userHash,
+        eventType: 'session_persist_failed',
+        eventData: { stage: detail.stage, error: msg.slice(0, 500) },
+      }),
+    });
+  } catch {
+    // ignore secondary failures
+  }
+}
+
 export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
-  if (DISABLE_SESSION_SYNC) return true;
-  if (!sessionData?.userHash) return false;
+  const dbg = isSessionSyncDebugEnabled();
+  const shortHash = (h: string) =>
+    h.length > 14 ? `${h.slice(0, 10)}…${h.slice(-4)}` : h;
+
+  if (DISABLE_SESSION_SYNC) {
+    if (dbg) {
+      console.log('[session-sync:debug] save skipped (NEXT_PUBLIC_DISABLE_SESSION_SYNC)');
+    }
+    return true;
+  }
+  if (!sessionData?.userHash) {
+    if (dbg) console.warn('[session-sync:debug] save skipped: no userHash');
+    return false;
+  }
   if (!gcpApi.isConfigured()) {
     if (process.env.NODE_ENV === 'development') {
       console.warn(
         '[GCP] saveSessionToGcp skipped: set NEXT_PUBLIC_GCP_API_BASE_URL (Cloud Run API)',
       );
     }
+    if (dbg) console.warn('[session-sync:debug] save skipped: GCP API not configured');
     return false;
   }
 
   try {
+    if (dbg) {
+      console.log('[session-sync:debug] save start (session snapshot)', {
+        userHash: shortHash(sessionData.userHash),
+        pathType: sessionData.pathType,
+        currentStep: sessionData.currentStep,
+        generationsCount: Array.isArray(sessionData.generations)
+          ? sessionData.generations.length
+          : undefined,
+        hasBigFive: !!sessionData.bigFive,
+        imageRatingsCount: Array.isArray(sessionData.imageRatings)
+          ? sessionData.imageRatings.length
+          : undefined,
+      });
+    }
+
     const { mapSessionDataToParticipant, mapParticipantToSessionData } = await import(
       '@/lib/participants-mapper'
     );
@@ -239,6 +325,13 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
       mergedRow.consent_timestamp = new Date().toISOString();
     }
 
+    if (dbg) {
+      console.log(
+        '[session-sync:debug] merged row (going to API)',
+        summarizeParticipantRowForDebug(mergedRow),
+      );
+    }
+
     const payload = {
       participantRow: mergedRow,
     };
@@ -246,16 +339,46 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
     let r = await gcpApi.participants.saveSession(sessionData.userHash, payload);
     if (!r.ok) {
       console.error('[GCP] session save failed:', r.error);
+      if (dbg) {
+        console.warn('[session-sync:debug] first POST failed, retry in 400ms', r.error);
+      }
       await new Promise((res) => setTimeout(res, 400));
       r = await gcpApi.participants.saveSession(sessionData.userHash, payload);
     }
     if (!r.ok) {
       console.error('[GCP] session save failed after retry:', r.error);
+      if (dbg) {
+        console.warn('[session-sync:debug] save FAILED after retry', {
+          userHash: shortHash(sessionData.userHash),
+          error: r.error,
+        });
+      }
+      void reportSessionPersistFailure(sessionData.userHash, {
+        stage: 'saveSession_retry_exhausted',
+        error: r.error,
+      });
       return false;
+    }
+    if (dbg) {
+      console.log('[session-sync:debug] save OK', {
+        userHash: shortHash(sessionData.userHash),
+      });
     }
     return true;
   } catch (err) {
     console.error('saveSessionToGcp error:', err);
+    if (sessionData?.userHash) {
+      if (dbg) {
+        console.warn('[session-sync:debug] save exception', {
+          userHash: shortHash(sessionData.userHash),
+          err,
+        });
+      }
+      void reportSessionPersistFailure(sessionData.userHash, {
+        stage: 'saveSession_exception',
+        error: err,
+      });
+    }
     return false;
   }
 };

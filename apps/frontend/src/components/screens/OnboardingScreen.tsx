@@ -127,9 +127,16 @@ const OnboardingScreen: React.FC = () => {
     }));
   }, [language]);
 
-  // Apply path_type from sessionStorage after login redirect (set by PathSelectionScreen)
+  // Apply path_type from sessionStorage after login redirect (set by PathSelectionScreen).
+  // Wait for session hydration so we do not clear aura_auth_path_type before pathType can merge from localStorage.
   useEffect(() => {
+    if (!isInitialized) return;
     const stored = safeSessionStorage.getItem('aura_auth_path_type');
+    if (!stored) return;
+    if (sessionData?.pathType) {
+      safeSessionStorage.removeItem('aura_auth_path_type');
+      return;
+    }
     if (stored === 'fast') {
       safeSessionStorage.removeItem('aura_auth_path_type');
       updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
@@ -137,7 +144,7 @@ const OnboardingScreen: React.FC = () => {
       safeSessionStorage.removeItem('aura_auth_path_type');
       updateSessionData({ pathType: 'full' });
     }
-  }, [updateSessionData]);
+  }, [isInitialized, sessionData?.pathType, updateSessionData]);
 
   useEffect(() => {
     // Redirect immediately when pathType is available - don't wait for full sessionData
