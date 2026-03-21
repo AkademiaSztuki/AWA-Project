@@ -86,8 +86,9 @@ export function UserDashboard() {
 
   useEffect(() => {
     if (!isInitialized) return;
+    if (sessionData.currentStep === 'dashboard') return;
     void updateSessionData({ currentStep: 'dashboard' });
-  }, [isInitialized, updateSessionData]);
+  }, [isInitialized, sessionData.currentStep, updateSessionData]);
   const { language } = useLanguage();
   const { user, linkUserHashToAuth } = useAuth();
   

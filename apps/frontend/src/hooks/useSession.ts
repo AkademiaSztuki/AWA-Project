@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { SessionData, FlowStep } from '@/types';
 import {
   fetchSessionSnapshotFromGcp,
@@ -960,32 +960,30 @@ export const useSession = (): UseSessionReturn => {
     };
   }, []);
 
-  const updateSession = (updates: Partial<SessionData>) => {
+  const updateSession = useCallback((updates: Partial<SessionData>) => {
     setSessionStoreState((prev) => {
       const prevData = prev.sessionData;
       // Preserve roomImageEmpty from previous state if not explicitly provided in updates
       const hasRoomImageEmptyInUpdates = 'roomImageEmpty' in updates;
-      const newData = { 
-        ...prevData, 
+      const newData = {
+        ...prevData,
         ...updates,
         // CRITICAL: Preserve roomImageEmpty from previous state if not explicitly in updates
-        roomImageEmpty: hasRoomImageEmptyInUpdates ? updates.roomImageEmpty : prevData.roomImageEmpty
+        roomImageEmpty: hasRoomImageEmptyInUpdates ? updates.roomImageEmpty : prevData.roomImageEmpty,
       };
-      
-      
+
       const persisted = persistSessionData(newData);
-      
-      
+
       return { ...prev, sessionData: persisted };
     });
     if (!DISABLE_SESSION_SYNC) {
       scheduleDebouncedGcpSave();
     }
-  };
+  }, []);
 
-  const setCurrentStep = (step: FlowStep) => {
+  const setCurrentStep = useCallback((step: FlowStep) => {
     updateSession({ currentStep: step });
-  };
+  }, [updateSession]);
 
   return {
     sessionData,
