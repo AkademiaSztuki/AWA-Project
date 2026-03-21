@@ -184,6 +184,14 @@ function omitUndefinedValues(obj: Record<string, unknown>): Record<string, unkno
   return out;
 }
 
+/** Same idea as participants-mapper — repeated here so the save path always sees live sessionData. */
+function computeGenerationCountFromSession(sessionData: Record<string, unknown>): number {
+  const g = Array.isArray(sessionData.generations) ? sessionData.generations.length : 0;
+  const mh = Array.isArray(sessionData.matrixHistory) ? sessionData.matrixHistory.length : 0;
+  const gi = Array.isArray(sessionData.generatedImages) ? sessionData.generatedImages.length : 0;
+  return Math.max(g, mh, gi);
+}
+
 function summarizeParticipantRowForDebug(row: Record<string, unknown>) {
   const has = (k: string) => {
     const v = row[k];
@@ -327,14 +335,15 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
       mergedRow.consent_timestamp = new Date().toISOString();
     }
 
-    // Never let a transient local count of 0 wipe a previously persisted count (remote remap uses empty generations).
+    // generations_count: mapper + raw DB max, then bump from live session (matrixHistory is not always in mapped row timing).
     const rawGc = rawParticipantRow?.generations_count;
-    const mergedGc = mergedRow.generations_count;
-    if (typeof rawGc === 'number' && typeof mergedGc === 'number') {
-      mergedRow.generations_count = Math.max(rawGc, mergedGc);
-    } else if (typeof rawGc === 'number' && mergedGc === undefined) {
-      mergedRow.generations_count = rawGc;
+    let gc =
+      typeof mergedRow.generations_count === 'number' ? mergedRow.generations_count : 0;
+    if (typeof rawGc === 'number') {
+      gc = Math.max(gc, rawGc);
     }
+    gc = Math.max(gc, computeGenerationCountFromSession(sessionData as Record<string, unknown>));
+    mergedRow.generations_count = gc;
 
     if (dbg) {
       console.log(
