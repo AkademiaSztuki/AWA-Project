@@ -7,7 +7,9 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { getSessionStoreSnapshot } from "@/hooks/useSession";
 import { useSessionData } from "@/hooks/useSessionData";
+import { saveSessionToGcp } from "@/lib/gcp-data";
 import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
 import { RadarChart, DomainDescription } from '@/components/dashboard/BigFiveDetailed';
 import { 
@@ -295,10 +297,9 @@ export default function BigFivePage() {
           completedAt: new Date().toISOString()
         }
       } as any);
-      
-      // NOTE: After radical refactor, data is saved via updateSessionData -> saveSessionToGcp
-      // which writes to participants table. No need for direct saveUserProfile call.
-      
+
+      // Flush immediately so big5_* / big5_responses reach Cloud SQL before navigation (debounced save may not run).
+      await saveSessionToGcp(getSessionStoreSnapshot());
 
       // Always redirect to dashboard after completing Big Five test
       router.push("/dashboard");
@@ -329,6 +330,8 @@ export default function BigFivePage() {
             completedAt: new Date().toISOString()
           }
         } as any);
+
+        await saveSessionToGcp(getSessionStoreSnapshot());
 
         // CRITICAL: Immediately save to Supabase user_profiles to ensure data is persisted
         // This ensures that retake updates are saved even if useProfileSync hasn't run yet

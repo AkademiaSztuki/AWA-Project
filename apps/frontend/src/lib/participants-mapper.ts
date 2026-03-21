@@ -8,7 +8,8 @@ import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
 
 /**
  * Room Setup often stores answers only in `roomPreferences`; Core Profile uses root
- * `semanticDifferential` / `colorsAndMaterials`. Merge so GCP/CSV see full explicit prefs.
+ * `semanticDifferential` / `colorsAndMaterials` (see `CoreProfileWizard.tsx`, `RoomSetup.tsx`).
+ * Merge so GCP/CSV see full explicit prefs.
  */
 function mergeExplicitSemanticsForParticipant(sessionData: SessionData) {
   const rp = sessionData.roomPreferences;

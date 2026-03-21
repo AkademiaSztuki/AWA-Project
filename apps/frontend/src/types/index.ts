@@ -188,7 +188,20 @@ export type FlowStep =
   | 'generation'
   | 'survey_satisfaction'
   | 'survey_clarity'
-  | 'thanks';
+  | 'thanks'
+  /** Research / routing: session `current_step` persisted to `participants` */
+  | 'dashboard'
+  | 'space'
+  | 'path_selection'
+  | 'big_five'
+  | 'generate'
+  | 'inspirations'
+  | 'modification'
+  | 'photo_upload'
+  | 'prs_current'
+  | 'preference_questions'
+  | 'lifestyle'
+  | 'demographics';
 
 export interface TinderSwipe {
   imageId: string;

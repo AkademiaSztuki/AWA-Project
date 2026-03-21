@@ -83,6 +83,11 @@ function sortImagesDescending(images: SpaceImage[]): SpaceImage[] {
 export function UserDashboard() {
   const router = useRouter();
   const { sessionData, updateSessionData, isInitialized } = useSessionData();
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    void updateSessionData({ currentStep: 'dashboard' });
+  }, [isInitialized, updateSessionData]);
   const { language } = useLanguage();
   const { user, linkUserHashToAuth } = useAuth();
   

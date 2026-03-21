@@ -19,7 +19,7 @@ const LandingScreen: React.FC = () => {
   const router = useRouter();
   const { language } = useLanguage();
   const { checkHealth } = useModalAPI();
-  const { updateSessionData } = useSessionData();
+  const { updateSessionData, isInitialized, sessionData } = useSessionData();
   const { user, isLoading: authLoading } = useAuth();
   const { setHeaderVisible } = useLayout();
   const [showAuraSection, setShowAuraSection] = useState(false);
@@ -30,6 +30,18 @@ const LandingScreen: React.FC = () => {
     // Hide header on landing mount - it should only appear after dialogue
     setHeaderVisible(false);
   }, [setHeaderVisible]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    const cs = sessionData?.currentStep;
+    if (
+      cs === undefined ||
+      cs === null ||
+      (typeof cs === 'string' && cs.trim() === '')
+    ) {
+      void updateSessionData({ currentStep: 'landing' });
+    }
+  }, [isInitialized, sessionData?.currentStep, updateSessionData]);
 
   const handleDialogueEnd = () => {
     // 500ms delay for quick transition

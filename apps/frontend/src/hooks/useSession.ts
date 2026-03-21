@@ -355,6 +355,12 @@ const persistSessionData = (data: SessionData): SessionData => {
       const existing = JSON.parse(existingRaw) as SessionData;
       const willPreserveBigFive = !data.bigFive && !!existing.bigFive;
       const willPreservePathType = !data.pathType && !!existing.pathType;
+      const willPreserveCurrentStep =
+        (data.currentStep === undefined ||
+          data.currentStep === null ||
+          (typeof data.currentStep === 'string' && data.currentStep.trim() === '')) &&
+        !!existing.currentStep &&
+        String(existing.currentStep).trim() !== '';
       const willPreserveUserHash = !data.userHash && !!existing.userHash;
       
       // CRITICAL: Check if data.colorsAndMaterials has actual data (not just empty values)
@@ -393,6 +399,9 @@ const persistSessionData = (data: SessionData): SessionData => {
             pathType: existing.pathType,
           });
         }
+      }
+      if (willPreserveCurrentStep) {
+        data = { ...data, currentStep: existing.currentStep };
       }
       if (willPreserveUserHash) {
         data = { ...data, userHash: existing.userHash };

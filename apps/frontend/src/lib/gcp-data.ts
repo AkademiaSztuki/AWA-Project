@@ -3,6 +3,7 @@
  * All persistence goes through `gcpApi`; there is no Supabase runtime dependency.
  */
 
+import type { FlowStep, SessionData } from '@/types';
 import { gcpApi } from './gcp-api-client';
 
 // ---------------------------------------------------------------------------
@@ -192,6 +193,51 @@ function computeGenerationCountFromSession(sessionData: Record<string, unknown>)
   return Math.max(g, mh, gi);
 }
 
+/**
+ * Ensures `path_type`, `current_step`, and top-level room fields used by CSV exist when possible
+ * before mapping to `participants` (UPSERT only updates keys present in the payload).
+ */
+export function finalizeSessionDataForParticipantPersist(sessionData: SessionData): SessionData {
+  const out = { ...sessionData } as SessionData;
+
+  const step = out.currentStep;
+  if (
+    step === undefined ||
+    step === null ||
+    (typeof step === 'string' && step.trim() === '')
+  ) {
+    out.currentStep = 'landing' as FlowStep;
+  }
+
+  if (out.pathType !== 'fast' && out.pathType !== 'full') {
+    const stored =
+      typeof window !== 'undefined'
+        ? safeSessionStorage.getItem('aura_auth_path_type')
+        : null;
+    if (stored === 'fast' || stored === 'full') {
+      out.pathType = stored;
+    } else if (typeof out.consentTimestamp === 'string' && out.consentTimestamp.length > 0) {
+      // Product default once consent exists; avoids NULL path_type in exports when UI skipped PathSelection.
+      out.pathType = 'full';
+    }
+  }
+
+  // Denormalize from active space when setup flow stored room only on the space card.
+  if (out.currentSpaceId && Array.isArray(out.spaces) && out.spaces.length > 0) {
+    const sp = out.spaces.find((s) => s.id === out.currentSpaceId);
+    if (sp) {
+      if (!out.roomType || String(out.roomType).trim() === '') {
+        out.roomType = sp.type;
+      }
+      if (!out.roomName || String(out.roomName).trim() === '') {
+        out.roomName = sp.name;
+      }
+    }
+  }
+
+  return out;
+}
+
 function summarizeParticipantRowForDebug(row: Record<string, unknown>) {
   const has = (k: string) => {
     const v = row[k];
@@ -294,7 +340,9 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
         : null;
     const authId = googleAuthUserId ?? undefined;
 
-    const localRow = mapSessionDataToParticipant(sessionData, authId);
+    const finalized = finalizeSessionDataForParticipantPersist(sessionData as SessionData);
+
+    const localRow = mapSessionDataToParticipant(finalized, authId);
     const localRowDefined = omitUndefinedValues(localRow as unknown as Record<string, unknown>);
 
     let mergedRow: Record<string, unknown> = {
@@ -323,6 +371,30 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
       // merge is best-effort; local-only save still runs
     }
 
+    // Safety net: merge can leave path/current empty if both remote and local omitted them; re-apply from finalized row.
+    const lrPath = localRowDefined.path_type;
+    if (
+      (mergedRow.path_type === undefined ||
+        mergedRow.path_type === null ||
+        mergedRow.path_type === '') &&
+      lrPath !== undefined &&
+      lrPath !== null &&
+      lrPath !== ''
+    ) {
+      mergedRow.path_type = lrPath;
+    }
+    const lrStep = localRowDefined.current_step;
+    if (
+      (mergedRow.current_step === undefined ||
+        mergedRow.current_step === null ||
+        mergedRow.current_step === '') &&
+      lrStep !== undefined &&
+      lrStep !== null &&
+      lrStep !== ''
+    ) {
+      mergedRow.current_step = lrStep;
+    }
+
     if (
       (mergedRow.auth_user_id === undefined || mergedRow.auth_user_id === null) &&
       rawAuthUserId != null &&
@@ -342,7 +414,7 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
     if (typeof rawGc === 'number') {
       gc = Math.max(gc, rawGc);
     }
-    gc = Math.max(gc, computeGenerationCountFromSession(sessionData as Record<string, unknown>));
+    gc = Math.max(gc, computeGenerationCountFromSession(finalized as unknown as Record<string, unknown>));
     mergedRow.generations_count = gc;
 
     if (dbg) {
@@ -355,6 +427,22 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
     const payload = {
       participantRow: mergedRow,
     };
+
+    try {
+      const approxBytes = JSON.stringify(payload.participantRow).length;
+      if (approxBytes > 1_500_000) {
+        console.warn(
+          '[GCP] participantRow JSON is very large; if saves fail, check Cloud Run / proxy body limits (bytes ≈',
+          approxBytes,
+          ')',
+        );
+      }
+      if (dbg && approxBytes > 200_000) {
+        console.log('[session-sync:debug] participantRow JSON size (bytes)', approxBytes);
+      }
+    } catch {
+      // ignore stringify errors
+    }
 
     let r = await gcpApi.participants.saveSession(sessionData.userHash, payload);
     if (!r.ok) {

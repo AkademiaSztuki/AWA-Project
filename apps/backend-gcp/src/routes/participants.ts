@@ -414,6 +414,12 @@ participantsRouter.post('/session', async (req, res) => {
         }
 
         if (isSessionPersistDebug()) {
+          if (row.path_type == null || row.path_type === '') {
+            console.warn('[participants.session:debug] incoming row has empty path_type', { userHash });
+          }
+          if (row.current_step == null || row.current_step === '') {
+            console.warn('[participants.session:debug] incoming row has empty current_step', { userHash });
+          }
           console.log('[participants.session:debug] after column filter', {
             userHash,
             upsertColumnCount: columns.length,

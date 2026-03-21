@@ -43,12 +43,20 @@ export default function SpaceDetailPage() {
   const params = useParams();
   const spaceId = params?.id as string;
   const searchParams = useSearchParams();
-  const { sessionData } = useSessionData();
+  const { sessionData, updateSessionData, isInitialized } = useSessionData();
   const { language } = useLanguage();
 
   const [space, setSpace] = useState<Space | null>(null);
   const [selectedImage, setSelectedImage] = useState<SpaceImage | null>(null);
   const [filter, setFilter] = useState<'all' | 'generated' | 'inspiration'>('all');
+
+  useEffect(() => {
+    if (!isInitialized || !spaceId) return;
+    void updateSessionData({
+      currentStep: 'space',
+      currentSpaceId: spaceId,
+    });
+  }, [isInitialized, spaceId, updateSessionData]);
 
   useEffect(() => {
     (async () => {
