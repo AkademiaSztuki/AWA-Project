@@ -9,6 +9,9 @@
 
   $env:PGPASSWORD = "haslo_awa_app"
   .\cloud-sql-export-csv.ps1 -OutFile ".\participants.csv"
+
+  Po migracji kolumny JSONB (infra/gcp/sql/02_session_image_ratings.sql):
+  .\cloud-sql-export-csv.ps1 -OutFile ".\participants.csv" -IncludeSessionImageRatings
 #>
 
 param(
@@ -17,7 +20,8 @@ param(
   [int] $Port = 5432,
   [string] $User = "awa_app",
   [string] $Database = "awa_db",
-  [int] $Limit = 5000
+  [int] $Limit = 5000,
+  [switch] $IncludeSessionImageRatings = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,10 +47,14 @@ if (-not $psqlCmd) {
 }
 
 # Jedna linia — meta-polecenie \copy dziala w psql -c
-# Kolumna session_image_ratings: uruchom najpierw infra/gcp/sql/02_session_image_ratings.sql na Cloud SQL.
-$sql = '\copy (SELECT user_hash, path_type, auth_user_id::text AS auth_user_id, current_step, consent_timestamp, updated_at, implicit_warmth, implicit_brightness, implicit_complexity, implicit_dominant_style, implicit_style_1, explicit_warmth, explicit_brightness, explicit_complexity, explicit_style, explicit_palette, explicit_material_1, explicit_material_2, explicit_material_3, big5_openness, big5_conscientiousness, big5_extraversion, big5_agreeableness, big5_neuroticism, big5_completed_at, sus_score, clarity_score, core_profile_complete, room_type, room_name, room_usage_type, tinder_total_swipes, tinder_likes, tinder_dislikes, generations_count, session_image_ratings::text AS session_image_ratings FROM public.participants ORDER BY updated_at DESC LIMIT ' + $Limit + ') TO STDOUT WITH CSV HEADER'
+# Domyslnie BEZ session_image_ratings (stare bazy bez migracji). Po ADD COLUMN uzyj -IncludeSessionImageRatings.
+$baseSelect = 'SELECT user_hash, path_type, auth_user_id::text AS auth_user_id, current_step, consent_timestamp, updated_at, implicit_warmth, implicit_brightness, implicit_complexity, implicit_dominant_style, implicit_style_1, explicit_warmth, explicit_brightness, explicit_complexity, explicit_style, explicit_palette, explicit_material_1, explicit_material_2, explicit_material_3, big5_openness, big5_conscientiousness, big5_extraversion, big5_agreeableness, big5_neuroticism, big5_completed_at, sus_score, clarity_score, core_profile_complete, room_type, room_name, room_usage_type, tinder_total_swipes, tinder_likes, tinder_dislikes, generations_count'
+if ($IncludeSessionImageRatings) {
+  $baseSelect += ', session_image_ratings::text AS session_image_ratings'
+}
+$sql = '\copy (' + $baseSelect + ' FROM public.participants ORDER BY updated_at DESC LIMIT ' + $Limit + ') TO STDOUT WITH CSV HEADER'
 
-Write-Host "[cloud-sql-export-csv] Eksport (limit $Limit) -> $OutFile"
+Write-Host "[cloud-sql-export-csv] Eksport (limit $Limit, IncludeSessionImageRatings=$IncludeSessionImageRatings) -> $OutFile"
 & $psqlCmd -h $DbHost -p $Port -U $User -d $Database -v ON_ERROR_STOP=1 -c $sql | Set-Content -Path $OutFile -Encoding utf8
 if ($LASTEXITCODE -ne 0) {
   Write-Error "Eksport nieudany (psql exit code: $LASTEXITCODE). Sprawdz haslo, port proxy i dane polaczenia."
