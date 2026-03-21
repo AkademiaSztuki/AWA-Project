@@ -6,6 +6,45 @@
 import { SessionData } from '@/types';
 import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
 
+/**
+ * Room Setup often stores answers only in `roomPreferences`; Core Profile uses root
+ * `semanticDifferential` / `colorsAndMaterials`. Merge so GCP/CSV see full explicit prefs.
+ */
+function mergeExplicitSemanticsForParticipant(sessionData: SessionData) {
+  const rp = sessionData.roomPreferences;
+  const sd = sessionData.semanticDifferential;
+  const rsd = rp?.semanticDifferential;
+  return {
+    warmth: normalizeSemanticTo01(sd?.warmth ?? rsd?.warmth),
+    brightness: normalizeSemanticTo01(sd?.brightness ?? rsd?.brightness),
+    complexity: normalizeSemanticTo01(sd?.complexity ?? rsd?.complexity),
+    texture: normalizeSemanticTo01(sd?.texture ?? rsd?.texture),
+  };
+}
+
+function mergeColorsMaterialsForParticipant(sessionData: SessionData) {
+  const cm = sessionData.colorsAndMaterials;
+  const rcm = sessionData.roomPreferences?.colorsAndMaterials;
+  const topFrom = (a?: string[]) =>
+    Array.isArray(a) && a.filter(Boolean).length > 0 ? a.filter(Boolean) as string[] : undefined;
+  const topMaterials = topFrom(cm?.topMaterials) ?? topFrom(rcm?.topMaterials) ?? [];
+  return {
+    selectedPalette: cm?.selectedPalette || rcm?.selectedPalette,
+    selectedStyle: cm?.selectedStyle || rcm?.selectedStyle,
+    topMaterials,
+  };
+}
+
+function mergeSensoryForParticipant(sessionData: SessionData) {
+  const sp = sessionData.sensoryPreferences;
+  const rsp = sessionData.roomPreferences?.sensoryPreferences;
+  return {
+    music: sp?.music || rsp?.music,
+    texture: sp?.texture || rsp?.texture,
+    light: sp?.light || rsp?.light,
+  };
+}
+
 export interface ParticipantRow {
   user_hash: string;
   auth_user_id?: string;
@@ -138,6 +177,10 @@ export interface ParticipantRow {
  * Map SessionData to ParticipantRow (for database insert/update)
  */
 export function mapSessionDataToParticipant(sessionData: SessionData, authUserId?: string): ParticipantRow {
+  const explicitSem = mergeExplicitSemanticsForParticipant(sessionData);
+  const mergedCm = mergeColorsMaterialsForParticipant(sessionData);
+  const mergedSensory = mergeSensoryForParticipant(sessionData);
+
   const row: ParticipantRow = {
     user_hash: sessionData.userHash,
     auth_user_id: authUserId,
@@ -177,23 +220,23 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     implicit_complexity: sessionData.visualDNA?.implicitScores?.complexity,
     dna_accuracy_score: sessionData.visualDNA?.accuracyScore ?? sessionData.dnaAccuracyScore,
     
-    // Explicit (0–1 in DB; accept legacy 0–100 from session and normalize)
-    explicit_warmth: normalizeSemanticTo01(sessionData.semanticDifferential?.warmth),
-    explicit_brightness: normalizeSemanticTo01(sessionData.semanticDifferential?.brightness),
-    explicit_complexity: normalizeSemanticTo01(sessionData.semanticDifferential?.complexity),
-    explicit_texture: normalizeSemanticTo01(sessionData.semanticDifferential?.texture),
-    explicit_palette: sessionData.colorsAndMaterials?.selectedPalette,
-    explicit_style: sessionData.colorsAndMaterials?.selectedStyle,
-    explicit_material_1: sessionData.colorsAndMaterials?.topMaterials?.[0],
-    explicit_material_2: sessionData.colorsAndMaterials?.topMaterials?.[1],
-    explicit_material_3: sessionData.colorsAndMaterials?.topMaterials?.[2],
+    // Explicit (0–1 in DB; root session OR roomPreferences from Room Setup)
+    explicit_warmth: explicitSem.warmth,
+    explicit_brightness: explicitSem.brightness,
+    explicit_complexity: explicitSem.complexity,
+    explicit_texture: explicitSem.texture,
+    explicit_palette: mergedCm.selectedPalette,
+    explicit_style: mergedCm.selectedStyle,
+    explicit_material_1: mergedCm.topMaterials[0],
+    explicit_material_2: mergedCm.topMaterials[1],
+    explicit_material_3: mergedCm.topMaterials[2],
     
     // Sensory / Biophilia
-    sensory_music: sessionData.sensoryPreferences?.music,
-    sensory_texture: sessionData.sensoryPreferences?.texture,
-    sensory_light: sessionData.sensoryPreferences?.light,
-    biophilia_score: sessionData.biophiliaScore,
-    nature_metaphor: sessionData.natureMetaphor,
+    sensory_music: mergedSensory.music,
+    sensory_texture: mergedSensory.texture,
+    sensory_light: mergedSensory.light,
+    biophilia_score: sessionData.biophiliaScore ?? sessionData.roomPreferences?.biophiliaScore,
+    nature_metaphor: sessionData.natureMetaphor ?? sessionData.roomPreferences?.natureMetaphor,
     
     // Lifestyle
     living_situation: sessionData.lifestyle?.livingSituation,

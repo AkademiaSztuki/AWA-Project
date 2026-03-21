@@ -368,10 +368,33 @@ export function RoomSetup({ householdId }: { householdId: string }) {
           ? existingSpaces.map((s) => (s.id === targetSpaceId ? spacePayload : s))
           : [...existingSpaces, spacePayload];
 
+      const rp = roomData.explicitPreferences;
+      const roomExplicitToRoot: Record<string, unknown> = {};
+      if (rp?.semanticDifferential) {
+        roomExplicitToRoot.semanticDifferential = rp.semanticDifferential;
+      }
+      if (rp?.colorsAndMaterials) {
+        roomExplicitToRoot.colorsAndMaterials = {
+          selectedPalette: rp.colorsAndMaterials.selectedPalette || '',
+          topMaterials: rp.colorsAndMaterials.topMaterials || [],
+          selectedStyle: rp.colorsAndMaterials.selectedStyle,
+        };
+      }
+      if (rp?.sensoryPreferences) {
+        roomExplicitToRoot.sensoryPreferences = rp.sensoryPreferences;
+      }
+      if (rp?.biophiliaScore !== undefined) {
+        roomExplicitToRoot.biophiliaScore = rp.biophiliaScore;
+      }
+      if (rp?.natureMetaphor !== undefined) {
+        roomExplicitToRoot.natureMetaphor = rp.natureMetaphor;
+      }
+
       await updateSessionData({
         roomType: roomData.roomType,
         roomName: roomData.name,
         roomUsageType: roomData.usageType,
+        roomSharedWith: roomData.sharedWith || [],
         roomPainPoints: roomData.painPoints,
         roomActivities: roomData.activities,
         roomPreferenceSource: roomData.preferenceSource,
@@ -387,7 +410,8 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         selectedImage: null,
         blindSelectionMade: false,
         generatedImages: [],
-        generations: []
+        generations: [],
+        ...roomExplicitToRoot,
       } as any);
 
       console.log('[RoomSetup] Session updated, navigating to generate flow');
