@@ -61,6 +61,104 @@ function filterParticipantRowToExistingColumns(
   return { filtered, droppedKeys };
 }
 
+// #region agent log (debug session 995889 — DB persist tracing)
+const AGENT_DEBUG_SESSION = '995889';
+const AGENT_DEBUG_INGEST =
+  'http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497';
+
+function agentServerPersistDebug(payload: {
+  hypothesisId: string;
+  location: string;
+  message: string;
+  data: Record<string, unknown>;
+}): void {
+  const line = {
+    sessionId: AGENT_DEBUG_SESSION,
+    timestamp: Date.now(),
+    ...payload,
+  };
+  void fetch(AGENT_DEBUG_INGEST, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': AGENT_DEBUG_SESSION,
+    },
+    body: JSON.stringify(line),
+  }).catch(() => {});
+  console.log('[DEBUG995889]', JSON.stringify(line));
+}
+// #endregion
+
+/** JSONB columns on `participants` (see infra/gcp/sql/01_research_schema.sql). */
+const PARTICIPANTS_JSONB_COLUMNS = new Set<string>([
+  'big5_responses',
+  'big5_facets',
+  'sus_answers',
+  'agency_answers',
+  'satisfaction_answers',
+  'clarity_answers',
+  'room_activities',
+  'session_image_ratings',
+]);
+
+function sanitizeJsonbCellForPg(value: unknown): { ok: true; value: unknown } | { ok: false } {
+  if (value === null || value === undefined) {
+    return { ok: true, value: null };
+  }
+  if (typeof value === 'string') {
+    const t = value.trim();
+    if (t === '') return { ok: true, value: null };
+    try {
+      return { ok: true, value: JSON.parse(t) };
+    } catch {
+      return { ok: false };
+    }
+  }
+  try {
+    const round = JSON.stringify(value, (_k, v) => {
+      if (typeof v === 'number' && !Number.isFinite(v)) return null;
+      if (typeof v === 'bigint') return Number(v);
+      return v;
+    });
+    return { ok: true, value: JSON.parse(round) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
+ * Ensures JSONB-bound values round-trip as valid JSON for PostgreSQL (avoids 22P02 invalid input syntax for type json).
+ * Invalid cells are removed from the row so UPSERT does not fail entirely.
+ */
+function sanitizeParticipantRowJsonb(
+  row: Record<string, unknown>,
+  userHash: string,
+): Record<string, unknown> {
+  const out = { ...row };
+  const dropped: string[] = [];
+  for (const col of PARTICIPANTS_JSONB_COLUMNS) {
+    if (!(col in out) || out[col] === undefined) continue;
+    const res = sanitizeJsonbCellForPg(out[col]);
+    if (res.ok) {
+      out[col] = res.value;
+    } else {
+      delete out[col];
+      dropped.push(col);
+    }
+  }
+  if (dropped.length) {
+    // #region agent log
+    agentServerPersistDebug({
+      hypothesisId: 'H4',
+      location: 'participants.ts:sanitizeParticipantRowJsonb',
+      message: 'jsonb_cell_invalid_removed',
+      data: { userHash, droppedColumns: dropped },
+    });
+    // #endregion
+  }
+  return out;
+}
+
 /** Make a DB row JSON-serializable (Date → ISO string, BigInt → number, Buffer → skip or base64). */
 function sanitizeRow(row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -404,12 +502,36 @@ participantsRouter.post('/session', async (req, res) => {
           });
         }
 
-        const row = { ...filtered };
+        const row = sanitizeParticipantRowJsonb({ ...filtered }, userHash);
         const columns = Object.keys(row);
         const values = Object.values(row);
 
+        // #region agent log
+        agentServerPersistDebug({
+          hypothesisId: 'H5',
+          location: 'participants.ts:POST/session',
+          message: 'after_column_filter',
+          data: {
+            userHash,
+            droppedKeysCount: droppedKeys.length,
+            droppedKeysSample: droppedKeys.slice(0, 20),
+            upsertKeyCount: columns.length,
+            hasPathType: row.path_type != null && row.path_type !== '',
+            hasCurrentStep: row.current_step != null && row.current_step !== '',
+          },
+        });
+        // #endregion
+
         if (!columns.length) {
           console.log('[participants.session] empty participantRow, nothing to upsert', { userHash });
+          // #region agent log
+          agentServerPersistDebug({
+            hypothesisId: 'H5',
+            location: 'participants.ts:POST/session',
+            message: 'empty_row_no_upsert',
+            data: { userHash, reason: 'no_columns_after_filter' },
+          });
+          // #endregion
           return res.json({ ok: true });
         }
 
@@ -445,6 +567,14 @@ participantsRouter.post('/session', async (req, res) => {
         try {
           await client.query(sql, [userHash, ...values]);
           console.log('[participants.session] upsert success', { userHash });
+          // #region agent log
+          agentServerPersistDebug({
+            hypothesisId: 'H5',
+            location: 'participants.ts:POST/session',
+            message: 'upsert_sql_ok',
+            data: { userHash, columnCount: columns.length },
+          });
+          // #endregion
           if (isSessionPersistDebug()) {
             console.log('[participants.session:debug] upsert OK', {
               userHash,
