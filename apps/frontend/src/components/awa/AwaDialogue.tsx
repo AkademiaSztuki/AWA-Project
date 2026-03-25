@@ -271,7 +271,10 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
       "When they are ready, choose one of them that you want to refine further."
     ]
   },
-  /** Intentionally empty: modify flow has no narrator lines unless you pass customMessage */
+  /**
+   * Modify screen (`/flow/modify`): empty = no UI for now.
+   * To show dialogue later, add strings here or use `<AwaDialogue customMessage="…" />` on that page.
+   */
   modification: {
     pl: [],
     en: [],

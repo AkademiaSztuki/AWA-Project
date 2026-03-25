@@ -12,6 +12,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassSlider } from '@/components/ui/GlassSlider';
 import { GenerationHistory } from '@/components/ui/GenerationHistory';
+import { AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import {
   Wand2,
@@ -1421,6 +1422,12 @@ export default function ModifyPage() {
             </motion.div>
           )}
         </motion.div>
+      </div>
+
+      {/* IDA na dole — `modification` w DIALOGUE_MAP jest na razie puste (nic się nie renderuje).
+          Później: uzupełnij pl/en w AwaDialogue.tsx albo przekaż customMessage. */}
+      <div className="w-full">
+        <AwaDialogue currentStep="modification" fullWidth autoHide />
       </div>
     </div>
   );
