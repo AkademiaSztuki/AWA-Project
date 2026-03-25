@@ -271,6 +271,11 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
       "When they are ready, choose one of them that you want to refine further."
     ]
   },
+  /** Intentionally empty: modify flow has no narrator lines unless you pass customMessage */
+  modification: {
+    pl: [],
+    en: [],
+  },
   survey_satisfaction: {
     pl: [
       "Oceń użyteczność systemu na skali 1-5.",
@@ -382,7 +387,12 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
         return customArray;
       }
     } else {
-      return baseDialogues.length > 0 ? baseDialogues : ["Cześć! Jestem IDA."];
+      if (baseDialogues.length > 0) return baseDialogues;
+      // Known step with no scripted lines → render nothing (do not fall back to generic greeting)
+      if (DIALOGUE_MAP[currentStep as keyof typeof DIALOGUE_MAP] !== undefined) {
+        return [];
+      }
+      return ["Cześć! Jestem IDA."];
     }
   }, [currentStep, language, customMessage]);
   
@@ -405,9 +415,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // Track transitioning state to prevent double-triggering
   const isTransitioningRef = useRef<boolean>(false);
   
-  // Zabezpieczenie przed pustą tablicą
   if (!dialogues || dialogues.length === 0) {
-    console.error('AwaDialogue: No dialogues found for step:', currentStep);
     return null;
   }
   

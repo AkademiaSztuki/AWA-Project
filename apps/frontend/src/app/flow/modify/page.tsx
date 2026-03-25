@@ -12,7 +12,6 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassSlider } from '@/components/ui/GlassSlider';
 import { GenerationHistory } from '@/components/ui/GenerationHistory';
-import { AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import {
   Wand2,
@@ -963,8 +962,6 @@ export default function ModifyPage() {
           animate={{ opacity: 1, y: 0 }}
           className="max-w-6xl mx-auto space-y-6"
         >
-          <AwaDialogue currentStep="modification" />
-
           {/* Selected Image - Main Display */}
           <GlassCard variant="flatOnMobile" className="p-4">
             <div className="space-y-4">
