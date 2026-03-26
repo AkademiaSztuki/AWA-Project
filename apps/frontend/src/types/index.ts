@@ -1,4 +1,5 @@
 import type { RoomActivity, RoomPreferencePayload, ActivityContext } from './deep-personalization';
+import type { ModificationPromptLogEntry } from '@/lib/modification-prompt-log';
 
 // Typy dla aplikacji Aura
 export interface SessionData {
@@ -6,6 +7,8 @@ export interface SessionData {
   consentTimestamp: string;
   currentStep: FlowStep;
   pathType?: 'fast' | 'full';
+  /** Dominant style used for the last fast-track image generation (invalidates cached preview when style changes). */
+  fastTrackLastGeneratedStyle?: string;
   uploadedImage?: string;
   roomType?: string;
   roomName?: string;
@@ -176,6 +179,10 @@ export interface SessionData {
   biophiliaScore?: number;
   coreProfileComplete?: boolean;
   coreProfileCompletedAt?: string;
+  /** GCP `participant_images.id` for primary room photo after upload (UUID string). */
+  roomPhotoImageId?: string;
+  /** GCP `participants.modification_prompt_log` — preset + custom modify prompts */
+  modificationPromptLog?: ModificationPromptLogEntry[];
 }
 
 export type FlowStep = 

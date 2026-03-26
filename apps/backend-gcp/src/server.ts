@@ -8,6 +8,7 @@ import { generationsRouter } from './routes/generations';
 import { imagesRouter } from './routes/images';
 import { researchRouter } from './routes/research';
 import { gcsImagesRouter } from './routes/gcs-images';
+import { matrixRouter } from './routes/matrix';
 import { spacesRouter } from './routes/spaces';
 import { creditsRouter } from './routes/credits';
 import { billingRouter } from './routes/billing';
@@ -20,7 +21,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(morgan('tiny'));
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'backend-gcp', env: process.env.NODE_ENV || 'development' });
+  const gcsBucket = process.env.GCS_IMAGES_BUCKET || null;
+  res.json({
+    ok: true,
+    service: 'backend-gcp',
+    env: process.env.NODE_ENV || 'development',
+    gcsImagesBucketConfigured: Boolean(gcsBucket),
+  });
 });
 
 // Debug: typ kolumny auth_user_id + czy backend łączy się przez socket Cloud SQL
@@ -59,6 +66,7 @@ app.use('/api', generationsRouter);
 app.use('/api', imagesRouter);
 app.use('/api', researchRouter);
 app.use('/api', gcsImagesRouter);
+app.use('/api', matrixRouter);
 app.use('/api', spacesRouter);
 app.use('/api', creditsRouter);
 app.use('/api', billingRouter);

@@ -1,6 +1,11 @@
 import type { PoolClient } from 'pg';
 import { Router } from 'express';
 import { pool } from '../db';
+import {
+  jsonbKeyByteLengths,
+  pgErrorSnapshot,
+  sessionSyncTrace,
+} from '../lib/session-sync-trace';
 import { ensureParticipantRecord, grantFreeCredits } from '../services/billing';
 
 /** Lazily loaded; cleared on schema mismatch so new migrations are picked up after deploy. */
@@ -16,6 +21,41 @@ async function getParticipantsTableColumns(client: PoolClient): Promise<Set<stri
   );
   participantsTableColumns = new Set(rows.map((r) => r.column_name));
   return participantsTableColumns;
+}
+
+/**
+ * All json/jsonb columns on `participants` — **not cached**: Cloud SQL can gain columns while the
+ * process runs; a stale list skips sanitization/strip and leaves bad JSONB in the UPSERT (22P02).
+ * Merge pg_catalog + information_schema so domains / odd builds still match.
+ */
+async function getParticipantsJsonbColumnNames(client: PoolClient): Promise<Set<string>> {
+  const { rows: fromPgCat } = await client.query<{ column_name: string }>(
+    `SELECT a.attname AS column_name
+     FROM pg_attribute a
+     INNER JOIN pg_class c ON c.oid = a.attrelid
+     INNER JOIN pg_namespace n ON n.oid = c.relnamespace
+     INNER JOIN pg_type t ON t.oid = a.atttypid
+     WHERE n.nspname = 'public'
+       AND c.relname = 'participants'
+       AND a.attnum > 0
+       AND NOT a.attisdropped
+       AND t.typname IN ('json', 'jsonb')`,
+  );
+  const { rows: fromInfo } = await client.query<{ column_name: string }>(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'participants'
+       AND (
+         data_type IN ('json', 'jsonb')
+         OR udt_name::text IN ('json', 'jsonb')
+       )`,
+  );
+  return new Set<string>([
+    ...PARTICIPANTS_JSONB_COLUMNS,
+    ...fromPgCat.map((r) => r.column_name),
+    ...fromInfo.map((r) => r.column_name),
+  ]);
 }
 
 function isSessionPersistDebug(): boolean {
@@ -61,35 +101,7 @@ function filterParticipantRowToExistingColumns(
   return { filtered, droppedKeys };
 }
 
-// #region agent log (debug session 995889 — DB persist tracing)
-const AGENT_DEBUG_SESSION = '995889';
-const AGENT_DEBUG_INGEST =
-  'http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497';
-
-function agentServerPersistDebug(payload: {
-  hypothesisId: string;
-  location: string;
-  message: string;
-  data: Record<string, unknown>;
-}): void {
-  const line = {
-    sessionId: AGENT_DEBUG_SESSION,
-    timestamp: Date.now(),
-    ...payload,
-  };
-  void fetch(AGENT_DEBUG_INGEST, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': AGENT_DEBUG_SESSION,
-    },
-    body: JSON.stringify(line),
-  }).catch(() => {});
-  console.log('[DEBUG995889]', JSON.stringify(line));
-}
-// #endregion
-
-/** JSONB columns on `participants` (see infra/gcp/sql/01_research_schema.sql). */
+/** Fallback JSONB list if information_schema returns none (should not happen in production). */
 const PARTICIPANTS_JSONB_COLUMNS = new Set<string>([
   'big5_responses',
   'big5_facets',
@@ -99,7 +111,59 @@ const PARTICIPANTS_JSONB_COLUMNS = new Set<string>([
   'clarity_answers',
   'room_activities',
   'session_image_ratings',
+  'room_activity_context',
+  'final_survey',
+  'ladder_prompt_elements',
+  'modification_prompt_log',
 ]);
+
+/**
+ * PostgreSQL `json`/`jsonb` rejects U+0000 in strings; lone UTF-16 surrogates often fail RFC-style JSON (22P02)
+ * even when `JSON.parse` in Node accepted the payload.
+ */
+function sanitizeJsonStringForPostgres(s: string): string {
+  let r = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 0) continue;
+    if (c >= 0xd800 && c <= 0xdbff) {
+      if (i + 1 < s.length) {
+        const d = s.charCodeAt(i + 1);
+        if (d >= 0xdc00 && d <= 0xdfff) {
+          r += s.slice(i, i + 2);
+          i++;
+          continue;
+        }
+      }
+      r += '\uFFFD';
+      continue;
+    }
+    if (c >= 0xdc00 && c <= 0xdfff) {
+      r += '\uFFFD';
+      continue;
+    }
+    r += s[i];
+  }
+  return r;
+}
+
+function sanitizeJsonLeafStringsForPostgres(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return sanitizeJsonStringForPostgres(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map(sanitizeJsonLeafStringsForPostgres);
+  }
+  if (value !== null && typeof value === 'object') {
+    const o = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(o)) {
+      out[k] = sanitizeJsonLeafStringsForPostgres(v);
+    }
+    return out;
+  }
+  return value;
+}
 
 function sanitizeJsonbCellForPg(value: unknown): { ok: true; value: unknown } | { ok: false } {
   if (value === null || value === undefined) {
@@ -109,7 +173,7 @@ function sanitizeJsonbCellForPg(value: unknown): { ok: true; value: unknown } | 
     const t = value.trim();
     if (t === '') return { ok: true, value: null };
     try {
-      return { ok: true, value: JSON.parse(t) };
+      return { ok: true, value: sanitizeJsonLeafStringsForPostgres(JSON.parse(t)) };
     } catch {
       return { ok: false };
     }
@@ -120,7 +184,7 @@ function sanitizeJsonbCellForPg(value: unknown): { ok: true; value: unknown } | 
       if (typeof v === 'bigint') return Number(v);
       return v;
     });
-    return { ok: true, value: JSON.parse(round) };
+    return { ok: true, value: sanitizeJsonLeafStringsForPostgres(JSON.parse(round)) };
   } catch {
     return { ok: false };
   }
@@ -133,10 +197,11 @@ function sanitizeJsonbCellForPg(value: unknown): { ok: true; value: unknown } | 
 function sanitizeParticipantRowJsonb(
   row: Record<string, unknown>,
   userHash: string,
+  jsonbColumns: Set<string>,
 ): Record<string, unknown> {
   const out = { ...row };
   const dropped: string[] = [];
-  for (const col of PARTICIPANTS_JSONB_COLUMNS) {
+  for (const col of jsonbColumns) {
     if (!(col in out) || out[col] === undefined) continue;
     const res = sanitizeJsonbCellForPg(out[col]);
     if (res.ok) {
@@ -147,16 +212,90 @@ function sanitizeParticipantRowJsonb(
     }
   }
   if (dropped.length) {
-    // #region agent log
-    agentServerPersistDebug({
-      hypothesisId: 'H4',
+    sessionSyncTrace({
+      hypothesisId: 'S4',
       location: 'participants.ts:sanitizeParticipantRowJsonb',
       message: 'jsonb_cell_invalid_removed',
       data: { userHash, droppedColumns: dropped },
     });
-    // #endregion
+    console.warn('[participants.session] dropped invalid JSONB cells', {
+      userHash,
+      droppedColumns: dropped,
+    });
   }
   return out;
+}
+
+/** Avoid passing `undefined` as a bound parameter (pg/jsonb edge cases and cleaner UPSERT rows). */
+function omitUndefinedRowValues(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (v !== undefined) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+function stripJsonbColumns(
+  row: Record<string, unknown>,
+  jsonbCols: Set<string>,
+): Record<string, unknown> {
+  const out = { ...row };
+  for (const c of jsonbCols) {
+    delete out[c];
+  }
+  return out;
+}
+
+/**
+ * Node's JSON.stringify can accept values that PostgreSQL jsonb input rejects (22P02).
+ * Use the same parameter binding as INSERT to validate each JSONB cell against PG before upsert.
+ */
+async function filterJsonbRowByPostgresCast(
+  client: PoolClient,
+  row: Record<string, unknown>,
+  jsonbCols: Set<string>,
+  userHash: string,
+): Promise<{ row: Record<string, unknown>; droppedPgCast: string[] }> {
+  const out = { ...row };
+  const droppedPgCast: string[] = [];
+  for (const col of jsonbCols) {
+    if (!(col in out) || out[col] === undefined) continue;
+    const v = out[col];
+    try {
+      await client.query('SELECT $1::jsonb AS _j', [v]);
+    } catch (e) {
+      const err = e as Error & { code?: string; detail?: string };
+      delete out[col];
+      droppedPgCast.push(col);
+      sessionSyncTrace({
+        hypothesisId: 'S6',
+        location: 'participants.ts:filterJsonbRowByPostgresCast',
+        message: 'jsonb_precast_failed_column_dropped',
+        data: {
+          userHash,
+          column: col,
+          pg: pgErrorSnapshot(e),
+        },
+      });
+      console.warn('[participants.session] dropped JSONB column (PostgreSQL jsonb cast failed)', {
+        userHash,
+        column: col,
+        code: err.code,
+        detail: err.detail,
+      });
+    }
+  }
+  if (droppedPgCast.length) {
+    sessionSyncTrace({
+      hypothesisId: 'S6',
+      location: 'participants.ts:filterJsonbRowByPostgresCast',
+      message: 'jsonb_precast_dropped_summary',
+      data: { userHash, droppedPgCast },
+    });
+  }
+  return { row: out, droppedPgCast };
 }
 
 /** Make a DB row JSON-serializable (Date → ISO string, BigInt → number, Buffer → skip or base64). */
@@ -492,46 +631,86 @@ participantsRouter.post('/session', async (req, res) => {
       const rawRow = { ...participantRow };
       delete rawRow.user_hash;
 
+      sessionSyncTrace({
+        hypothesisId: 'S0',
+        location: 'participants.ts:POST/session',
+        message: 'incoming_row_shape',
+        data: {
+          userHash,
+          keyCount: Object.keys(rawRow).length,
+          keysSample: Object.keys(rawRow).sort().slice(0, 48),
+        },
+      });
+
       for (let attempt = 0; attempt < 2; attempt++) {
         const allowed = await getParticipantsTableColumns(client);
+        const jsonbCols = await getParticipantsJsonbColumnNames(client);
+        const jsonbSorted = [...jsonbCols].sort();
+        sessionSyncTrace({
+          hypothesisId: 'S1',
+          location: 'participants.ts:POST/session',
+          message: 'jsonb_columns_resolved',
+          data: {
+            userHash,
+            attempt,
+            jsonbColumnCount: jsonbCols.size,
+            jsonbNamesSample: jsonbSorted.slice(0, 48),
+          },
+        });
         const { filtered, droppedKeys } = filterParticipantRowToExistingColumns(rawRow, allowed);
         if (droppedKeys.length) {
+          sessionSyncTrace({
+            hypothesisId: 'S2',
+            location: 'participants.ts:POST/session',
+            message: 'unknown_columns_dropped',
+            data: {
+              userHash,
+              droppedKeysCount: droppedKeys.length,
+              droppedKeysSample: droppedKeys.slice(0, 24),
+            },
+          });
           console.warn('[participants.session] dropped unknown columns (not in participants table)', {
             userHash,
             droppedKeys,
           });
         }
 
-        const row = sanitizeParticipantRowJsonb({ ...filtered }, userHash);
+        const rowSanitized = omitUndefinedRowValues(
+          sanitizeParticipantRowJsonb({ ...filtered }, userHash, jsonbCols),
+        );
+        const { row: rowAfterPrecast, droppedPgCast } = await filterJsonbRowByPostgresCast(
+          client,
+          rowSanitized,
+          jsonbCols,
+          userHash,
+        );
+        const row = rowAfterPrecast;
         const columns = Object.keys(row);
         const values = Object.values(row);
 
-        // #region agent log
-        agentServerPersistDebug({
-          hypothesisId: 'H5',
+        let rowBytesApprox = 0;
+        try {
+          rowBytesApprox = JSON.stringify(row).length;
+        } catch {
+          rowBytesApprox = -1;
+        }
+        sessionSyncTrace({
+          hypothesisId: 'S5',
           location: 'participants.ts:POST/session',
-          message: 'after_column_filter',
+          message: 'ready_for_upsert',
           data: {
             userHash,
-            droppedKeysCount: droppedKeys.length,
-            droppedKeysSample: droppedKeys.slice(0, 20),
+            attempt,
             upsertKeyCount: columns.length,
-            hasPathType: row.path_type != null && row.path_type !== '',
-            hasCurrentStep: row.current_step != null && row.current_step !== '',
+            droppedPgCastCount: droppedPgCast.length,
+            droppedPgCastSample: droppedPgCast.slice(0, 16),
+            jsonbByteLengths: jsonbKeyByteLengths(row, jsonbCols),
+            rowBytesApprox,
           },
         });
-        // #endregion
 
         if (!columns.length) {
           console.log('[participants.session] empty participantRow, nothing to upsert', { userHash });
-          // #region agent log
-          agentServerPersistDebug({
-            hypothesisId: 'H5',
-            location: 'participants.ts:POST/session',
-            message: 'empty_row_no_upsert',
-            data: { userHash, reason: 'no_columns_after_filter' },
-          });
-          // #endregion
           return res.json({ ok: true });
         }
 
@@ -567,14 +746,12 @@ participantsRouter.post('/session', async (req, res) => {
         try {
           await client.query(sql, [userHash, ...values]);
           console.log('[participants.session] upsert success', { userHash });
-          // #region agent log
-          agentServerPersistDebug({
-            hypothesisId: 'H5',
+          sessionSyncTrace({
+            hypothesisId: 'S7',
             location: 'participants.ts:POST/session',
-            message: 'upsert_sql_ok',
-            data: { userHash, columnCount: columns.length },
+            message: 'upsert_ok',
+            data: { userHash, attempt, columnCount: columns.length },
           });
-          // #endregion
           if (isSessionPersistDebug()) {
             console.log('[participants.session:debug] upsert OK', {
               userHash,
@@ -583,7 +760,75 @@ participantsRouter.post('/session', async (req, res) => {
           }
           return res.json({ ok: true });
         } catch (queryErr) {
-          const qe = queryErr as Error & { code?: string };
+          const qe = queryErr as Error & {
+            code?: string;
+            detail?: string;
+            schema?: string;
+            column?: string;
+          };
+          if (qe.code === '22P02') {
+            sessionSyncTrace({
+              hypothesisId: 'S8',
+              location: 'participants.ts:POST/session',
+              message: 'upsert_22p02',
+              data: {
+                userHash,
+                attempt,
+                upsertColumnCount: columns.length,
+                jsonbColsInRow: jsonbSorted.filter((c) => c in row),
+                pg: pgErrorSnapshot(queryErr),
+              },
+            });
+            console.error('[participants.session] upsert JSON/JSONB diagnostic', {
+              message: qe.message,
+              code: qe.code,
+              detail: qe.detail,
+              schema: qe.schema,
+              column: qe.column,
+            });
+
+            const rowScalars = stripJsonbColumns(row, jsonbCols);
+            let cols2 = Object.keys(rowScalars);
+            let vals2 = Object.values(rowScalars);
+            if (!cols2.includes('consent_timestamp')) {
+              cols2 = [...cols2, 'consent_timestamp'];
+              vals2 = [...vals2, new Date().toISOString()];
+            }
+            if (cols2.length > 0) {
+              const assignments2 = cols2.map((col, idx) => `${col} = $${idx + 2}`);
+              const sqlScalars = `
+        INSERT INTO participants (user_hash, ${cols2.join(', ')})
+        VALUES ($1, ${cols2.map((_, idx) => `$${idx + 2}`).join(', ')})
+        ON CONFLICT (user_hash) DO UPDATE
+        SET ${assignments2.join(', ')}, updated_at = NOW()
+      `;
+              try {
+                await client.query(sqlScalars, [userHash, ...vals2]);
+                console.warn('[participants.session] upsert recovered after 22P02 by omitting all JSONB columns', {
+                  userHash,
+                });
+                sessionSyncTrace({
+                  hypothesisId: 'S9',
+                  location: 'participants.ts:POST/session',
+                  message: 'upsert_22p02_recovered_scalar_only',
+                  data: { userHash, scalarColumnCount: cols2.length },
+                });
+                return res.json({ ok: true, sessionPersistPartial: true });
+              } catch (scalarErr) {
+                sessionSyncTrace({
+                  hypothesisId: 'S10',
+                  location: 'participants.ts:POST/session',
+                  message: 'upsert_22p02_scalar_retry_failed',
+                  data: {
+                    userHash,
+                    scalarColumnCount: cols2.length,
+                    pg: pgErrorSnapshot(scalarErr),
+                  },
+                });
+                console.error('[participants.session] scalar-only upsert also failed', scalarErr);
+              }
+            }
+          }
           if (qe.code === '42703' && attempt === 0) {
             console.warn('[participants.session] schema mismatch, refreshing column cache and retrying');
             participantsTableColumns = null;
@@ -597,14 +842,28 @@ participantsRouter.post('/session', async (req, res) => {
       client.release();
     }
   } catch (error) {
-    const err = error as Error & { code?: string; detail?: string };
+    const err = error as Error & { code?: string; detail?: string; column?: string };
+    sessionSyncTrace({
+      hypothesisId: 'S99',
+      location: 'participants.ts:POST/session',
+      message: 'session_route_unhandled_error',
+      data: {
+        userHash: sessionData?.userHash ?? 'unknown',
+        pg: pgErrorSnapshot(error),
+      },
+    });
     console.error('participants/session error', error);
     const message = err?.message ?? String(error);
+    const detail =
+      typeof err.detail === 'string' && err.detail.length > 0
+        ? `${message.slice(0, 280)} | PG: ${err.detail.slice(0, 420)}`
+        : message;
     return res.status(500).json({
       ok: false,
       error: 'session_persist_failed',
-      detail: message,
+      detail,
       code: err?.code,
+      pgColumn: err.column,
     });
   }
 });

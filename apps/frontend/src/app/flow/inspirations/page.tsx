@@ -300,38 +300,68 @@ export default function InspirationsPage() {
         const userHash = (sessionData as any)?.userHash;
         if (userHash) {
           const { fetchParticipantImages, deleteParticipantImage, updateParticipantImageMetadata } = await import('@/lib/remote-spaces');
-          const existing = await fetchParticipantImages(userHash);
-          const existingInspirations = (existing || []).filter(img => img.type === 'inspiration');
+          const uuidRe =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-          const desiredUrls = new Set(finalInspirations.map(p => p.url || p.imageBase64 || '').filter(Boolean));
+          let existing = await fetchParticipantImages(userHash);
+          let existingInspirations = (existing || []).filter((img) => img.type === 'inspiration');
 
-          // Delete inspirations that are no longer present (source-of-truth sync)
-          const toDelete = existingInspirations.filter(img => img.url && !desiredUrls.has(img.url));
+          const desiredServerIds = new Set(
+            finalInspirations
+              .map((p: { id?: string }) => p.id)
+              .filter((id): id is string => typeof id === 'string' && uuidRe.test(id)),
+          );
+
+          // Never compare only raw URLs: session often has data: URLs while DB has https —
+          // old logic deleted every row on each save and re-inserted, causing races and "only 1 image".
+          const toDelete = existingInspirations.filter((img) => {
+            if (desiredServerIds.size > 0) {
+              return !desiredServerIds.has(img.id);
+            }
+            // No server UUIDs in payload (only local ids): replace DB inspirations with this save
+            return true;
+          });
+
           for (const img of toDelete) {
             await deleteParticipantImage(userHash, img.id);
           }
 
-          // Dedup existing inspirations by URL (keep newest)
+          existing = await fetchParticipantImages(userHash);
+          existingInspirations = (existing || []).filter((img) => img.type === 'inspiration');
+
+          // Dedup duplicate rows (same public URL)
           const byUrl = new Map<string, typeof existingInspirations>();
           for (const img of existingInspirations) {
             if (!img.url) continue;
             if (!byUrl.has(img.url)) byUrl.set(img.url, []);
             byUrl.get(img.url)!.push(img);
           }
-          for (const [url, imgs] of Array.from(byUrl.entries())) {
+          for (const [, imgs] of Array.from(byUrl.entries())) {
             if (imgs.length <= 1) continue;
-            const sorted = [...imgs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            const keep = sorted[0];
+            const sorted = [...imgs].sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+            );
             for (const extra of sorted.slice(1)) {
               await deleteParticipantImage(userHash, extra.id);
             }
-            // Ensure map points to kept image
-            byUrl.set(url, [keep]);
           }
 
-          // Upsert-like behavior: update existing rows, insert only missing URLs
+          existing = await fetchParticipantImages(userHash);
+          existingInspirations = (existing || []).filter((img) => img.type === 'inspiration');
+          const byIdAfter = new Map(existingInspirations.map((img) => [img.id, img]));
+
+          for (const insp of finalInspirations) {
+            const sid = typeof insp.id === 'string' && uuidRe.test(insp.id) ? insp.id : null;
+            if (sid && byIdAfter.has(sid)) {
+              await updateParticipantImageMetadata(userHash, sid, {
+                tags: insp.tags,
+                description: insp.description ?? null,
+              });
+            }
+          }
+
           const imagesForInsert = finalInspirations
-            .map(p => ({
+            .map((p) => ({
               url: p.url || p.imageBase64 || '',
               thumbnail_url: undefined,
               type: 'inspiration' as const,
@@ -339,30 +369,57 @@ export default function InspirationsPage() {
               description: p.description,
               is_favorite: false,
               source: undefined,
-              generation_id: undefined
+              generation_id: undefined,
+              _id: p.id,
             }))
-            .filter(img => !!img.url)
-            .filter(img => !byUrl.has(img.url));
-
-          for (const insp of finalInspirations) {
-            const url = insp.url || insp.imageBase64 || '';
-            const existingOne = url ? byUrl.get(url)?.[0] : undefined;
-            if (existingOne) {
-              await updateParticipantImageMetadata(userHash, existingOne.id, {
-                tags: insp.tags,
-                description: insp.description ?? null
-              });
-            }
-          }
+            .filter((img) => !!img.url)
+            .filter((img) => {
+              const sid =
+                typeof img._id === 'string' && uuidRe.test(img._id) ? img._id : null;
+              if (sid && byIdAfter.has(sid)) return false;
+              return true;
+            })
+            .map(({ _id, ...rest }) => rest);
 
           if (imagesForInsert.length > 0) {
             await saveParticipantImages(userHash, imagesForInsert);
           }
 
+          // #region agent log (debug session 995889 — inspirations → participant_images)
+          {
+            fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Debug-Session-Id': '995889',
+              },
+              body: JSON.stringify({
+                sessionId: '995889',
+                hypothesisId: 'F2',
+                location: 'inspirations/page.tsx:handleSave:gcp_images',
+                message: 'inspirations_participant_images_save',
+                data: {
+                  userHashShort:
+                    typeof userHash === 'string'
+                      ? `${userHash.slice(0, 14)}…${userHash.slice(-4)}`
+                      : null,
+                  finalInspirationsCount: finalInspirations.length,
+                  insertedNewCount: imagesForInsert.length,
+                  desiredServerIdCount: desiredServerIds.size,
+                },
+                timestamp: Date.now(),
+                runId: 'full-flow',
+              }),
+            }).catch(() => {});
+          }
+          // #endregion
         }
       } catch (e) {
         console.warn('[Inspirations] Failed to save to participant_images:', e);
       }
+
+      // Keep session aligned with what we just saved (finalInspirations); do not replace
+      // with an immediate fetch — it can return fewer rows before all inserts are visible.
       
       const untaggedItems = itemsWithBase64.filter(i => i.file && (!i.tags || Object.keys(i.tags).length === 0));
       if (untaggedItems.length > 0) {

@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db';
+import { isPersistenceDebug, shortUserHashForLog } from '../lib/persistence-debug';
+import { sessionSyncTrace } from '../lib/session-sync-trace';
 
 export const swipesRouter = Router();
 
@@ -77,6 +79,13 @@ swipesRouter.post('/participants/:userHash/swipes', async (req, res) => {
           image_materials
         )
         VALUES ${valuePlaceholders.join(', ')}
+        ON CONFLICT (user_hash, image_id) DO UPDATE SET
+          direction = EXCLUDED.direction,
+          reaction_time_ms = COALESCE(EXCLUDED.reaction_time_ms, participant_swipes.reaction_time_ms),
+          swipe_timestamp = COALESCE(EXCLUDED.swipe_timestamp, participant_swipes.swipe_timestamp),
+          image_styles = EXCLUDED.image_styles,
+          image_colors = EXCLUDED.image_colors,
+          image_materials = EXCLUDED.image_materials
       `,
         insertValues,
       );
@@ -173,6 +182,22 @@ swipesRouter.post('/participants/:userHash/swipes', async (req, res) => {
       );
 
       await client.query('COMMIT');
+
+      if (isPersistenceDebug()) {
+        sessionSyncTrace({
+          hypothesisId: 'P3',
+          location: 'swipes.ts:POST',
+          message: 'swipes_batch_committed',
+          data: {
+            userHashShort: shortUserHashForLog(userHash),
+            batchSize: swipes.length,
+            totalInDb: total,
+            likes,
+            dislikes,
+          },
+          runId: 'persistence',
+        });
+      }
 
       return res.json({
         ok: true,

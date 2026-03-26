@@ -4,6 +4,7 @@
 
 import { saveParticipantImage } from '@/lib/gcp-data';
 import { gcpApi } from '@/lib/gcp-api-client';
+import { isPersistenceDebugEnabled, shortHashForLog } from '@/lib/persistence-debug';
 
 export type SpaceImageInput = {
   id: string;
@@ -69,6 +70,14 @@ export async function uploadSpaceImage(
 // Save participant images
 // ---------------------------------------------------------------------------
 
+export type SaveParticipantImagesResult = {
+  ok: boolean;
+  saved: number;
+  failed: number;
+  /** `participant_images.id` (UUID) for each successful save, in order. */
+  imageIds: string[];
+};
+
 export async function saveParticipantImages(
   userHash: string,
   images: Array<{
@@ -82,12 +91,15 @@ export async function saveParticipantImages(
     source?: string;
     generation_id?: string;
   }>,
-): Promise<boolean> {
-  if (!userHash || images.length === 0) return true;
+): Promise<SaveParticipantImagesResult> {
+  if (!userHash || images.length === 0) {
+    return { ok: true, saved: 0, failed: 0, imageIds: [] };
+  }
 
   try {
     let savedCount = 0;
     let failedCount = 0;
+    const imageIds: string[] = [];
 
     for (const img of images) {
       const tags = img.tags || {};
@@ -136,16 +148,29 @@ export async function saveParticipantImages(
 
       if (result.ok) {
         savedCount++;
+        const body = result.data as { imageId?: string } | undefined;
+        const id = body?.imageId;
+        if (id) imageIds.push(String(id));
       } else {
         failedCount++;
         console.warn('[remote-spaces] GCP save failed', result.error);
       }
     }
 
-    return failedCount === 0 || savedCount > 0;
+    const ok = failedCount === 0 || savedCount > 0;
+    if (isPersistenceDebugEnabled()) {
+      console.log('[persistence:debug] participant images batch', {
+        userHash: shortHashForLog(userHash),
+        imagesInBatch: images.length,
+        saved: savedCount,
+        failed: failedCount,
+        imageIdsReturned: imageIds.length,
+      });
+    }
+    return { ok, saved: savedCount, failed: failedCount, imageIds };
   } catch (e) {
     console.warn('[remote-spaces] saveParticipantImages error', e);
-    return false;
+    return { ok: false, saved: 0, failed: images.length, imageIds: [] };
   }
 }
 
@@ -161,7 +186,7 @@ export async function saveSpaceImagesMetadata(
     source?: string;
     generation_set_id?: string;
   }>,
-): Promise<boolean> {
+): Promise<SaveParticipantImagesResult> {
   return saveParticipantImages(userHash, images);
 }
 

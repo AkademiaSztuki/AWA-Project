@@ -48,9 +48,9 @@ W konsoli GCP: **Cloud Run** → usługa `backend-gcp` → **Logi**.
 
 ---
 
-## 2. Zapytania SQL (matrix)
+## 2. Zapytania SQL (matrix + participants)
 
-Plik: [verification-queries.sql](verification-queries.sql) — kontrole po `user_hash` / `auth_user_id`, kohorty `path_type`, implicit vs explicit.
+Plik: [verification-queries.sql](verification-queries.sql) — kontrole po `user_hash` / `auth_user_id`, kohorty `path_type`, implicit vs explicit, **`participant_matrix_entries`** (zapis po `/flow/generate` w trybie macierzy, sync z frontu).
 
 ---
 
@@ -67,7 +67,7 @@ Dla **jednej** sesji testowej zapisz `user_hash` i po każdym kroku: DevTools (s
 | 4 | `/flow/big-five` | `big5_*`, `big5_responses`, `big5_facets` |
 | 5 | `/flow/dna` | `participant_swipes`; po sesji: `implicit_*`, `tinder_*`, ladder |
 | 6 | `/flow/photo` | `room_analysis_*`, obrazy `room_photo` w GCS |
-| 7 | `/flow/generate` | `participant_generations`, obrazy `generated` w GCS |
+| 7 | `/flow/generate` | `participant_generations`, obrazy `generated` w GCS; w trybie **6 obrazów**: `participant_matrix_entries` (URL-e http, bez base64 w DB) + w sieci `POST .../matrix/sync` |
 | 8 | Ankiety | `POST /api/research/survey` → kolumny ankiet na `participants` |
 | 9 | Zgoda | `research_consents` |
 | 10 | Dashboard / reload | `fetchSessionSnapshotFromGcp` zgodny z DB |

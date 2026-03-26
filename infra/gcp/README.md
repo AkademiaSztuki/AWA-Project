@@ -223,3 +223,17 @@ Frontend should get the backend base URL as:
 
 - `NEXT_PUBLIC_GCP_API_BASE_URL` (example name) pointing to the Cloud Run URL (or a custom domain in front of it).
 
+---
+
+### 9. SQL migrations and storage checks
+
+Apply migration files under `infra/gcp/sql/` in lexical order (e.g. `01_*.sql`, …, `09_participant_research_extensions.sql`, `10_participant_swipes_dedupe.sql`) against `awa_db` after the base schema. Migration `10` adds a unique index on `(user_hash, image_id)` for idempotent swipe upserts.
+
+Verify the backend sees Cloud Storage configuration:
+
+- `GET https://<cloud-run-url>/health` returns `gcsImagesBucketConfigured: true` when `GCS_IMAGES_BUCKET` is set on the service.
+
+The Cloud Run service account needs permission to write objects to that bucket (for example `roles/storage.objectAdmin` on the bucket).
+
+**Persistence debug (optional):** set `DEBUG_PERSISTENCE=1` or `DEBUG_SESSION_SYNC=1` on Cloud Run to log structured traces for matrix sync, GCS upload, and swipe batches (see `[SESSION_SYNC_TRACE]` / `sessionSyncTrace` in Cloud Logging). On the frontend, set `NEXT_PUBLIC_DEBUG_PERSISTENCE=1` (or `NEXT_PUBLIC_DEBUG_SESSION_SYNC=1`) to print session snapshots and read-back checks in the browser console (`[persistence:debug]`).
+

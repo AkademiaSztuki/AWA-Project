@@ -8,7 +8,8 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import GlassSurface from 'src/components/ui/GlassSurface';
 import { Dna, Palette, Home, Lightbulb } from 'lucide-react';
 import { computeWeightedDNAFromSwipes, buildFluxPromptFromDNA } from '@/lib/dna';
-import { getOrCreateProjectId, updateDiscoverySession, saveTinderSwipes, saveDnaSnapshot, startPageView, endPageView } from '@/lib/gcp-data';
+import { getOrCreateProjectId, saveParticipantSwipes, startPageView, endPageView } from '@/lib/gcp-data';
+import { gcpApi } from '@/lib/gcp-api-client';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
@@ -104,27 +105,25 @@ export default function VisualDNAPage() {
       dnaAnalysisComplete: true,
     });
 
-    // Persist swipes + discovery session to Supabase
+    // Persist swipes to Cloud SQL (idempotent with per-swipe saves from CoreProfileWizard)
     try {
-      const projectId = await getOrCreateProjectId((sessionData as any).userHash);
-      if (projectId) {
-        await saveTinderSwipes(projectId, tinderData?.swipes || []);
-        await updateDiscoverySession(
-          projectId,
-          (sessionData as any).visualDNA,
-          Math.round(weighted.confidence),
-          (sessionData as any).ladderResults?.path || [],
-          (sessionData as any).ladderResults?.coreNeed || 'unknown'
+      const uh = (sessionData as any).userHash as string | undefined;
+      const swipes = tinderData?.swipes || [];
+      if (gcpApi.isConfigured() && uh && Array.isArray(swipes) && swipes.length > 0) {
+        await saveParticipantSwipes(
+          uh,
+          swipes.map((s: any) => ({
+            imageId: s.imageId ?? s.id ?? '',
+            direction: s.direction as 'left' | 'right',
+            reactionTimeMs: s.reactionTimeMs ?? s.reactionTime,
+            timestamp: s.timestamp,
+            tags: s.tags,
+            categories: s.categories,
+          })),
         );
-        await saveDnaSnapshot(projectId, {
-          weights: (weighted as any).weights,
-          top: (weighted as any).top,
-          confidence: weighted.confidence,
-          parser_version: 'v1'
-        });
       }
     } catch (e) {
-      console.warn('Supabase persist failed (DNA):', e);
+      console.warn('[DNA] GCP swipe persist failed:', e);
     }
 
     // Server-side debug log to terminal (Next.js dev server)

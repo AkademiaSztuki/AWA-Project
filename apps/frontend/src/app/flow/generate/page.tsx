@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
-import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage } from '@/lib/gcp-data';
+import { getSessionStoreSnapshot } from '@/hooks/useSession';
+import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage, syncMatrixHistoryToGcp } from '@/lib/gcp-data';
 import { UpgradePrompt } from '@/components/subscription/UpgradePrompt';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LocalizedText } from '@/lib/questions/validated-scales';
@@ -54,6 +55,10 @@ import {
   getOrCreateSpaceId,
   saveParticipantImages
 } from '@/lib/remote-spaces';
+import {
+  appendModificationPromptLog,
+  buildModificationPromptLogEntry,
+} from '@/lib/modification-prompt-log';
 
 interface GeneratedImage {
   id: string;
@@ -218,13 +223,45 @@ export default function GeneratePage() {
         (typeof window !== 'undefined' && 
           (window.location.pathname.includes('/flow/modify') || 
            sessionStorage.getItem('awa-navigating-to-modify') === 'true'));
-      
-      if (abortControllerRef.current && !goingToModify) {
-        console.log('[Generate] 🛑 Cleanup: Aborting generation (navigating away, not to modify)');
+
+      // React 18 Strict Mode (dev) runs this cleanup on a *simulated* unmount while the user
+      // is still on /flow/generate — aborting here caused "Generation cancelled" on first load.
+      // Only abort when we have actually left the generate/modify flow (real navigation).
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      const stillInGenerateFlow =
+        path.includes('/flow/generate') || path.includes('/flow/modify');
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '995889' },
+        body: JSON.stringify({
+          sessionId: '995889',
+          hypothesisId: 'H-STRICT',
+          runId: 'post-fix',
+          location: 'generate/page.tsx:pageView-cleanup',
+          message: 'mount cleanup abort decision',
+          data: {
+            path,
+            stillInGenerateFlow,
+            goingToModify,
+            hasController: !!abortControllerRef.current,
+            willAbort:
+              !!(abortControllerRef.current && !goingToModify && !stillInGenerateFlow),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
+      if (abortControllerRef.current && !goingToModify && !stillInGenerateFlow) {
+        console.log('[Generate] 🛑 Cleanup: Aborting generation (left generate flow)');
         abortControllerRef.current.abort();
       } else if (goingToModify) {
         console.log('[Generate] ✅ NOT aborting - letting generation continue for modify page');
         sessionStorage.removeItem('awa-navigating-to-modify');
+      } else if (stillInGenerateFlow && abortControllerRef.current) {
+        console.log('[Generate] ⏭️ Cleanup: still on generate/modify route — skipping abort (Strict Mode or same-page)');
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1405,6 +1442,34 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               const filtered = prev.filter(img => !(img.source === result.source && img.provider === 'google'));
               const updated = [...filtered, newImage].sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0));
               console.log(`[6-Image Matrix] Progressive update (Google): ${updated.length} images (added ${result.source})`);
+              // #region agent log (debug session 995889 — matrix generation UI)
+              {
+                const uh = (sessionData as any)?.userHash;
+                const userHashShort =
+                  typeof uh === 'string' && uh.length > 14 ? `${uh.slice(0, 10)}…${uh.slice(-4)}` : uh ?? null;
+                fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Debug-Session-Id': '995889',
+                  },
+                  body: JSON.stringify({
+                    sessionId: '995889',
+                    hypothesisId: 'G0',
+                    location: 'generate/page.tsx:setMatrixImages',
+                    message: 'matrix_ui_image_added',
+                    data: {
+                      userHashShort,
+                      source: result.source,
+                      matrixUiCount: updated.length,
+                      displayIndex: newImage.displayIndex,
+                    },
+                    timestamp: Date.now(),
+                    runId: 'matrix-gen',
+                  }),
+                }).catch(() => {});
+              }
+              // #endregion
               return updated;
             });
             
@@ -1454,10 +1519,93 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   await updateSessionData({
                     matrixHistory: [...currentMatrixHistory, newHistoryItem]
                   } as any);
+                  const mergedMatrix = [...currentMatrixHistory, newHistoryItem];
+                  const uhSync = (sessionData as any)?.userHash as string | undefined;
+                  if (uhSync) {
+                    void syncMatrixHistoryToGcp(uhSync, mergedMatrix);
+                  }
                   console.log(`[6-Image Matrix] Progressively saved ${result.source} to session`);
+                  // #region agent log (debug session 995889 — matrix generation persist)
+                  {
+                    const uh = (sessionData as any)?.userHash;
+                    const userHashShort =
+                      typeof uh === 'string' && uh.length > 14 ? `${uh.slice(0, 10)}…${uh.slice(-4)}` : uh ?? null;
+                    fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'X-Debug-Session-Id': '995889',
+                      },
+                      body: JSON.stringify({
+                        sessionId: '995889',
+                        hypothesisId: 'G1',
+                        location: 'generate/page.tsx:matrixProgressiveSave',
+                        message: 'matrix_history_append_ok',
+                        data: {
+                          userHashShort,
+                          source: result.source,
+                          matrixLenAfter: currentMatrixHistory.length + 1,
+                          sessionStorageKeyRead: !!stored,
+                        },
+                        timestamp: Date.now(),
+                        runId: 'matrix-gen',
+                      }),
+                    }).catch(() => {});
+                  }
+                  // #endregion
+                } else {
+                  // #region agent log (debug session 995889 — matrix generation persist)
+                  {
+                    const uh = (sessionData as any)?.userHash;
+                    const userHashShort =
+                      typeof uh === 'string' && uh.length > 14 ? `${uh.slice(0, 10)}…${uh.slice(-4)}` : uh ?? null;
+                    fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'X-Debug-Session-Id': '995889',
+                      },
+                      body: JSON.stringify({
+                        sessionId: '995889',
+                        hypothesisId: 'G2',
+                        location: 'generate/page.tsx:matrixProgressiveSave',
+                        message: 'matrix_history_skip_duplicate',
+                        data: {
+                          userHashShort,
+                          source: result.source,
+                          imageId: newImage.id,
+                        },
+                        timestamp: Date.now(),
+                        runId: 'matrix-gen',
+                      }),
+                    }).catch(() => {});
+                  }
+                  // #endregion
                 }
               } catch (e) {
                 console.warn('[6-Image Matrix] Failed to progressively save to session:', e);
+                // #region agent log (debug session 995889 — matrix generation persist)
+                {
+                  fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-Debug-Session-Id': '995889',
+                    },
+                    body: JSON.stringify({
+                      sessionId: '995889',
+                      hypothesisId: 'G3',
+                      location: 'generate/page.tsx:matrixProgressiveSave',
+                      message: 'matrix_history_persist_error',
+                      data: {
+                        errSlice: e instanceof Error ? e.message.slice(0, 220) : String(e).slice(0, 220),
+                      },
+                      timestamp: Date.now(),
+                      runId: 'matrix-gen',
+                    }),
+                  }).catch(() => {});
+                }
+                // #endregion
               }
             })();
             
@@ -1795,6 +1943,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         // Save all matrix images for history display in modify page
         matrixHistory: initialHistory
       } as any);
+      const uhBlind = (sessionData as any)?.userHash as string | undefined;
+      if (uhBlind) {
+        void syncMatrixHistoryToGcp(uhBlind, initialHistory);
+      }
     } catch (e) {
       console.warn('[Generate] Failed to persist selectedImage/blindSelectionMade to session:', e);
     }
@@ -2361,6 +2513,18 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
       // Clear failed modification on success
       setLastFailedModification(null);
+
+      const isCustomModification = Boolean(customPrompt) || modification.id === 'custom_text';
+      const modLogEntry = buildModificationPromptLogEntry({
+        modification,
+        modificationPrompt,
+        source: isCustomModification ? 'custom' : 'preset',
+        userInstruction: isCustomModification ? modification.label.pl : undefined,
+      });
+      const snap = getSessionStoreSnapshot();
+      await updateSessionData({
+        modificationPromptLog: appendModificationPromptLog(snap.modificationPromptLog, modLogEntry),
+      } as any);
 
       // Log how many results we received (should be 1 for modifications)
       console.log(`[Modification] Received ${response.results.length} result(s) from API. Using first successful result.`);

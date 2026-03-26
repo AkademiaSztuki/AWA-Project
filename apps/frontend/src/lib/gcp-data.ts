@@ -5,6 +5,12 @@
 
 import type { FlowStep, SessionData } from '@/types';
 import { gcpApi } from './gcp-api-client';
+import {
+  isPersistenceDebugEnabled,
+  shortHashForLog,
+  summarizeParticipantRowForPersistenceDebug,
+  summarizeSessionForPersistenceDebug,
+} from '@/lib/persistence-debug';
 
 // ---------------------------------------------------------------------------
 // Feature flags
@@ -291,6 +297,7 @@ async function reportSessionPersistFailure(
 
 export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
   const dbg = isSessionSyncDebugEnabled();
+  const pdb = isPersistenceDebugEnabled();
   const shortHash = (h: string) =>
     h.length > 14 ? `${h.slice(0, 10)}…${h.slice(-4)}` : h;
 
@@ -329,6 +336,12 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
           : undefined,
       });
     }
+    if (pdb) {
+      console.log('[persistence:debug] session snapshot before persist (counts only)', {
+        userHash: shortHashForLog(String(sessionData.userHash)),
+        ...summarizeSessionForPersistenceDebug(sessionData as SessionData),
+      });
+    }
 
     const { mapSessionDataToParticipant, mapParticipantToSessionData } = await import(
       '@/lib/participants-mapper'
@@ -351,9 +364,11 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
 
     let rawAuthUserId: string | null | undefined;
     let rawParticipantRow: Record<string, unknown> | null = null;
+    let remoteMergeUsed = false;
     try {
       const fetchRes = await gcpApi.participants.fetchSession(sessionData.userHash);
       if (fetchRes.ok && fetchRes.data?.participant != null) {
+        remoteMergeUsed = true;
         const raw = fetchRes.data.participant as Record<string, unknown>;
         rawParticipantRow = raw;
         const aid = raw.auth_user_id;
@@ -424,27 +439,111 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
       );
     }
 
+    // #region agent log (debug session 995889 — generation_count persist)
+    {
+      const fd = finalized as unknown as Record<string, unknown>;
+      const matrixLen = Array.isArray(fd.matrixHistory) ? fd.matrixHistory.length : 0;
+      const genLen = Array.isArray(fd.generations) ? fd.generations.length : 0;
+      const imgLen = Array.isArray(fd.generatedImages) ? fd.generatedImages.length : 0;
+      const mh = Array.isArray(fd.matrixHistory) ? fd.matrixHistory : [];
+      const matrixSourcesSample = mh
+        .slice(-10)
+        .map((it: unknown) =>
+          String(typeof it === 'object' && it !== null && 'source' in it ? (it as { source?: string }).source : '?'),
+        );
+      let spacesGeneratedImageCount = 0;
+      if (Array.isArray(fd.spaces)) {
+        for (const s of fd.spaces as { images?: Array<{ type?: string }> }[]) {
+          if (!Array.isArray(s?.images)) continue;
+          spacesGeneratedImageCount += s.images.filter((i) => i?.type === 'generated').length;
+        }
+      }
+      fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': '995889',
+        },
+        body: JSON.stringify({
+          sessionId: '995889',
+          hypothesisId: 'H2',
+          location: 'gcp-data.ts:saveSessionToGcp:prePost',
+          message: 'generation_counts_before_api',
+          data: {
+            userHashShort: shortHash(String(sessionData.userHash)),
+            currentStep: sessionData?.currentStep ?? null,
+            pathType: sessionData?.pathType ?? null,
+            gc,
+            rawGc: typeof rawGc === 'number' ? rawGc : null,
+            matrixLen,
+            genLen,
+            imgLen,
+            spacesGeneratedImageCount,
+            matrixSourcesSample,
+            remoteMergeUsed,
+            mergedRowKeyCount: Object.keys(mergedRow).length,
+            mergedRowKeysSample: Object.keys(mergedRow).sort().slice(0, 40),
+            hasSessionImageRatings: mergedRow.session_image_ratings != null,
+            hasBig5Responses: mergedRow.big5_responses != null,
+          },
+          timestamp: Date.now(),
+          runId: 'gen-persist',
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
+
     const payload = {
       participantRow: mergedRow,
     };
 
+    let participantRowBytesApprox = 0;
     try {
-      const approxBytes = JSON.stringify(payload.participantRow).length;
-      if (approxBytes > 1_500_000) {
+      participantRowBytesApprox = JSON.stringify(payload.participantRow).length;
+      if (participantRowBytesApprox > 1_500_000) {
         console.warn(
           '[GCP] participantRow JSON is very large; if saves fail, check Cloud Run / proxy body limits (bytes ≈',
-          approxBytes,
+          participantRowBytesApprox,
           ')',
         );
       }
-      if (dbg && approxBytes > 200_000) {
-        console.log('[session-sync:debug] participantRow JSON size (bytes)', approxBytes);
+      if (dbg && participantRowBytesApprox > 200_000) {
+        console.log('[session-sync:debug] participantRow JSON size (bytes)', participantRowBytesApprox);
       }
     } catch {
-      // ignore stringify errors
+      participantRowBytesApprox = -1;
     }
 
     let r = await gcpApi.participants.saveSession(sessionData.userHash, payload);
+    // #region agent log (debug session 995889 — generation_count persist)
+    {
+      fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': '995889',
+        },
+        body: JSON.stringify({
+          sessionId: '995889',
+          hypothesisId: 'H1',
+          location: 'gcp-data.ts:saveSessionToGcp:afterFirstPost',
+          message: 'save_session_response',
+          data: {
+            userHashShort: shortHash(String(sessionData.userHash)),
+            ok: r.ok,
+            errSlice: r.ok ? null : String(r.error ?? '').slice(0, 500),
+            httpStatus: r.ok ? r.status ?? null : r.status ?? null,
+            pgCode: !r.ok ? r.code ?? null : null,
+            generationsCountSent: mergedRow.generations_count,
+            participantRowBytesApprox,
+            sessionPersistPartial: r.ok ? r.data?.sessionPersistPartial === true : null,
+          },
+          timestamp: Date.now(),
+          runId: 'gen-persist',
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
     if (!r.ok) {
       console.error('[GCP] session save failed:', r.error);
       if (dbg) {
@@ -453,6 +552,35 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
       await new Promise((res) => setTimeout(res, 400));
       r = await gcpApi.participants.saveSession(sessionData.userHash, payload);
     }
+    // #region agent log (debug session 995889 — generation_count persist)
+    {
+      fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': '995889',
+        },
+        body: JSON.stringify({
+          sessionId: '995889',
+          hypothesisId: 'H1',
+          location: 'gcp-data.ts:saveSessionToGcp:final',
+          message: 'save_session_final',
+          data: {
+            userHashShort: shortHash(String(sessionData.userHash)),
+            ok: r.ok,
+            errSlice: r.ok ? null : String(r.error ?? '').slice(0, 500),
+            httpStatus: r.ok ? r.status ?? null : r.status ?? null,
+            pgCode: !r.ok ? r.code ?? null : null,
+            generationsCountSent: mergedRow.generations_count,
+            participantRowBytesApprox,
+            sessionPersistPartial: r.ok ? r.data?.sessionPersistPartial === true : null,
+          },
+          timestamp: Date.now(),
+          runId: 'gen-persist',
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
     if (!r.ok) {
       console.error('[GCP] session save failed after retry:', r.error);
       if (dbg) {
@@ -471,6 +599,18 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
       console.log('[session-sync:debug] save OK', {
         userHash: shortHash(sessionData.userHash),
       });
+    }
+    if (pdb) {
+      try {
+        const fr = await gcpApi.participants.fetchSession(sessionData.userHash);
+        const row = fr.data?.participant as Record<string, unknown> | undefined;
+        console.log('[persistence:debug] read-back after save (which DB fields are set)', {
+          userHash: shortHashForLog(String(sessionData.userHash)),
+          ...summarizeParticipantRowForPersistenceDebug(row),
+        });
+      } catch (readErr) {
+        console.warn('[persistence:debug] read-back after save failed', readErr);
+      }
     }
     return true;
   } catch (err) {
@@ -546,8 +686,91 @@ export const saveParticipantSwipes = async (
   if (!participantExists) return;
 
   const r = await gcpApi.swipes.save(userHash, swipes);
+  if (isPersistenceDebugEnabled()) {
+    console.log('[persistence:debug] swipes POST', {
+      userHash: shortHashForLog(userHash),
+      count: swipes.length,
+      ok: r.ok,
+    });
+  }
   return r.ok;
 };
+
+/** Persists matrix steps to `participant_matrix_entries` (no base64; URLs only when not data:/blob:). */
+export async function syncMatrixHistoryToGcp(
+  userHash: string,
+  matrixHistory:
+    | Array<{
+        id?: string;
+        label?: string;
+        timestamp?: number;
+        imageUrl?: string;
+        source?: string;
+        isSelected?: boolean;
+        base64?: string;
+      }>
+    | undefined,
+): Promise<boolean> {
+  if (!userHash || !gcpApi.isConfigured()) return false;
+  const ensured = await ensureParticipantExists(userHash);
+  if (!ensured) return false;
+
+  const entries = (matrixHistory || []).map((h, stepIndex) => {
+    const url = h.imageUrl;
+    const safeUrl =
+      url && typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')
+        ? url
+        : undefined;
+    const extra: Record<string, unknown> = {};
+    if (h.timestamp != null) extra.timestamp = h.timestamp;
+    if (h.base64) extra.hasBase64 = true;
+    return {
+      stepIndex,
+      clientId: h.id ?? null,
+      label: h.label ?? null,
+      source: h.source ?? null,
+      isSelected: h.isSelected ?? null,
+      imageUrl: safeUrl ?? null,
+      extra: Object.keys(extra).length ? extra : undefined,
+    };
+  });
+  const r = await gcpApi.participants.matrixSync(userHash, entries);
+  if (isPersistenceDebugEnabled()) {
+    console.log('[persistence:debug] matrix sync POST', {
+      userHash: shortHashForLog(userHash),
+      entryCount: entries.length,
+      ok: r.ok,
+      httpStatus: r.status,
+    });
+  }
+  // #region agent log (debug session 995889 — matrix → participant_matrix_entries)
+  {
+    fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '995889',
+      },
+      body: JSON.stringify({
+        sessionId: '995889',
+        hypothesisId: 'F3',
+        location: 'gcp-data.ts:syncMatrixHistoryToGcp',
+        message: 'matrix_sync_result',
+        data: {
+          userHashShort: shortHashForLog(userHash),
+          entryCount: entries.length,
+          ok: r.ok,
+          httpStatus: r.status ?? null,
+          errSlice: r.ok ? null : String((r as { error?: unknown }).error ?? '').slice(0, 400),
+        },
+        timestamp: Date.now(),
+        runId: 'full-flow',
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+  return r.ok;
+}
 
 export const saveTinderSwipesDetailed = async (
   _projectId: string,

@@ -50,6 +50,25 @@ WHERE user_hash = :user_hash
 ORDER BY started_at DESC
 LIMIT 30;
 
+-- --- Macierz 6 wizji (POST /api/participants/:userHash/matrix/sync) ----------
+-- Wymaga migracji: infra/gcp/sql/09_participant_research_extensions.sql
+SELECT COUNT(*) AS matrix_entry_rows
+FROM participant_matrix_entries
+WHERE user_hash = :user_hash;
+
+SELECT
+  step_index,
+  client_id,
+  label,
+  source,
+  is_selected,
+  image_url,
+  extra,
+  created_at
+FROM participant_matrix_entries
+WHERE user_hash = :user_hash
+ORDER BY step_index ASC;
+
 -- --- Obrazy (metadane + ścieżki do GCS) --------------------------------------
 SELECT id, type, storage_path, public_url, created_at, generation_id
 FROM participant_images

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
+import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, safeSessionStorage } from '@/lib/gcp-data';
 import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
@@ -35,6 +36,12 @@ import {
   uploadSpaceImage,
   saveSpaceImagesMetadata
 } from '@/lib/remote-spaces';
+import {
+  appendModificationPromptLog,
+  buildModificationPromptLogEntry,
+} from '@/lib/modification-prompt-log';
+
+const AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY = 'awa_fast_track_require_fresh_gen';
 
 interface GeneratedImage {
   id: string;
@@ -101,6 +108,29 @@ const getImageDimensions = (base64: string): Promise<{ width: number; height: nu
   });
 };
 
+/**
+ * React 18 Strict Mode (dev) mounts twice and runs effects twice before `setIsGenerating` flips.
+ * A synchronous module-level guard prevents two parallel Vertex requests + double credit deduct.
+ */
+let fastGenerateInitialGenerationInFlight = false;
+let fastStaleSessionClearInFlight = false;
+let fastFreshGenClearInFlight = false;
+
+function isFastTrackStyleStale(session: any): boolean {
+  const dom = session?.visualDNA?.dominantStyle;
+  if (!dom) return false;
+  const last = session?.fastTrackLastGeneratedStyle;
+  if (last) return last !== dom;
+  const fastGen = (session?.generations || []).find((g: any) => g?.id?.startsWith('fast-gen'));
+  if (!fastGen?.prompt) return false;
+  try {
+    const j = JSON.parse(fastGen.prompt);
+    return typeof j.style === 'string' && j.style !== dom;
+  } catch {
+    return false;
+  }
+}
+
 export default function FastGeneratePage() {
   const router = useRouter();
   const { language } = useLanguage();
@@ -119,6 +149,8 @@ export default function FastGeneratePage() {
   const [hasCompletedRatings, setHasCompletedRatings] = useState(false);
   const [pageViewId, setPageViewId] = useState<string | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  /** Keeps the latest controller for unmount cleanup (avoid Strict Mode abort via [abortController] effect). */
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [upscaledImage, setUpscaledImage] = useState<GeneratedImage | null>(null);
@@ -133,7 +165,7 @@ export default function FastGeneratePage() {
 
   // Build prompt for fast track - simple style-based prompt
   const buildFastTrackPrompt = (): string => {
-    const typedSessionData = sessionData as any;
+    const typedSessionData = getSessionStoreSnapshot() as any;
     const style = typedSessionData?.visualDNA?.dominantStyle || 'modern';
     const roomType = typedSessionData?.roomType || 'living room';
     
@@ -183,33 +215,55 @@ export default function FastGeneratePage() {
 
   // Initial generation
   const handleInitialGeneration = async () => {
-    if (isGenerating) return;
-    
-    const typedSessionData = sessionData as any;
-    const roomImage = typedSessionData?.roomImage;
-    const roomImageEmpty = typedSessionData?.roomImageEmpty;
-    const processedRoomImage = roomImageEmpty || roomImage;
-
-    if (!processedRoomImage) {
-      setError('Brak zdjęcia pomieszczenia. Wróć do poprzedniego kroku i dodaj zdjęcie.');
+    if (fastGenerateInitialGenerationInFlight) {
+      console.log('[Fast Generate] Skipping duplicate initial generation (already in flight)');
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '995889' },
+        body: JSON.stringify({
+          sessionId: '995889',
+          hypothesisId: 'H-DUP-STRICT',
+          runId: 'verify',
+          location: 'fast-generate/page.tsx:handleInitialGeneration',
+          message: 'duplicate suppressed',
+          data: { isGeneratingState: isGenerating },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       return;
     }
+    fastGenerateInitialGenerationInFlight = true;
 
-    if (typedSessionData?.userHash) {
-      let hasCredits = true;
-      try {
-        hasCredits = await checkCreditsViaApi(typedSessionData.userHash, 10);
-      } catch (creditError) {
-        console.warn('[Fast Generate] Error checking credits:', creditError);
-      }
+    try {
+      if (isGenerating) return;
 
-      if (!hasCredits) {
-        setError('Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jeden obraz.');
+      const typedSessionData = getSessionStoreSnapshot() as any;
+      const roomImage = typedSessionData?.roomImage;
+      const roomImageEmpty = typedSessionData?.roomImageEmpty;
+      const processedRoomImage = roomImageEmpty || roomImage;
+
+      if (!processedRoomImage) {
+        setError('Brak zdjęcia pomieszczenia. Wróć do poprzedniego kroku i dodaj zdjęcie.');
         return;
       }
-    }
 
-    setIsGenerating(true);
+      if (typedSessionData?.userHash) {
+        let hasCredits = true;
+        try {
+          hasCredits = await checkCreditsViaApi(typedSessionData.userHash, 10);
+        } catch (creditError) {
+          console.warn('[Fast Generate] Error checking credits:', creditError);
+        }
+
+        if (!hasCredits) {
+          setError('Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jeden obraz.');
+          return;
+        }
+      }
+
+      setIsGenerating(true);
     setError(null);
     setLoadingStage(1);
     setLoadingProgress(10);
@@ -217,6 +271,7 @@ export default function FastGeneratePage() {
     setEstimatedTime(120);
 
     const controller = new AbortController();
+    abortControllerRef.current = controller;
     setAbortController(controller);
 
     try {
@@ -229,7 +284,7 @@ export default function FastGeneratePage() {
       }
 
       // Start generation job to participant_generations
-      const userHash = (sessionData as any).userHash;
+      const userHash = typedSessionData.userHash;
       let jobId: string | null = null;
       if (userHash) {
         const prompt = buildFastTrackPrompt();
@@ -334,19 +389,24 @@ export default function FastGeneratePage() {
       setStatusMessage("Gotowe!");
       setEstimatedTime(0);
 
-      // Save to session
+      // Save to session (merge — do not wipe unrelated generations / images from other flows)
+      const prevImgs = Array.isArray(typedSessionData?.generatedImages) ? typedSessionData.generatedImages : [];
+      const prevGens = Array.isArray(typedSessionData?.generations) ? typedSessionData.generations : [];
+      const imagesWithoutFast = prevImgs.filter((img: any) => !(img?.id && String(img.id).startsWith('fast-')));
+      const gensWithoutFast = prevGens.filter((g: any) => !(g?.id && String(g.id).startsWith('fast-gen')));
       await updateSessionData({
-        generatedImages: [{
-          id: newImage.id,
-          url: newImage.url
-        }],
-        generations: [{
-          id: `fast-gen-${generationCount}`,
-          prompt: prompt,
-          images: 1,
-          timestamp: Date.now(),
-          type: 'initial',
-        }],
+        generatedImages: [...imagesWithoutFast, { id: newImage.id, url: newImage.url }],
+        generations: [
+          ...gensWithoutFast,
+          {
+            id: `fast-gen-${generationCount}`,
+            prompt: prompt,
+            images: 1,
+            timestamp: Date.now(),
+            type: 'initial',
+          },
+        ],
+        fastTrackLastGeneratedStyle: typedSessionData?.visualDNA?.dominantStyle,
       } as any);
 
       // Save to spaces (używamy już zdefiniowanego userHash z linii 183)
@@ -418,6 +478,9 @@ export default function FastGeneratePage() {
     } finally {
       setIsGenerating(false);
     }
+    } finally {
+      fastGenerateInitialGenerationInFlight = false;
+    }
   };
 
   // Auto-generate on mount if no image exists
@@ -426,13 +489,75 @@ export default function FastGeneratePage() {
     
     const typedSessionData = sessionData as any;
     const savedGeneratedImages = typedSessionData?.generatedImages || [];
+    const fastSavedOnly = savedGeneratedImages.filter(
+      (img: any) => img?.id && String(img.id).startsWith('fast-'),
+    );
+    const hasFastPreview = fastSavedOnly.length > 0;
+    const styleStale = isFastTrackStyleStale(typedSessionData) && hasFastPreview;
+
+    const requireFreshGen =
+      typeof window !== 'undefined' &&
+      safeSessionStorage.getItem(AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY) === '1';
+
+    if (requireFreshGen && !isGenerating && !generatedImage) {
+      if (fastFreshGenClearInFlight) return;
+      fastFreshGenClearInFlight = true;
+      void (async () => {
+        try {
+          const imgs = savedGeneratedImages.filter(
+            (img: any) => !(img?.id && String(img.id).startsWith('fast-')),
+          );
+          const gens = (typedSessionData.generations || []).filter(
+            (g: any) => !(g?.id && String(g.id).startsWith('fast-gen')),
+          );
+          await updateSessionData({
+            generatedImages: imgs,
+            generations: gens,
+            fastTrackLastGeneratedStyle: undefined,
+          } as any);
+        } finally {
+          safeSessionStorage.removeItem(AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY);
+          fastFreshGenClearInFlight = false;
+        }
+        queueMicrotask(() => {
+          void handleInitialGeneration();
+        });
+      })();
+      return;
+    }
+
+    if (styleStale && !isGenerating && !generatedImage) {
+      if (fastStaleSessionClearInFlight) return;
+      fastStaleSessionClearInFlight = true;
+      void (async () => {
+        try {
+          const imgs = savedGeneratedImages.filter((img: any) => !(img?.id && String(img.id).startsWith('fast-')));
+          const gens = (typedSessionData.generations || []).filter((g: any) => !(g?.id && String(g.id).startsWith('fast-gen')));
+          await updateSessionData({
+            generatedImages: imgs,
+            generations: gens,
+            fastTrackLastGeneratedStyle: undefined,
+          } as any);
+        } finally {
+          fastStaleSessionClearInFlight = false;
+        }
+        queueMicrotask(() => {
+          void handleInitialGeneration();
+        });
+      })();
+      return;
+    }
+
     const hasGeneratedImages = savedGeneratedImages.length > 0;
     
     if (!hasGeneratedImages && !isGenerating && !generatedImage) {
       handleInitialGeneration();
-    } else if (hasGeneratedImages && !generatedImage) {
-      // Restore from session
-      const restoredImages: GeneratedImage[] = savedGeneratedImages.map((savedImage: any) => {
+    } else if (hasGeneratedImages && !hasFastPreview && !generatedImage && !isGenerating) {
+      // Session has e.g. matrix/gen previews but no fast-track row — still need a new fast render on this page
+      handleInitialGeneration();
+    } else if (hasFastPreview && !generatedImage && !isGenerating) {
+      // Restore only fast-track previews (never use matrix-* / gen-* as the main fast image)
+      const restoredImages: GeneratedImage[] = fastSavedOnly.map((savedImage: any) => {
         // Try to extract base64 from URL if it's a data URL
         let base64 = '';
         if (savedImage.url && savedImage.url.startsWith('data:')) {
@@ -457,7 +582,7 @@ export default function FastGeneratePage() {
       setGeneratedImages(restoredImages);
       
       // Set the first image as current
-      const savedImage = savedGeneratedImages[0];
+      const savedImage = fastSavedOnly[0];
       if (savedImage && savedImage.url) {
         setGeneratedImage(restoredImages[0]);
         
@@ -471,8 +596,10 @@ export default function FastGeneratePage() {
           }
         }
         
-        // Restore generation history if available
-        const savedGenerations = typedSessionData?.generations || [];
+        // Restore generation history if available (align with fast-gen rows only)
+        const savedGenerations = (typedSessionData?.generations || []).filter((g: any) =>
+          g?.id?.startsWith('fast-gen'),
+        );
         if (savedGenerations.length > 0) {
           const history = restoredImages.map((img, idx) => {
             const gen = savedGenerations[idx];
@@ -492,14 +619,18 @@ export default function FastGeneratePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSessionInitialized, sessionData, isGenerating, generatedImage]);
 
-  // Cleanup on unmount
+  // Abort only when truly leaving fast-generate (not React Strict Mode fake unmount on same route)
   useEffect(() => {
     return () => {
-      if (abortController) {
-        abortController.abort();
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      const stillOnFastGenerate = path.includes('/flow/fast-generate');
+      if (stillOnFastGenerate) return;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
     };
-  }, [abortController]);
+  }, []);
 
   // Handle modification
   const handleModification = async (modification: ModificationOption) => {
@@ -616,6 +747,16 @@ export default function FastGeneratePage() {
       };
       setGenerationHistory(prev => [...prev, historyNode]);
       setCurrentHistoryIndex(generationHistory.length);
+
+      const fastModLog = buildModificationPromptLogEntry({
+        modification,
+        modificationPrompt,
+        source: 'preset',
+      });
+      const snap = getSessionStoreSnapshot();
+      await updateSessionData({
+        modificationPromptLog: appendModificationPromptLog(snap.modificationPromptLog, fastModLog),
+      } as any);
 
       // Save to Supabase
       try {

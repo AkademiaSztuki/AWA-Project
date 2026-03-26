@@ -232,6 +232,34 @@ export const useGoogleAI = () => {
       throw new Error('Generation cancelled');
     }
 
+    // Each invocation must have a distinct run id for global dedup + cleanup. Callers that omit
+    // generation_run_id (e.g. fast-generate) previously all shared "no-run-id", so the 2nd+ attempt
+    // hit "Prompt already processed globally" and failed without clearing the map.
+    const effectiveRunId =
+      request.generation_run_id ??
+      (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `client-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`);
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '995889' },
+      body: JSON.stringify({
+        sessionId: '995889',
+        hypothesisId: 'H-FAST-DEDUP',
+        runId: 'verify',
+        location: 'useGoogleAI.ts:generateSixImagesParallelWithGoogle',
+        message: 'effective run id for dedup',
+        data: {
+          hadCallerRunId: !!request.generation_run_id,
+          promptSources: request.prompts.map((p) => p.source),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+
     const startTime = Date.now();
     const results: SourceGenerationResult[] = [];
 
@@ -251,12 +279,12 @@ export const useGoogleAI = () => {
       // Helper function to generate a single image
       const generateSingleImage = async (item: { source: GenerationSource; prompt: string }): Promise<SourceGenerationResult> => {
         const { source, prompt } = item;
-        const promptKey = getPromptKey(request.generation_run_id || 'no-run-id', source);
+        const promptKey = getPromptKey(effectiveRunId, source);
         const sourceStartTime = Date.now();
 
         // Global deduplication: skip if already processed (across all function calls)
         if (globalProcessedPrompts.has(promptKey)) {
-          console.log(`[Google AI] ⚠️ Prompt already processed globally, skipping: ${source} (runId=${request.generation_run_id}, key=${promptKey})`);
+          console.log(`[Google AI] ⚠️ Prompt already processed globally, skipping: ${source} (runId=${effectiveRunId}, key=${promptKey})`);
           return {
             source,
             image: '',
@@ -269,7 +297,7 @@ export const useGoogleAI = () => {
 
         // Mark as processed immediately to prevent duplicates (with timestamp for cleanup)
         globalProcessedPrompts.set(promptKey, Date.now());
-        console.log(`[Google AI] ✅ Processing prompt once: ${source} (runId=${request.generation_run_id}, key=${promptKey})`);
+        console.log(`[Google AI] ✅ Processing prompt once: ${source} (runId=${effectiveRunId}, key=${promptKey})`);
 
         try {
           if (abortSignal?.aborted) {
@@ -297,7 +325,7 @@ export const useGoogleAI = () => {
           };
           console.log('[Google AI] Generation request details:', {
             source,
-            runId: request.generation_run_id,
+            runId: effectiveRunId,
             total: request.prompts.length,
             baseImageLength: request.base_image?.length || 0,
             hasInspirationImages: !!inspirationImages?.length,
@@ -323,7 +351,7 @@ export const useGoogleAI = () => {
             clientController.signal.addEventListener('abort', () => combinedController.abort());
 
             try {
-              console.log(`[Google AI] 📤 Request attempt ${attempt + 1}/${maxRetries} for source ${source} (runId=${request.generation_run_id}, key=${promptKey})`);
+              console.log(`[Google AI] 📤 Request attempt ${attempt + 1}/${maxRetries} for source ${source} (runId=${effectiveRunId}, key=${promptKey})`);
               const response = await fetch('/api/google/generate-image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -363,7 +391,7 @@ export const useGoogleAI = () => {
           const result = await retryWithBackoff(fetchWithRetry, maxRetries, baseDelay, abortSignal);
 
           const processingTime = Date.now() - sourceStartTime;
-          console.log(`[Google AI] ✅ Source ${source} completed successfully in ${processingTime}ms (runId=${request.generation_run_id})`);
+          console.log(`[Google AI] ✅ Source ${source} completed successfully in ${processingTime}ms (runId=${effectiveRunId})`);
 
           // Add subtle watermark to generated image
           let watermarkedImage = result.images[0];
@@ -436,11 +464,6 @@ export const useGoogleAI = () => {
 
       console.log(`[Google AI] All generations complete. Success: ${successCount}, Failed: ${failCount}, Total time: ${totalTime}ms`);
 
-      // Cleanup processed prompts for this run after completion
-      if (request.generation_run_id) {
-        clearProcessedPrompts(request.generation_run_id);
-      }
-
       setIsLoading(false);
 
       return {
@@ -455,6 +478,8 @@ export const useGoogleAI = () => {
       setError(err.message || 'Wystąpił nieznany błąd.');
       setIsLoading(false);
       throw err;
+    } finally {
+      clearProcessedPrompts(effectiveRunId);
     }
   }, []);
 

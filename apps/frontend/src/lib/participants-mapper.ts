@@ -28,7 +28,14 @@ function mergeColorsMaterialsForParticipant(sessionData: SessionData) {
   const rcm = sessionData.roomPreferences?.colorsAndMaterials;
   const topFrom = (a?: string[]) =>
     Array.isArray(a) && a.filter(Boolean).length > 0 ? a.filter(Boolean) as string[] : undefined;
-  const topMaterials = topFrom(cm?.topMaterials) ?? topFrom(rcm?.topMaterials) ?? [];
+  let topMaterials = topFrom(cm?.topMaterials) ?? topFrom(rcm?.topMaterials) ?? [];
+  // Sensory suite stores chosen texture in sensoryPreferences.texture, not always in topMaterials.
+  const tex =
+    sessionData.sensoryPreferences?.texture?.trim() ||
+    sessionData.roomPreferences?.sensoryPreferences?.texture?.trim();
+  if (topMaterials.length === 0 && tex) {
+    topMaterials = [tex];
+  }
   return {
     selectedPalette: cm?.selectedPalette || rcm?.selectedPalette,
     selectedStyle: cm?.selectedStyle || rcm?.selectedStyle,
@@ -213,6 +220,17 @@ export interface ParticipantRow {
   generations_count?: number;
   /** Generate flow: per-image ratings (JSONB in DB) */
   session_image_ratings?: Record<string, unknown>;
+  /** Modify / fast-generate: chronological prompt log (JSONB in DB) */
+  modification_prompt_log?: unknown[];
+
+  room_preference_source?: string;
+  room_activity_context?: Record<string, unknown>;
+  final_survey?: unknown;
+  ladder_prompt_elements?: unknown;
+  ladder_completed_at?: string;
+  room_analysis_comment?: string;
+  room_analysis_human_comment?: string;
+  room_photo_image_id?: string;
 
   // Profile status
   core_profile_complete?: boolean;
@@ -333,6 +351,14 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     room_analysis_confidence: sessionData.roomAnalysis?.confidence,
     room_description: sessionData.roomAnalysis?.room_description,
     room_suggestions: sessionData.roomAnalysis?.suggestions,
+    room_analysis_comment: sessionData.roomAnalysis?.comment,
+    room_analysis_human_comment: sessionData.roomAnalysis?.human_comment,
+    room_preference_source: sessionData.roomPreferenceSource,
+    room_activity_context: sessionData.roomActivityContext as Record<string, unknown> | undefined,
+    final_survey: sessionData.finalSurvey,
+    ladder_prompt_elements: sessionData.ladderResults?.promptElements,
+    ladder_completed_at: sessionData.ladderCompleteTime,
+    room_photo_image_id: sessionData.roomPhotoImageId,
     
     // Tinder stats (aggregate from tinderResults)
     tinder_total_swipes: sessionData.tinderResults?.length || sessionData.tinderData?.swipes?.length || 0,
@@ -347,6 +373,7 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     // Generation stats (matrix uses `matrixHistory`, not always `generations[]`)
     generations_count: computeGenerationCount(sessionData),
     session_image_ratings: sessionData.imageRatings as Record<string, unknown> | undefined,
+    modification_prompt_log: sessionData.modificationPromptLog as unknown[] | undefined,
 
     // Profile status
     core_profile_complete: sessionData.coreProfileComplete,
@@ -396,7 +423,12 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
   // Remove undefined, null, and empty string values to avoid overwriting existing data
   // Also filter out empty strings for timestamp fields (they cause SQL errors)
   const cleaned: any = {};
-  const timestampFields = ['consent_timestamp', 'big5_completed_at', 'core_profile_completed_at'];
+  const timestampFields = [
+    'consent_timestamp',
+    'big5_completed_at',
+    'core_profile_completed_at',
+    'ladder_completed_at',
+  ];
   /** Do not UPSERT '' over existing DB text (path, step, room, explicit labels, …) */
   const skipEmptyStringKeys = new Set([
     'path_type',
@@ -427,10 +459,16 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     'gender',
     'country',
     'education',
+    'room_preference_source',
+    'room_analysis_comment',
+    'room_analysis_human_comment',
   ]);
 
   for (const [key, value] of Object.entries(row)) {
     if (value !== undefined && value !== null) {
+      if (key === 'modification_prompt_log' && Array.isArray(value) && value.length === 0) {
+        continue;
+      }
       // For timestamp fields, skip empty strings (they cause "invalid input syntax for type timestamp" errors)
       if (timestampFields.includes(key) && value === '') {
         continue;
@@ -523,11 +561,12 @@ export function mapParticipantToSessionData(row: any): SessionData {
       return { warmth, brightness, complexity, texture };
     })(),
     
-    colorsAndMaterials: row.explicit_palette || row.explicit_style ? {
-      selectedPalette: row.explicit_palette || '',
-      selectedStyle: row.explicit_style,
-      topMaterials: [row.explicit_material_1, row.explicit_material_2, row.explicit_material_3].filter(Boolean)
-    } : undefined,
+    colorsAndMaterials:
+      row.explicit_palette || row.explicit_style || row.explicit_material_1 ? {
+        selectedPalette: row.explicit_palette || '',
+        selectedStyle: row.explicit_style,
+        topMaterials: [row.explicit_material_1, row.explicit_material_2, row.explicit_material_3].filter(Boolean),
+      } : undefined,
     
     // Sensory / Biophilia
     sensoryPreferences: row.sensory_music || row.sensory_texture || row.sensory_light ? {
@@ -592,12 +631,16 @@ export function mapParticipantToSessionData(row: any): SessionData {
     roomSharedWith: row.room_shared_with,
     roomPainPoints: row.room_pain_points,
     roomActivities: row.room_activities,
+    roomPreferenceSource: row.room_preference_source as SessionData['roomPreferenceSource'],
+    roomActivityContext: row.room_activity_context as SessionData['roomActivityContext'],
     detectedRoomType: row.room_detected_type,
-    roomAnalysis: row.room_description ? {
+    roomAnalysis: row.room_description || row.room_analysis_comment || row.room_analysis_human_comment ? {
       detected_room_type: row.room_detected_type || '',
       confidence: row.room_analysis_confidence || 0,
       room_description: row.room_description || '',
-      suggestions: row.room_suggestions || []
+      suggestions: row.room_suggestions || [],
+      comment: row.room_analysis_comment,
+      human_comment: row.room_analysis_human_comment,
     } : undefined,
     
     // Tinder
@@ -614,17 +657,27 @@ export function mapParticipantToSessionData(row: any): SessionData {
     generations: [],
 
     imageRatings: row.session_image_ratings || undefined,
-    
+    roomPhotoImageId: row.room_photo_image_id || undefined,
+    modificationPromptLog: Array.isArray(row.modification_prompt_log)
+      ? (row.modification_prompt_log as SessionData['modificationPromptLog'])
+      : undefined,
+
     // Profile status
     coreProfileComplete: row.core_profile_complete || false,
     coreProfileCompletedAt: row.core_profile_completed_at,
     
     // Required fields
-    finalSurvey: {
-      satisfaction: { easeOfUse: 0, engagement: 0, clarity: 0, overall: 0 },
-      agency: { control: 0, collaboration: 0, creativity: 0, ownership: 0 },
-      preferences: { evolution: 0, crystallization: 0, discovery: 0 }
-    }
+    finalSurvey: (() => {
+      const fs = row.final_survey;
+      if (fs && typeof fs === 'object') {
+        return fs as SessionData['finalSurvey'];
+      }
+      return {
+        satisfaction: { easeOfUse: 0, engagement: 0, clarity: 0, overall: 0 },
+        agency: { control: 0, collaboration: 0, creativity: 0, ownership: 0 },
+        preferences: { evolution: 0, crystallization: 0, discovery: 0 },
+      };
+    })(),
   };
   
   return sessionData;

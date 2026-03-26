@@ -43,6 +43,7 @@ import {
 } from '@/components/dashboard/ProfileSections';
 import { CompletionStatus } from '@/types/deep-personalization';
 import { CreditBalance } from '@/components/subscription/CreditBalance';
+import { mergeInspirationLists } from '@/lib/inspiration-merge';
 
 interface Space {
   id: string;
@@ -99,6 +100,11 @@ export function UserDashboard() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [actionSpaceId, setActionSpaceId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  /** Kredyty opierają się na localStorage — bez tego SSR nie ma userHash, a klient tak → błąd hydratacji. */
+  const [creditsSectionMounted, setCreditsSectionMounted] = useState(false);
+  useEffect(() => {
+    setCreditsSectionMounted(true);
+  }, []);
 
   // Blokada dashboardu po core profile została wyłączona – dashboard jest dostępny
   // dla każdego zalogowanego użytkownika, nawet jeśli profil nie jest w 100% kompletny.
@@ -794,9 +800,10 @@ export function UserDashboard() {
           {/* Credits & Subscription */}
           {(() => {
             try {
+              if (!creditsSectionMounted) return null;
               const userHash = getUserHash();
               if (!userHash) return null;
-              
+
               return (
                 <div className="mb-8">
                   <CreditBalance userHash={userHash} />
@@ -813,6 +820,7 @@ export function UserDashboard() {
             sessionData={sessionData}
             remoteSession={remoteSession}
             completionStatus={completionStatus}
+            spaces={spaces}
           />
 
           {/* Big Five Results - Enhanced with details link */}
@@ -836,15 +844,10 @@ export function UserDashboard() {
           {/* Inspirations Preview */}
           <InspirationsPreviewSection 
             inspirations={(() => {
-              // Get inspirations from multiple sources
               const typedSession = sessionData as any;
-              
-              // First try sessionData.inspirations
               if (typedSession?.inspirations && typedSession.inspirations.length > 0) {
-                return typedSession.inspirations;
+                return mergeInspirationLists(typedSession.inspirations, []);
               }
-              
-              // Then try spaces - extract inspiration images
               const inspirationImages = spaces
                 .flatMap(space => space.images || [])
                 .filter(img => img.type === 'inspiration')
@@ -856,8 +859,7 @@ export function UserDashboard() {
                   description: undefined,
                   addedAt: img.addedAt
                 }));
-              
-              return inspirationImages;
+              return mergeInspirationLists(inspirationImages, []);
             })()}
             explicitBiophilia={
               (sessionData as any)?.roomPreferences?.biophiliaScore ??
@@ -958,13 +960,30 @@ export function UserDashboard() {
 
 // ========== SUB-COMPONENTS ==========
 
-function ProfileOverview({ sessionData, remoteSession, completionStatus }: { sessionData: any; remoteSession: any; completionStatus: CompletionStatus | null }) {
+function ProfileOverview({
+  sessionData,
+  remoteSession,
+  completionStatus,
+  spaces,
+}: {
+  sessionData: any;
+  remoteSession: any;
+  completionStatus: CompletionStatus | null;
+  spaces: Space[];
+}) {
   const { language } = useLanguage();
   const router = useRouter();
 
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
 
-  const source = remoteSession || sessionData;
+  // Do not use `remoteSession || sessionData` alone: GCP snapshot may omit inspirations/spaces
+  // while the client session + participant_spaces state still has them.
+  const sd = sessionData || {};
+  const rs = remoteSession || {};
+  const source = { ...sd, ...rs };
+
+  const inspirationInSpaces = (spaces: Space[]) =>
+    spaces.some((s) => (s.images || []).some((img) => img.type === 'inspiration'));
 
   // Calculate profile completion (prefer remote snapshot / RPC)
   const hasVisualDNA =
@@ -979,19 +998,29 @@ function ProfileOverview({ sessionData, remoteSession, completionStatus }: { ses
       completionStatus?.coreProfileComplete);
 
   const hasBigFive = !!source?.bigFive || !!completionStatus?.coreProfileComplete;
-  const hasInspirations = (source?.inspirations?.length || 0) > 0;
-  
-  // Check if user has generated rooms/spaces
-  const hasSpaces = (source?.spaces?.length || 0) > 0;
-  const hasGeneratedImages = source?.spaces?.some((space: any) => 
-    space.images?.some((img: any) => img.type === 'generated')
-  ) || false;
-  
-  const hasRoom = !!source?.roomImage 
-    || !!source?.currentRoomId 
-    || !!(completionStatus?.roomCount && completionStatus.roomCount > 0)
-    || hasSpaces
-    || hasGeneratedImages;
+
+  const hasInspirations =
+    (sd.inspirations?.length || 0) > 0 ||
+    (rs.inspirations?.length || 0) > 0 ||
+    inspirationInSpaces(spaces);
+
+  const hasSpacesInSession =
+    (sd.spaces?.length || 0) > 0 || (rs.spaces?.length || 0) > 0;
+  const hasGeneratedImages =
+    [...(sd.spaces || []), ...(rs.spaces || [])].some((space: any) =>
+      space.images?.some((img: any) => img.type === 'generated'),
+    ) || false;
+
+  const hasRoom =
+    !!sd.roomImage ||
+    !!rs.roomImage ||
+    !!sd.currentRoomId ||
+    !!rs.currentRoomId ||
+    !!(completionStatus?.roomCount && completionStatus.roomCount > 0) ||
+    hasSpacesInSession ||
+    (spaces?.length || 0) > 0 ||
+    (spaces || []).some((s) => (s.images || []).length > 0) ||
+    hasGeneratedImages;
 
   const completedItems = [hasVisualDNA, hasExplicitPreferences, hasBigFive, hasInspirations, hasRoom].filter(Boolean).length;
   const totalItems = 5;
@@ -1324,6 +1353,17 @@ function AddSpaceCallout({ onAddSpace, language }: { onAddSpace: () => void; lan
 
 // ========== HELPER FUNCTIONS ==========
 
+/** Big Five domain scores from Cloud SQL / JSON may be number or numeric string (node-pg). */
+function coerceBigFivePercent(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 function BigFiveResults({ userHash }: { userHash?: string }) {
   const { language } = useLanguage();
   const router = useRouter();
@@ -1447,17 +1487,17 @@ function BigFiveResults({ userHash }: { userHash?: string }) {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           {(() => {
-            // IPIP-NEO-120 format only (O/C/E/A/N)
+            // IPIP-NEO-120: stable O–N order; values may be numbers or strings from PostgreSQL
+            const OCEAN = ['O', 'C', 'E', 'A', 'N'] as const;
             const domainsMap: Array<{ domain: string; score: number }> = [];
-            
-            if (bigFiveData.scores.domains) {
-              Object.entries(bigFiveData.scores.domains).forEach(([key, value]) => {
-                if (['O', 'C', 'E', 'A', 'N'].includes(key) && typeof value === 'number') {
-                  domainsMap.push({ domain: key, score: value });
-                }
-              });
+            const scores = bigFiveData.scores;
+            const dom = scores?.domains;
+            for (const key of OCEAN) {
+              const raw = dom?.[key] ?? (scores as Record<string, unknown>)?.[key];
+              const n = coerceBigFivePercent(raw);
+              if (n !== null) domainsMap.push({ domain: key, score: n });
             }
-            
+
             return domainsMap.map(({ domain, score }, index) => (
               <motion.div
                 key={domain}

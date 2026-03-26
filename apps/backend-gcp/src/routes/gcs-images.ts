@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { Storage } from '@google-cloud/storage';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../db';
+import { isPersistenceDebug, shortUserHashForLog } from '../lib/persistence-debug';
+import { sessionSyncTrace } from '../lib/session-sync-trace';
 
 const bucketName = process.env.GCS_IMAGES_BUCKET;
 
@@ -126,6 +128,22 @@ gcsImagesRouter.post('/images/upload-and-register', async (req, res) => {
           generation_id || null,
         ],
       );
+
+      if (isPersistenceDebug()) {
+        sessionSyncTrace({
+          hypothesisId: 'P2',
+          location: 'gcs-images.ts:upload-and-register',
+          message: 'gcs_upload_and_registered',
+          data: {
+            userHashShort: shortUserHashForLog(userHash),
+            type,
+            storagePathPrefix: storagePath.split('/').slice(0, 4).join('/'),
+            sizeBytes: metadata.size ?? null,
+            imageIdPresent: !!rows[0]?.id,
+          },
+          runId: 'persistence',
+        });
+      }
 
       return res.json({
         ok: true,

@@ -11,7 +11,7 @@ const getBaseUrl = (): string | null => {
 async function apiFetch<T = unknown>(
   path: string,
   options: Omit<RequestInit, 'body'> & { body?: object } = {}
-): Promise<{ data?: T; ok: boolean; error?: string }> {
+): Promise<{ data?: T; ok: boolean; error?: string; status?: number; code?: string }> {
   const base = getBaseUrl();
   if (!base) {
     return { ok: false, error: 'GCP_API_BASE_URL not configured' };
@@ -32,13 +32,20 @@ async function apiFetch<T = unknown>(
       error?: string;
       detail?: string;
       hint?: string;
+      code?: string;
+      pgColumn?: string;
     };
     if (!res.ok) {
       const msg = data.detail || data.error || res.statusText;
       const full = data.hint ? `${msg}\n\n${data.hint}` : msg;
-      return { ok: false, error: full };
+      return {
+        ok: false,
+        error: full,
+        status: res.status,
+        code: data.code,
+      };
     }
-    return { ok: true, data: data as T };
+    return { ok: true, data: data as T, status: res.status };
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'network_error';
     return { ok: false, error: msg };
@@ -96,7 +103,7 @@ export const gcpApi = {
       }),
 
     saveSession: (userHash: string, payload: { participantRow: Record<string, unknown> }) =>
-      apiFetch<{ ok: boolean }>('/api/session', {
+      apiFetch<{ ok: boolean; sessionPersistPartial?: boolean }>('/api/session', {
         method: 'POST',
         body: { userHash, ...payload },
       }),
@@ -123,6 +130,23 @@ export const gcpApi = {
         `/api/participants/completion-status?${search.toString()}`
       );
     },
+
+    matrixSync: (
+      userHash: string,
+      entries: Array<{
+        stepIndex: number;
+        clientId?: string | null;
+        label?: string | null;
+        source?: string | null;
+        isSelected?: boolean | null;
+        imageUrl?: string | null;
+        extra?: Record<string, unknown> | null;
+      }>,
+    ) =>
+      apiFetch<{ ok: boolean; inserted?: number }>(
+        `/api/participants/${encodeURIComponent(userHash)}/matrix/sync`,
+        { method: 'POST', body: { entries } },
+      ),
   },
 
   swipes: {

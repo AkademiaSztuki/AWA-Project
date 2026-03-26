@@ -423,14 +423,31 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         if (userHash && roomImageBase64) {
           // Convert base64 to data URL for saveParticipantImages
           const dataUrl = `data:image/jpeg;base64,${roomImageBase64}`;
-          void saveParticipantImages(userHash, [{
-            url: dataUrl,
-            type: 'room_photo',
-            is_favorite: false
-          }]).then(() => {
-          }).catch((e) => {
-            console.warn('[RoomSetup] Failed to save room photo to participant_images:', e);
-          });
+          void saveParticipantImages(userHash, [
+            {
+              url: dataUrl,
+              type: 'room_photo',
+              is_favorite: false,
+            },
+          ])
+            .then((res) => {
+              if (res.ok && res.imageIds[0]) {
+                void updateSessionData({ roomPhotoImageId: res.imageIds[0] } as Partial<SessionData>);
+              }
+              if (!res.ok) {
+                console.warn('[RoomSetup] Room photo cloud save incomplete:', res);
+                if (typeof window !== 'undefined') {
+                  window.alert(
+                    language === 'pl'
+                      ? 'Nie udało się zapisać zdjęcia pokoju w chmurze. Sprawdź połączenie lub spróbuj ponownie później.'
+                      : 'Could not save your room photo to cloud storage. Check your connection or try again later.',
+                  );
+                }
+              }
+            })
+            .catch((e) => {
+              console.warn('[RoomSetup] Failed to save room photo to participant_images:', e);
+            });
         }
       } catch (e) {
         console.warn('[RoomSetup] Failed to start room photo save:', e);
@@ -2070,20 +2087,26 @@ function PreferenceQuestionsStep({
                 selectedStyle={selectedStyle}
                 onStyleSelect={(styleId) => handleStyleSelect(styleId)}
                 onComplete={(results) => {
-                  setLocalPrefs((prev) => ({
-                    ...prev,
-                    sensoryPreferences: {
-                      music: results.music,
-                      texture: results.texture,
-                      light: results.light
-                    },
-                    ...(results.style && {
+                  setLocalPrefs((prev) => {
+                    const prevCm = prev.colorsAndMaterials || {};
+                    const tex = results.texture?.trim();
+                    const prevMats = (prevCm.topMaterials ?? []).filter(Boolean);
+                    const topMats =
+                      prevMats.length > 0 ? prevMats : tex ? [tex] : [];
+                    return {
+                      ...prev,
+                      sensoryPreferences: {
+                        music: results.music,
+                        texture: results.texture,
+                        light: results.light,
+                      },
                       colorsAndMaterials: {
-                        ...(prev.colorsAndMaterials || {}),
-                        selectedStyle: results.style
-                      }
-                    })
-                  }));
+                        ...prevCm,
+                        ...(results.style && { selectedStyle: results.style }),
+                        topMaterials: topMats,
+                      },
+                    };
+                  });
                   setNatureMetaphor(results.natureMetaphor);
                   setBiophiliaScore(results.biophiliaScore);
                   if (results.style) {

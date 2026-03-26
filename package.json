@@ -10,6 +10,9 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "build:frontend": "pnpm --filter @aura/frontend build",
+    "build:backend-gcp": "pnpm --filter @aura/backend-gcp build",
+    "build:research-stack": "pnpm run build:backend-gcp && pnpm run build:frontend",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "clean": "turbo run clean && rm -rf node_modules",

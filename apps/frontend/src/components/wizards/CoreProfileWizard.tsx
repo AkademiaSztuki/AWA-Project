@@ -900,11 +900,20 @@ export function CoreProfileWizard() {
                             sessionData.colorsAndMaterials?.selectedPalette ||
                             profileData.colorsAndMaterials?.selectedPalette ||
                             '';
-                          const finalMaterials =
-                            (results as any).topMaterials ||
-                            sessionData.colorsAndMaterials?.topMaterials ||
-                            profileData.colorsAndMaterials?.topMaterials ||
-                            [];
+                          let finalMaterials: string[] = [];
+                          if (
+                            Array.isArray((results as any).topMaterials) &&
+                            (results as any).topMaterials.some(Boolean)
+                          ) {
+                            finalMaterials = (results as any).topMaterials.filter(Boolean);
+                          } else if (results.texture && String(results.texture).trim()) {
+                            finalMaterials = [String(results.texture).trim()];
+                          } else {
+                            finalMaterials =
+                              sessionData.colorsAndMaterials?.topMaterials?.filter(Boolean) ||
+                              profileData.colorsAndMaterials?.topMaterials?.filter(Boolean) ||
+                              [];
+                          }
 
                           updateProfile({
                             sensoryPreferences: {

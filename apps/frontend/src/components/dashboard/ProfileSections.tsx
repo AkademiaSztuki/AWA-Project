@@ -171,9 +171,11 @@ export function PreferencesOverviewSection({
 
   if (!hasExplicit && !hasImplicit) return null;
 
-  const formatPercent = (value?: number) => {
+  const formatPercent = (value?: number | string) => {
     if (value === undefined || value === null) return null;
-    const unit = value > 1 ? value / 100 : value;
+    const n = typeof value === 'string' ? Number(value.trim()) : value;
+    if (typeof n !== 'number' || Number.isNaN(n)) return null;
+    const unit = n > 1 ? n / 100 : n;
     return Math.round(Math.max(0, Math.min(1, unit)) * 100);
   };
 

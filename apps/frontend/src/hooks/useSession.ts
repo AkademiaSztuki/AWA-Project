@@ -10,6 +10,7 @@ import {
 } from '@/lib/gcp-data';
 import { uploadSpaceImage, saveSpaceImagesMetadata, fetchParticipantImages } from '@/lib/remote-spaces';
 import { gcpApi } from '@/lib/gcp-api-client';
+import { mergeInspirationLists } from '@/lib/inspiration-merge';
 
 const SESSION_STORAGE_KEY = 'aura_session';
 const USER_HASH_STORAGE_KEY = 'aura_user_hash';
@@ -20,38 +21,6 @@ const STORAGE_SIZE_THRESHOLD = 4_500_000; // ~4,5MB
 const MAX_INLINE_DATA_LENGTH = 120_000; // ~120KB
 const MAX_GENERATIONS_HISTORY = 120;
 const MAX_TINDER_SWIPES = 250;
-const MAX_SESSION_INSPIRATIONS = 10;
-
-function inspirationMergeKey(item: any): string {
-  const u = item?.url || item?.imageBase64;
-  if (typeof u === 'string' && u.length > 0) return `u:${u.slice(0, 2048)}`;
-  if (item?.id != null && String(item.id).length > 0) return `id:${String(item.id)}`;
-  return '';
-}
-
-/** Union remote + local by URL/id, newest wins, cap at MAX_SESSION_INSPIRATIONS. */
-function mergeInspirationLists(a: any[], b: any[]): any[] {
-  const map = new Map<string, any>();
-  const put = (item: any) => {
-    const k = inspirationMergeKey(item);
-    if (!k) return;
-    const prev = map.get(k);
-    const tNew = new Date(item.addedAt || item.createdAt || 0).getTime();
-    const tOld = prev ? new Date(prev.addedAt || prev.createdAt || 0).getTime() : 0;
-    if (!prev || tNew >= tOld) {
-      map.set(k, { ...prev, ...item });
-    }
-  };
-  for (const x of a) put(x);
-  for (const x of b) put(x);
-  return Array.from(map.values())
-    .sort(
-      (x, y) =>
-        new Date(y.addedAt || y.createdAt || 0).getTime() -
-        new Date(x.addedAt || x.createdAt || 0).getTime(),
-    )
-    .slice(0, MAX_SESSION_INSPIRATIONS);
-}
 
 const makeImageSig = (img?: string | null): string => {
   if (!img) return 'none';

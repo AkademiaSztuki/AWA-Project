@@ -11,6 +11,10 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { Palette, Check } from 'lucide-react';
 import { STYLE_OPTIONS } from '@/lib/questions/style-options';
+import { safeSessionStorage } from '@/lib/gcp-data';
+
+/** Tells /flow/fast-generate to ignore any cached fast preview (survives in-memory/GCP merge quirks). */
+const AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY = 'awa_fast_track_require_fresh_gen';
 
 // Map style IDs to image filenames
 const STYLE_IMAGE_MAP: Record<string, string> = {
@@ -80,6 +84,16 @@ export default function StyleSelectionPage() {
 
     console.log('[StyleSelection] Selected style:', selectedStyle);
 
+    const prev = sessionData as any;
+    const prevImages = Array.isArray(prev?.generatedImages) ? prev.generatedImages : [];
+    const prevGens = Array.isArray(prev?.generations) ? prev.generations : [];
+    // New style ⇒ drop prior fast-track previews so /flow/fast-generate does not restore an old render
+    const generatedImages = prevImages.filter((img: any) => {
+      const id = img && typeof img === 'object' ? img.id : null;
+      return !(id && String(id).startsWith('fast-'));
+    });
+    const generations = prevGens.filter((g: any) => !(g?.id && String(g.id).startsWith('fast-gen')));
+
     // Save style to session as visualDNA for prompt building
     await updateSession({
       visualDNA: {
@@ -95,8 +109,13 @@ export default function StyleSelectionPage() {
       },
       tinderResults: [],
       ladderPath: ['quick'],
-      coreNeed: 'comfortable and functional interior'
+      coreNeed: 'comfortable and functional interior',
+      generatedImages,
+      generations,
+      fastTrackLastGeneratedStyle: undefined,
     });
+
+    safeSessionStorage.setItem(AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY, '1');
 
     // Go to fast track generation
     router.push('/flow/fast-generate');
