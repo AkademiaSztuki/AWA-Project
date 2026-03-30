@@ -63,6 +63,7 @@ public/models/*.bin
 coverage/
 .nyc_output/.cursor/
 # Vercel: apps/frontend/.gitignore — commit .vercel/project.json (produkcja)
+/.vercel/
 
 **/keys/
 **/*service-account*.json
