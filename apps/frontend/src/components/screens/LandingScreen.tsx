@@ -8,7 +8,6 @@ import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { FlowStep } from '@/types';
 import { Zap, Heart, Palette, Home, Sparkles } from 'lucide-react';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
-import { useModalAPI } from '@/hooks/useModalAPI';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,7 +17,6 @@ import { LoginModal } from '@/components/auth/LoginModal';
 const LandingScreen: React.FC = () => {
   const router = useRouter();
   const { language } = useLanguage();
-  const { checkHealth } = useModalAPI();
   const { updateSessionData, isInitialized, sessionData } = useSessionData();
   const { user, isLoading: authLoading } = useAuth();
   const { setHeaderVisible } = useLayout();

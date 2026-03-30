@@ -10,7 +10,7 @@
  */
 
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
+require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
 
 // Sprawdź tylko URL - SERVICE_ROLE_KEY będzie używany przez API route na serwerze
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 

@@ -61,6 +61,100 @@ function computeGenerationCount(sessionData: SessionData): number {
   return Math.max(genLen, matrixLen, genImgLen);
 }
 
+function toSurveyNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
+/** Coerce `final_survey` JSONB (numeric strings from exports / drivers) to real numbers. */
+function normalizeFinalSurveyFromRow(fs: unknown): SessionData['finalSurvey'] | undefined {
+  if (!fs || typeof fs !== 'object') return undefined;
+  const x = fs as Record<string, unknown>;
+  const sat = (x.satisfaction as Record<string, unknown>) || {};
+  const ag = (x.agency as Record<string, unknown>) || {};
+  const pref = (x.preferences as Record<string, unknown>) || {};
+  return {
+    satisfaction: {
+      easeOfUse: toSurveyNumber(sat.easeOfUse),
+      engagement: toSurveyNumber(sat.engagement),
+      clarity: toSurveyNumber(sat.clarity),
+      overall: toSurveyNumber(sat.overall),
+    },
+    agency: {
+      control: toSurveyNumber(ag.control),
+      collaboration: toSurveyNumber(ag.collaboration),
+      creativity: toSurveyNumber(ag.creativity),
+      ownership: toSurveyNumber(ag.ownership),
+    },
+    preferences: {
+      evolution: toSurveyNumber(pref.evolution),
+      crystallization: toSurveyNumber(pref.crystallization),
+      discovery: toSurveyNumber(pref.discovery),
+    },
+  };
+}
+
+/** Roll up research survey scores into `final_survey` JSONB (avoids persisting only default zeros). */
+function resolveFinalSurveyForParticipantRow(sessionData: SessionData): SessionData['finalSurvey'] | undefined {
+  const sd = sessionData.surveyData;
+  if (!sd) return undefined;
+  const has =
+    sd.susScore != null ||
+    sd.clarityScore != null ||
+    sd.agencyScore != null ||
+    sd.satisfactionScore != null;
+  if (!has) return undefined;
+
+  const susN = toSurveyNumber(sd.susScore);
+  const clarityN = toSurveyNumber(sd.clarityScore);
+  const agencyN = toSurveyNumber(sd.agencyScore);
+  const satN = toSurveyNumber(sd.satisfactionScore);
+  const susAsSeven = susN > 0 ? Math.min(7, Math.max(0, (susN / 100) * 7)) : 0;
+
+  return {
+    satisfaction: {
+      easeOfUse: satN,
+      engagement: susAsSeven,
+      clarity: clarityN,
+      overall: satN,
+    },
+    agency: {
+      control: agencyN,
+      collaboration: agencyN,
+      creativity: agencyN,
+      ownership: agencyN,
+    },
+    preferences: {
+      evolution: clarityN,
+      crystallization: clarityN,
+      discovery: clarityN,
+    },
+  };
+}
+
+function isDefaultZeroFinalSurvey(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as SessionData['finalSurvey'];
+  const z = (n: unknown) => n === 0;
+  return (
+    z(v.satisfaction?.easeOfUse) &&
+    z(v.satisfaction?.engagement) &&
+    z(v.satisfaction?.clarity) &&
+    z(v.satisfaction?.overall) &&
+    z(v.agency?.control) &&
+    z(v.agency?.collaboration) &&
+    z(v.agency?.creativity) &&
+    z(v.agency?.ownership) &&
+    z(v.preferences?.evolution) &&
+    z(v.preferences?.crystallization) &&
+    z(v.preferences?.discovery)
+  );
+}
+
 /**
  * Support both `scores.domains.{O,C,E,A,N}` and legacy flat keys on `scores` (openness, …).
  */
@@ -101,6 +195,8 @@ function extractBigFiveDomains(sessionData: SessionData): {
 export interface ParticipantRow {
   user_hash: string;
   auth_user_id?: string;
+  /** OAuth / magic-link email (column from 05_auth_passwords.sql) */
+  email?: string;
   consent_timestamp?: string;
   path_type?: 'fast' | 'full';
   current_step?: string;
@@ -239,16 +335,27 @@ export interface ParticipantRow {
 
 /**
  * Map SessionData to ParticipantRow (for database insert/update)
+ * @param oauthEmail — Google / magic-link email from secure client storage (not in SessionData)
  */
-export function mapSessionDataToParticipant(sessionData: SessionData, authUserId?: string): ParticipantRow {
+export function mapSessionDataToParticipant(
+  sessionData: SessionData,
+  authUserId?: string,
+  oauthEmail?: string,
+): ParticipantRow {
   const explicitSem = mergeExplicitSemanticsForParticipant(sessionData);
   const mergedCm = mergeColorsMaterialsForParticipant(sessionData);
   const mergedSensory = mergeSensoryForParticipant(sessionData);
   const big5Domains = extractBigFiveDomains(sessionData);
 
+  const emailNorm =
+    typeof oauthEmail === 'string' && oauthEmail.trim().length > 0
+      ? oauthEmail.trim().toLowerCase()
+      : undefined;
+
   const row: ParticipantRow = {
     user_hash: sessionData.userHash,
     auth_user_id: authUserId,
+    email: emailNorm,
     consent_timestamp: sessionData.consentTimestamp,
     path_type: sessionData.pathType,
     current_step: sessionData.currentStep,
@@ -355,17 +462,42 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
     room_analysis_human_comment: sessionData.roomAnalysis?.human_comment,
     room_preference_source: sessionData.roomPreferenceSource,
     room_activity_context: sessionData.roomActivityContext as Record<string, unknown> | undefined,
-    final_survey: sessionData.finalSurvey,
+    final_survey:
+      resolveFinalSurveyForParticipantRow(sessionData) ??
+      normalizeFinalSurveyFromRow(sessionData.finalSurvey),
     ladder_prompt_elements: sessionData.ladderResults?.promptElements,
     ladder_completed_at: sessionData.ladderCompleteTime,
     room_photo_image_id: sessionData.roomPhotoImageId,
     
-    // Tinder stats (aggregate from tinderResults)
-    tinder_total_swipes: sessionData.tinderResults?.length || sessionData.tinderData?.swipes?.length || 0,
-    tinder_likes: sessionData.tinderResults?.filter(s => s.direction === 'right').length || 
-                  sessionData.tinderData?.swipes?.filter((s: any) => s.direction === 'right').length || 0,
-    tinder_dislikes: sessionData.tinderResults?.filter(s => s.direction === 'left').length || 
-                     sessionData.tinderData?.swipes?.filter((s: any) => s.direction === 'left').length || 0,
+    // Tinder stats (aggregate swipes; `totalImages` holds rehydrated total when `swipes` is empty)
+    ...(() => {
+      const results = sessionData.tinderResults ?? [];
+      const swipes = sessionData.tinderData?.swipes ?? [];
+      const stubTotal =
+        results.length === 0 &&
+        swipes.length === 0 &&
+        typeof sessionData.tinderData?.totalImages === 'number' &&
+        sessionData.tinderData.totalImages > 0
+          ? sessionData.tinderData.totalImages
+          : 0;
+      const total = Math.max(results.length, swipes.length, stubTotal);
+      const countDir = (arr: Array<{ direction?: string }>, dir: 'left' | 'right') =>
+        arr.filter((s) => s.direction === dir).length;
+      let likes = 0;
+      let dislikes = 0;
+      if (swipes.length > 0) {
+        likes = countDir(swipes, 'right');
+        dislikes = countDir(swipes, 'left');
+      } else if (results.length > 0) {
+        likes = countDir(results, 'right');
+        dislikes = countDir(results, 'left');
+      }
+      return {
+        tinder_total_swipes: total,
+        tinder_likes: likes,
+        tinder_dislikes: dislikes,
+      };
+    })(),
     
     // Inspiration tags (aggregate from inspirations array)
     inspirations_count: sessionData.inspirations?.length || 0,
@@ -466,6 +598,9 @@ export function mapSessionDataToParticipant(sessionData: SessionData, authUserId
 
   for (const [key, value] of Object.entries(row)) {
     if (value !== undefined && value !== null) {
+      if (key === 'final_survey' && isDefaultZeroFinalSurvey(value)) {
+        continue;
+      }
       if (key === 'modification_prompt_log' && Array.isArray(value) && value.length === 0) {
         continue;
       }
@@ -613,16 +748,22 @@ export function mapParticipantToSessionData(row: any): SessionData {
     } : undefined,
     
     // Surveys
-    surveyData: row.sus_score !== undefined || row.clarity_score !== undefined ? {
-      susScore: row.sus_score,
-      clarityScore: row.clarity_score,
-      agencyScore: row.agency_score,
-      satisfactionScore: row.satisfaction_score,
-      susAnswers: row.sus_answers,
-      agencyAnswers: row.agency_answers,
-      satisfactionAnswers: row.satisfaction_answers,
-      clarityAnswers: row.clarity_answers
-    } : undefined,
+    surveyData:
+      row.sus_score !== undefined ||
+      row.clarity_score !== undefined ||
+      row.agency_score !== undefined ||
+      row.satisfaction_score !== undefined
+        ? {
+            susScore: row.sus_score,
+            clarityScore: row.clarity_score,
+            agencyScore: row.agency_score,
+            satisfactionScore: row.satisfaction_score,
+            susAnswers: row.sus_answers,
+            agencyAnswers: row.agency_answers,
+            satisfactionAnswers: row.satisfaction_answers,
+            clarityAnswers: row.clarity_answers,
+          }
+        : undefined,
     
     // Room
     roomType: row.room_type,
@@ -669,9 +810,8 @@ export function mapParticipantToSessionData(row: any): SessionData {
     // Required fields
     finalSurvey: (() => {
       const fs = row.final_survey;
-      if (fs && typeof fs === 'object') {
-        return fs as SessionData['finalSurvey'];
-      }
+      const normalized = normalizeFinalSurveyFromRow(fs);
+      if (normalized) return normalized;
       return {
         satisfaction: { easeOfUse: 0, engagement: 0, clarity: 0, overall: 0 },
         agency: { control: 0, collaboration: 0, creativity: 0, ownership: 0 },

@@ -9,10 +9,10 @@ const path = require('path');
 
 // Load env vars
 try {
-  require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
+  require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
 } catch (e) {
   try {
-    require('dotenv').config({ path: path.join(__dirname, '../.env') });
+    require('dotenv').config({ path: path.join(__dirname, '../../.env') });
   } catch (e2) {}
 }
 

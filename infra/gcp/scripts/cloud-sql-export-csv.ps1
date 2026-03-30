@@ -65,7 +65,9 @@ param(
   # Gdy baza nie ma kolumn z infra/gcp/sql/09_participant_research_extensions.sql — uzyj z -FullResearch
   [switch] $SkipResearchExtensions = $false,
   # Gdy nie ma tabeli participant_matrix_entries (ta sama migracja 09) — uzyj z -FullResearch
-  [switch] $SkipMatrixEntries = $false
+  [switch] $SkipMatrixEntries = $false,
+  # Opcjonalnie: inspiracje z participant_images (deduplikacja / weryfikacja zapisu)
+  [string] $ParticipantImagesOutFile = ""
 )
 
 if ($FullResearch) {
@@ -189,6 +191,16 @@ if ($matrixExportWanted) {
   & $psqlCmd -h $DbHost -p $Port -U $User -d $Database -v ON_ERROR_STOP=1 -c $matrixSql | Set-Content -Path $MatrixOutFile -Encoding utf8
   if ($LASTEXITCODE -ne 0) {
     Write-Error "Eksport macierzy nieudany (psql exit code: $LASTEXITCODE)."
+    exit $LASTEXITCODE
+  }
+}
+
+if ($ParticipantImagesOutFile -and $ParticipantImagesOutFile.Trim().Length -gt 0) {
+  $piSql = '\copy (SELECT id, user_hash, type, public_url, storage_path, created_at FROM public.participant_images WHERE type = ''inspiration'' ORDER BY created_at DESC LIMIT ' + $Limit + ') TO STDOUT WITH CSV HEADER'
+  Write-Host "[cloud-sql-export-csv] Eksport participant_images (inspiration) -> $ParticipantImagesOutFile"
+  & $psqlCmd -h $DbHost -p $Port -U $User -d $Database -v ON_ERROR_STOP=1 -c $piSql | Set-Content -Path $ParticipantImagesOutFile -Encoding utf8
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error "Eksport participant_images nieudany (psql exit code: $LASTEXITCODE)."
     exit $LASTEXITCODE
   }
 }

@@ -11,12 +11,12 @@
     "db:push": "supabase db execute --file ./supabase/schema_full.sql",
     "db:studio": "supabase studio",
     "db:link": "supabase link",
-    "db:cleanup": "node scripts/cleanup-db.js",
-    "export:csv": "node scripts/export-to-csv.js",
-    "export:single": "node scripts/export-single-csv.js",
+    "db:cleanup": "node scripts/archive/supabase-legacy/cleanup-db.js",
+    "export:csv": "node scripts/archive/supabase-legacy/export-to-csv.js",
+    "export:single": "node scripts/archive/supabase-legacy/export-single-csv.js",
     "verify:gcp-health": "node scripts/gcp-backend-health.mjs",
-    "storage:create-bucket": "node scripts/create-storage-bucket.js",
-    "storage:create-bucket-api": "node scripts/create-bucket-via-api.js",
+    "storage:create-bucket": "node scripts/archive/supabase-legacy/create-storage-bucket.js",
+    "storage:create-bucket-api": "node scripts/archive/supabase-legacy/create-bucket-via-api.js",
     "generate:desktop-bg": "node scripts/generate-desktop-background.js"
   },
   "dependencies": {

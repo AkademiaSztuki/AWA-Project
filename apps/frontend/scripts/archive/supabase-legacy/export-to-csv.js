@@ -15,7 +15,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
+require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
 
 // Parsuj argumenty wiersza poleceń
 const args = process.argv.slice(2);
@@ -373,7 +373,7 @@ async function main() {
   
   // Utwórz folder eksportu
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const outputDir = path.join(__dirname, '../exports', timestamp);
+  const outputDir = path.join(__dirname, '../../exports', timestamp);
   fs.mkdirSync(outputDir, { recursive: true });
   
   console.log(`📁 Folder eksportu: ${outputDir}\n`);

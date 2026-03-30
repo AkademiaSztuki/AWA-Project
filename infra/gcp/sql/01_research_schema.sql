@@ -352,7 +352,7 @@ CREATE INDEX IF NOT EXISTS idx_research_consents_created_at
 CREATE TABLE IF NOT EXISTS generation_feedback (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id TEXT NOT NULL,
-  project_id UUID,
+  project_id TEXT,
   generated_sources TEXT[] NOT NULL,
   selected_source TEXT,
   selection_time_ms INTEGER,
@@ -385,7 +385,7 @@ CREATE INDEX IF NOT EXISTS idx_generation_feedback_created_at
 CREATE TABLE IF NOT EXISTS regeneration_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id TEXT NOT NULL,
-  project_id UUID,
+  project_id TEXT,
   previous_sources TEXT[],
   previous_selected TEXT,
   regeneration_count INTEGER NOT NULL,

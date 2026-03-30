@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { safeLocalStorage, safeSessionStorage } from '@/lib/gcp-data';
 import { gcpApi } from '@/lib/gcp-api-client';
+import { GOOGLE_AUTH_EMAIL_STORAGE_KEY } from '@/lib/auth-storage-keys';
+import { signInWithGoogleNative } from '@/lib/google-auth';
 
 const GOOGLE_AUTH_USER_KEY = 'aura_google_auth_user_id';
 
@@ -55,13 +57,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .fetchByAuth(storedAuthId)
         .then((res) => {
           if (res.ok && res.data?.participant) {
-            const hash =
-              (res.data.participant as { user_hash?: string }).user_hash ||
-              storedHash;
+            const p = res.data.participant as { user_hash?: string; email?: string };
+            const hash = p.user_hash || storedHash;
             if (hash) safeLocalStorage.setItem('aura_user_hash', hash);
+            const emailFromDb =
+              typeof p.email === 'string' && p.email.trim().length > 0 ? p.email.trim() : undefined;
+            if (emailFromDb) {
+              safeLocalStorage.setItem(GOOGLE_AUTH_EMAIL_STORAGE_KEY, emailFromDb);
+            }
             const authUser: AuthUser = {
               id: storedAuthId,
-              email: storedAuthId.startsWith('email:') ? storedAuthId.slice(6) : undefined,
+              email:
+                emailFromDb ||
+                (storedAuthId.startsWith('email:') ? storedAuthId.slice(6) : undefined),
               user_metadata: {},
               app_metadata: {},
               aud: '',
@@ -80,7 +88,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async (nextPath?: string) => {
     const currentHash = safeLocalStorage.getItem('aura_user_hash');
-    const { signInWithGoogleNative } = await import('@/lib/google-auth');
     const result = await signInWithGoogleNative({
       currentUserHash: currentHash,
       consentTimestamp: new Date().toISOString(),
@@ -103,6 +110,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { user: nativeUser } = result;
     safeLocalStorage.setItem('aura_user_hash', nativeUser.userHash);
     safeLocalStorage.setItem(GOOGLE_AUTH_USER_KEY, nativeUser.authUserId);
+    if (nativeUser.email && nativeUser.email.trim().length > 0) {
+      safeLocalStorage.setItem(GOOGLE_AUTH_EMAIL_STORAGE_KEY, nativeUser.email.trim());
+    }
+
+    if (nativeUser.email?.trim()) {
+      try {
+        const sync = await gcpApi.participants.linkAuth({
+          userHash: nativeUser.userHash,
+          authUserId: nativeUser.authUserId,
+          email: nativeUser.email.trim().toLowerCase(),
+        });
+        if (!sync.ok) {
+          console.warn('[AuthContext] linkAuth after Google sign-in failed:', sync.error);
+        }
+      } catch (e) {
+        console.warn('[AuthContext] linkAuth after Google sign-in error:', e);
+      }
+    }
 
     const authUser: AuthUser = {
       id: nativeUser.authUserId,
@@ -257,6 +282,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     safeLocalStorage.removeItem(GOOGLE_AUTH_USER_KEY);
+    safeLocalStorage.removeItem(GOOGLE_AUTH_EMAIL_STORAGE_KEY);
     safeLocalStorage.removeItem('aura_session');
     safeLocalStorage.removeItem('aura_user_hash');
     safeSessionStorage.removeItem('aura_session');
@@ -275,6 +301,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const linked = await gcpApi.participants.linkAuth({
         userHash,
         authUserId: user.id,
+        email: user.email || undefined,
       });
       if (linked.ok) {
         safeLocalStorage.setItem(
@@ -290,9 +317,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const hydrateFromMagicLink = (authUserId: string, email?: string) => {
+    const resolvedEmail = email ?? (authUserId.startsWith('email:') ? authUserId.slice(6) : undefined);
+    if (resolvedEmail && resolvedEmail.trim().length > 0) {
+      safeLocalStorage.setItem(GOOGLE_AUTH_EMAIL_STORAGE_KEY, resolvedEmail.trim());
+    }
     const authUser: AuthUser = {
       id: authUserId,
-      email: email ?? (authUserId.startsWith('email:') ? authUserId.slice(6) : undefined),
+      email: resolvedEmail,
       user_metadata: {},
       app_metadata: {},
       aud: '',

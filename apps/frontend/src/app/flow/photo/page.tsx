@@ -44,6 +44,7 @@ export default function PhotoUploadPage() {
   const ttsAbortRef = useRef<AbortController | null>(null);
   const pendingTtsTextRef = useRef<string | null>(null);
   const ttsInFlightRef = useRef(false);
+  const pageViewTrackingRef = useRef<{ userHash: string; viewId: string } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -62,6 +63,7 @@ export default function PhotoUploadPage() {
           await saveDeviceContext(projectId, context);
           // Page view start
           const pvId = await startPageView(projectId, 'photo', { roomTypeDefault: roomType });
+          if (pvId) pageViewTrackingRef.current = { userHash: projectId, viewId: pvId };
           if (isMounted) setPageViewId(pvId);
         }
       } catch (e) {
@@ -70,7 +72,8 @@ export default function PhotoUploadPage() {
     })();
     return () => {
       (async () => {
-        if (pageViewId) await endPageView(pageViewId);
+        const t = pageViewTrackingRef.current;
+        if (t) await endPageView(t.userHash, t.viewId);
       })();
       isMounted = false;
     };

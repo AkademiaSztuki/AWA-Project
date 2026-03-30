@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useSession } from '@/hooks';
@@ -30,6 +30,7 @@ export default function VisualDNAPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [showResults, setShowResults] = useState(false);
   const [pageViewId, setPageViewId] = useState<string | null>(null);
+  const pageViewTrackingRef = useRef<{ userHash: string; viewId: string } | null>(null);
 
   useEffect(() => {
     analyzeDNA();
@@ -38,11 +39,17 @@ export default function VisualDNAPage() {
         const projectId = await getOrCreateProjectId((sessionData as any).userHash);
         if (projectId) {
           const id = await startPageView(projectId, 'dna');
+          if (id) pageViewTrackingRef.current = { userHash: projectId, viewId: id };
           setPageViewId(id);
         }
       } catch {}
     })();
-    return () => { (async () => { if (pageViewId) await endPageView(pageViewId); })(); };
+    return () => {
+      (async () => {
+        const t = pageViewTrackingRef.current;
+        if (t) await endPageView(t.userHash, t.viewId);
+      })();
+    };
   }, []);
 
   const analyzeDNA = async () => {

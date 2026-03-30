@@ -127,6 +127,7 @@ export async function signInWithGoogleNative(options: {
             userHash,
             authUserId,
             consentTimestamp: options.consentTimestamp,
+            email: email || undefined,
           });
 
           if (!linkRes.ok) {

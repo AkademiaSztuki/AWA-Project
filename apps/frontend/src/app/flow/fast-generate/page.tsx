@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, safeSessionStorage } from '@/lib/gcp-data';
+import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, safeSessionStorage, saveSessionToGcp } from '@/lib/gcp-data';
 import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -469,7 +469,9 @@ export default function FastGeneratePage() {
           console.warn('[Fast Generate] Error deducting credits:', creditError);
         }
       }
-      if (viewId) await endPageView(viewId);
+      if (viewId && typedSessionData?.userHash) {
+        await endPageView(typedSessionData.userHash, viewId);
+      }
 
     } catch (err) {
       console.error('Generation failed:', err);
@@ -757,6 +759,8 @@ export default function FastGeneratePage() {
       await updateSessionData({
         modificationPromptLog: appendModificationPromptLog(snap.modificationPromptLog, fastModLog),
       } as any);
+
+      void saveSessionToGcp(getSessionStoreSnapshot());
 
       // Save to Supabase
       try {

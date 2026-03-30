@@ -8,7 +8,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
+require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -28,7 +28,7 @@ async function applyMigration() {
   
   try {
     // Wczytaj plik migracji
-    const migrationPath = path.join(__dirname, '../supabase/migrations/20250123000000_radical_refactor.sql');
+    const migrationPath = path.join(__dirname, '../../supabase/migrations/20250123000000_radical_refactor.sql');
     const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
     
     // Podziel na pojedyncze komendy (rozdzielone przez ;)
@@ -78,7 +78,7 @@ async function applyMigrationDirect() {
   console.log('🚀 Zastosowywanie migracji refaktoru (bezpośrednio)...\n');
   
   try {
-    const migrationPath = path.join(__dirname, '../supabase/migrations/20250123000000_radical_refactor.sql');
+    const migrationPath = path.join(__dirname, '../../supabase/migrations/20250123000000_radical_refactor.sql');
     const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
     
     // Usuń komentarze i puste linie

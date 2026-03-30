@@ -46,7 +46,10 @@ $files = @(
   "02_session_image_ratings.sql",
   "09_participant_research_extensions.sql",
   "10_participant_swipes_dedupe.sql",
-  "11_participant_modification_prompt_log.sql"
+  "11_participant_modification_prompt_log.sql",
+  "12_participant_research_events.sql",
+  "13_generation_feedback_project_id_text.sql",
+  "14_session_export_json.sql"
 )
 
 foreach ($f in $files) {

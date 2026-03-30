@@ -13,10 +13,10 @@ const readline = require('readline');
 
 // Load env vars (Next.js style - try .env.local first, then .env)
 try {
-  require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
+  require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
 } catch (e) {
   try {
-    require('dotenv').config({ path: path.join(__dirname, '../.env') });
+    require('dotenv').config({ path: path.join(__dirname, '../../.env') });
   } catch (e2) {
     // Env vars should be in process.env already (Vercel, etc.)
   }

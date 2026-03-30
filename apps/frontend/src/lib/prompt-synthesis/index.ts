@@ -624,6 +624,27 @@ export async function synthesizeSixPrompts(
           'transitional', 'japanese', 'gothic', 'tropical'
         ];
 
+        const styleAliases: Record<string, string> = {
+          'art deco': 'art-deco',
+          'mid century': 'mid-century',
+          'mid century modern': 'mid-century',
+          'mid-century modern': 'mid-century',
+          'mcm': 'mid-century',
+          'scandi': 'scandinavian',
+          'japandi style': 'japandi',
+          'boho': 'bohemian',
+        };
+
+        const normalizeStyleToken = (raw: string): string | null => {
+          const s = String(raw).toLowerCase().trim().replace(/\s+/g, ' ');
+          if (!s) return null;
+          if (validStyleList.includes(s)) return s;
+          if (styleAliases[s]) return styleAliases[s];
+          const hyphenated = s.replace(/\s+/g, '-');
+          if (validStyleList.includes(hyphenated)) return hyphenated;
+          return null;
+        };
+
         inspirations.forEach((inspiration) => {
           const tags = (inspiration as any).tags || {};
           const styles = Array.isArray(tags.styles) ? tags.styles : [];
@@ -632,9 +653,9 @@ export async function synthesizeSixPrompts(
           const biophiliaVal = typeof tags.biophilia === 'number' ? tags.biophilia : null;
           
           styles.forEach((style: string) => {
-            const s = String(style).toLowerCase().trim();
-            if (validStyleList.includes(s)) {
-              styleCounts[s] = (styleCounts[s] || 0) + 1;
+            const canonical = normalizeStyleToken(style);
+            if (canonical) {
+              styleCounts[canonical] = (styleCounts[canonical] || 0) + 1;
             }
           });
 
@@ -711,8 +732,27 @@ export async function synthesizeSixPrompts(
       console.log('[InspirationReference] ========================================');
       
       const inspirationTags = extractInspirationTags(filteredInputs.inspirations);
-      
-      
+
+      const visionStyleLabels = Array.from(
+        new Set(
+          (filteredInputs.inspirations || []).flatMap((insp: any) =>
+            Array.isArray(insp?.tags?.styles)
+              ? insp.tags.styles.map((x: string) => String(x).trim()).filter(Boolean)
+              : [],
+          ),
+        ),
+      );
+      const visionColorLabels = Array.from(
+        new Set(
+          (filteredInputs.inspirations || []).flatMap((insp: any) =>
+            Array.isArray(insp?.tags?.colors)
+              ? insp.tags.colors.map((x: string) => String(x).trim()).filter(Boolean)
+              : [],
+          ),
+        ),
+      );
+      const visionSummary = inspirationTags.descriptions.filter(Boolean).join(' | ');
+
       // DEBUG: Log extracted tags
       console.log('[InspirationReference] Extracted tags from Gemini:', {
         styles: inspirationTags.additionalStyles,
@@ -800,14 +840,23 @@ export async function synthesizeSixPrompts(
         ? inspirationTags.additionalStyles[0]
         : 'modern';
 
-      const hexColors = inspirationTags.additionalColors
-        .slice(0, 8)
-        .map(color => {
-          if (!color) return null;
-          const hex = ensureHexColor(color);
-          return hex && hex !== '#808080' ? hex : null;
-        })
-        .filter((color): color is string => !!color);
+      const hexFromVisionLabels = visionColorLabels
+        .filter((c) => c.startsWith('#'))
+        .map((c) => ensureHexColor(c))
+        .filter((h) => h && h !== '#808080');
+
+      const hexColors = [
+        ...hexFromVisionLabels,
+        ...inspirationTags.additionalColors
+          .slice(0, 8)
+          .map((color) => {
+            if (!color) return null;
+            const hex = ensureHexColor(color);
+            return hex && hex !== '#808080' ? hex : null;
+          })
+          .filter((color): color is string => !!color),
+      ];
+      const hexColorsDeduped = Array.from(new Set(hexColors)).slice(0, 8);
 
       const allMaterials = inspirationTags.additionalMaterials.slice(0, 6);
 
@@ -836,7 +885,7 @@ export async function synthesizeSixPrompts(
         room_type: roomName, // Add room type
         primary_style: primaryStyle, // ONE dominant style only (first from inspirations)
         secondary_styles: inspirationTags.additionalStyles.slice(1, 3), // Subtle influences
-        colors: hexColors,
+        colors: hexColorsDeduped,
         materials: allMaterials,
         complexity,
         brightness,
@@ -844,7 +893,11 @@ export async function synthesizeSixPrompts(
         nature_metaphor: natureMetaphor,
         texture: allMaterials.length >= 2 ? `${allMaterials[0]} vs ${allMaterials[1]}` : (allMaterials[0] || ''),
         mood,
-        plants
+        plants,
+        // Text + raw VLM labels — critical when whitelist/hex mapping drops structured tags
+        vision_summary: visionSummary || undefined,
+        vision_style_labels: visionStyleLabels.length > 0 ? visionStyleLabels : undefined,
+        vision_color_labels: visionColorLabels.length > 0 ? visionColorLabels : undefined,
       };
       
       // Add concrete tags from Gemini analysis - ONLY from inspirations  
@@ -856,7 +909,10 @@ export async function synthesizeSixPrompts(
         secondary_styles: promptJson.secondary_styles,
         colorsCount: promptJson.colors.length,
         materialsCount: promptJson.materials.length,
-        plants: promptJson.plants
+        plants: promptJson.plants,
+        hasVisionSummary: !!promptJson.vision_summary,
+        visionStyleLabelsCount: visionStyleLabels.length,
+        visionColorLabelsCount: visionColorLabels.length,
       });
       
       // Generate explainability metadata for InspirationReference
@@ -868,7 +924,7 @@ export async function synthesizeSixPrompts(
           roomType: roomType,
           style: inspirationOnlyWeights.dominantStyle,
           mood: '',
-          colors: hexColors.slice(0, 3).join(', ') || '',
+          colors: hexColorsDeduped.slice(0, 3).join(', ') || visionColorLabels.slice(0, 3).join(', ') || '',
           materials: allMaterials.slice(0, 2).join(', ') || '',
           lighting: '',
           biophilia: blendedNatureDensity > 0.05 ? 'plants present' : '',

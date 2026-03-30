@@ -17,9 +17,8 @@
     "lint": "turbo run lint",
     "clean": "turbo run clean && rm -rf node_modules",
     "dev:frontend": "cd apps/frontend && npm run dev",
-    "dev:backend": "cd apps/modal-backend && modal serve main.py",
-    "deploy:frontend": "cd apps/frontend && vercel deploy",
-    "deploy:backend": "cd apps/modal-backend && modal deploy main.py"
+    "dev:backend-gcp": "pnpm --filter @aura/backend-gcp dev",
+    "deploy:frontend": "cd apps/frontend && vercel deploy"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

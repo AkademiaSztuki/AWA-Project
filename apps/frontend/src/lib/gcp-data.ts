@@ -4,9 +4,13 @@
  */
 
 import type { FlowStep, SessionData } from '@/types';
+import { GOOGLE_AUTH_EMAIL_STORAGE_KEY } from '@/lib/auth-storage-keys';
 import { gcpApi } from './gcp-api-client';
 import {
+  emitPersistenceSaveAudit855,
+  ingestPersistenceTrace855,
   isPersistenceDebugEnabled,
+  pickMergedRowAuditFields,
   shortHashForLog,
   summarizeParticipantRowForPersistenceDebug,
   summarizeSessionForPersistenceDebug,
@@ -89,13 +93,82 @@ export const safeSessionStorage = {
 };
 
 // ---------------------------------------------------------------------------
-// Legacy no-op stubs (kept for backward compatibility)
+// Research events (participant_research_events via Cloud Run)
+// `projectId` in older call sites is the participant user_hash.
 // ---------------------------------------------------------------------------
 export const logBehavioralEvent = async (
-  _projectId: string,
-  _eventType: string,
-  _eventData: Record<string, any>,
-) => {};
+  userHash: string,
+  eventType: string,
+  eventData: Record<string, unknown>,
+): Promise<void> => {
+  if (!userHash || String(userHash).trim() === '') {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H2',
+      location: 'gcp-data.ts:logBehavioralEvent',
+      message: 'skip_no_userHash',
+      data: { eventType },
+    });
+    // #endregion
+    return;
+  }
+  if (!gcpApi.isConfigured()) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H1',
+      location: 'gcp-data.ts:logBehavioralEvent',
+      message: 'skip_gcp_not_configured',
+      data: { eventType, userHashShort: shortHashForLog(userHash) },
+    });
+    // #endregion
+    return;
+  }
+  try {
+    void ensureParticipantExists(userHash);
+    const r = await gcpApi.research.events({
+      events: [
+        {
+          userHash,
+          eventType,
+          payload: eventData,
+          clientTimestamp: new Date().toISOString(),
+        },
+      ],
+    });
+    if (!r.ok) {
+      // #region agent log
+      ingestPersistenceTrace855({
+        hypothesisId: 'H3',
+        location: 'gcp-data.ts:logBehavioralEvent',
+        message: 'research_events_failed',
+        data: {
+          eventType,
+          userHashShort: shortHashForLog(userHash),
+          errSlice: String(r.error ?? '').slice(0, 400),
+          status: r.status ?? null,
+        },
+      });
+      // #endregion
+      if (isPersistenceDebugEnabled()) {
+        console.warn('[logBehavioralEvent]', eventType, r.error);
+      }
+    }
+  } catch (e) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H4',
+      location: 'gcp-data.ts:logBehavioralEvent',
+      message: 'exception',
+      data: {
+        eventType,
+        userHashShort: shortHashForLog(userHash),
+        errSlice: e instanceof Error ? e.message.slice(0, 400) : 'unknown',
+      },
+    });
+    // #endregion
+    if (isPersistenceDebugEnabled()) console.warn('[logBehavioralEvent]', e);
+  }
+};
 
 export const createProject = async (_userHash: string) => null;
 
@@ -130,6 +203,20 @@ export const saveGenerationFeedback = async (
   },
 ) => {
   const r = await gcpApi.research.generationFeedback(feedback);
+  if (!r.ok) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H3',
+      location: 'gcp-data.ts:saveGenerationFeedback',
+      message: 'generation_feedback_failed',
+      data: {
+        sessionIdSlice: String(feedback.sessionId ?? '').slice(0, 24),
+        errSlice: String(r.error ?? '').slice(0, 400),
+        status: r.status ?? null,
+      },
+    });
+    // #endregion
+  }
   return r.ok;
 };
 
@@ -197,6 +284,51 @@ function computeGenerationCountFromSession(sessionData: Record<string, unknown>)
   const mh = Array.isArray(sessionData.matrixHistory) ? sessionData.matrixHistory.length : 0;
   const gi = Array.isArray(sessionData.generatedImages) ? sessionData.generatedImages.length : 0;
   return Math.max(g, mh, gi);
+}
+
+/** Live Tinder aggregates from session (avoids zeroing DB after GCP rehydration left empty `swipes` but `totalImages` holds prior total). */
+function computeTinderStatsFromSession(sessionData: Record<string, unknown>): {
+  total: number;
+  likes: number;
+  dislikes: number;
+} {
+  const results = Array.isArray(sessionData.tinderResults)
+    ? (sessionData.tinderResults as Array<{ direction?: string }>)
+    : [];
+  const td = sessionData.tinderData as { swipes?: Array<{ direction?: string }>; totalImages?: number } | undefined;
+  const swipes = Array.isArray(td?.swipes) ? td.swipes : [];
+  const totalImages = typeof td?.totalImages === 'number' && td.totalImages > 0 ? td.totalImages : 0;
+
+  const countSwipeList = (arr: Array<{ direction?: string }>) => {
+    let likes = 0;
+    let dislikes = 0;
+    for (const s of arr) {
+      if (s?.direction === 'right') likes++;
+      else if (s?.direction === 'left') dislikes++;
+    }
+    return { len: arr.length, likes, dislikes };
+  };
+
+  const r = countSwipeList(results);
+  const w = countSwipeList(swipes);
+  const detailLen = Math.max(r.len, w.len);
+  const total = detailLen > 0 ? detailLen : totalImages;
+
+  let likes = 0;
+  let dislikes = 0;
+  if (w.len > 0) {
+    likes = w.likes;
+    dislikes = w.dislikes;
+  } else if (r.len > 0) {
+    likes = r.likes;
+    dislikes = r.dislikes;
+  }
+
+  return { total, likes, dislikes };
+}
+
+function numOr0(v: unknown): number {
+  return typeof v === 'number' && !Number.isNaN(v) ? v : 0;
 }
 
 /**
@@ -302,16 +434,61 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
     h.length > 14 ? `${h.slice(0, 10)}…${h.slice(-4)}` : h;
 
   if (DISABLE_SESSION_SYNC) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H1',
+      location: 'gcp-data.ts:saveSessionToGcp',
+      message: 'skip_session_sync_disabled',
+      data: {},
+    });
+    // #endregion
+    if (pdb) {
+      emitPersistenceSaveAudit855({
+        outcome: 'skipped',
+        skipReason: 'NEXT_PUBLIC_DISABLE_SESSION_SYNC',
+        userHashShort: '',
+      });
+    }
     if (dbg) {
       console.log('[session-sync:debug] save skipped (NEXT_PUBLIC_DISABLE_SESSION_SYNC)');
     }
     return true;
   }
   if (!sessionData?.userHash) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H2',
+      location: 'gcp-data.ts:saveSessionToGcp',
+      message: 'skip_no_userHash',
+      data: { hasSession: !!sessionData },
+    });
+    // #endregion
+    if (pdb) {
+      emitPersistenceSaveAudit855({
+        outcome: 'skipped',
+        skipReason: 'no_userHash',
+        userHashShort: '',
+      });
+    }
     if (dbg) console.warn('[session-sync:debug] save skipped: no userHash');
     return false;
   }
   if (!gcpApi.isConfigured()) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H1',
+      location: 'gcp-data.ts:saveSessionToGcp',
+      message: 'skip_gcp_not_configured',
+      data: { userHashShort: shortHash(String(sessionData.userHash)) },
+    });
+    // #endregion
+    if (pdb) {
+      emitPersistenceSaveAudit855({
+        outcome: 'skipped',
+        skipReason: 'NEXT_PUBLIC_GCP_API_BASE_URL_missing',
+        userHashShort: shortHashForLog(String(sessionData.userHash)),
+      });
+    }
     if (process.env.NODE_ENV === 'development') {
       console.warn(
         '[GCP] saveSessionToGcp skipped: set NEXT_PUBLIC_GCP_API_BASE_URL (Cloud Run API)',
@@ -353,9 +530,16 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
         : null;
     const authId = googleAuthUserId ?? undefined;
 
+    const oauthEmailRaw =
+      typeof window !== 'undefined' ? safeLocalStorage.getItem(GOOGLE_AUTH_EMAIL_STORAGE_KEY) : null;
+    const oauthEmail =
+      typeof oauthEmailRaw === 'string' && oauthEmailRaw.trim().length > 0
+        ? oauthEmailRaw.trim().toLowerCase()
+        : undefined;
+
     const finalized = finalizeSessionDataForParticipantPersist(sessionData as SessionData);
 
-    const localRow = mapSessionDataToParticipant(finalized, authId);
+    const localRow = mapSessionDataToParticipant(finalized, authId, oauthEmail);
     const localRowDefined = omitUndefinedValues(localRow as unknown as Record<string, unknown>);
 
     let mergedRow: Record<string, unknown> = {
@@ -376,7 +560,7 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
           rawAuthUserId = aid;
         }
         const remoteSession = mapParticipantToSessionData(raw);
-        const remoteRow = mapSessionDataToParticipant(remoteSession, authId) as unknown as Record<
+        const remoteRow = mapSessionDataToParticipant(remoteSession, authId, oauthEmail) as unknown as Record<
           string,
           unknown
         >;
@@ -418,6 +602,15 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
       mergedRow.auth_user_id = rawAuthUserId;
     }
 
+    if (
+      oauthEmail &&
+      (mergedRow.email === undefined ||
+        mergedRow.email === null ||
+        String(mergedRow.email).trim() === '')
+    ) {
+      mergedRow.email = oauthEmail;
+    }
+
     if (!mergedRow.consent_timestamp) {
       mergedRow.consent_timestamp = new Date().toISOString();
     }
@@ -431,6 +624,38 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
     }
     gc = Math.max(gc, computeGenerationCountFromSession(finalized as unknown as Record<string, unknown>));
     mergedRow.generations_count = gc;
+
+    // Tinder_*: merged local row can be 0 after GCP rehydration (empty swipes); never regress below remote or live session.
+    const liveTinder = computeTinderStatsFromSession(finalized as unknown as Record<string, unknown>);
+    const rawTt = rawParticipantRow?.tinder_total_swipes;
+    const rawTl = rawParticipantRow?.tinder_likes;
+    const rawTd = rawParticipantRow?.tinder_dislikes;
+    mergedRow.tinder_total_swipes = Math.max(
+      numOr0(mergedRow.tinder_total_swipes),
+      numOr0(rawTt),
+      liveTinder.total,
+    );
+    mergedRow.tinder_likes = Math.max(
+      numOr0(mergedRow.tinder_likes),
+      numOr0(rawTl),
+      liveTinder.likes,
+    );
+    mergedRow.tinder_dislikes = Math.max(
+      numOr0(mergedRow.tinder_dislikes),
+      numOr0(rawTd),
+      liveTinder.dislikes,
+    );
+
+    // inspirations_count: session array may be empty while rows exist in participant_images; do not regress.
+    const rawInsp = rawParticipantRow?.inspirations_count;
+    const sessionInspLen = Array.isArray((finalized as unknown as { inspirations?: unknown[] }).inspirations)
+      ? (finalized as { inspirations: unknown[] }).inspirations.length
+      : 0;
+    mergedRow.inspirations_count = Math.max(
+      numOr0(mergedRow.inspirations_count),
+      numOr0(rawInsp),
+      sessionInspLen,
+    );
 
     if (dbg) {
       console.log(
@@ -593,6 +818,17 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
         stage: 'saveSession_retry_exhausted',
         error: r.error,
       });
+      if (pdb) {
+        emitPersistenceSaveAudit855({
+          outcome: 'failed',
+          userHashShort: shortHashForLog(String(sessionData.userHash)),
+          mergedAudit: pickMergedRowAuditFields(mergedRow),
+          remoteMergeUsed,
+          httpStatus: r.status ?? null,
+          errSlice: String(r.error ?? '').slice(0, 400),
+          sessionPersistPartial: r.data?.sessionPersistPartial === true,
+        });
+      }
       return false;
     }
     if (dbg) {
@@ -601,21 +837,41 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
       });
     }
     if (pdb) {
+      let readBackSummary: Record<string, unknown> | null = null;
       try {
         const fr = await gcpApi.participants.fetchSession(sessionData.userHash);
         const row = fr.data?.participant as Record<string, unknown> | undefined;
+        readBackSummary = summarizeParticipantRowForPersistenceDebug(row);
         console.log('[persistence:debug] read-back after save (which DB fields are set)', {
           userHash: shortHashForLog(String(sessionData.userHash)),
-          ...summarizeParticipantRowForPersistenceDebug(row),
+          ...readBackSummary,
         });
       } catch (readErr) {
         console.warn('[persistence:debug] read-back after save failed', readErr);
+        readBackSummary = { readBackFailed: true };
       }
+      emitPersistenceSaveAudit855({
+        outcome: 'ok',
+        userHashShort: shortHashForLog(String(sessionData.userHash)),
+        mergedAudit: pickMergedRowAuditFields(mergedRow),
+        remoteMergeUsed,
+        httpStatus: r.status ?? null,
+        errSlice: null,
+        sessionPersistPartial: r.data?.sessionPersistPartial === true,
+        readBack: readBackSummary,
+      });
     }
     return true;
   } catch (err) {
     console.error('saveSessionToGcp error:', err);
     if (sessionData?.userHash) {
+      if (pdb) {
+        emitPersistenceSaveAudit855({
+          outcome: 'exception',
+          userHashShort: shortHashForLog(String(sessionData.userHash)),
+          exceptionMessage: err instanceof Error ? err.message : String(err),
+        });
+      }
       if (dbg) {
         console.warn('[session-sync:debug] save exception', {
           userHash: shortHash(sessionData.userHash),
@@ -632,11 +888,14 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
 };
 
 // ---------------------------------------------------------------------------
-// Legacy stubs
+// Participant id for logging (legacy name: was a Supabase project row)
 // ---------------------------------------------------------------------------
 export const getOrCreateProjectId = async (
-  _userHash: string,
-): Promise<string | null> => null;
+  userHash: string | undefined,
+): Promise<string | null> => {
+  if (!userHash || String(userHash).trim() === '') return null;
+  return String(userHash);
+};
 
 export const saveTinderSwipes = async (
   _projectId: string,
@@ -644,17 +903,42 @@ export const saveTinderSwipes = async (
 ) => {};
 
 export const saveDeviceContext = async (
-  _projectId: string,
-  _context: Record<string, any>,
-) => {};
+  userHash: string,
+  context: Record<string, unknown>,
+): Promise<void> => {
+  if (!userHash) return;
+  await logBehavioralEvent(userHash, 'device_context', context);
+};
+
+function newPageViewId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
 
 export const startPageView = async (
-  _projectId: string,
-  _page: string,
-  _meta?: any,
-) => null;
+  userHash: string | undefined,
+  page: string,
+  meta?: Record<string, unknown>,
+): Promise<string | null> => {
+  if (!userHash || !gcpApi.isConfigured()) return null;
+  const pageViewId = newPageViewId();
+  await logBehavioralEvent(userHash, 'page_view_start', {
+    pageViewId,
+    page,
+    ...(meta ?? {}),
+  });
+  return pageViewId;
+};
 
-export const endPageView = async (_pageViewId: string) => {};
+export const endPageView = async (
+  userHash: string | undefined,
+  pageViewId: string | null | undefined,
+): Promise<void> => {
+  if (!userHash || !pageViewId) return;
+  await logBehavioralEvent(userHash, 'page_view_end', { pageViewId });
+};
 
 export const saveTinderExposures = async (
   _projectId: string,
@@ -683,9 +967,34 @@ export const saveParticipantSwipes = async (
   if (!userHash || !swipes.length) return;
 
   const participantExists = await ensureParticipantExists(userHash);
-  if (!participantExists) return;
+  if (!participantExists) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H5',
+      location: 'gcp-data.ts:saveParticipantSwipes',
+      message: 'skip_ensure_failed',
+      data: { userHashShort: shortHashForLog(userHash), swipeCount: swipes.length },
+    });
+    // #endregion
+    return;
+  }
 
   const r = await gcpApi.swipes.save(userHash, swipes);
+  if (!r.ok) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H3',
+      location: 'gcp-data.ts:saveParticipantSwipes',
+      message: 'swipes_save_failed',
+      data: {
+        userHashShort: shortHashForLog(userHash),
+        count: swipes.length,
+        errSlice: String(r.error ?? '').slice(0, 400),
+        status: r.status ?? null,
+      },
+    });
+    // #endregion
+  }
   if (isPersistenceDebugEnabled()) {
     console.log('[persistence:debug] swipes POST', {
       userHash: shortHashForLog(userHash),
@@ -711,9 +1020,33 @@ export async function syncMatrixHistoryToGcp(
       }>
     | undefined,
 ): Promise<boolean> {
-  if (!userHash || !gcpApi.isConfigured()) return false;
+  if (!userHash || !gcpApi.isConfigured()) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: !userHash ? 'H2' : 'H1',
+      location: 'gcp-data.ts:syncMatrixHistoryToGcp',
+      message: 'skip_no_user_or_gcp',
+      data: {
+        hasUserHash: !!userHash,
+        gcpConfigured: gcpApi.isConfigured(),
+        matrixLen: matrixHistory?.length ?? 0,
+      },
+    });
+    // #endregion
+    return false;
+  }
   const ensured = await ensureParticipantExists(userHash);
-  if (!ensured) return false;
+  if (!ensured) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H5',
+      location: 'gcp-data.ts:syncMatrixHistoryToGcp',
+      message: 'skip_ensure_failed',
+      data: { userHashShort: shortHashForLog(userHash), matrixLen: matrixHistory?.length ?? 0 },
+    });
+    // #endregion
+    return false;
+  }
 
   const entries = (matrixHistory || []).map((h, stepIndex) => {
     const url = h.imageUrl;
@@ -735,6 +1068,21 @@ export async function syncMatrixHistoryToGcp(
     };
   });
   const r = await gcpApi.participants.matrixSync(userHash, entries);
+  if (!r.ok) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H3',
+      location: 'gcp-data.ts:syncMatrixHistoryToGcp',
+      message: 'matrix_sync_http_failed',
+      data: {
+        userHashShort: shortHashForLog(userHash),
+        entryCount: entries.length,
+        errSlice: String((r as { error?: unknown }).error ?? '').slice(0, 400),
+        status: r.status ?? null,
+      },
+    });
+    // #endregion
+  }
   if (isPersistenceDebugEnabled()) {
     console.log('[persistence:debug] matrix sync POST', {
       userHash: shortHashForLog(userHash),
@@ -853,25 +1201,36 @@ export const endGenerationJob = async (
 ) => {};
 
 export const saveImageRatingEvent = async (
-  _projectId: string,
-  _event: { local_image_id: string; rating_key: string; value: number },
-) => {};
+  userHash: string,
+  event: { local_image_id: string; rating_key: string; value: number },
+): Promise<void> => {
+  if (!userHash) return;
+  await logBehavioralEvent(userHash, 'image_rating_detail', {
+    local_image_id: event.local_image_id,
+    rating_key: event.rating_key,
+    value: event.value,
+  });
+};
 
 export const logHealthCheck = async (
-  _projectId: string,
-  _ok: boolean,
-  _latency_ms: number,
-) => {};
+  userHash: string,
+  ok: boolean,
+  latency_ms: number,
+): Promise<void> => {
+  await logBehavioralEvent(userHash, 'health_check', { ok, latency_ms });
+};
 
 export const logErrorEvent = async (
-  _projectId: string,
-  _payload: {
+  userHash: string,
+  payload: {
     source: string;
     message: string;
     stack?: string;
-    meta?: any;
+    meta?: unknown;
   },
-) => {};
+): Promise<void> => {
+  await logBehavioralEvent(userHash, 'client_error', payload as Record<string, unknown>);
+};
 
 // ---------------------------------------------------------------------------
 // Ensure participant exists
@@ -879,9 +1238,33 @@ export const logErrorEvent = async (
 export const ensureParticipantExists = async (
   userHash: string,
 ): Promise<boolean> => {
-  if (!userHash) return false;
+  if (!userHash) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H2',
+      location: 'gcp-data.ts:ensureParticipantExists',
+      message: 'no_userHash',
+      data: {},
+    });
+    // #endregion
+    return false;
+  }
 
   const r = await gcpApi.participants.ensure(userHash);
+  if (!r.ok) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H5',
+      location: 'gcp-data.ts:ensureParticipantExists',
+      message: 'ensure_failed',
+      data: {
+        userHashShort: shortHashForLog(userHash),
+        errSlice: String(r.error ?? '').slice(0, 400),
+        status: r.status ?? null,
+      },
+    });
+    // #endregion
+  }
   return r.ok;
 };
 

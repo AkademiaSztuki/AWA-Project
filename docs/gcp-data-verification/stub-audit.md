@@ -2,20 +2,30 @@
 
 Funkcje w [`apps/frontend/src/lib/gcp-data.ts`](../../apps/frontend/src/lib/gcp-data.ts): **część jest pusta** (legacy / no-op) — wywołanie zwraca sukces lub „nic”, bez INSERT do Cloud SQL.
 
-## Brak persystencji w bazie
+## Zaimplementowane (Cloud SQL)
+
+| Funkcja | Gdzie trafia |
+|---------|----------------|
+| `logBehavioralEvent` | `POST /api/research/events` → tabela **`participant_research_events`** (migracja `infra/gcp/sql/12_participant_research_events.sql`) |
+| `startPageView` / `endPageView` | Zdarzenia `page_view_start` / `page_view_end` w **`participant_research_events`** |
+| `saveImageRatingEvent` | Zdarzenie `image_rating_detail` w **`participant_research_events`** |
+| `saveDeviceContext` | Zdarzenie `device_context` w **`participant_research_events`** |
+| `getOrCreateProjectId` | Zwraca **`user_hash`** (kompatybilność ze starym nazewnictwem `projectId`) |
+
+[`apps/frontend/src/app/api/log/route.ts`](../../apps/frontend/src/app/api/log/route.ts) akceptuje `userHash` lub `projectId` i wywołuje `logBehavioralEvent`.
+
+## Nadal brak persystencji w bazie (stuby / null)
 
 | Funkcja | Stan | Skutek |
 |---------|------|--------|
-| `logBehavioralEvent` | no-op | [`apps/frontend/src/app/api/log/route.ts`](../../apps/frontend/src/app/api/log/route.ts) zwraca `success: true` — **brak tabeli zdarzeń** |
 | `saveDnaSnapshot`, `saveLadderPathRows`, `saveLadderSummary` | no-op | Brak osobnych tabel; DNA/ladder muszą być w `SessionData` → `POST /api/session` → kolumny `participants` (implicit, `ladder_path`, …) |
-| `saveImageRatingEvent` | no-op | Oceny w `generate` / `fast-generate` **nie** trafiają do dedykowanej tabeli, chyba że zmapujecie je do `SessionData` / innej tabeli później |
-| `startPageView` / `endPageView` | no-op | Brak telemetrii page views w DB |
-| `saveGenerationSet`, `saveGeneratedImages`, `getOrCreateProjectId` | legacy / null | Nie używać `projectId` jako klucza badawczego |
+| `saveGenerationSet`, `saveGeneratedImages` | legacy / null | Stare tabele usunięte; obrazy i joby przez `participant_generations` / GCS |
+| `saveTinderSwipes`, `saveTinderExposures`, `saveTinderSwipesDetailed` | no-op | Swipy badawcze: **`saveParticipantSwipes`** → `participant_swipes` |
 
 ## Co robić przy weryfikacji
 
-1. Dla każdego zdarzenia z powyższej listy: sprawdźcie, czy **ta sama informacja** pojawia się w `participants` (przez `mapSessionDataToParticipant`) albo w tabelach (`participant_swipes`, `participant_generations`, `research_*`).
-2. Jeśli **nie** — dane badawcze są **niezapisane**; przed zbiorem danych: albo akceptujecie brak, albo implementujecie zapis (np. rozszerzenie `POST /api/session` lub nowa tabela).
+1. Dla każdego zdarzenia z listy stubów: sprawdźcie, czy **ta sama informacja** pojawia się w `participants` (przez `mapSessionDataToParticipant`) albo w tabelach (`participant_swipes`, `participant_generations`, `research_*`).
+2. Zdarzenia drobnoziarniste: `SELECT * FROM participant_research_events WHERE user_hash = '…' ORDER BY created_at DESC`.
 
 ## Powiązanie z planem
 

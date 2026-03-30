@@ -1,25 +1,71 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { GlassCard } from '../ui/GlassCard';
 import GlassSurface from '../ui/GlassSurface';
 import { useSessionData } from '@/hooks/useSessionData';
 import { AwaDialogue } from '@/components/awa';
+import { gcpApi } from '@/lib/gcp-api-client';
+import { pruneLargeStringsForSessionExport } from '@/lib/prune-session-export';
+
+function pushSessionExportToServer(userHash: string, sessionObject: unknown, approxRawChars: number): void {
+  const pruned = pruneLargeStringsForSessionExport(sessionObject);
+  try {
+    void gcpApi.participants.saveSessionExport(userHash, pruned).then((res) => {
+      const prunedChars = JSON.stringify(pruned).length;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '855d7b' },
+        body: JSON.stringify({
+          sessionId: '855d7b',
+          hypothesisId: 'H_session_export_auto',
+          location: 'ThanksScreen.tsx:pushSessionExportToServer',
+          message: 'session_export_persist',
+          data: {
+            source: 'thanks_auto',
+            ok: res.ok,
+            status: res.status ?? null,
+            approxRawChars,
+            prunedPayloadChars: prunedChars,
+          },
+          timestamp: Date.now(),
+          runId: 'thanks-session-export',
+        }),
+      }).catch(() => {});
+      // #endregion
+      if (!res.ok && res.status !== 503) {
+        console.warn('[ThanksScreen] session_export_json save failed:', res.error);
+      }
+    });
+  } catch {
+    console.warn('[ThanksScreen] Could not send session export to server');
+  }
+}
 
 export function ThanksScreen() {
-  const { sessionData, exportSessionData } = useSessionData();
+  const { sessionData, isInitialized } = useSessionData();
+  const lastAutoSentPayloadRef = useRef<string | null>(null);
 
-  const handleDownloadData = () => {
-    const dataStr = exportSessionData();
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+  const serializedSession =
+    isInitialized && sessionData?.userHash ? JSON.stringify(sessionData, null, 2) : '';
 
-    const exportFileDefaultName = `aura-session-${sessionData?.userHash?.split('_')[1]}.json`;
-
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-  };
+  useEffect(() => {
+    if (!isInitialized || !serializedSession) return;
+    let hash: string;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(serializedSession) as unknown;
+      const o = parsed as { userHash?: string };
+      hash = typeof o.userHash === 'string' ? o.userHash : '';
+    } catch {
+      return;
+    }
+    if (!hash) return;
+    if (lastAutoSentPayloadRef.current === serializedSession) return;
+    lastAutoSentPayloadRef.current = serializedSession;
+    pushSessionExportToServer(hash, parsed, serializedSession.length);
+  }, [isInitialized, serializedSession]);
 
   return (
     <div className="min-h-screen flex flex-col w-full">
@@ -36,58 +82,33 @@ export function ThanksScreen() {
               dla rozwoju naukowego w dziedzinie projektowania wnętrz.
             </p>
 
-            {/* Informacja o badaniu */}
             <div className="text-sm text-gray-500 mb-8 font-modern">
               <p>
                 Twoje dane zostały anonimowo zebrane dla celów badania doktorskiego 
                 na Akademii Sztuki w Szczecinie o współpracy człowieka z AI w projektowaniu.
               </p>
-              <p className="mt-2">
-                ID sesji: <code className="bg-gray-100 px-1 rounded">{sessionData?.userHash}</code>
-              </p>
             </div>
 
-            {/* Eksport danych */}
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                <GlassSurface
-                  width={300}
-                  height={56}
-                  borderRadius={32}
-                  className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
-                  onClick={handleDownloadData}
-                  aria-label="Pobierz dane"
-                  style={{ opacity: 1 }}
-                >
-                  Pobierz swoje dane (JSON)
-                </GlassSurface>
-
-                {sessionData?.coreProfileComplete && (
-                  <GlassSurface
-                    width={200}
-                    height={56}
-                    borderRadius={32}
-                    className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
-                    onClick={() => window.location.href = '/dashboard'}
-                    aria-label="Przejdź do dashboard"
-                    style={{ opacity: 1 }}
-                  >
-                    Przejdź do Dashboard
-                  </GlassSurface>
-                )}
-              </div>
-
-              <p className="text-xs text-gray-400 font-modern">
-                Dziękujemy za udział w badaniu Research through Design. 
-                Twoja przygoda z IDA zakończyła się, ale nauka trwa dalej!
-              </p>
+            <div className="flex justify-center">
+              <GlassSurface
+                width={260}
+                height={56}
+                borderRadius={32}
+                className="cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
+                onClick={() => {
+                  window.location.href = '/dashboard';
+                }}
+                aria-label="Wróć do dashboard"
+                style={{ opacity: 1 }}
+              >
+                Wróć do dashboard
+              </GlassSurface>
             </div>
           </div>
         </GlassCard>
         </div>
       </div>
 
-      {/* Dialog AWA na dole - cała szerokość */}
       <div className="w-full">
         <AwaDialogue 
           currentStep="thanks" 

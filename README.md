@@ -1,58 +1,59 @@
 # AWA - AI Interior Design Dialogue Research Platform
 
-## Architektura Hybrydowa
+## Architecture
 
 - **Frontend (Vercel)**: Next.js 14 + Three.js + Glassmorphism UI
-- **Backend (Modal.com)**: Python API + FLUX 1 Kontext + GPU Processing  
-- **Database**: Supabase PostgreSQL + Storage
+- **API / persistence (Google Cloud)**: Cloud Run backend ([`apps/backend-gcp`](apps/backend-gcp)), Cloud SQL, Cloud Storage
+- **Image generation**: Google (Vertex / Gemini image APIs) via Next.js routes under `/api/google/*`
 - **Monitoring**: Research Through Design data collection
 
-## Szybki Start
+## Quick start
 
 ```bash
-# Instalacja zależności
-npm install
+pnpm install
 
-# Rozwój lokalny 
-npm run dev:frontend  # Next.js na :3000
-npm run dev:backend   # Modal serve
+# Local development
+pnpm dev:frontend          # Next.js on :3000
+pnpm dev:backend-gcp       # Express API (requires DATABASE_URL)
+
+# Or run the full monorepo dev graph (frontend + backend-gcp + packages)
+pnpm dev
 
 # Deployment
-npm run deploy:frontend  # Vercel
-npm run deploy:backend   # Modal.com
+pnpm run deploy:frontend   # Vercel
+# Deploy backend-gcp to Cloud Run per infra docs (see infra/gcp)
 ```
 
-## Struktura Projektu
+## Project layout
 
-- `apps/frontend/` - Aplikacja Next.js z postacią AWA
-- `apps/modal-backend/` - API Modal.com z FLUX generacją
-- `packages/shared-types/` - Wspólne typy TypeScript/Python
-- `packages/ui-components/` - Komponenty glassmorphism UI
+- `apps/frontend/` - Next.js app (AWA character, flows, GCP client)
+- `apps/backend-gcp/` - Cloud Run API (Postgres, research routes, auth helpers)
+- `infra/gcp/sql/` - **Source of truth** for Cloud SQL schema
+- `docs/archive/modal-backend/` - Legacy Modal.com Python backend (archived)
 
-## Konfiguracja
+## Configuration
 
-### Frontend (.env.local)
-```
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-key
-NEXT_PUBLIC_MODAL_API_URL=your-modal-endpoint
-```
+### Frontend (`.env.local`)
 
-### Backend (Modal secrets)  
-```
-HUGGINGFACE_TOKEN=your-hf-token
-FLUX_API_KEY=your-flux-key
-```
+Set at least:
 
-## Badania Naukowe
+- `NEXT_PUBLIC_GCP_API_BASE_URL` - Cloud Run base URL for persistence
+- Variables for Google image generation as documented in the frontend app
 
-Aplikacja zbiera dane zgodnie z metodologią Research Through Design:
-- Dane deklaratywne (odpowiedzi użytkownika)
-- Dane behawioralne (interakcje z AWA)  
-- Dane wynikowe (parametry AI, generacje)
+### Backend GCP (`DATABASE_URL`, etc.)
 
-Persystencja produkcyjna (Google Cloud SQL + Cloud Storage) i **plan weryfikacji zapisu** (checklisty, SQL, audyt stubów): zobacz [docs/gcp-data-verification/README.md](docs/gcp-data-verification/README.md).
+See [`infra/gcp/INSTRUKCJA_PL.md`](infra/gcp/INSTRUKCJA_PL.md) and backend README.
+
+## Research
+
+The app collects data per Research Through Design:
+
+- Declarative (user answers)
+- Behavioral (interactions; persisted via GCP when wired — see `gcp-data` + research events API)
+- Outcomes (AI parameters, generations)
+
+Persistence verification checklists: [docs/gcp-data-verification/README.md](docs/gcp-data-verification/README.md).
 
 ## Akademia Sztuk Pięknych - Doktorat
 
-Projekt realizowany w ramach badań nad współpracą człowiek-AI w projektowaniu wnętrz.
+Project within research on human–AI collaboration in interior design.

@@ -421,7 +421,18 @@ participantsRouter.post('/participants/link-auth', async (req, res) => {
     userHash,
     authUserId,
     consentTimestamp,
-  } = req.body as { userHash?: string; authUserId?: string; consentTimestamp?: string };
+    email: rawEmail,
+  } = req.body as {
+    userHash?: string;
+    authUserId?: string;
+    consentTimestamp?: string;
+    email?: string;
+  };
+
+  const email =
+    typeof rawEmail === 'string' && rawEmail.trim().length > 0
+      ? rawEmail.trim().toLowerCase()
+      : null;
 
   if (!userHash || !authUserId) {
     return res.status(400).json({ ok: false, error: 'userHash and authUserId are required' });
@@ -454,13 +465,16 @@ participantsRouter.post('/participants/link-auth', async (req, res) => {
         consentTimestamp: consentTimestamp || null,
       });
 
+      // $3 = OAuth email when provided; COALESCE($3, email) fills empty column and overwrites when Google sends a value
       await client.query(
         `
           UPDATE participants
-          SET auth_user_id = $2, updated_at = NOW()
+          SET auth_user_id = $2,
+              email = COALESCE($3::text, participants.email),
+              updated_at = NOW()
           WHERE user_hash = $1
         `,
-        [userHash, authUserId]
+        [userHash, authUserId, email],
       );
 
       await client.query('COMMIT');
@@ -595,6 +609,62 @@ participantsRouter.get('/participants/completion-status', async (req, res) => {
     }
   } catch (error) {
     console.error('participants/completion-status error', error);
+    return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
+
+// POST /participants/session-export — same JSON as "Pobierz dane" (thanks page); requires column session_export_json
+participantsRouter.post('/participants/session-export', async (req, res) => {
+  const { userHash, sessionExport } = req.body as {
+    userHash?: string;
+    sessionExport?: unknown;
+  };
+
+  if (!userHash || typeof userHash !== 'string') {
+    return res.status(400).json({ ok: false, error: 'userHash is required' });
+  }
+  if (sessionExport === undefined || sessionExport === null) {
+    return res.status(400).json({ ok: false, error: 'sessionExport is required' });
+  }
+
+  let payload: string;
+  try {
+    payload = JSON.stringify(sessionExport);
+  } catch {
+    return res.status(400).json({ ok: false, error: 'sessionExport_not_serializable' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      const upd = await client.query(
+        `
+        UPDATE participants
+        SET session_export_json = $2::jsonb,
+            updated_at = NOW()
+        WHERE user_hash = $1
+        `,
+        [userHash, payload],
+      );
+      if (upd.rowCount === 0) {
+        return res.status(404).json({ ok: false, error: 'participant_not_found' });
+      }
+      return res.json({ ok: true });
+    } catch (e) {
+      const err = e as Error & { code?: string; message?: string };
+      if (err.code === '42703') {
+        return res.status(503).json({
+          ok: false,
+          error: 'column_missing',
+          detail: 'Run migration 14_session_export_json.sql on Cloud SQL (session_export_json).',
+        });
+      }
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('participants/session-export error', error);
     return res.status(500).json({ ok: false, error: 'internal_error' });
   }
 });

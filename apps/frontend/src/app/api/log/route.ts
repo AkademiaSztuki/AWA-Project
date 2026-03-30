@@ -4,20 +4,26 @@ import { logBehavioralEvent } from '@/lib/gcp-data';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { projectId, eventType, eventData } = body;
+    const { projectId, userHash, eventType, eventData } = body as {
+      projectId?: string;
+      userHash?: string;
+      eventType?: string;
+      eventData?: Record<string, unknown>;
+    };
 
-    if (!projectId || !eventType) {
+    const hash = userHash ?? projectId;
+    if (!hash || !eventType) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields (userHash or projectId, and eventType)' },
         { status: 400 }
       );
     }
 
     if (eventType === 'session_persist_failed') {
-      console.error('[api/log] session_persist_failed', { projectId, eventData });
+      console.error('[api/log] session_persist_failed', { userHash: hash, eventData });
     }
 
-    await logBehavioralEvent(projectId, eventType, eventData);
+    await logBehavioralEvent(hash, eventType, eventData ?? {});
 
     return NextResponse.json({ success: true });
   } catch (error) {

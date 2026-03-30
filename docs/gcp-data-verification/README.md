@@ -52,6 +52,8 @@ W konsoli GCP: **Cloud Run** → usługa `backend-gcp` → **Logi**.
 
 Plik: [verification-queries.sql](verification-queries.sql) — kontrole po `user_hash` / `auth_user_id`, kohorty `path_type`, implicit vs explicit, **`participant_matrix_entries`** (zapis po `/flow/generate` w trybie macierzy, sync z frontu).
 
+**Zdarzenia behawioralne:** tabela `participant_research_events` (migracja [`infra/gcp/sql/12_participant_research_events.sql`](../../infra/gcp/sql/12_participant_research_events.sql)), endpoint `POST /api/research/events` — frontend wysyła m.in. `page_view_start` / `page_view_end`, `generation_initial`, `image_rating_detail` przez `logBehavioralEvent` w [`gcp-data.ts`](../../apps/frontend/src/lib/gcp-data.ts).
+
 ---
 
 ## 3. Checklista UX — ścieżka **pełna** (`path_type = 'full'`)

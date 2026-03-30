@@ -10,6 +10,7 @@ import {
 } from '@/lib/gcp-data';
 import { uploadSpaceImage, saveSpaceImagesMetadata, fetchParticipantImages } from '@/lib/remote-spaces';
 import { gcpApi } from '@/lib/gcp-api-client';
+import { GOOGLE_AUTH_EMAIL_STORAGE_KEY } from '@/lib/auth-storage-keys';
 import { mergeInspirationLists } from '@/lib/inspiration-merge';
 
 const SESSION_STORAGE_KEY = 'aura_session';
@@ -545,9 +546,15 @@ export const useSession = (): UseSessionReturn => {
           } else {
             const existingHash = await getUserHashFromAuth(authUserId);
             if (!existingHash) {
+              const storedEmail = safeLocalStorage.getItem(GOOGLE_AUTH_EMAIL_STORAGE_KEY);
+              const emailForLink =
+                typeof storedEmail === 'string' && storedEmail.trim().length > 0
+                  ? storedEmail.trim()
+                  : undefined;
               const linked = await gcpApi.participants.linkAuth({
                 userHash,
                 authUserId,
+                email: emailForLink,
               });
               if (!linked.ok) {
                 console.warn('[useSession] link-auth failed:', linked.error);
@@ -559,6 +566,27 @@ export const useSession = (): UseSessionReturn => {
           }
         } catch (error) {
           console.warn('[useSession] Failed to link userHash to auth_user_id:', error);
+        }
+      }
+
+      // Always push OAuth email to DB when we have hash + Google sub (covers users already linked before email sync existed)
+      if (authUserId && userHash) {
+        const rawEm = safeLocalStorage.getItem(GOOGLE_AUTH_EMAIL_STORAGE_KEY);
+        const em =
+          typeof rawEm === 'string' && rawEm.trim().length > 0 ? rawEm.trim().toLowerCase() : null;
+        if (em) {
+          try {
+            const syncRes = await gcpApi.participants.linkAuth({
+              userHash,
+              authUserId,
+              email: em,
+            });
+            if (!syncRes.ok) {
+              console.warn('[useSession] link-auth email refresh failed:', syncRes.error);
+            }
+          } catch (e) {
+            console.warn('[useSession] link-auth email refresh error:', e);
+          }
         }
       }
 

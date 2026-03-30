@@ -76,6 +76,8 @@ export type SaveParticipantImagesResult = {
   failed: number;
   /** `participant_images.id` (UUID) for each successful save, in order. */
   imageIds: string[];
+  /** Per input row (same order as `images` argument). */
+  details: Array<{ imageId?: string; publicUrl?: string }>;
 };
 
 export async function saveParticipantImages(
@@ -93,13 +95,14 @@ export async function saveParticipantImages(
   }>,
 ): Promise<SaveParticipantImagesResult> {
   if (!userHash || images.length === 0) {
-    return { ok: true, saved: 0, failed: 0, imageIds: [] };
+    return { ok: true, saved: 0, failed: 0, imageIds: [], details: [] };
   }
 
   try {
     let savedCount = 0;
     let failedCount = 0;
     const imageIds: string[] = [];
+    const details: Array<{ imageId?: string; publicUrl?: string }> = [];
 
     for (const img of images) {
       const tags = img.tags || {};
@@ -148,11 +151,26 @@ export async function saveParticipantImages(
 
       if (result.ok) {
         savedCount++;
-        const body = result.data as { imageId?: string } | undefined;
+        const body = result.data as
+          | { imageId?: string; public_url?: string; url?: string }
+          | undefined;
         const id = body?.imageId;
-        if (id) imageIds.push(String(id));
+        const publicUrl =
+          body?.public_url ||
+          body?.url ||
+          (!img.url.startsWith('data:') && (img.url.startsWith('http://') || img.url.startsWith('https://'))
+            ? img.url
+            : undefined);
+        if (id) {
+          const sid = String(id);
+          imageIds.push(sid);
+          details.push({ imageId: sid, publicUrl });
+        } else {
+          details.push({ publicUrl });
+        }
       } else {
         failedCount++;
+        details.push({});
         console.warn('[remote-spaces] GCP save failed', result.error);
       }
     }
@@ -167,10 +185,10 @@ export async function saveParticipantImages(
         imageIdsReturned: imageIds.length,
       });
     }
-    return { ok, saved: savedCount, failed: failedCount, imageIds };
+    return { ok, saved: savedCount, failed: failedCount, imageIds, details };
   } catch (e) {
     console.warn('[remote-spaces] saveParticipantImages error', e);
-    return { ok: false, saved: 0, failed: images.length, imageIds: [] };
+    return { ok: false, saved: 0, failed: images.length, imageIds: [], details: [] };
   }
 }
 

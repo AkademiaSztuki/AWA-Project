@@ -11,7 +11,12 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSessionData } from "@/hooks/useSessionData";
 import { analyzeInspirationsWithGamma, type InspirationTaggingResult } from "@/lib/vision/gamma-tagging";
 import { fileToNormalizedDataUrl } from "@/lib/utils";
-import { saveParticipantImages } from "@/lib/remote-spaces";
+import {
+  saveParticipantImages,
+  fetchParticipantImages,
+  deleteParticipantImage,
+  updateParticipantImageMetadata,
+} from "@/lib/remote-spaces";
 import { gcpApi } from "@/lib/gcp-api-client";
 import { 
   Upload, 
@@ -36,6 +41,9 @@ interface LocalInspiration {
 }
 
 const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[min(85vh,900px)]";
+
+const PARTICIPANT_IMAGE_ID_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function InspirationsPage() {
   const { language } = useLanguage();
@@ -110,6 +118,72 @@ export default function InspirationsPage() {
     // ignore blob: and other schemes
     return undefined;
   };
+
+  // Load existing inspiration rows from GCP when session was rehydrated with inspirations: []
+  // (otherwise handleSave deletes all DB rows when the payload has only local ids).
+  useEffect(() => {
+    const userHash = (sessionData as any)?.userHash as string | undefined;
+    if (!userHash) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const all = await fetchParticipantImages(userHash);
+        if (cancelled) return;
+        const inspRows = all.filter((img) => img.type === 'inspiration');
+        if (inspRows.length === 0) return;
+
+        setItems((prev) => {
+          const fromGcp: LocalInspiration[] = inspRows.map((img) => ({
+            id: img.id,
+            previewUrl: img.url,
+            imageBase64: img.url.startsWith('data:') ? img.url : undefined,
+            tags: img.tags as LocalInspiration['tags'],
+            description: img.description,
+            persisted: true,
+            addedAt: img.createdAt,
+          }));
+
+          const byId = new Map<string, LocalInspiration>();
+          for (const g of fromGcp) {
+            byId.set(g.id, g);
+          }
+          for (const p of prev) {
+            if (p.persisted && !byId.has(p.id)) {
+              byId.set(p.id, p);
+            }
+          }
+          for (const u of prev) {
+            if (!u.persisted && !byId.has(u.id)) {
+              byId.set(u.id, u);
+            }
+          }
+          const merged = Array.from(byId.values());
+
+          queueMicrotask(() => {
+            updateSessionData({
+              inspirations: merged.map((i) => ({
+                id: i.id,
+                url: sanitizeUrl(i.previewUrl),
+                imageBase64: i.imageBase64,
+                tags: i.tags,
+                description: i.description,
+                addedAt: i.addedAt,
+              })),
+            } as any);
+          });
+
+          return merged;
+        });
+      } catch (e) {
+        console.warn('[Inspirations] GCP hydration failed', e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionData?.userHash]); // eslint-disable-line react-hooks/exhaustive-deps -- only when userHash changes
 
   // Preload existing inspirations when entering from dashboard to avoid overwrite
   useEffect(() => {
@@ -291,25 +365,25 @@ export default function InspirationsPage() {
         const { persisted, ...rest } = i as any;
         return rest;
       });
-      
 
-      await updateSessionData({ inspirations: finalInspirations } as any);
-      
-      // Save inspirations to participant_images with tags
+      /** After GCP insert, map local list item id → server `participant_images.id` + public URL. */
+      const serverByLocalId = new Map<string, { imageId: string; publicUrl?: string }>();
+      let mergedSessionInspirations: typeof finalInspirations = finalInspirations;
+
+      // Save inspirations to participant_images with tags; then one session write with https URLs + server ids
       try {
         const userHash = (sessionData as any)?.userHash;
         if (userHash) {
-          const { fetchParticipantImages, deleteParticipantImage, updateParticipantImageMetadata } = await import('@/lib/remote-spaces');
-          const uuidRe =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
           let existing = await fetchParticipantImages(userHash);
           let existingInspirations = (existing || []).filter((img) => img.type === 'inspiration');
 
           const desiredServerIds = new Set(
             finalInspirations
               .map((p: { id?: string }) => p.id)
-              .filter((id): id is string => typeof id === 'string' && uuidRe.test(id)),
+              .filter(
+                (id): id is string =>
+                  typeof id === 'string' && PARTICIPANT_IMAGE_ID_UUID_RE.test(id),
+              ),
           );
 
           // Never compare only raw URLs: session often has data: URLs while DB has https —
@@ -318,8 +392,12 @@ export default function InspirationsPage() {
             if (desiredServerIds.size > 0) {
               return !desiredServerIds.has(img.id);
             }
-            // No server UUIDs in payload (only local ids): replace DB inspirations with this save
-            return true;
+            // No server UUIDs in payload: do not wipe DB (hydration may not have run yet).
+            // Only remove all rows when the user cleared every inspiration in the UI.
+            if (finalInspirations.length === 0) {
+              return true;
+            }
+            return false;
           });
 
           for (const img of toDelete) {
@@ -351,7 +429,10 @@ export default function InspirationsPage() {
           const byIdAfter = new Map(existingInspirations.map((img) => [img.id, img]));
 
           for (const insp of finalInspirations) {
-            const sid = typeof insp.id === 'string' && uuidRe.test(insp.id) ? insp.id : null;
+            const sid =
+              typeof insp.id === 'string' && PARTICIPANT_IMAGE_ID_UUID_RE.test(insp.id)
+                ? insp.id
+                : null;
             if (sid && byIdAfter.has(sid)) {
               await updateParticipantImageMetadata(userHash, sid, {
                 tags: insp.tags,
@@ -360,7 +441,7 @@ export default function InspirationsPage() {
             }
           }
 
-          const imagesForInsert = finalInspirations
+          const imagesToInsert = finalInspirations
             .map((p) => ({
               url: p.url || p.imageBase64 || '',
               thumbnail_url: undefined,
@@ -370,20 +451,49 @@ export default function InspirationsPage() {
               is_favorite: false,
               source: undefined,
               generation_id: undefined,
-              _id: p.id,
+              _localId: p.id,
             }))
             .filter((img) => !!img.url)
             .filter((img) => {
               const sid =
-                typeof img._id === 'string' && uuidRe.test(img._id) ? img._id : null;
+                typeof img._localId === 'string' && PARTICIPANT_IMAGE_ID_UUID_RE.test(img._localId)
+                  ? img._localId
+                  : null;
               if (sid && byIdAfter.has(sid)) return false;
               return true;
-            })
-            .map(({ _id, ...rest }) => rest);
+            });
 
-          if (imagesForInsert.length > 0) {
-            await saveParticipantImages(userHash, imagesForInsert);
+          const insertPayloads = imagesToInsert.map(({ _localId: _lid, ...rest }) => rest);
+          const insertLocalIds = imagesToInsert.map((row) => String(row._localId));
+
+          if (insertPayloads.length > 0) {
+            const saveResult = await saveParticipantImages(userHash, insertPayloads);
+            insertLocalIds.forEach((localId, i) => {
+              const d = saveResult.details[i];
+              if (d?.imageId) {
+                serverByLocalId.set(localId, { imageId: d.imageId, publicUrl: d.publicUrl });
+              }
+            });
           }
+
+          const gcpBase = (process.env.NEXT_PUBLIC_GCP_API_BASE_URL || '').replace(/\/$/, '');
+          mergedSessionInspirations = finalInspirations.map((insp: { id?: string; url?: string; imageBase64?: string; [k: string]: unknown }) => {
+            const s = serverByLocalId.get(String(insp.id));
+            if (s?.imageId) {
+              // Private GCS: storage.googleapis.com URL often 403 in the browser — use backend raw proxy.
+              const fetchableUrl =
+                gcpBase.length > 0
+                  ? `${gcpBase}/api/images/${encodeURIComponent(s.imageId)}/raw`
+                  : s.publicUrl || (insp.url as string | undefined);
+              return {
+                ...insp,
+                id: s.imageId,
+                url: fetchableUrl,
+                imageBase64: gcpBase.length > 0 ? undefined : insp.imageBase64,
+              };
+            }
+            return insp;
+          });
 
           // #region agent log (debug session 995889 — inspirations → participant_images)
           {
@@ -404,7 +514,7 @@ export default function InspirationsPage() {
                       ? `${userHash.slice(0, 14)}…${userHash.slice(-4)}`
                       : null,
                   finalInspirationsCount: finalInspirations.length,
-                  insertedNewCount: imagesForInsert.length,
+                  insertedNewCount: insertPayloads.length,
                   desiredServerIdCount: desiredServerIds.size,
                 },
                 timestamp: Date.now(),
@@ -418,52 +528,38 @@ export default function InspirationsPage() {
         console.warn('[Inspirations] Failed to save to participant_images:', e);
       }
 
-      // Keep session aligned with what we just saved (finalInspirations); do not replace
-      // with an immediate fetch — it can return fewer rows before all inserts are visible.
-      
+      await updateSessionData({ inspirations: mergedSessionInspirations } as any);
+
       const untaggedItems = itemsWithBase64.filter(i => i.file && (!i.tags || Object.keys(i.tags).length === 0));
       if (untaggedItems.length > 0) {
+        const userHashForBg = (sessionData as any)?.userHash as string | undefined;
         (async () => {
+          let rolling = mergedSessionInspirations;
           for (const item of untaggedItems) {
             try {
               const [analysis] = await analyzeInspirationsWithGamma([item.file!]);
-              const currentInspirations = (sessionData as any)?.inspirations || [];
-              const updatedInspirations = currentInspirations.map((insp: any) => 
-                insp.id === item.id ? { ...insp, tags: analysis.tags, description: analysis.description } : insp
-              );
-              await updateSessionData({ inspirations: updatedInspirations } as any);
-              
-              // Automatically save tags to GCP if userHash is available
-              const currentUserHash = (sessionData as any)?.userHash;
-              if (currentUserHash && item.imageBase64) {
+              const sid = PARTICIPANT_IMAGE_ID_UUID_RE.test(item.id)
+                ? item.id
+                : serverByLocalId.get(String(item.id))?.imageId;
+              rolling = rolling.map((insp: { id?: string; [k: string]: unknown }) => {
+                if (insp.id === item.id || (sid && insp.id === sid)) {
+                  return {
+                    ...insp,
+                    tags: analysis.tags,
+                    description: analysis.description,
+                  };
+                }
+                return insp;
+              });
+              await updateSessionData({ inspirations: rolling } as any);
+              if (userHashForBg && sid) {
                 try {
-                  const { fetchParticipantImages, updateParticipantImageMetadata, saveParticipantImages } = await import('@/lib/remote-spaces');
-                  const existing = await fetchParticipantImages(currentUserHash);
-                  const itemUrl = item.imageBase64;
-                  const existingInspiration = existing.find(img => 
-                    img.type === 'inspiration' && 
-                    (img.url === itemUrl || img.url === item.previewUrl)
-                  );
-                  
-                  if (existingInspiration) {
-                    await updateParticipantImageMetadata(currentUserHash, existingInspiration.id, {
-                      tags: analysis.tags,
-                      description: analysis.description ?? null
-                    });
-                    console.log('[Inspirations] Tags saved for:', existingInspiration.id);
-                  } else if (itemUrl && !itemUrl.startsWith('blob:')) {
-                    await saveParticipantImages(currentUserHash, [{
-                      url: itemUrl,
-                      type: 'inspiration',
-                      tags: analysis.tags,
-                      description: analysis.description,
-                      is_favorite: false
-                    }]);
-                    console.log('[Inspirations] New image with tags saved');
-                  }
+                  await updateParticipantImageMetadata(userHashForBg, sid, {
+                    tags: analysis.tags,
+                    description: analysis.description ?? null,
+                  });
                 } catch (saveError) {
                   console.warn('[Inspirations] Failed to auto-save tags:', saveError);
-                  // Don't fail the whole tagging process if Supabase save fails
                 }
               }
             } catch (error) {

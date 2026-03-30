@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
-import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage, syncMatrixHistoryToGcp } from '@/lib/gcp-data';
+import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage, syncMatrixHistoryToGcp, saveSessionToGcp } from '@/lib/gcp-data';
 import { UpgradePrompt } from '@/components/subscription/UpgradePrompt';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LocalizedText } from '@/lib/questions/validated-scales';
@@ -198,11 +198,14 @@ export default function GeneratePage() {
 
   // Track pageViewId in a ref to avoid cleanup on every change
   const pageViewIdRef = useRef<string | null>(null);
-  
+  const pageViewUserHashRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
     (async () => {
       try {
-        const projectId = await getOrCreateProjectId((sessionData as any).userHash);
+        const uh = (sessionData as any).userHash as string | undefined;
+        pageViewUserHashRef.current = uh;
+        const projectId = await getOrCreateProjectId(uh);
         if (projectId) {
           const id = await startPageView(projectId, 'generate');
           setPageViewId(id);
@@ -215,7 +218,9 @@ export default function GeneratePage() {
     // This allows background generation to continue and update matrixHistory
     return () => { 
       (async () => { 
-        if (pageViewIdRef.current) await endPageView(pageViewIdRef.current); 
+        if (pageViewIdRef.current) {
+          await endPageView(pageViewUserHashRef.current, pageViewIdRef.current);
+        }
       })();
       // Check if we're navigating to modify - if so, don't abort (let generation continue)
       // Use the ref which is set BEFORE navigation, more reliable than checking URL
@@ -1270,10 +1275,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         return;
       }
       
-      // NOTE: We intentionally DO NOT send binary inspiration images to Google Nano Banana.
-      // For source 6/6 we already embed extracted inspiration-derived data in the prompt
-      // (style/colors/materials/etc.), so sending base64 reference images only increases payload size
-      // and can stall generation/rendering.
+      // InspirationReference is driven by VLM tags + text description embedded in the JSON prompt
+      // (same transport as other matrix slots: room base image + prompt only). Binary reference
+      // images are intentionally omitted to keep payloads smaller and avoid private-URL fetch issues.
       const SEND_INSPIRATION_IMAGES_TO_MODEL = false;
 
       // Filter out blob URLs from inspiration images - they cannot be used for generation
@@ -2659,6 +2663,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         },
         blindSelectionMade: true
       } as any);
+
+      void saveSessionToGcp(getSessionStoreSnapshot());
 
       // Persist generation modification and user choice
       try {

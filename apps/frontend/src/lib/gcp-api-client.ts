@@ -3,6 +3,8 @@
  * This backend is currently safest as an optional mirror, not the primary store.
  */
 
+import { ingestPersistenceTrace855 } from '@/lib/persistence-debug';
+
 const getBaseUrl = (): string | null => {
   const url = process.env.NEXT_PUBLIC_GCP_API_BASE_URL;
   return url && url.length > 0 ? url.replace(/\/$/, '') : null;
@@ -14,6 +16,14 @@ async function apiFetch<T = unknown>(
 ): Promise<{ data?: T; ok: boolean; error?: string; status?: number; code?: string }> {
   const base = getBaseUrl();
   if (!base) {
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H1',
+      location: 'gcp-api-client.ts:apiFetch',
+      message: 'skip_no_base_url',
+      data: { path: path.slice(0, 120), method: options.method ?? 'GET' },
+    });
+    // #endregion
     return { ok: false, error: 'GCP_API_BASE_URL not configured' };
   }
   const { method = 'GET', body, ...rest } = options;
@@ -38,6 +48,19 @@ async function apiFetch<T = unknown>(
     if (!res.ok) {
       const msg = data.detail || data.error || res.statusText;
       const full = data.hint ? `${msg}\n\n${data.hint}` : msg;
+      // #region agent log
+      ingestPersistenceTrace855({
+        hypothesisId: 'H3',
+        location: 'gcp-api-client.ts:apiFetch',
+        message: 'http_error',
+        data: {
+          path: path.slice(0, 120),
+          status: res.status,
+          errSlice: String(full).slice(0, 400),
+          code: data.code ?? null,
+        },
+      });
+      // #endregion
       return {
         ok: false,
         error: full,
@@ -48,6 +71,14 @@ async function apiFetch<T = unknown>(
     return { ok: true, data: data as T, status: res.status };
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'network_error';
+    // #region agent log
+    ingestPersistenceTrace855({
+      hypothesisId: 'H3',
+      location: 'gcp-api-client.ts:apiFetch',
+      message: 'network_or_fetch_error',
+      data: { path: path.slice(0, 120), errSlice: String(msg).slice(0, 400) },
+    });
+    // #endregion
     return { ok: false, error: msg };
   }
 }
@@ -111,11 +142,27 @@ export const gcpApi = {
     fetchSession: (userHash: string) =>
       apiFetch<{ participant?: Record<string, unknown> | null }>(`/api/session/${encodeURIComponent(userHash)}`),
 
-    linkAuth: (payload: { userHash: string; authUserId: string; consentTimestamp?: string }) =>
+    linkAuth: (payload: {
+      userHash: string;
+      authUserId: string;
+      consentTimestamp?: string;
+      /** OAuth / magic-link email for participants.email (no password). */
+      email?: string;
+    }) =>
       apiFetch<{ ok: boolean; existingUserHash?: string }>('/api/participants/link-auth', {
         method: 'POST',
         body: payload,
       }),
+
+    /** Persist the same JSON as thanks-page download (`session_export_json` column). */
+    saveSessionExport: (userHash: string, sessionExport: unknown) =>
+      apiFetch<{ ok: boolean; error?: string; detail?: string }>(
+        '/api/participants/session-export',
+        {
+          method: 'POST',
+          body: { userHash, sessionExport },
+        },
+      ),
 
     fetchByAuth: (authUserId: string) =>
       apiFetch<{ participant?: Record<string, unknown> | null }>(
@@ -330,6 +377,21 @@ export const gcpApi = {
       score: number;
     }) =>
       apiFetch<{ ok: boolean }>('/api/research/survey', {
+        method: 'POST',
+        body: payload,
+      }),
+
+    /** Batch or single research / behavioral events → `participant_research_events` */
+    events: (payload: {
+      events: Array<{
+        userHash: string;
+        eventType: string;
+        payload?: Record<string, unknown>;
+        sessionId?: string;
+        clientTimestamp?: string;
+      }>;
+    }) =>
+      apiFetch<{ ok: boolean; inserted?: number }>('/api/research/events', {
         method: 'POST',
         body: payload,
       }),

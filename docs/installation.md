@@ -2,11 +2,10 @@
 
 ## Wymagania Systemowe
 
-- Node.js 18+ 
-- Python 3.11+
-- Modal CLI
-- Supabase account
-- Hugging Face account (dla FLUX)
+- Node.js 18+
+- pnpm (zalecane) lub npm
+- Opcjonalnie: Python tylko jeśli eksperymentujesz ze zarchiwizowanym Modal (`docs/archive/modal-backend`)
+- Konto Google Cloud (Cloud Run, Cloud SQL) dla pełnej persystencji
 
 ## Krok 1: Klonowanie i Instalacja
 
@@ -15,46 +14,25 @@
 unzip aura-research-monorepo.zip
 cd aura-research-monorepo
 
-# Instaluj zależności (główne)
-npm install
-
-# Instaluj zależności w poszczególnych aplikacjach
-cd apps/frontend && npm install && cd ../..
-cd apps/modal-backend && pip install -r requirements.txt && cd ../..
+pnpm install
 ```
 
-## Krok 2: Konfiguracja Modal.com
+## Krok 2: Konfiguracja frontendu i GCP
 
-```bash
-# Zainstaluj Modal CLI
-pip install modal
-
-# Zaloguj się do Modal
-modal setup
-
-# Stwórz sekrety (Hugging Face token)
-modal secret create huggingface-secret HUGGINGFACE_TOKEN=your_hf_token
-```
-
-## Krok 3: Konfiguracja Supabase
-
-1. Utwórz nowy projekt na supabase.com
-2. Skopiuj URL i anon key
-3. Utwórz plik `.env.local` w `apps/frontend/`:
+1. Utwórz plik `.env.local` w `apps/frontend/` (patrz też `infra/gcp/INSTRUKCJA_PL.md`):
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-NEXT_PUBLIC_MODAL_API_URL=https://your-workspace--aura-flux-api.modal.run
+NEXT_PUBLIC_GCP_API_BASE_URL=https://your-cloud-run-url
+# + zmienne dla Google image generation (projekt dokumentuje w kodzie / Vercel)
 ```
 
-## Krok 4: Deployment
+2. Dla lokalnego **backend-gcp** ustaw `DATABASE_URL` (Postgres) zgodnie z instrukcją GCP.
 
-### Backend (Modal.com)
-```bash
-cd apps/modal-backend
-modal deploy main.py
-```
+## Krok 3: Deployment
+
+### Backend (Cloud Run)
+
+Wdrożenie wg dokumentacji w `infra/gcp/` (obraz Dockera / `gcloud run deploy`).
 
 ### Frontend (Vercel)
 ```bash
@@ -63,21 +41,19 @@ npm run build
 vercel deploy
 ```
 
-## Krok 5: Upload Modelu Quinn
+## Krok 4: Upload modelu Quinn
 
 1. Skopiuj plik `SKM_Quinn.gltf` do `apps/frontend/public/models/`
 2. Upewnij się, że wszystkie tekstury są w tym samym folderze
 
 ## Troubleshooting
 
-### Modal nie uruchamia się
-- Sprawdź czy masz poprawny token Hugging Face
-- Upewnij się, że masz dostęp do GPU H100
+### Backend GCP nie startuje lokalnie
+- Ustaw `DATABASE_URL` (Postgres) — patrz `infra/gcp/INSTRUKCJA_PL.md`
 
 ### Model Quinn nie ładuje się
 - Sprawdź ścieżkę do pliku GLTF
 - Upewnij się, że plik ma poprawną strukturę eksportu z Unreal
 
-### Frontend nie łączy się z backend
-- Sprawdź URL Modal API w zmiennych środowiskowych
-- Upewnij się, że CORS jest poprawnie skonfigurowany
+### Frontend nie zapisuje danych badawczych
+- Sprawdź `NEXT_PUBLIC_GCP_API_BASE_URL` oraz odpowiedzi `200` z Cloud Run (`/api/session`, `/api/research/events`)

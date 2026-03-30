@@ -179,8 +179,17 @@ researchRouter.post('/research/generation-feedback', async (req, res) => {
       client.release();
     }
   } catch (error) {
-    console.error('research/generation-feedback error', error);
-    return res.status(500).json({ ok: false, error: 'internal_error' });
+    const err = error as Error & { code?: string; detail?: string };
+    console.error('research/generation-feedback error', err?.message, err?.code, err?.detail, error);
+    return res.status(500).json({
+      ok: false,
+      error: 'internal_error',
+      code: err?.code,
+      detail:
+        typeof err?.detail === 'string'
+          ? err.detail.slice(0, 400)
+          : (err?.message ?? String(error)).slice(0, 400),
+    });
   }
 });
 
@@ -241,7 +250,110 @@ researchRouter.post('/research/regeneration-event', async (req, res) => {
       client.release();
     }
   } catch (error) {
-    console.error('research/regeneration-event error', error);
+    const err = error as Error & { code?: string; detail?: string };
+    console.error('research/regeneration-event error', err?.message, err?.code, err?.detail, error);
+    return res.status(500).json({
+      ok: false,
+      error: 'internal_error',
+      code: err?.code,
+      detail:
+        typeof err?.detail === 'string'
+          ? err.detail.slice(0, 400)
+          : (err?.message ?? String(error)).slice(0, 400),
+    });
+  }
+});
+
+type ResearchEventInput = {
+  userHash?: string;
+  eventType?: string;
+  payload?: Record<string, unknown>;
+  sessionId?: string;
+  clientTimestamp?: string;
+};
+
+// POST /research/events — batch insert fine-grained research events
+researchRouter.post('/research/events', async (req, res) => {
+  const body = req.body as {
+    events?: ResearchEventInput[];
+    userHash?: string;
+    eventType?: string;
+    payload?: Record<string, unknown>;
+    sessionId?: string;
+    clientTimestamp?: string;
+  };
+
+  let list: ResearchEventInput[] = [];
+  if (Array.isArray(body.events) && body.events.length > 0) {
+    list = body.events;
+  } else if (body.userHash && body.eventType) {
+    list = [
+      {
+        userHash: body.userHash,
+        eventType: body.eventType,
+        payload: body.payload,
+        sessionId: body.sessionId,
+        clientTimestamp: body.clientTimestamp,
+      },
+    ];
+  } else {
+    return res.status(400).json({ ok: false, error: 'invalid_payload' });
+  }
+
+  if (list.length > 200) {
+    return res.status(400).json({ ok: false, error: 'too_many_events' });
+  }
+
+  for (const ev of list) {
+    if (!ev.userHash || typeof ev.userHash !== 'string' || !ev.eventType || typeof ev.eventType !== 'string') {
+      return res.status(400).json({ ok: false, error: 'invalid_event' });
+    }
+    if (ev.userHash.length > 256 || ev.eventType.length > 128) {
+      return res.status(400).json({ ok: false, error: 'invalid_event' });
+    }
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const ev of list) {
+        const payload = ev.payload && typeof ev.payload === 'object' ? ev.payload : {};
+        let clientTs: Date | null = null;
+        if (ev.clientTimestamp) {
+          const d = new Date(ev.clientTimestamp);
+          if (!Number.isNaN(d.getTime())) clientTs = d;
+        }
+        await client.query(
+          `
+          INSERT INTO participant_research_events (
+            user_hash,
+            event_type,
+            payload,
+            session_id,
+            client_timestamp
+          )
+          VALUES ($1, $2, $3::jsonb, $4, $5)
+        `,
+          [
+            ev.userHash,
+            ev.eventType,
+            JSON.stringify(payload),
+            ev.sessionId ?? null,
+            clientTs,
+          ],
+        );
+      }
+      await client.query('COMMIT');
+      return res.json({ ok: true, inserted: list.length });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('research/events error', error);
     return res.status(500).json({ ok: false, error: 'internal_error' });
   }
 });

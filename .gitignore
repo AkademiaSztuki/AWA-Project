@@ -22,6 +22,9 @@ infra/gcp/ENV_ZMIENNE_DO_WKLEJENIA.txt
 .env.test.local
 .env.production.local
 
+# Turborepo
+.turbo/
+
 # Build outputs
 .next/
 dist/

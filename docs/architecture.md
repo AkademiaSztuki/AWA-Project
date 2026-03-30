@@ -4,16 +4,17 @@
 
 Aura wykorzystuje hybrydową architekturę łączącą:
 - **Frontend**: Next.js 14 + Three.js (Vercel)
-- **Backend**: Python + FLUX 1 Kontext (Modal.com)  
-- **Database**: Supabase PostgreSQL
-- **Storage**: Supabase Storage + Modal filesystem
+- **Backend**: Google Cloud Run ([`apps/backend-gcp`](../apps/backend-gcp))
+- **Database**: Cloud SQL (PostgreSQL); schema w [`infra/gcp/sql`](../infra/gcp/sql)
+- **Image generation**: Google (Vertex / Gemini) z Next.js `/api/google/*`
+- **Legacy Modal backend**: [`docs/archive/modal-backend`](../docs/archive/modal-backend)
 
 ## Przepływ Danych
 
 ```
-User → Frontend (Vercel) → Modal API → FLUX Model → Generated Images
-  ↓                          ↓
-  Research Data → Supabase → Analytics
+User → Frontend (Vercel) → /api/google/* → Google image APIs
+  ↓
+  Research Data → Cloud Run (backend-gcp) → Cloud SQL / Storage
 ```
 
 ## Komponenty Systemu
@@ -38,12 +39,12 @@ src/
 ### Backend Architecture
 
 ```
-apps/modal-backend/
-├── main.py             # FastAPI + Modal app
-├── requirements.txt    # Python dependencies
-├── modal.toml         # Modal configuration
-└── utils/             # Helper functions
+apps/backend-gcp/
+├── src/server.ts       # Express API
+├── src/routes/         # participants, research, swipes, …
+└── …
 ```
+Archiwum Modal: `docs/archive/modal-backend/`.
 
 ## Kluczowe Technologie
 
