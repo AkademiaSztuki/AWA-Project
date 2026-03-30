@@ -18,7 +18,8 @@
     "clean": "turbo run clean && rm -rf node_modules",
     "dev:frontend": "cd apps/frontend && npm run dev",
     "dev:backend-gcp": "pnpm --filter @aura/backend-gcp dev",
-    "deploy:frontend": "cd apps/frontend && vercel deploy"
+    "deploy:frontend": "cd apps/frontend && vercel deploy",
+    "vercel:link:frontend": "cd apps/frontend && vercel link --project awa-project-frontend-fhka --yes --scope pali89s-projects"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
