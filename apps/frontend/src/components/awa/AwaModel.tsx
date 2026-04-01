@@ -136,7 +136,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const skinnedMeshesRef = useRef<THREE.SkinnedMesh[]>([]);
   // Włączenie cząsteczek – diagnostycznie (duże, widoczne)
   const isMobileView = Math.abs(position[0]) < 0.01;
-  const particleDensity = isMobileView ? 0.13 : 0.20; // Zmniejszono o ~1/3 na mobile
+  const particleDensity = isMobileView ? 0.10 : 0.20; // Mniej partikli na mobile (landing)
   const particleSize = 0.45; // Zmień tę wartość żeby zwiększyć/zmniejszyć rozmiar pojedynczych cząsteczek
   const particleScale = 1.001; // SKALA MODELU CZĄSTECZEK - zmień (np. 1.1 = 10% większy, 0.9 = 10% mniejszy) żeby powiększyć/pomniejszyć cały model cząsteczek
   const particleOpacityMin = 0.7; // Minimalna przezroczystość cząsteczek (0-1)
@@ -157,6 +157,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   const particleSizeMultiplier = 2.35;
   const particleMouseRadius = 0.35;
   const particleMouseStrength = 0.05;
+  /** W przestrzeni lokalnej grupy — poza sylwetką, żeby wyłączyć odpychanie po puszczeniu palca (mobile). */
+  const particleMouseResetLocalRef = useRef(new THREE.Vector3(800, 800, 800));
 
   const { scene: threeScene, camera } = useThree();
   const { currentAnimation, onAnimationEnd, playAnimation } = useAnimation();
@@ -488,10 +490,9 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   }, [scene, threeScene, onLoaded, particleDensity, particleSize, particleScale]);
 
   useEffect(() => {
-    // Mouse tracking setup
-    const handleMouseMove = (event: MouseEvent) => {
-      const x = (event.clientX / window.innerWidth) * 2 - 1;
-      const y = -(event.clientY / window.innerHeight) * 2 + 1;
+    const updatePointerFromClient = (clientX: number, clientY: number) => {
+      const x = (clientX / window.innerWidth) * 2 - 1;
+      const y = -(clientY / window.innerHeight) * 2 + 1;
       setMousePosition({ x, y });
       if (!camera) return;
       const pointer = pointerNdcRef.current;
@@ -511,8 +512,56 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
         meshRef.current.worldToLocal(mouseLocalRef.current);
       }
     };
+
+    const resetParticleMouseInfluence = () => {
+      mouseLocalRef.current.copy(particleMouseResetLocalRef.current);
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      updatePointerFromClient(event.clientX, event.clientY);
+    };
+
+    const handleTouch = (event: TouchEvent) => {
+      const t = event.touches[0];
+      if (!t) return;
+      updatePointerFromClient(t.clientX, t.clientY);
+    };
+
+    const handleTouchEnd = () => {
+      resetParticleMouseInfluence();
+    };
+
+    /** Na urządzeniach z Pointer Events często nie ma ciągłego mousemove przy palcu. */
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse') return;
+      updatePointerFromClient(event.clientX, event.clientY);
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+        resetParticleMouseInfluence();
+      }
+    };
+
     window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    window.addEventListener('touchstart', handleTouch, { passive: true });
+    window.addEventListener('touchmove', handleTouch, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('touchcancel', handleTouchEnd);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchstart', handleTouch);
+      window.removeEventListener('touchmove', handleTouch);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchEnd);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
   }, [camera]);
 
   const { actions, mixer } = useAnimations(allAnimations, scene);
