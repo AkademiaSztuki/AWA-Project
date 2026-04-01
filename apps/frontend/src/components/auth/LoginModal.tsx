@@ -247,21 +247,21 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                     <div className="w-full border-t border-white/20"></div>
                   </div>
                   <div className="relative flex justify-center text-xs">
-                    <span className="bg-pearl-50 px-2 text-silver-dark font-modern">
+                    <span className="px-2 bg-transparent text-graphite font-modern">
                       {language === 'pl' ? 'lub' : 'or'}
                     </span>
                   </div>
                 </div>
 
-                {/* Mode switcher */}
-                <div className="grid grid-cols-3 gap-2 text-xs font-modern mb-2">
+                {/* Mode switcher — same glass/gold fill as Google CTA for contrast */}
+                <div className="grid grid-cols-3 gap-2 mb-2">
                   <button
                     type="button"
                     onClick={() => setMode('login')}
-                    className={`px-2 py-1 rounded-full border ${
+                    className={`glass-button min-h-[44px] px-2 py-2 rounded-full text-xs font-medium font-modern text-graphite transition-all focus:ring-2 focus:ring-gold-400 focus:outline-none ${
                       mode === 'login'
-                        ? 'border-gold bg-gold/10 text-graphite'
-                        : 'border-white/20 text-silver-dark'
+                        ? 'ring-2 ring-gold-400/70 border-gold-400/60'
+                        : 'opacity-90 hover:opacity-100'
                     }`}
                   >
                     {language === 'pl' ? 'Zaloguj' : 'Log in'}
@@ -269,10 +269,10 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                   <button
                     type="button"
                     onClick={() => setMode('register')}
-                    className={`px-2 py-1 rounded-full border ${
+                    className={`glass-button min-h-[44px] px-2 py-2 rounded-full text-xs font-medium font-modern text-graphite transition-all focus:ring-2 focus:ring-gold-400 focus:outline-none ${
                       mode === 'register'
-                        ? 'border-gold bg-gold/10 text-graphite'
-                        : 'border-white/20 text-silver-dark'
+                        ? 'ring-2 ring-gold-400/70 border-gold-400/60'
+                        : 'opacity-90 hover:opacity-100'
                     }`}
                   >
                     {language === 'pl' ? 'Utwórz konto' : 'Sign up'}
@@ -280,10 +280,10 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
                   <button
                     type="button"
                     onClick={() => setMode('magic')}
-                    className={`px-2 py-1 rounded-full border ${
+                    className={`glass-button min-h-[44px] px-2 py-2 rounded-full text-xs font-medium font-modern text-graphite transition-all focus:ring-2 focus:ring-gold-400 focus:outline-none ${
                       mode === 'magic'
-                        ? 'border-gold bg-gold/10 text-graphite'
-                        : 'border-white/20 text-silver-dark'
+                        ? 'ring-2 ring-gold-400/70 border-gold-400/60'
+                        : 'opacity-90 hover:opacity-100'
                     }`}
                   >
                     Magic link
