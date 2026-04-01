@@ -11,6 +11,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { LayoutProvider } from '@/contexts/LayoutContext';
 import { AnimationProvider } from '@/contexts/AnimationContext';
 import { ColorAdjustmentProvider } from '@/contexts/ColorAdjustmentContext';
+import { DialogueVoiceProvider } from '@/contexts/DialogueVoiceContext';
 import { GlassHeader } from '@/components/ui/GlassHeader';
 import { GlobalProtectedRoute } from '@/components/auth/GlobalProtectedRoute';
 import type { Language } from '@/lib/questions/validated-scales';
@@ -87,6 +88,7 @@ export default function RootLayout({
             <LayoutProvider>
               <AnimationProvider>
                 <ColorAdjustmentProvider>
+                  <DialogueVoiceProvider>
                   <LandscapeGuard>
                   <ResponsiveLayoutWrapper>
                     <AmbientMusic volume={0.3} audioFile="/audio/ambient.mp3" />
@@ -119,6 +121,7 @@ export default function RootLayout({
                     <SpeedInsights />
                   </ResponsiveLayoutWrapper>
                 </LandscapeGuard>
+                  </DialogueVoiceProvider>
                 </ColorAdjustmentProvider>
               </AnimationProvider>
             </LayoutProvider>

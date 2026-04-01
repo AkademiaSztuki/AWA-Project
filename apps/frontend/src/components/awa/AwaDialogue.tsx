@@ -838,10 +838,11 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
           {/* Invisible placeholder to maintain layout */}
         </div>
       )}
-      {audioFile && voiceEnabled && audioReady && (
+      {audioFile && audioReady && (
         <DialogueAudioPlayer
           src={audioFile}
           volume={voiceVolume}
+          enabled={voiceEnabled}
           autoPlay={true}
           onEnded={handleAudioEnded}
         />
