@@ -666,10 +666,11 @@ export function RoomSetup({ householdId }: { householdId: string }) {
           </div>
         )
       )}
-      {voiceEnabled && ttsAudioUrl && (
+      {ttsAudioUrl && (
         <DialogueAudioPlayer
           src={ttsAudioUrl}
           volume={voiceVolume}
+          enabled={voiceEnabled}
           autoPlay={true}
           onEnded={() => {
             setIsTtsPlaying(false);

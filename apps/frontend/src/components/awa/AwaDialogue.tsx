@@ -9,7 +9,7 @@ import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAnimation, AnimationType } from '@/contexts/AnimationContext';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import DialogueAudioPlayer from '../ui/DialogueAudioPlayer';
+import DialogueAudioPlayer, { markDialoguePlaybackUserGesture } from '../ui/DialogueAudioPlayer';
 import { ArrowRight } from 'lucide-react';
 
 interface AwaDialogueProps {
@@ -705,6 +705,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const handleClickToStart = () => {
     if (hasStarted) return; // Prevent multiple triggers
     console.log('User clicked to start dialogue');
+    markDialoguePlaybackUserGesture();
     setHasStarted(true);
     setAudioReady(true);
     // Play loading animation when user clicks on landing page
@@ -838,10 +839,11 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
           {/* Invisible placeholder to maintain layout */}
         </div>
       )}
-      {audioFile && voiceEnabled && audioReady && (
+      {audioFile && audioReady && (
         <DialogueAudioPlayer
           src={audioFile}
           volume={voiceVolume}
+          enabled={voiceEnabled}
           autoPlay={true}
           onEnded={handleAudioEnded}
         />

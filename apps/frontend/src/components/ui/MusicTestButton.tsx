@@ -20,6 +20,7 @@ export const MusicTestButton: React.FC = () => {
   const firstButtonRef = useRef<HTMLButtonElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [panelPosition, setPanelPosition] = useState({ top: 0, right: 0 });
+  const voiceVolumeBeforeMuteRef = useRef(0.8);
 
   useEffect(() => {
     setMounted(true);
@@ -306,7 +307,31 @@ export const MusicTestButton: React.FC = () => {
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          toggleVoiceEnabled();
+                          if (voiceEnabled) {
+                            voiceVolumeBeforeMuteRef.current =
+                              voiceVolume > 0 ? voiceVolume : voiceVolumeBeforeMuteRef.current;
+                            const dialogueAudios = document.querySelectorAll(
+                              'audio[data-type="dialogue"]'
+                            ) as NodeListOf<HTMLAudioElement>;
+                            dialogueAudios.forEach((audio) => {
+                              audio.volume = 0;
+                            });
+                            setVoiceVolume(0);
+                            toggleVoiceEnabled();
+                          } else {
+                            const restored =
+                              voiceVolumeBeforeMuteRef.current > 0
+                                ? voiceVolumeBeforeMuteRef.current
+                                : 0.8;
+                            const dialogueAudios = document.querySelectorAll(
+                              'audio[data-type="dialogue"]'
+                            ) as NodeListOf<HTMLAudioElement>;
+                            dialogueAudios.forEach((audio) => {
+                              audio.volume = restored;
+                            });
+                            setVoiceVolume(restored);
+                            toggleVoiceEnabled();
+                          }
                         }}
                         className="w-8 h-8 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 transition-all focus:ring-2 focus:ring-gold-400 focus:outline-none"
                         aria-label={voiceEnabled ? t('Wyłącz głos', 'Disable voice') : t('Włącz głos', 'Enable voice')}

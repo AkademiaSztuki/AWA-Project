@@ -643,10 +643,11 @@ export default function PhotoUploadPage() {
           autoHide={true}
         />
       </div>
-      {voiceEnabled && ttsAudioUrl && (
+      {ttsAudioUrl && (
         <DialogueAudioPlayer
           src={ttsAudioUrl}
           volume={voiceVolume}
+          enabled={voiceEnabled}
           autoPlay={true}
           onEnded={() => {
             setIsTtsPlaying(false);
