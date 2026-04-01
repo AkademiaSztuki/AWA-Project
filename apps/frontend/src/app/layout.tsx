@@ -38,7 +38,8 @@ export const viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: 'cover',
-  themeColor: '#1a1a1a', // Dopasowane do ciemnego tła projektu
+  // Złoty odcień zgodny z radial-gradient na html/body (globals.css) — unika „czarnego” paska UI
+  themeColor: '#c79833',
 };
 
 const LANGUAGE_COOKIE = 'app_language';

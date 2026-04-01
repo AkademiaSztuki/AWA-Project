@@ -36,7 +36,7 @@ export function DesktopBackground() {
 
   return (
     <div
-      className="fixed z-[1] pointer-events-none bg-[#1a1a1a] overflow-hidden"
+      className="fixed z-[1] pointer-events-none bg-transparent overflow-hidden"
       style={{
         top: 'calc(-1 * env(safe-area-inset-top, 0))',
         left: 'calc(-1 * env(safe-area-inset-left, 0))',
@@ -61,7 +61,7 @@ export function DesktopBackground() {
             alt=""
             className="object-cover bg-image w-full h-full"
             style={{ objectFit: 'cover' }}
-            fetchPriority="low"
+            fetchPriority="high"
           />
         </picture>
       </div>
