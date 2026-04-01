@@ -25,6 +25,8 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
   const playAttemptedRef = useRef<boolean>(false);
   const previousSrcRef = useRef<string>('');
   const retryOnInteractionRef = useRef<boolean>(false);
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
 
   // Listen for user interactions to retry audio playback on mobile
   useEffect(() => {
@@ -104,7 +106,7 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
             // Now safe to change src
             if (audioRef.current) {
               audioRef.current.src = src;
-              audioRef.current.volume = volume;
+              audioRef.current.volume = volumeRef.current;
               previousSrcRef.current = src;
               
               if (autoPlay) {
@@ -157,7 +159,7 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
           if (audioRef.current && previousSrcRef.current !== src) {
             console.warn('[DialogueAudioPlayer] Timeout waiting for previous audio, forcing src change');
             audioRef.current.src = src;
-            audioRef.current.volume = volume;
+            audioRef.current.volume = volumeRef.current;
             previousSrcRef.current = src;
             if (autoPlay) {
               audioRef.current.currentTime = 0;
@@ -206,7 +208,7 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
       } else {
         // Normal case: src didn't change or previous audio finished/near end
         audioRef.current.src = src;
-        audioRef.current.volume = volume;
+        audioRef.current.volume = volumeRef.current;
         previousSrcRef.current = src;
 
         if (autoPlay) {
@@ -256,7 +258,13 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
         }
       }
     }
-  }, [src, autoPlay, volume]);
+  }, [src, autoPlay]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -273,7 +281,7 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({ src, volume, 
   }, [onEnded, src]);
 
   return (
-    <audio ref={audioRef} style={{ display: 'none' }} />
+    <audio ref={audioRef} data-type="dialogue" style={{ display: 'none' }} />
   );
 };
 
