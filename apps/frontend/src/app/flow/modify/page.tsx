@@ -963,8 +963,6 @@ export default function ModifyPage() {
           animate={{ opacity: 1, y: 0 }}
           className="max-w-6xl mx-auto space-y-6"
         >
-          <AwaDialogue currentStep="modification" />
-
           {/* Selected Image - Main Display */}
           <GlassCard variant="flatOnMobile" className="p-4">
             <div className="space-y-4">
@@ -1424,6 +1422,12 @@ export default function ModifyPage() {
             </motion.div>
           )}
         </motion.div>
+      </div>
+
+      {/* IDA na dole — `modification` w DIALOGUE_MAP jest na razie puste (nic się nie renderuje).
+          Później: uzupełnij pl/en w AwaDialogue.tsx albo przekaż customMessage. */}
+      <div className="w-full">
+        <AwaDialogue currentStep="modification" fullWidth autoHide />
       </div>
     </div>
   );
