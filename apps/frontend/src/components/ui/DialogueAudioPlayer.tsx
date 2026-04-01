@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 
 interface DialogueAudioPlayerProps {
   src: string;
@@ -10,6 +10,11 @@ interface DialogueAudioPlayerProps {
 }
 
 let userHasInteracted = false;
+
+/** Wywołaj przy starcie dialogu z kliknięcia (landing), zanim zamontuje się `<audio>` — inaczej play() w efekcie trafia poza gestem i przeglądarka blokuje dźwięk. */
+export function markDialoguePlaybackUserGesture(): void {
+  userHasInteracted = true;
+}
 
 if (typeof window !== 'undefined') {
   const enableAutoplay = () => {
@@ -105,7 +110,8 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({
     };
   }, [autoPlay]);
 
-  useEffect(() => {
+  // useLayoutEffect: pierwsze play() po kliknięciu „start” (landing) musi być synchroniczne z commitem, inaczej przeglądarka traktuje to jako autoplay bez gestu.
+  useLayoutEffect(() => {
     if (audioRef.current) {
       const previousSrc = previousSrcRef.current;
       const srcChanged = previousSrc !== src;
@@ -276,7 +282,7 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({
     }
   }, [src, autoPlay]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const audio = audioRef.current;
     if (!audio || !src) return;
     if (!enabled) {

@@ -22,24 +22,23 @@ interface DialogueVoiceControls {
 
 const DialogueVoiceContext = createContext<DialogueVoiceControls | null>(null);
 
+function readInitialVolume(): number {
+  const raw = safeLocalStorage.getItem("dialogue-voice-volume");
+  if (!raw) return 0.8;
+  const parsed = parseFloat(raw);
+  return Number.isNaN(parsed) ? 0.8 : parsed;
+}
+
+function readInitialEnabled(): boolean {
+  const raw = safeLocalStorage.getItem("dialogue-voice-enabled");
+  if (raw === null) return true;
+  return raw === "true";
+}
+
 export function DialogueVoiceProvider({ children }: { children: React.ReactNode }) {
-  const [volume, setVolumeState] = useState(0.8);
-  const [isEnabled, setIsEnabled] = useState(true);
+  const [volume, setVolumeState] = useState(readInitialVolume);
+  const [isEnabled, setIsEnabled] = useState(readInitialEnabled);
   const skipEnableAudioSyncRef = useRef(true);
-
-  useEffect(() => {
-    const savedVolume = safeLocalStorage.getItem("dialogue-voice-volume");
-    const savedEnabled = safeLocalStorage.getItem("dialogue-voice-enabled");
-
-    if (savedVolume) {
-      const parsedVolume = parseFloat(savedVolume);
-      if (!Number.isNaN(parsedVolume)) setVolumeState(parsedVolume);
-    }
-
-    if (savedEnabled !== null) {
-      setIsEnabled(savedEnabled === "true");
-    }
-  }, []);
 
   const setVolume = useCallback((newVolume: number) => {
     const clampedVolume = Math.max(0, Math.min(1, newVolume));
