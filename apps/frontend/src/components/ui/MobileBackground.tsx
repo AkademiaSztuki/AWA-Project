@@ -6,7 +6,7 @@ import Image from 'next/image';
 export function MobileBackground() {
   return (
     <div 
-      className="fixed z-[1] pointer-events-none bg-[#1a1a1a]"
+      className="fixed z-[1] pointer-events-none bg-transparent"
       style={{
         /* Pokrywa cały ekran włącznie z safe-area (notch) na iOS */
         top: 'calc(-1 * env(safe-area-inset-top, 0))',
