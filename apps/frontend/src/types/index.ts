@@ -42,6 +42,8 @@ export interface SessionData {
     isSelected?: boolean;
     base64?: string;
   }>;
+  /** After anonymous 1/6: prompts not yet sent to image API; completed after login (GCP session sync) */
+  matrixAnonPending?: Array<{ source: string; prompt: string }>;
   finalSurvey: SurveyResults;
   // Dashboard data - Spaces with images
   spaces?: Array<{

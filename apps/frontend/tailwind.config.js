@@ -23,9 +23,9 @@ module.exports = {
           200: '#F0F0F5',  // Lekko perłowy
         },
         gold: {
-          400: '#FFE55C',  // Jasne złoto - UWAGA: słaby kontrast na białym tle (nie spełnia WCAG AA)
+          400: '#FFE55C',  // Accent / gradients — avoid for small text on white (use 600+ for body copy)
           500: '#FFD700',  // Klasyczne złoto
-          600: '#DAA520',  // Ciemne złoto - lepszy kontrast na białym tle
+          600: '#DAA520',  // Prefer for borders, rings, and text on light backgrounds (WCAG AA)
         },
         silver: {
           300: '#E5E4E2',  // Platynowy

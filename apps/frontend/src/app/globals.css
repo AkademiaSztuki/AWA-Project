@@ -51,8 +51,8 @@
   }
 
   .glass-button {
-    @apply bg-gold-500/20 backdrop-blur-glass border border-gold-400/40 shadow-glass-inset;
-    @apply hover:bg-gold-400/30 hover:border-gold-400 transition-all duration-300;
+    @apply bg-gold-500/20 backdrop-blur-glass border border-gold-600/45 shadow-glass-inset;
+    @apply hover:bg-gold-600/25 hover:border-gold-600 transition-all duration-300;
   }
 
   .glass-slider {
@@ -146,7 +146,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gold-400/60 rounded-full;
+  @apply bg-gold-600/70 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -361,6 +361,94 @@ svg {
   filter: none !important;
 }
 
+/* === WCAG 2.1 accessibility (WcagSettingsContext) === */
+html {
+  font-size: calc(16px * var(--a11y-font-scale, 1));
+}
+
+/* 1.4.12 Text Spacing */
+html.a11y-text-spacing,
+html.a11y-text-spacing * {
+  line-height: 1.5 !important;
+  letter-spacing: 0.12em !important;
+  word-spacing: 0.16em !important;
+}
+
+html.a11y-text-spacing p {
+  margin-bottom: 2em !important;
+}
+
+html.a11y-readable-font,
+html.a11y-readable-font * {
+  font-family: var(--font-atkinson), var(--font-inter), system-ui, sans-serif !important;
+}
+
+html.a11y-underline-links a {
+  text-decoration: underline !important;
+}
+
+html.a11y-big-cursor,
+html.a11y-big-cursor * {
+  cursor: url("/cursors/big.svg") 24 24, auto !important;
+}
+
+html.a11y-reduced-motion *,
+html.a11y-reduced-motion *::before,
+html.a11y-reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+html.a11y-focus-highlight :focus-visible {
+  outline: 4px solid #ffd60a !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.85) !important;
+}
+
+/* High contrast: real colors (overrides inline filter from ColorAdjustmentContext) */
+html.a11y-contrast-high {
+  filter: none !important;
+  background: #000 !important;
+}
+
+html.a11y-contrast-high body,
+html.a11y-contrast-high * {
+  background-color: #000 !important;
+  color: #ffff00 !important;
+  border-color: #ffff00 !important;
+  text-shadow: none !important;
+}
+
+html.a11y-contrast-high a {
+  color: #00ffff !important;
+  text-decoration: underline !important;
+}
+
+html.a11y-contrast-high :where(button, [role="button"]) {
+  outline: 2px solid #ffff00;
+}
+
+html.a11y-contrast-high :where(img, video, canvas, svg.keep-colors, .keep-colors) {
+  background: transparent !important;
+}
+
+html.a11y-contrast-negative {
+  filter: invert(1) hue-rotate(180deg) !important;
+}
+
+html.a11y-contrast-negative img:not(.keep-colors img),
+html.a11y-contrast-negative video:not(.keep-colors video),
+html.a11y-contrast-negative canvas,
+html.a11y-contrast-negative .keep-colors {
+  filter: invert(1) hue-rotate(180deg) !important;
+}
+
+html.a11y-contrast-grayscale {
+  filter: grayscale(1) !important;
+}
+
 .simplebar-scrollbar:before {
   background: rgba(251, 191, 36, 0.7); /* Twój kolor gold */
   border-radius: 8px;
@@ -394,8 +482,8 @@ svg {
 
 /* Warning class for low accessibility (low saturation or contrast) */
 .low-accessibility-warning {
-  /* Visual indicator could be added here if needed */
-  /* Currently handled by warning message in ColorAdjustmentPanel */
+  outline: 2px dashed rgba(234, 179, 8, 0.85);
+  outline-offset: 2px;
 }
 
 /* Skip link for accessibility - hidden by default, visible on focus */

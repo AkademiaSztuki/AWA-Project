@@ -9,7 +9,9 @@ import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getSessionStoreSnapshot } from "@/hooks/useSession";
 import { useSessionData } from "@/hooks/useSessionData";
-import { saveSessionToGcp } from "@/lib/gcp-data";
+import { saveSessionToGcp, logBehavioralEvent } from "@/lib/gcp-data";
+import { useAuth } from "@/contexts/AuthContext";
+import { LoginModal } from "@/components/auth/LoginModal";
 import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
 import { RadarChart, DomainDescription } from '@/components/dashboard/BigFiveDetailed';
 import { 
@@ -22,6 +24,8 @@ export default function BigFivePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { sessionData, updateSessionData } = useSessionData();
+  const { user } = useAuth();
+  const [nudgeCOpen, setNudgeCOpen] = useState(false);
   const fromDashboard = searchParams?.get('from') === 'dashboard';
   const retake = searchParams?.get('retake') === 'true';
   const shouldGoDashboard = fromDashboard || retake;
@@ -301,8 +305,17 @@ export default function BigFivePage() {
       // Flush immediately so big5_* / big5_responses reach Cloud SQL before navigation (debounced save may not run).
       await saveSessionToGcp(getSessionStoreSnapshot());
 
-      // Always redirect to dashboard after completing Big Five test
-      router.push("/dashboard");
+      const hash = sessionData?.userHash;
+      if (hash) {
+        void logBehavioralEvent(hash, "flow_step_big_five_complete", { path: "big-five" });
+      }
+
+      if (user || shouldGoDashboard) {
+        router.push("/dashboard");
+        return;
+      }
+
+      setNudgeCOpen(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -361,6 +374,10 @@ export default function BigFivePage() {
   }, [showResults, scores, responses, updateSessionData, sessionData?.userHash]); // Only depend on userHash, not entire sessionData
 
   const handleSkip = () => {
+    if (!user) {
+      router.push("/flow/generate?mode=anon-single");
+      return;
+    }
     router.push("/dashboard");
   };
 
@@ -596,6 +613,32 @@ export default function BigFivePage() {
             autoHide={true}
           />
         </div>
+
+        <LoginModal
+          isOpen={nudgeCOpen}
+          onClose={() => setNudgeCOpen(false)}
+          gateMode="soft"
+          nudgeLocation="big_five"
+          nudgeReason="login_required"
+          onMaybeLater={() => {
+            setNudgeCOpen(false);
+            router.push("/flow/generate?mode=anon-single");
+          }}
+          onNudgeEvent={(ev) => {
+            const h = sessionData?.userHash;
+            if (h) void logBehavioralEvent(h, "login_nudge", { page: "big_five", ev });
+          }}
+          message={
+            language === "pl"
+              ? "Zaloguj się, aby zapisać profil na koncie i odblokować pełną matrycę 6 wariantów + upscale. Możesz też kontynuować anonimowo z jedną darmową generacją."
+              : "Sign in to save your profile and unlock the full 6-image matrix + upscale. You can also continue anonymously with one free generation."
+          }
+          redirectPath="/flow/generate?mode=anon-single"
+          softMaybeLaterLabel={{
+            pl: "Kontynuuj z jedną darmową generacją",
+            en: "Continue with one free generation",
+          }}
+        />
       </div>
     );
   }

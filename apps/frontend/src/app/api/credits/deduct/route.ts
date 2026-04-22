@@ -1,40 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { deductCredits } from '@/lib/credits';
+import { getAnonSessionIdFromRequest, getRequestClientIp, parseAnonPathScope } from '@/lib/anon-request-helpers';
+import { deductAnonGenerate } from '@/lib/anon-db-limits';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as {
+      userHash?: string;
+      generationId?: string;
+      isAuthenticated?: boolean;
+      pathScope?: string;
+    };
     const { userHash, generationId } = body;
-
-    console.log('[API Credits Deduct] Received request:', { userHash, generationId });
+    const isAuthenticated = body.isAuthenticated === true;
+    const pathScope = parseAnonPathScope(body.pathScope);
 
     if (!userHash || !generationId) {
-      console.error('[API Credits Deduct] Missing required fields:', { userHash: !!userHash, generationId: !!generationId });
       return NextResponse.json(
         { error: 'Missing required fields: userHash, generationId' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const success = await deductCredits(userHash, generationId);
+    if (isAuthenticated) {
+      const success = await deductCredits(userHash, generationId);
+      if (!success) {
+        return NextResponse.json({ error: 'Failed to deduct credits' }, { status: 500 });
+      }
+      return NextResponse.json({ success: true, ok: true, scope: 'user' as const });
+    }
 
-    if (!success) {
-      console.error('[API Credits Deduct] deductCredits returned false');
+    if (!pathScope) {
       return NextResponse.json(
-        { error: 'Failed to deduct credits' },
-        { status: 500 }
+        { error: 'Invalid or missing pathScope (expected "fast" or "full")' },
+        { status: 400 },
       );
     }
 
-    console.log('[API Credits Deduct] Successfully deducted credits');
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('[API Credits Deduct] Exception caught:', error);
-    console.error('[API Credits Deduct] Error stack:', error?.stack);
-    return NextResponse.json(
-      { error: error.message || 'Failed to deduct credits', details: error?.toString() },
-      { status: 500 }
-    );
+    const anonId = getAnonSessionIdFromRequest(request);
+    if (!anonId) {
+      return NextResponse.json({ error: 'Anon session cookie required', reason: 'login_required' }, { status: 400 });
+    }
+    const ip = getRequestClientIp(request);
+    const r = await deductAnonGenerate(ip, anonId, generationId, pathScope);
+    if (!r.ok) {
+      return NextResponse.json(
+        { error: r.error || 'Failed to record anon usage', success: false },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ success: true, ok: true, scope: 'anon' as const, duplicate: r.duplicate });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to deduct credits';
+    console.error('Error in credits deduct:', error);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

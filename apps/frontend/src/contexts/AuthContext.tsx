@@ -314,6 +314,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error in linkUserHashToAuth:', error);
     }
+
+    try {
+      await fetch('/api/anon/link-auth', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authUserId: user.id, userHash }),
+      });
+    } catch (e) {
+      console.warn('[AuthContext] /api/anon/link-auth failed:', e);
+    }
   };
 
   const hydrateFromMagicLink = (authUserId: string, email?: string) => {

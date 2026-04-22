@@ -114,7 +114,7 @@ export const TinderCard: React.FC<TinderCardProps> = ({
                   {tags.map((tag, index) => (
                     <span
                       key={index}
-                      className="bg-gold-400/80 text-gold-900 px-2 py-1 rounded-md text-xs font-modern"
+                      className="bg-gold-600/90 text-white px-2 py-1 rounded-md text-xs font-modern"
                       aria-label={`Tag: ${tag}`}
                     >
                       {tag}

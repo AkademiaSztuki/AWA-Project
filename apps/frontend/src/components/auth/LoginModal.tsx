@@ -10,15 +10,39 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { X, Mail, Sparkles } from 'lucide-react';
 
+export type LoginNudgeEvent = 'nudge_shown' | 'nudge_dismissed' | 'nudge_cta' | 'nudge_soft_later';
+
+export type LoginGateMode = 'default' | 'soft' | 'hard';
+
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
   message?: string;
   redirectPath?: string;
+  /** Dismiss (soft) for logged-out funnel – “maybe later” */
+  onMaybeLater?: () => void;
+  /** Parent-driven funnel telemetry (optional) */
+  onNudgeEvent?: (event: LoginNudgeEvent) => void;
+  gateMode?: LoginGateMode;
+  nudgeLocation?: string;
+  nudgeReason?: 'login_required' | 'quota_exceeded';
+  softMaybeLaterLabel?: { pl: string; en: string };
 }
 
-export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }: LoginModalProps) {
+export function LoginModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  message,
+  redirectPath,
+  onMaybeLater,
+  onNudgeEvent,
+  gateMode = 'default',
+  nudgeLocation,
+  nudgeReason,
+  softMaybeLaterLabel,
+}: LoginModalProps) {
   const { signInWithGoogle, signInWithEmail, registerWithEmail, loginWithEmail, resendVerificationEmail } = useAuth();
   const { language } = useLanguage();
   const searchParams = useSearchParams();
@@ -38,6 +62,12 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
     return () => setMounted(false);
   }, []);
 
+  useEffect(() => {
+    if (isOpen && (gateMode === 'soft' || gateMode === 'hard')) {
+      onNudgeEvent?.('nudge_shown');
+    }
+  }, [isOpen, gateMode, nudgeLocation, nudgeReason, onNudgeEvent]);
+
   // Focus management for accessibility
   useEffect(() => {
     if (isOpen && firstFocusableRef.current) {
@@ -51,6 +81,9 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
+        if (gateMode === 'hard') {
+          onNudgeEvent?.('nudge_dismissed');
+        }
         onClose();
       }
     };
@@ -59,7 +92,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
       document.addEventListener('keydown', handleEscape);
       return () => document.removeEventListener('keydown', handleEscape);
     }
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, gateMode, onNudgeEvent]);
 
   // Trap focus within modal when open
   useEffect(() => {
@@ -96,10 +129,30 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
     return redirectPath || searchParams.get('redirect') || undefined;
   };
 
+  const handleClose = () => {
+    onNudgeEvent?.('nudge_dismissed');
+    onClose();
+  };
+
+  const handleBackdropClick = () => {
+    if (gateMode === 'hard') {
+      return;
+    }
+    onNudgeEvent?.('nudge_dismissed');
+    onClose();
+  };
+
+  const handleMaybeLater = () => {
+    onNudgeEvent?.('nudge_soft_later');
+    onMaybeLater?.();
+    onClose();
+  };
+
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setError('');
     try {
+      onNudgeEvent?.('nudge_cta');
       await signInWithGoogle(getEffectiveRedirectPath());
       // No onSuccess call here for OAuth because the whole page will redirect anyway.
       // Calling router.push in onSuccess creates a race condition that blocks Safari.
@@ -142,6 +195,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
           }
           setError(msg);
         } else {
+          onNudgeEvent?.('nudge_cta');
           onClose();
           onSuccess?.();
         }
@@ -164,7 +218,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={handleBackdropClick}
           aria-hidden="true"
         />
 
@@ -184,7 +238,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
             {/* Close Button */}
             <button
               ref={firstFocusableRef}
-              onClick={onClose}
+              onClick={handleClose}
               className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors focus:ring-2 focus:ring-gold-400 focus:outline-none"
               aria-label={language === 'pl' ? 'Zamknij modal logowania' : 'Close login modal'}
             >
@@ -224,6 +278,23 @@ export function LoginModal({ isOpen, onClose, onSuccess, message, redirectPath }
               </div>
             ) : (
               <div className="space-y-4">
+                {gateMode === 'soft' && onMaybeLater && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleMaybeLater}
+                      className="text-sm text-silver-dark hover:text-graphite font-modern underline underline-offset-2"
+                    >
+                      {softMaybeLaterLabel
+                        ? language === 'pl'
+                          ? softMaybeLaterLabel.pl
+                          : softMaybeLaterLabel.en
+                        : language === 'pl'
+                          ? 'Może później'
+                          : 'Maybe later'}
+                    </button>
+                  </div>
+                )}
                 {/* Google Sign In */}
                 <GlassButton
                   onClick={handleGoogleSignIn}

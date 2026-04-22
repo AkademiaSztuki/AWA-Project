@@ -11,7 +11,9 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { Palette, Check } from 'lucide-react';
 import { STYLE_OPTIONS } from '@/lib/questions/style-options';
-import { safeSessionStorage } from '@/lib/gcp-data';
+import { safeSessionStorage, logBehavioralEvent } from '@/lib/gcp-data';
+import { useAuth } from '@/contexts/AuthContext';
+import { LoginModal } from '@/components/auth/LoginModal';
 
 /** Tells /flow/fast-generate to ignore any cached fast preview (survives in-memory/GCP merge quirks). */
 const AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY = 'awa_fast_track_require_fresh_gen';
@@ -53,7 +55,9 @@ export default function StyleSelectionPage() {
   const router = useRouter();
   const { sessionData, updateSession } = useSession();
   const { language } = useLanguage();
+  const { user } = useAuth();
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
+  const [nudgeAOpen, setNudgeAOpen] = useState(false);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   const handleImageError = (styleId: string) => {
@@ -79,7 +83,7 @@ export default function StyleSelectionPage() {
 
   const t = texts[language];
 
-  const handleContinue = async () => {
+  const applyStyleAndGoToGenerate = async () => {
     if (!selectedStyle) return;
 
     console.log('[StyleSelection] Selected style:', selectedStyle);
@@ -119,6 +123,15 @@ export default function StyleSelectionPage() {
 
     // Go to fast track generation
     router.push('/flow/fast-generate');
+  };
+
+  const handleContinue = async () => {
+    if (!selectedStyle) return;
+    if (!user) {
+      setNudgeAOpen(true);
+      return;
+    }
+    await applyStyleAndGoToGenerate();
   };
 
   return (
@@ -247,6 +260,33 @@ export default function StyleSelectionPage() {
             : 'Choose a style that inspires you. Don\'t worry - you can adjust it later!'}
         />
       </div>
+
+      <LoginModal
+        isOpen={nudgeAOpen}
+        onClose={() => setNudgeAOpen(false)}
+        gateMode="soft"
+        nudgeLocation="style_selection"
+        nudgeReason="login_required"
+        onMaybeLater={async () => {
+          const h = (sessionData as { userHash?: string } | null)?.userHash;
+          if (h) {
+            void logBehavioralEvent(h, 'login_nudge', { page: 'style-selection', nudge: 'nudge_soft_later' });
+          }
+          setNudgeAOpen(false);
+          await applyStyleAndGoToGenerate();
+        }}
+        onNudgeEvent={(ev) => {
+          const h = (sessionData as { userHash?: string } | null)?.userHash;
+          if (h) void logBehavioralEvent(h, 'login_nudge', { page: 'style-selection', nudge: ev });
+        }}
+        message={
+          language === 'pl'
+            ? 'Zaloguj się, aby zapisać postęp i później wrócić do tego samego projektu. Możesz też od razu iść dalej bez logowania.'
+            : 'Sign in to save progress and return to this project later. You can also continue without signing in.'
+        }
+        redirectPath="/flow/fast-generate"
+        softMaybeLaterLabel={{ pl: 'Idź dalej bez logowania', en: 'Continue without signing in' }}
+      />
     </div>
   );
 }

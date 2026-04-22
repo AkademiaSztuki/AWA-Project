@@ -10,19 +10,14 @@ import { Zap, Heart, Palette, Home, Sparkles } from 'lucide-react';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSessionData } from '@/hooks/useSessionData';
-import { useAuth } from '@/contexts/AuthContext';
 import { useLayout } from '@/contexts/LayoutContext';
-import { LoginModal } from '@/components/auth/LoginModal';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
   const { language } = useLanguage();
   const { updateSessionData, isInitialized, sessionData } = useSessionData();
-  const { user, isLoading: authLoading } = useAuth();
   const { setHeaderVisible } = useLayout();
   const [showAuraSection, setShowAuraSection] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [pendingPath, setPendingPath] = useState<'fast' | 'full' | null>(null);
 
   useEffect(() => {
     // Hide header on landing mount - it should only appear after dialogue
@@ -108,12 +103,6 @@ const LandingScreen: React.FC = () => {
                     aria-label={language === 'pl' ? 'Wybierz Szybką Ścieżkę (3-5 minut)' : 'Choose Fast Track (3-5 minutes)'}
                     onClick={async () => {
                       stopAllDialogueAudio();
-                      if (!user) { 
-                        setPendingPath('fast'); 
-                        // Just show the modal - LoginModal will handle the redirect via redirectPath prop
-                        setShowLoginModal(true); 
-                        return; 
-                      }
                       await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
                       router.push('/flow/onboarding');
                     }}
@@ -146,12 +135,6 @@ const LandingScreen: React.FC = () => {
                     aria-label={language === 'pl' ? 'Wybierz Pełne Doświadczenie (20-30 minut, polecane)' : 'Choose Full Experience (20-30 minutes, recommended)'}
                     onClick={async () => {
                       stopAllDialogueAudio();
-                      if (!user) { 
-                        setPendingPath('full'); 
-                        // Just show the modal
-                        setShowLoginModal(true); 
-                        return; 
-                      }
                       await updateSessionData({ pathType: 'full' });
                       router.push('/setup/profile');
                     }}
@@ -186,11 +169,6 @@ const LandingScreen: React.FC = () => {
         )}
       </div>
 
-      <LoginModal
-        isOpen={showLoginModal}
-        redirectPath={pendingPath === 'fast' ? '/flow/onboarding' : pendingPath === 'full' ? '/setup/profile' : undefined}
-        onClose={() => setShowLoginModal(false)}
-      />
     </div>
   );
 };

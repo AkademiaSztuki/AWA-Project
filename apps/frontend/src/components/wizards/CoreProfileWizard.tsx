@@ -20,6 +20,7 @@ import { LoginModal } from '@/components/auth/LoginModal';
 import { computeWeightedDNAFromSwipes } from '@/lib/dna';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { saveResearchConsent, saveParticipantSwipes, safeSessionStorage } from '@/lib/gcp-data';
+import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import Link from 'next/link';
 
 const STEP_CARD_HEIGHT = "min-h-[500px] md:min-h-[650px] max-h-[min(90vh,800px)] md:max-h-[min(78vh,900px)]";
@@ -621,6 +622,7 @@ export function CoreProfileWizard() {
     
     console.log('[CoreProfileWizard] Updating session data and moving to next step...');
     await updateSessionData({ consentTimestamp: timestamp });
+    void initAnonSessionAfterConsent();
     handleNext();
   };
 
@@ -1021,6 +1023,8 @@ function ConsentStep({
       purposeText: 'Badanie analizuje, jak interaktywny system AI wpływa na proces twórczy w projektowaniu wnętrz; wyniki opracowywane statystycznie i publikowane zbiorczo.',
       scope: 'Zakres danych',
       scopeText: 'Dane konta (e-mail), odpowiedzi i wyniki testów, preferencje i interakcje (np. czasy reakcji), przesłane zdjęcia wnętrz oraz dane techniczne/analityczne działania serwisu.',
+      sessionCookieText:
+        'Techniczne: po akceptacji zgody ustawiamy HttpOnly cookie z losowym identyfikatorem sesji anonimowej oraz (serwerowo) jednokierunkowy skrót adresu IP w celu ograniczenia nadużyć limitu darmowych generacji (nie w celu identyfikacji marketingowej).',
       voluntary: 'Dobrowolność',
       voluntaryText: 'Udział jest dobrowolny; można przerwać i wycofać zgodę w dowolnym momencie poprzez e-mail.',
       rights: 'Prawa',
@@ -1057,6 +1061,8 @@ function ConsentStep({
       purposeText: 'The study analyzes how an interactive AI system influences the creative process in interior design; results are processed statistically and published collectively.',
       scope: 'Data Scope',
       scopeText: 'Account data (email), test responses and results, preferences and interactions (e.g., reaction times), uploaded interior photos, and technical/analytical service operation data.',
+      sessionCookieText:
+        'Technical: after you accept, we set an HttpOnly cookie with a random anonymous session id and a one-way server-side hash of the IP address to limit abuse of free generation quotas (not for marketing identification).',
       voluntary: 'Voluntary Participation',
       voluntaryText: 'Participation is voluntary; you can stop and withdraw consent at any time via email.',
       rights: 'Rights',
@@ -1119,6 +1125,7 @@ function ConsentStep({
                 {texts.scope}
               </h3>
               <p className="leading-relaxed">{texts.scopeText}</p>
+              <p className="leading-relaxed text-xs text-silver-dark mt-2">{texts.sessionCookieText}</p>
             </div>
 
             <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">

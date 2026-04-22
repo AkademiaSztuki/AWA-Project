@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { SpeedInsights } from '@vercel/speed-insights/next';
-import { Inter, Audiowide, Exo_2 } from 'next/font/google';
+import { Inter, Audiowide, Exo_2, Atkinson_Hyperlegible } from 'next/font/google';
 import './globals.css';
 import AmbientMusic from '@/components/ui/AmbientMusic';
 import { LandscapeGuard } from '@/components/ui/LandscapeGuard';
@@ -11,6 +11,8 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { LayoutProvider } from '@/contexts/LayoutContext';
 import { AnimationProvider } from '@/contexts/AnimationContext';
 import { ColorAdjustmentProvider } from '@/contexts/ColorAdjustmentContext';
+import { WcagSettingsProvider } from '@/contexts/WcagSettingsContext';
+import { ReadingGuide } from '@/components/ui/ReadingGuide';
 import { DialogueVoiceProvider } from '@/contexts/DialogueVoiceContext';
 import { GlassHeader } from '@/components/ui/GlassHeader';
 import { GlobalProtectedRoute } from '@/components/auth/GlobalProtectedRoute';
@@ -25,6 +27,12 @@ const audiowide = Audiowide({
 const exo2 = Exo_2({ 
   subsets: ['latin'], 
   variable: '--font-exo2' 
+});
+
+const atkinson = Atkinson_Hyperlegible({
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  variable: '--font-atkinson',
 });
 
 export const metadata: Metadata = {
@@ -74,7 +82,7 @@ export default function RootLayout({
   const initialLanguage = detectInitialLanguage();
 
   return (
-    <html lang={initialLanguage} className={`${inter.variable} ${audiowide.variable} ${exo2.variable}`}>
+    <html lang={initialLanguage} className={`${inter.variable} ${atkinson.variable} ${audiowide.variable} ${exo2.variable}`}>
       <body className="min-h-screen overflow-y-auto font-nasalization">
         {/* Skip to main content link for accessibility */}
         <a 
@@ -88,6 +96,7 @@ export default function RootLayout({
           <AuthProvider>
             <LayoutProvider>
               <AnimationProvider>
+                <WcagSettingsProvider>
                 <ColorAdjustmentProvider>
                   <DialogueVoiceProvider>
                   <LandscapeGuard>
@@ -112,6 +121,7 @@ export default function RootLayout({
                           <div className="hidden xl:block min-h-[720px]" aria-hidden="true" />
                           <div className="w-full max-w-full lg:max-w-none lg:ml-auto space-y-2 sm:space-y-4">
                             <GlassHeader />
+                            <ReadingGuide />
                             <div className="w-full">
                               {children}
                             </div>
@@ -124,6 +134,7 @@ export default function RootLayout({
                 </LandscapeGuard>
                   </DialogueVoiceProvider>
                 </ColorAdjustmentProvider>
+                </WcagSettingsProvider>
               </AnimationProvider>
             </LayoutProvider>
           </AuthProvider>

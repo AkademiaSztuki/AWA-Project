@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
@@ -22,6 +22,10 @@ import { LoadingProgress } from '@/components/ui/LoadingProgress';
 import { GenerationHistory } from '@/components/ui/GenerationHistory';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
+import { useAuth } from '@/contexts/AuthContext';
+import { LoginModal, type LoginNudgeEvent } from '@/components/auth/LoginModal';
+import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
+import { FREE_GRANT_CREDITS } from '@/lib/credits';
 import {
   Wand2,
   RefreshCw,
@@ -39,6 +43,7 @@ import {
   ChevronRight,
   MessageSquare,
   X,
+  Lock,
 } from 'lucide-react';
 import Image from 'next/image';
 import { buildOptimizedFluxPrompt } from '@/lib/dna';
@@ -116,10 +121,20 @@ const MACRO_MODIFICATIONS: ModificationOption[] = [
 
 export default function GeneratePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t, language } = useLanguage();
+  const { user } = useAuth();
+  const isAuthenticated = !!user;
   const { sessionData, updateSessionData, isInitialized: isSessionInitialized } = useSessionData();
+  const isAnonSingle = searchParams.get('mode') === 'anon-single' || (!isAuthenticated && (sessionData as { pathType?: 'fast' | 'full' })?.pathType === 'fast');
+  const pathTypeForCredits = (sessionData as { pathType?: 'fast' | 'full' })?.pathType === 'fast' ? 'fast' : 'full';
+  const isAnonMatrixPreview = !isAuthenticated && pathTypeForCredits === 'full' && searchParams.get('mode') !== 'anon-single';
   const { generateSixImagesParallelWithGoogle, upscaleImageWithGoogle, isLoading, error, setError } = useGoogleAI();
-  const { generateLLMComment } = useModalAPI(); 
+  const { generateLLMComment } = useModalAPI();
+
+  const [postAnonGenLoginOpen, setPostAnonGenLoginOpen] = useState(false);
+  const [preGenLoginOpen, setPreGenLoginOpen] = useState(false);
+  const [matrixLoginWallOpen, setMatrixLoginWallOpen] = useState(false); 
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
@@ -138,7 +153,25 @@ export default function GeneratePage() {
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
   
   // 6-Image Matrix State
-  const [isMatrixMode, setIsMatrixMode] = useState(true); // Enabled - 6 different sources
+  const [isMatrixMode, setIsMatrixMode] = useState(true); // Enabled - 6 different sources (off for anonymous)
+
+  useEffect(() => {
+    const m = searchParams.get('mode');
+    if (m === 'anon-single') {
+      setIsMatrixMode(false);
+      return;
+    }
+    if (!isAuthenticated) {
+      const pt = (sessionData as { pathType?: 'fast' | 'full' })?.pathType;
+      setIsMatrixMode(pt !== 'fast');
+      return;
+    }
+    setIsMatrixMode(true);
+  }, [isAuthenticated, searchParams, sessionData?.pathType]);
+
+  useEffect(() => {
+    void initAnonSessionAfterConsent();
+  }, []);
   const [matrixImages, setMatrixImages] = useState<GeneratedImage[]>([]);
   const [matrixDisplayOrder, setMatrixDisplayOrder] = useState<GenerationSource[]>([]);
   const [blindSelectionMade, setBlindSelectionMade] = useState(false);
@@ -981,35 +1014,104 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         return;
       }
 
-      const requiredCredits = synthesisResult.generatedSources.length * 10;
-      const matrixUserHash = typedSessionData?.userHash;
-      if (matrixUserHash) {
-        let hasCredits = true;
-        try {
-          hasCredits = await checkCreditsViaApi(matrixUserHash, requiredCredits);
-        } catch (creditError) {
-          console.warn('[6-Image Matrix] Error checking credits:', creditError);
-        }
+      const allMatrixPrompts = synthesisResult.generatedSources.map((source) => ({
+        source,
+        prompt: synthesisResult.results[source]!.prompt,
+      }));
 
-        if (!hasCredits) {
-          setError(t({
-            pl: `Nie masz wystarczającej liczby kredytów. Potrzebujesz ${requiredCredits} kredytów na ten zestaw obrazów.`,
-            en: `You do not have enough credits. You need ${requiredCredits} credits for this image set.`,
-          }));
-          setStatusMessage({ pl: 'Brak kredytów', en: 'No credits' });
+      if (isAnonMatrixPreview) {
+        const previewUserHash = typedSessionData?.userHash as string | undefined;
+        if (previewUserHash) {
+          let cred: Awaited<ReturnType<typeof checkCreditsWithAction>> | null = null;
+          try {
+            cred = await checkCreditsWithAction(previewUserHash, 10, 'generate');
+          } catch (e) {
+            console.warn('[Anon 1/6] credit check:', e);
+          }
+          if (cred && !cred.allowed) {
+            if (cred.code === 429) {
+              setPreGenLoginOpen(true);
+            } else {
+              setError(
+                t({
+                  pl: 'Nie masz dostępnej darmowej próby na tę ścieżkę. Zaloguj się, aby kontynuować.',
+                  en: 'No free try left on this path. Sign in to continue.',
+                }),
+              );
+            }
+            setIsGenerating(false);
+            isGeneratingRef.current = false;
+            return;
+          }
+        } else {
+          setError(
+            t({
+              pl: 'Brak identyfikatora sesji. Zgódź się na pliki cookie i spróbuj ponownie.',
+              en: 'Missing session id. Please accept cookies and try again.',
+            }),
+          );
+          setIsGenerating(false);
+          isGeneratingRef.current = false;
           return;
         }
+        const rest = allMatrixPrompts.slice(1);
+        await updateSessionData({
+          matrixAnonPending: rest.map((p) => ({ source: p.source, prompt: p.prompt })),
+        } as Record<string, unknown>);
+        void saveSessionToGcp(getSessionStoreSnapshot() as Record<string, unknown>);
+        void logBehavioralEvent(typedSessionData.userHash, 'login_nudge', {
+          page: 'flow-generate',
+          nudge: 'anon_one_of_six' as any,
+        }).catch(() => {});
+      } else {
+        const requiredCredits = synthesisResult.generatedSources.length * 10;
+        const matrixUserHash = typedSessionData?.userHash;
+        if (matrixUserHash) {
+          let credit: Awaited<ReturnType<typeof checkCreditsWithAction>> | null = null;
+          try {
+            credit = await checkCreditsWithAction(matrixUserHash, requiredCredits, 'matrix');
+          } catch (creditError) {
+            console.warn('[6-Image Matrix] Error checking credits:', creditError);
+          }
+
+          if (credit && !credit.allowed) {
+            if (credit.code === 429) {
+              setMatrixLoginWallOpen(true);
+              setIsGenerating(false);
+              isGeneratingRef.current = false;
+              return;
+            }
+            setError(t({
+              pl: `Nie masz wystarczającej liczby kredytów. Potrzebujesz ${requiredCredits} kredytów na ten zestaw obrazów.`,
+              en: `You do not have enough credits. You need ${requiredCredits} credits for this image set.`,
+            }));
+            setStatusMessage({ pl: 'Brak kredytów', en: 'No credits' });
+            setIsGenerating(false);
+            isGeneratingRef.current = false;
+            return;
+          }
+        }
       }
-      
+
       // Step 2: Prepare prompts for parallel generation
       setLoadingProgress(45);
-      setStatusMessage({ pl: `Generuję ${synthesisResult.generatedSources.length} wizji równolegle...`, en: `Generating ${synthesisResult.generatedSources.length} visions in parallel...` });
+      if (isAnonMatrixPreview) {
+        setStatusMessage({
+          pl: `Generuję pierwszą z ${allMatrixPrompts.length} wizji (gość, 1/6)…`,
+          en: `Generating 1 of ${allMatrixPrompts.length} vision(s) (guest preview, 1/6)…`,
+        });
+      } else {
+        setStatusMessage({
+          pl: `Generuję ${synthesisResult.generatedSources.length} wizji równolegle...`,
+          en: `Generating ${synthesisResult.generatedSources.length} visions in parallel...`,
+        });
+      }
       setEstimatedTime(120);
-      
-      const prompts = synthesisResult.generatedSources.map(source => ({
-        source,
-        prompt: synthesisResult.results[source]!.prompt
-      }));
+
+      const prompts: { source: GenerationSource; prompt: string }[] =
+        isAnonMatrixPreview && allMatrixPrompts.length > 0
+          ? [allMatrixPrompts[0]!]
+          : allMatrixPrompts;
 
       // Seed per-source progress so placeholders immediately show activity (start at 2%)
       setImageProgress(() => {
@@ -1821,6 +1923,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           // Nie blokuj aplikacji jeśli odejmowanie kredytów się nie powiodło
         }
       }
+
+      if (isAnonMatrixPreview && newMatrixImages.length > 0) {
+        setPostAnonGenLoginOpen(true);
+      }
       
     } catch (err: any) {
       // Check if it was an abort
@@ -2078,29 +2184,57 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   // Use centralized parameters from useModalAPI
   const getOptimalParameters = getGenerationParameters;
 
-  const checkCreditsViaApi = async (userHash: string, amount: number) => {
+  type CreditAction = 'generate' | 'regenerate' | 'upscale' | 'save' | 'matrix';
+
+  const runGenNudgeTelemetry = (event: LoginNudgeEvent) => {
+    const uid = (sessionData as { userHash?: string } | null)?.userHash;
+    if (!uid) return;
+    void logBehavioralEvent(uid, 'login_nudge', { page: 'flow-generate', nudge: event });
+  };
+
+  const checkCreditsWithAction = async (userHash: string, amount: number, action: CreditAction) => {
     const response = await fetch('/api/credits/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userHash, amount }),
+      credentials: 'include',
+      body: JSON.stringify({
+        userHash,
+        amount,
+        action,
+        isAuthenticated,
+        ...(!isAuthenticated ? { pathScope: pathTypeForCredits } : {}),
+      }),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to check credits');
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      return {
+        allowed: false as const,
+        code: 429 as const,
+        reason: data.reason as string | undefined,
+        scope: data.scope as string | undefined,
+      };
     }
-
-    const data = await response.json();
-    return !!data.available;
+    if (!response.ok) {
+      throw new Error((data as { error?: string }).error || 'Failed to check credits');
+    }
+    if (data.available === false) {
+      return { allowed: false as const, code: 200, reason: 'quota' as const };
+    }
+    return { allowed: true as const, code: 200 };
   };
 
   const deductCreditsViaApi = async (userHash: string, generationId: string) => {
     const response = await fetch('/api/credits/deduct', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userHash, generationId }),
+      credentials: 'include',
+      body: JSON.stringify({
+        userHash,
+        generationId,
+        isAuthenticated,
+        ...(!isAuthenticated ? { pathScope: pathTypeForCredits } : {}),
+      }),
     });
-
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to deduct credits');
@@ -2111,6 +2245,168 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     const validIds = imageIds.filter(Boolean);
     await Promise.all(validIds.map((imageId) => deductCreditsViaApi(userHash, imageId)));
   };
+
+  const matrixAnonResumeOnce = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isApiReady) return;
+    const snap = getSessionStoreSnapshot() as Record<string, unknown> & {
+      matrixAnonPending?: { source: string; prompt: string }[];
+      userHash?: string;
+    };
+    const pending = snap.matrixAnonPending;
+    if (!Array.isArray(pending) || pending.length === 0) return;
+    if (matrixAnonResumeOnce.current) return;
+    if (isGeneratingRef.current) return;
+
+    void (async () => {
+      const userHash = snap.userHash;
+      if (!userHash) return;
+      let credit: Awaited<ReturnType<typeof checkCreditsWithAction>> | null = null;
+      try {
+        credit = await checkCreditsWithAction(userHash, pending.length * 10, 'matrix');
+      } catch (e) {
+        console.warn('[Matrix resume] credit check', e);
+        return;
+      }
+      if (credit && !credit.allowed) {
+        if (credit.code === 429) setMatrixLoginWallOpen(true);
+        return;
+      }
+      matrixAnonResumeOnce.current = true;
+      isGeneratingRef.current = true;
+      setIsGenerating(true);
+      setStatusMessage({
+        pl: 'Dokańczam pozostałe warianty z zapisanej sesji…',
+        en: 'Completing remaining variants from your saved session…',
+      });
+      try {
+        let roomImage = snap.roomImage as string | undefined;
+        if (!roomImage) {
+          const s = safeSessionStorage.getItem('aura_session_room_image');
+          if (s) roomImage = s;
+        }
+        if (!roomImage) {
+          setError(
+            t({ pl: 'Brak zdjęcia pomieszczenia — nie można wznowić matrycy.', en: 'No room image — cannot resume matrix.' }),
+          );
+          matrixAnonResumeOnce.current = false;
+          return;
+        }
+        const roomEmpty = snap.roomImageEmpty as string | undefined;
+        let processedRoomImage = roomEmpty || roomImage;
+        processedRoomImage = processedRoomImage.includes(',') ? processedRoomImage.split(',')[1] : processedRoomImage;
+
+        const dims = await getImageDimensions(processedRoomImage);
+        const ratio = dims.width / dims.height;
+        let finalWidth = 1024;
+        let finalHeight = 1024;
+        if (dims.width >= dims.height) {
+          finalWidth = 1024;
+          finalHeight = Math.round(1024 / ratio);
+        } else {
+          finalHeight = 1024;
+          finalWidth = Math.round(1024 * ratio);
+        }
+        const baseParams = getGenerationParameters('preview', generationCount);
+        const parameters = {
+          ...baseParams,
+          image_size: 1024,
+          width: finalWidth,
+          height: finalHeight,
+        };
+        const runId =
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `resume-${Date.now()}`;
+        const prompts = pending.map((p) => ({
+          source: p.source as GenerationSource,
+          prompt: p.prompt,
+        }));
+        const genRes = await generateSixImagesParallelWithGoogle(
+          {
+            prompts,
+            base_image: processedRoomImage,
+            inspiration_images: undefined,
+            style: (snap as { visualDNA?: { dominantStyle?: string } }).visualDNA?.dominantStyle || 'modern',
+            generation_run_id: runId,
+            parameters: {
+              ...parameters,
+              strength: parameters.strength ?? 0.55,
+            },
+          },
+          undefined,
+        );
+        if (!genRes.successful_count) {
+          setError(
+            t({ pl: 'Nie udało się wznowić generacji matrycy.', en: 'Failed to resume matrix generation.' }),
+          );
+          matrixAnonResumeOnce.current = false;
+          return;
+        }
+        const displayOrder = synthesisResult?.displayOrder || [];
+        const newMatrixImages: GeneratedImage[] = genRes.results
+          .filter((r) => r.success)
+          .map((result) => {
+            const displayIndex = displayOrder.indexOf(result.source);
+            return {
+              id: `matrix-resume-${runId}-${result.source}`,
+              url: `data:image/png;base64,${result.image}`,
+              base64: result.image,
+              prompt: result.prompt,
+              parameters: { ...parameters, source: result.source },
+              ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+              isFavorite: false,
+              createdAt: Date.now(),
+              source: result.source,
+              displayIndex: displayIndex >= 0 ? displayIndex : 0,
+              isBlindSelected: false,
+              provider: 'google' as const,
+            };
+          });
+        newMatrixImages.sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0));
+        setMatrixImages((prev) => {
+          const bySource = new Map(prev.map((img) => [img.source, img]));
+          for (const img of newMatrixImages) {
+            bySource.set(img.source, img);
+          }
+          return Array.from(bySource.values()).sort(
+            (a, b) => (a.displayIndex || 0) - (b.displayIndex || 0),
+          );
+        });
+        setGeneratedImages((prev) => {
+          const bySource = new Map(prev.map((img) => [img.source, img]));
+          for (const img of newMatrixImages) {
+            bySource.set(img.source, img);
+          }
+          return Array.from(bySource.values());
+        });
+        await updateSessionData({ matrixAnonPending: [] } as Record<string, unknown>);
+        void saveSessionToGcp(getSessionStoreSnapshot() as Record<string, unknown>);
+        await deductCreditsForImages(
+          userHash,
+          newMatrixImages.map((i) => i.id),
+        );
+        setStatusMessage({
+          pl: 'Gotowe! Wybierz swoje ulubione wnętrze.',
+          en: 'Ready! Choose your favorite interior.',
+        });
+        void logBehavioralEvent(userHash, 'login_nudge', {
+          page: 'flow-generate',
+          nudge: 'matrix_anon_resumed' as any,
+        }).catch(() => {});
+      } catch (e) {
+        console.error('[Matrix resume]', e);
+        matrixAnonResumeOnce.current = false;
+        setError(
+          t({ pl: 'Błąd wznawiania matrycy.', en: 'Error resuming matrix.' }),
+        );
+      } finally {
+        isGeneratingRef.current = false;
+        setIsGenerating(false);
+      }
+    })();
+  }, [isAuthenticated, isApiReady, sessionData?.matrixAnonPending, sessionData?.userHash]);
 
   const handleInitialGeneration = async (force = false) => {
     console.log('[Generate] handleInitialGeneration called', { 
@@ -2147,17 +2443,24 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     // Sprawdź dostępność kredytów przed generacją
     const userHash = (sessionData as any)?.userHash;
     if (userHash && !isMatrixMode) {
-      // Sprawdź kredyty (z try-catch aby nie blokować aplikacji jeśli tabela nie istnieje)
-      let hasCredits = true;
+      let credit: Awaited<ReturnType<typeof checkCreditsWithAction>> | null = null;
       try {
-        hasCredits = await checkCreditsViaApi(userHash, 10);
+        credit = await checkCreditsWithAction(userHash, 10, 'generate');
       } catch (creditError) {
         console.warn('Error checking credits (tables may not exist yet):', creditError);
-        // Kontynuuj bez sprawdzania kredytów jeśli tabela nie istnieje
       }
-      
-      if (!hasCredits) {
-        setError(t({ pl: 'Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jeden obraz.', en: 'You do not have enough credits. You need 10 credits for one image.' }));
+
+      if (credit && !credit.allowed) {
+        if (credit.code === 429) {
+          setPreGenLoginOpen(true);
+          return;
+        }
+        setError(
+          t({
+            pl: 'Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jeden obraz.',
+            en: 'You do not have enough credits. You need 10 credits for one image.',
+          }),
+        );
         setStatusMessage({ pl: 'Brak kredytów', en: 'No credits' });
         return;
       }
@@ -2260,7 +2563,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         return;
       }
 
-      const newImages: GeneratedImage[] = response.results.map((result: any, index: number) => ({
+      let newImages: GeneratedImage[] = response.results.map((result: any, index: number) => ({
         id: `gen-${generationCount}-${index}`,
         url: `data:image/png;base64,${result.image}`,
         base64: result.image,
@@ -2276,6 +2579,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         isFavorite: false,
         createdAt: Date.now(),
       }));
+
+      if (isAnonSingle && !isAuthenticated) {
+        newImages = newImages.slice(0, 1);
+      }
 
       setGeneratedImages(newImages);
       setSelectedImage(newImages[0]);
@@ -2374,11 +2681,19 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           // Odejmij kredyty po udanej generacji (użyj API route - działa po stronie serwera z service_role)
           if (userHash) {
             try {
-              await deductCreditsForImages(userHash, newImages.map((image) => image.id));
-              console.log(`[Credits] Credits deducted successfully for ${newImages.length} image(s)`);
+              if (!isAuthenticated) {
+                await deductCreditsViaApi(userHash, newImages[0].id);
+                console.log('[Credits] Anon: single deduct for initial generation');
+              } else {
+                await deductCreditsForImages(userHash, newImages.map((image) => image.id));
+                console.log(`[Credits] Credits deducted successfully for ${newImages.length} image(s)`);
+              }
             } catch (creditError) {
               console.warn('[Credits] Error deducting credits (tables may not exist yet):', creditError);
               // Nie blokuj aplikacji jeśli odejmowanie kredytów się nie powiodło
+            }
+            if (!isAuthenticated) {
+              setPostAnonGenLoginOpen(true);
             }
           }
         }
@@ -2414,6 +2729,28 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     if (!hasAnsweredInteriorQuestion) {
       setError(t({ pl: "Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed modyfikacją obrazu.", en: "Please answer the question 'Is this my interior?' before modifying the image." }));
       return;
+    }
+
+    const modUserHash = (sessionData as { userHash?: string } | null)?.userHash;
+    if (modUserHash) {
+      try {
+        const cr = await checkCreditsWithAction(modUserHash, 10, 'regenerate');
+        if (!cr.allowed) {
+          if (cr.code === 429) {
+            setPostAnonGenLoginOpen(true);
+            return;
+          }
+          setError(
+            t({
+              pl: 'Zaloguj się lub doładuj kredyty, aby modyfikować obraz.',
+              en: 'Sign in or add credits to modify the image.',
+            }),
+          );
+          return;
+        }
+      } catch (e) {
+        console.warn('[Modification] credit check:', e);
+      }
     }
 
     const isMacro = modification.category === 'macro';
@@ -3156,6 +3493,17 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     : t({ pl: 'Wybierz wizję, która najbardziej Ci odpowiada', en: 'Choose the vision that best suits you' })}
                 </p>
               </div>
+
+              {isAnonMatrixPreview && !isAuthenticated && (
+                <GlassCard className="p-4 max-w-2xl mx-auto border-gold/30 bg-gold/5">
+                  <p className="text-sm text-graphite text-center font-medium">
+                    {t({
+                      pl: `Gość: widzisz 1 z 6 wariantów. Zaloguj się z Google, aby otrzymać ${String(FREE_GRANT_CREDITS)} darmowych kredytów i dokończyć pozostałe 5 wariantów oraz kolejne generacje.`,
+                      en: `Guest: you are seeing 1 of 6 variants. Sign in with Google to get ${String(FREE_GRANT_CREDITS)} free credits and finish the other 5 variants and more generations.`,
+                    })}
+                  </p>
+                </GlassCard>
+              )}
               
               <div className="space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
@@ -3164,8 +3512,15 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   const expectedSource = synthesisResult?.displayOrder[index] || null;
                   // Only show Google images
                   const image = matrixImages.find(img => img.source === expectedSource && img.provider === 'google');
-                  // Always show loading skeleton when there is no image (unless error)
-                  const slotIsLoading = !image && !error;
+                  const firstGeneratedSource = synthesisResult?.generatedSources?.[0] ?? null;
+                  const isLockedAnon =
+                    isAnonMatrixPreview &&
+                    !image &&
+                    expectedSource != null &&
+                    firstGeneratedSource != null &&
+                    expectedSource !== firstGeneratedSource;
+                  // Always show loading skeleton when there is no image (unless error), except locked anon slots
+                  const slotIsLoading = !isLockedAnon && !image && !error;
                   const offset = progressOffsets[expectedSource || ''] ?? index * 3000;
                   const elapsedForFallback = Math.max(0, Date.now() - ((matrixGenerationStartTime || Date.now()) + offset));
                   const pendingSources = synthesisResult?.displayOrder.filter(src => !matrixImages.some(img => img.source === src && img.provider === 'google')) || [];
@@ -3206,7 +3561,21 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     >
                       {/* No GlassCard wrapper - image fills the entire placeholder */}
                       <div className="relative aspect-square w-full rounded-lg overflow-hidden group">
-                        {slotIsLoading ? (
+                        {isLockedAnon ? (
+                          <div
+                            className="relative aspect-square w-full rounded-lg overflow-hidden bg-graphite/30 backdrop-blur-sm border border-white/15 flex flex-col items-center justify-center gap-2 p-3"
+                            role="img"
+                            aria-label={t({ pl: 'Zablokowane — zaloguj się, aby dokończyć', en: 'Locked — sign in to complete' })}
+                          >
+                            <Lock className="w-10 h-10 text-gold/80" aria-hidden />
+                            <p className="text-center text-xs text-silver-300 leading-tight">
+                              {t({
+                                pl: 'Dokończ po zalogowaniu',
+                                en: 'Complete after sign-in',
+                              })}
+                            </p>
+                          </div>
+                        ) : slotIsLoading ? (
                           /* Loading Skeleton - Futuristic transparent glass style */
                           <div 
                             className="relative aspect-square w-full rounded-lg overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10"
@@ -4333,6 +4702,46 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           customMessage={idaComment || (isGeneratingComment ? t({ pl: "Analizuję wygenerowany obraz...", en: "Analyzing generated image..." }) : undefined)}
         />
       </div>
+
+      <LoginModal
+        isOpen={preGenLoginOpen}
+        onClose={() => setPreGenLoginOpen(false)}
+        gateMode="hard"
+        nudgeLocation="flow_generate_pre_gen"
+        nudgeReason="login_required"
+        onNudgeEvent={runGenNudgeTelemetry}
+        message={t({
+          pl: 'Darmowa anonimowa generacja nie jest już dostępna. Zaloguj się, aby kontynuować (konto i kredyty).',
+          en: 'Your free anonymous generation is not available. Sign in to continue (account and credits).',
+        })}
+        redirectPath="/flow/generate"
+      />
+      <LoginModal
+        isOpen={postAnonGenLoginOpen}
+        onClose={() => setPostAnonGenLoginOpen(false)}
+        gateMode="hard"
+        nudgeLocation="flow_generate_nudge_d"
+        nudgeReason="login_required"
+        onNudgeEvent={runGenNudgeTelemetry}
+        message={t({
+          pl: 'Zaloguj się, aby zobaczyć 5 dodatkowych wariantów, zapisać projekt na koncie i skorzystać z upscale.',
+          en: 'Sign in to unlock 5 more variants, save your project, and use upscale.',
+        })}
+        redirectPath="/flow/generate"
+      />
+      <LoginModal
+        isOpen={matrixLoginWallOpen}
+        onClose={() => setMatrixLoginWallOpen(false)}
+        gateMode="hard"
+        nudgeLocation="flow_generate_matrix"
+        nudgeReason="login_required"
+        onNudgeEvent={runGenNudgeTelemetry}
+        message={t({
+          pl: 'Pełna matryca 6 obrazów wymaga konta i wystarczającej liczby kredytów.',
+          en: 'The full 6-image matrix requires an account and enough credits.',
+        })}
+        redirectPath="/flow/generate"
+      />
     </div>
   );
 }

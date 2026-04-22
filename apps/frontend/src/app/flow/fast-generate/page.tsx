@@ -15,6 +15,9 @@ import { LoadingProgress } from '@/components/ui/LoadingProgress';
 import { GenerationHistory } from '@/components/ui/GenerationHistory';
 import { AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
+import { useAuth } from '@/contexts/AuthContext';
+import { LoginModal, type LoginNudgeEvent } from '@/components/auth/LoginModal';
+import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import {
   Wand2,
   RefreshCw,
@@ -134,8 +137,13 @@ function isFastTrackStyleStale(session: any): boolean {
 export default function FastGeneratePage() {
   const router = useRouter();
   const { language } = useLanguage();
+  const { user } = useAuth();
   const { sessionData, updateSessionData, isInitialized: isSessionInitialized } = useSessionData();
   const { generateSixImagesParallelWithGoogle, upscaleImageWithGoogle, isLoading, error, setError } = useGoogleAI();
+  const isAuthenticated = !!user;
+
+  const [loginWallOpen, setLoginWallOpen] = useState(false);
+  const [loginGateMode, setLoginGateMode] = useState<'soft' | 'hard'>('hard');
 
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]); // Store all generated images
@@ -184,34 +192,66 @@ export default function FastGeneratePage() {
     });
   };
 
-  const checkCreditsViaApi = async (userHash: string, amount: number) => {
+  type CreditAction = 'generate' | 'regenerate' | 'upscale' | 'save' | 'matrix';
+
+  const runCreditsFunnelEvent = (event: LoginNudgeEvent) => {
+    const uid = (sessionData as { userHash?: string } | null)?.userHash;
+    if (!uid) return;
+    void logBehavioralEvent(uid, 'login_nudge', { path: 'fast-generate', nudge: event });
+  };
+
+  const checkCreditsWithAction = async (userHash: string, amount: number, action: CreditAction) => {
     const response = await fetch('/api/credits/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userHash, amount }),
+      credentials: 'include',
+      body: JSON.stringify({
+        userHash,
+        amount,
+        action,
+        isAuthenticated,
+        ...(!isAuthenticated ? { pathScope: 'fast' as const } : {}),
+      }),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to check credits');
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      return {
+        allowed: false as const,
+        code: 429 as const,
+        reason: data.reason as string | undefined,
+        scope: data.scope as string | undefined,
+      };
     }
-
-    const data = await response.json();
-    return !!data.available;
+    if (!response.ok) {
+      throw new Error((data as { error?: string }).error || 'Failed to check credits');
+    }
+    if (data.available === false) {
+      return { allowed: false as const, code: 200, reason: 'quota' as const };
+    }
+    return { allowed: true as const, code: 200 };
   };
 
   const deductCreditsViaApi = async (userHash: string, generationId: string) => {
     const response = await fetch('/api/credits/deduct', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userHash, generationId }),
+      credentials: 'include',
+      body: JSON.stringify({
+        userHash,
+        generationId,
+        isAuthenticated,
+        ...(!isAuthenticated ? { pathScope: 'fast' as const } : {}),
+      }),
     });
-
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to deduct credits');
     }
   };
+
+  useEffect(() => {
+    void initAnonSessionAfterConsent();
+  }, []);
 
   // Initial generation
   const handleInitialGeneration = async () => {
@@ -250,15 +290,31 @@ export default function FastGeneratePage() {
       }
 
       if (typedSessionData?.userHash) {
-        let hasCredits = true;
+        let credit: Awaited<ReturnType<typeof checkCreditsWithAction>> | null = null;
         try {
-          hasCredits = await checkCreditsViaApi(typedSessionData.userHash, 10);
+          credit = await checkCreditsWithAction(typedSessionData.userHash, 10, 'generate');
         } catch (creditError) {
           console.warn('[Fast Generate] Error checking credits:', creditError);
         }
 
-        if (!hasCredits) {
-          setError('Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jeden obraz.');
+        if (credit && !credit.allowed) {
+          if (credit.code === 429) {
+            const h = typedSessionData.userHash;
+            if (h) {
+              void logBehavioralEvent(h, 'quota_exceeded', {
+                path: 'fast-generate',
+                reason: credit.scope === 'ip' ? 'ip' : credit.reason,
+              });
+            }
+            setLoginGateMode('hard');
+            setLoginWallOpen(true);
+            return;
+          }
+          setError(
+            isAuthenticated
+              ? 'Nie masz wystarczającej liczby kredytów. Potrzebujesz 10 kredytów na jeden obraz.'
+              : 'Darmowa anonimowa generacja jest niedostępna. Zaloguj się, aby kontynuować.',
+          );
           return;
         }
       }
@@ -637,6 +693,28 @@ export default function FastGeneratePage() {
   // Handle modification
   const handleModification = async (modification: ModificationOption) => {
     if (!generatedImage || isGenerating) return;
+
+    const uh = (sessionData as { userHash?: string } | null)?.userHash;
+    if (uh) {
+      try {
+        const credit = await checkCreditsWithAction(uh, 10, 'regenerate');
+        if (!credit.allowed) {
+          if (credit.code === 429) {
+            setLoginGateMode('hard');
+            setLoginWallOpen(true);
+          } else {
+            setError(
+              isAuthenticated
+                ? 'Nie masz wystarczającej liczby kredytów na modyfikację.'
+                : 'Zaloguj się, aby modyfikować obraz (wymagane konto).',
+            );
+          }
+          return;
+        }
+      } catch (e) {
+        console.warn('[Fast Generate] credit check (regenerate):', e);
+      }
+    }
 
     setIsGenerating(true);
     setError(null);
@@ -1132,6 +1210,21 @@ export default function FastGeneratePage() {
           autoHide={true}
         />
       </div>
+
+      <LoginModal
+        isOpen={loginWallOpen}
+        onClose={() => setLoginWallOpen(false)}
+        gateMode={loginGateMode}
+        nudgeLocation="fast_generate"
+        nudgeReason="login_required"
+        onNudgeEvent={runCreditsFunnelEvent}
+        message={
+          language === 'pl'
+            ? 'Ta akcja wymaga konta (regeneracje, modyfikacje, zapis). Zaloguj się, aby kontynuować.'
+            : 'This action requires an account (regenerations, modifications, save). Sign in to continue.'
+        }
+        redirectPath="/flow/fast-generate"
+      />
     </div>
   );
 }

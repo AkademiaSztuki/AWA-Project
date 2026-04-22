@@ -10,6 +10,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { saveResearchConsent, safeSessionStorage } from '@/lib/gcp-data';
+import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import { ChevronDown } from 'lucide-react';
 
 const getDefaultCountry = (language: 'pl' | 'en') => (language === 'pl' ? 'PL' : 'US');
@@ -201,6 +202,7 @@ const OnboardingScreen: React.FC = () => {
     
     // Zapisz consentTimestamp od razu po wyrażeniu zgody
     await updateSessionData({ consentTimestamp: timestamp });
+    void initAnonSessionAfterConsent();
     
     console.log('[Onboarding] ✅ Moving to demographics step');
     setStep('demographics');
@@ -241,6 +243,8 @@ const OnboardingScreen: React.FC = () => {
       purposeText: 'Badanie analizuje, jak interaktywny system AI wpływa na proces twórczy w projektowaniu wnętrz; wyniki opracowywane statystycznie i publikowane zbiorczo.',
       scope: 'Zakres danych',
       scopeText: 'Dane konta (e-mail), odpowiedzi i wyniki testów, preferencje i interakcje (np. czasy reakcji), przesłane zdjęcia wnętrz oraz dane techniczne/analityczne działania serwisu.',
+      sessionCookieText:
+        'Techniczne: po akceptacji zgody ustawiamy HttpOnly cookie z losowym identyfikatorem sesji anonimowej oraz (serwerowo) jednokierunkowy skrót adresu IP w celu ograniczenia nadużyć limitu darmowych generacji (nie w celu identyfikacji marketingowej).',
       voluntary: 'Dobrowolność',
       voluntaryText: 'Udział jest dobrowolny; można przerwać i wycofać zgodę w dowolnym momencie poprzez e-mail.',
       rights: 'Prawa',
@@ -277,6 +281,8 @@ const OnboardingScreen: React.FC = () => {
       purposeText: 'The study analyzes how an interactive AI system influences the creative process in interior design; results are processed statistically and published collectively.',
       scope: 'Data Scope',
       scopeText: 'Account data (email), test responses and results, preferences and interactions (e.g., reaction times), uploaded interior photos, and technical/analytical service operation data.',
+      sessionCookieText:
+        'Technical: after you accept, we set an HttpOnly cookie with a random anonymous session id and a one-way server-side hash of the IP address to limit abuse of free generation quotas (not for marketing identification).',
       voluntary: 'Voluntary Participation',
       voluntaryText: 'Participation is voluntary; you can stop and withdraw consent at any time via email.',
       rights: 'Rights',
@@ -350,6 +356,7 @@ const OnboardingScreen: React.FC = () => {
                       {texts.scope}
                     </h3>
                     <p className="leading-snug">{texts.scopeText}</p>
+                    <p className="leading-snug text-xs text-silver-dark mt-2">{texts.sessionCookieText}</p>
                   </div>
 
                   <div className="p-2 rounded-lg bg-white/5 border border-white/10">

@@ -1,13 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { LoginModal } from '@/components/auth/LoginModal';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { safeSessionStorage } from '@/lib/gcp-data';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
@@ -27,9 +25,6 @@ export default function PathSelectionScreen() {
   const searchParams = useSearchParams();
   const { language } = useLanguage();
   const { updateSessionData } = useSessionData();
-  const { user, isLoading: authLoading } = useAuth();
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [pendingPath, setPendingPath] = useState<'fast' | 'full' | null>(null);
 
   const fastCompleted = searchParams.get('fast_completed') === 'true';
   
@@ -112,23 +107,7 @@ export default function PathSelectionScreen() {
 
   const handlePathSelection = async (pathType: 'fast' | 'full') => {
     stopAllDialogueAudio();
-
-    // Wait for auth to finish loading
-    if (authLoading) {
-      return; // Wait for auth to finish
-    }
-
-    // Check if user is authenticated
-    if (!user) {
-      // Store the selected path so after login redirect we can apply it on the destination page
-      setPendingPath(pathType);
-      safeSessionStorage.setItem('aura_auth_path_type', pathType);
-      // Show login modal
-      setShowLoginModal(true);
-      return;
-    }
-
-    // User is authenticated, proceed with path selection
+    safeSessionStorage.setItem('aura_auth_path_type', pathType);
 
     if (pathType === 'fast') {
       await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
@@ -140,70 +119,6 @@ export default function PathSelectionScreen() {
       router.push('/setup/profile');
     }
   };
-
-  // Handle successful login - continue with pending path
-  const handleLoginSuccess = async () => {
-
-    setShowLoginModal(false);
-    
-    // Check if redirect is in URL (set by handlePathSelection or middleware)
-    // Also check window.location.search in case searchParams hasn't updated yet
-    const urlParams = new URLSearchParams(window.location.search);
-    const redirectPath = urlParams.get('redirect') || searchParams.get('redirect');
-    
-    if (redirectPath) {
-      // Use redirect from URL (set when path was selected)
-      setTimeout(async () => {
-        // Determine pathType from redirect path
-        const pathType = redirectPath.includes('/flow/onboarding') ? 'fast' : 'full';
-        if (pathType === 'fast') {
-          await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
-        } else {
-          await updateSessionData({ pathType: 'full' });
-        }
-        console.log('[PathSelection] Redirecting to:', redirectPath);
-        router.push(redirectPath);
-        setPendingPath(null);
-      }, 500);
-    } else if (pendingPath) {
-      // Fallback to pendingPath if no redirect in URL
-      setTimeout(async () => {
-        if (pendingPath === 'fast') {
-          await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
-          console.log('[PathSelection] Fast track selected after login');
-          router.push('/flow/onboarding');
-        } else {
-          await updateSessionData({ pathType: 'full' });
-          console.log('[PathSelection] Full experience selected after login');
-          router.push('/setup/profile');
-        }
-        setPendingPath(null);
-      }, 500);
-    }
-  };
-
-  // Watch for auth state changes - if user logs in while modal is open, continue
-  useEffect(() => {
-    if (user && showLoginModal && pendingPath) {
-
-      setShowLoginModal(false);
-      
-      // Small delay to ensure auth state is updated
-      const pathToContinue = pendingPath;
-      setTimeout(async () => {
-        if (pathToContinue === 'fast') {
-          await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
-          console.log('[PathSelection] Fast track selected after login');
-          router.push('/flow/onboarding');
-        } else {
-          await updateSessionData({ pathType: 'full' });
-          console.log('[PathSelection] Full experience selected after login');
-          router.push('/setup/profile');
-        }
-        setPendingPath(null);
-      }, 500);
-    }
-  }, [user, showLoginModal, pendingPath, updateSessionData, router]);
 
   return (
     <div className="min-h-screen flex relative">
@@ -302,15 +217,6 @@ export default function PathSelectionScreen() {
         />
       </div>
 
-      {/* Login Modal */}
-      <LoginModal
-        isOpen={showLoginModal}
-        redirectPath={pendingPath === 'fast' ? '/flow/onboarding' : pendingPath === 'full' ? '/setup/profile' : undefined}
-        onClose={() => {
-          setShowLoginModal(false);
-          setPendingPath(null);
-        }}
-      />
     </div>
   );
 }
