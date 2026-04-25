@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useAnimations, useEnvironment, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { FlowStep } from '@/types';
+import { useWcagSettings } from '@/contexts/WcagSettingsContext';
 
 interface AwaModelParticlesDiscsProps {
   currentStep: FlowStep;
@@ -81,6 +82,7 @@ export const AwaModelParticlesDiscs: React.FC<AwaModelParticlesDiscsProps> = ({
   const [headBone, setHeadBone] = useState<THREE.Bone | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const { scene: threeScene } = useThree();
+  const { reducedMotion: wcagReducedMotion } = useWcagSettings();
   const envMap = useEnvironment({ preset: 'studio' });
 
   const { scene: originalScene } = useGLTF('/models/SKM_Quinn.gltf');
@@ -309,7 +311,7 @@ export const AwaModelParticlesDiscs: React.FC<AwaModelParticlesDiscsProps> = ({
   }, [baseColorMap, useTextureColor]);
 
   useFrame((state, delta) => {
-    if (mixer) mixer.update(delta);
+    if (mixer) mixer.update(wcagReducedMotion ? 0 : delta);
     meshDataRef.current.forEach((m) => {
       if (m.skeleton) m.skeleton.update();
     });
@@ -332,7 +334,7 @@ export const AwaModelParticlesDiscs: React.FC<AwaModelParticlesDiscsProps> = ({
 
     if (!pointsRef.current || !particlesGeometry || meshDataRef.current.length === 0) return;
 
-    const time = state.clock.elapsedTime;
+    const time = wcagReducedMotion ? 0 : state.clock.elapsedTime;
     const positions = particlesGeometry.attributes.position;
     const opacities = particlesGeometry.attributes.aOpacity as THREE.BufferAttribute | undefined;
     if (!opacities) return;
@@ -404,7 +406,7 @@ export const AwaModelParticlesDiscs: React.FC<AwaModelParticlesDiscsProps> = ({
     positions.needsUpdate = true;
     opacities.needsUpdate = true;
 
-    if (headBone) {
+    if (headBone && !wcagReducedMotion) {
       const lookTarget = new THREE.Vector3(mousePosition.x * 2, mousePosition.y * 2, 5);
       headBone.lookAt(lookTarget);
       headBone.rotateX(-Math.PI / -0.1);
@@ -412,7 +414,9 @@ export const AwaModelParticlesDiscs: React.FC<AwaModelParticlesDiscsProps> = ({
     }
 
     if (groupRef.current) {
-      groupRef.current.scale.y = 1 + Math.sin(time * 0.5) * 0.02;
+      groupRef.current.scale.y = wcagReducedMotion
+        ? 1
+        : 1 + Math.sin(time * 0.5) * 0.02;
     }
   });
 

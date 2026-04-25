@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "db:migrate:anon-usage": "pnpm --filter @aura/backend-gcp migrate:anon-usage",
     "db:push": "supabase db execute --file ./supabase/schema_full.sql",
     "db:studio": "supabase studio",
     "db:link": "supabase link",

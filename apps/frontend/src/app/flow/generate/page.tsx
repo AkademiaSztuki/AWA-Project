@@ -1058,7 +1058,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         await updateSessionData({
           matrixAnonPending: rest.map((p) => ({ source: p.source, prompt: p.prompt })),
         } as Record<string, unknown>);
-        void saveSessionToGcp(getSessionStoreSnapshot() as Record<string, unknown>);
+        void saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
         void logBehavioralEvent(typedSessionData.userHash, 'login_nudge', {
           page: 'flow-generate',
           nudge: 'anon_one_of_six' as any,
@@ -2250,7 +2250,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
   useEffect(() => {
     if (!isAuthenticated || !isApiReady) return;
-    const snap = getSessionStoreSnapshot() as Record<string, unknown> & {
+    const snap = getSessionStoreSnapshot() as unknown as Record<string, unknown> & {
       matrixAnonPending?: { source: string; prompt: string }[];
       userHash?: string;
     };
@@ -2382,7 +2382,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           return Array.from(bySource.values());
         });
         await updateSessionData({ matrixAnonPending: [] } as Record<string, unknown>);
-        void saveSessionToGcp(getSessionStoreSnapshot() as Record<string, unknown>);
+        void saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
         await deductCreditsForImages(
           userHash,
           newMatrixImages.map((i) => i.id),
@@ -2391,9 +2391,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           pl: 'Gotowe! Wybierz swoje ulubione wnętrze.',
           en: 'Ready! Choose your favorite interior.',
         });
-        void logBehavioralEvent(userHash, 'login_nudge', {
+        void logBehavioralEvent(userHash, 'matrix_resumed_after_login', {
           page: 'flow-generate',
-          nudge: 'matrix_anon_resumed' as any,
+          resumedVariantCount: newMatrixImages.length,
         }).catch(() => {});
       } catch (e) {
         console.error('[Matrix resume]', e);

@@ -12,6 +12,7 @@ import { LayoutProvider } from '@/contexts/LayoutContext';
 import { AnimationProvider } from '@/contexts/AnimationContext';
 import { ColorAdjustmentProvider } from '@/contexts/ColorAdjustmentContext';
 import { WcagSettingsProvider } from '@/contexts/WcagSettingsContext';
+import { A11yMotionConfig } from '@/components/ui/A11yMotionConfig';
 import { ReadingGuide } from '@/components/ui/ReadingGuide';
 import { DialogueVoiceProvider } from '@/contexts/DialogueVoiceContext';
 import { GlassHeader } from '@/components/ui/GlassHeader';
@@ -97,6 +98,7 @@ export default function RootLayout({
             <LayoutProvider>
               <AnimationProvider>
                 <WcagSettingsProvider>
+                <A11yMotionConfig>
                 <ColorAdjustmentProvider>
                   <DialogueVoiceProvider>
                   <LandscapeGuard>
@@ -134,6 +136,7 @@ export default function RootLayout({
                 </LandscapeGuard>
                   </DialogueVoiceProvider>
                 </ColorAdjustmentProvider>
+                </A11yMotionConfig>
                 </WcagSettingsProvider>
               </AnimationProvider>
             </LayoutProvider>

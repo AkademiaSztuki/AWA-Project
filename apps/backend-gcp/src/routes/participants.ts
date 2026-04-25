@@ -465,7 +465,8 @@ participantsRouter.post('/participants/link-auth', async (req, res) => {
         consentTimestamp: consentTimestamp || null,
       });
 
-      // $3 = OAuth email when provided; COALESCE($3, email) fills empty column and overwrites when Google sends a value
+      // Attach auth to existing anonymous row: do not wipe other participant columns.
+      // $3 = OAuth email when provided; COALESCE($3::text, participants.email) keeps prior email if body omits it.
       await client.query(
         `
           UPDATE participants

@@ -100,8 +100,8 @@ export default function BigFivePage() {
         bigFive: {
             ...profileData.bigFive,
             instrument: 'IPIP-NEO-120',
-            responses: newResponses
-        }
+            responses: newResponses,
+        } as any,
     });
     
     // Auto-advance after selection

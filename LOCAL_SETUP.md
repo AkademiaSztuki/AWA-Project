@@ -42,9 +42,21 @@ Jeśli chcesz połączyć się z Supabase i backendem, utwórz plik `.env.local`
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 NEXT_PUBLIC_MODAL_API_URL=your-modal-endpoint
+NEXT_PUBLIC_GCP_API_BASE_URL=https://your-backend-gcp.example.run.app
+# Optional: force in-process anon limits (skip Cloud SQL tables)
+# AWA_ANON_LIMITS_MEMORY_ONLY=true
 ```
 
 **Uwaga:** Projekt może działać lokalnie bez tych zmiennych, ale niektóre funkcje mogą nie działać.
+
+**Limity anon (1 generacja / ścieżka + sufit IP):** zastosuj migrację na bazie (wymaga `DATABASE_URL`, np. przez Cloud SQL Proxy), z katalogu głównego repo:
+
+```powershell
+$env:DATABASE_URL = "postgresql://awa_app:HASLO@127.0.0.1:5432/awa_db"
+pnpm db:migrate:anon-usage
+```
+
+Szablony zmiennych: [apps/backend-gcp/.env.example](apps/backend-gcp/.env.example), [apps/frontend/.env.example](apps/frontend/.env.example). Backend obsługuje `POST /api/anon/check-limits` i `POST /api/anon/deduct`. Ustaw ten sam `AURA_IP_HASH_SALT` (frontend + backend / Cloud Run).
 
 ## Krok 5: Uruchom projekt
 

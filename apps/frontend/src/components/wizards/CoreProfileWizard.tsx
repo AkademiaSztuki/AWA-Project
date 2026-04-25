@@ -19,7 +19,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { computeWeightedDNAFromSwipes } from '@/lib/dna';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
-import { saveResearchConsent, saveParticipantSwipes, safeSessionStorage } from '@/lib/gcp-data';
+import { saveResearchConsent, saveParticipantSwipes, safeSessionStorage, saveSessionToGcp, logBehavioralEvent } from '@/lib/gcp-data';
+import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import Link from 'next/link';
 
@@ -741,8 +742,13 @@ export function CoreProfileWizard() {
         sessionStorage.removeItem(WIZARD_STEP_STORAGE_KEY);
       }
 
-      // Continue with flow - go to inspirations next
-      router.push('/flow/inspirations');
+      await saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
+
+      if (user) {
+        router.push('/flow/inspirations');
+      } else {
+        setShowLoginModal(true);
+      }
     } catch (error) {
       console.error('Failed to save core profile:', error);
     } finally {
@@ -758,8 +764,7 @@ export function CoreProfileWizard() {
       await linkUserHashToAuth(sessionData.userHash);
     }
     
-    // Continue with flow - go to photo upload next
-    router.push('/flow/photo');
+    router.push('/flow/inspirations');
   };
 
   return (
@@ -982,9 +987,25 @@ export function CoreProfileWizard() {
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         onSuccess={handleLoginSuccess}
+        gateMode="soft"
+        nudgeLocation="setup_profile_complete"
+        nudgeReason="login_required"
+        redirectPath="/flow/inspirations"
+        onMaybeLater={() => {
+          setShowLoginModal(false);
+          router.push('/flow/inspirations');
+        }}
+        onNudgeEvent={(ev) => {
+          const h = sessionData?.userHash;
+          if (h) void logBehavioralEvent(h, 'login_nudge', { page: 'setup-profile-complete', nudge: ev });
+        }}
+        softMaybeLaterLabel={{
+          pl: 'Kontynuuj bez konta',
+          en: 'Continue without account',
+        }}
         message={language === 'pl' 
-          ? 'Świetnie! Zaloguj się aby zachować swój profil i wrócić później.'
-          : 'Great! Sign in to save your profile and return later.'}
+          ? 'Świetnie! Zaloguj się, aby zapisać profil na koncie i wrócić później. Możesz też kontynuować bez logowania — dane badawcze zapisujemy w tej sesji.'
+          : 'Great! Sign in to save your profile to your account and return later. You can also continue without signing in — we still save your session for research.'}
       />
     </div>
   );

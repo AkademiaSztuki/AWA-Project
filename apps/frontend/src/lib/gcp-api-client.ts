@@ -426,6 +426,25 @@ export const gcpApi = {
       }),
   },
 
+  /** Anonymous generation quotas (Cloud SQL via backend-gcp). */
+  anon: {
+    checkLimits: (payload: { anonId: string | null; pathScope: 'fast' | 'full'; action: string }) =>
+      apiFetch<{
+        ok: boolean;
+        available?: boolean;
+        reason?: 'login_required' | 'quota_exceeded';
+        scope?: 'anon' | 'ip';
+        remaining?: number;
+        error?: string;
+      }>('/api/anon/check-limits', { method: 'POST', body: payload }),
+
+    deduct: (payload: { anonId: string; generationId: string; pathScope: 'fast' | 'full' }) =>
+      apiFetch<{ ok: boolean; duplicate?: boolean; error?: string }>('/api/anon/deduct', {
+        method: 'POST',
+        body: payload,
+      }),
+  },
+
   billing: {
     checkoutCompleted: (payload: Record<string, unknown>) =>
       apiFetch<{ ok: boolean }>('/api/billing/stripe/checkout-completed', {

@@ -43,8 +43,6 @@ import {
 } from '@/components/dashboard/ProfileSections';
 import { CompletionStatus } from '@/types/deep-personalization';
 import { CreditBalance } from '@/components/subscription/CreditBalance';
-import { LoginModal } from '@/components/auth/LoginModal';
-import { logBehavioralEvent } from '@/lib/gcp-data';
 import { mergeInspirationLists } from '@/lib/inspiration-merge';
 
 interface Space {
@@ -86,14 +84,28 @@ function sortImagesDescending(images: SpaceImage[]): SpaceImage[] {
 export function UserDashboard() {
   const router = useRouter();
   const { sessionData, updateSessionData, isInitialized } = useSessionData();
+  const { language } = useLanguage();
+  const { user, linkUserHashToAuth, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
     if (!isInitialized) return;
+    // Only pin funnel step for signed-in users; guests are redirected out of dashboard.
+    if (!user) return;
     if (sessionData.currentStep === 'dashboard') return;
     void updateSessionData({ currentStep: 'dashboard' });
-  }, [isInitialized, sessionData.currentStep, updateSessionData]);
-  const { language } = useLanguage();
-  const { user, linkUserHashToAuth } = useAuth();
+  }, [isInitialized, user, sessionData.currentStep, updateSessionData]);
+
+  /** Guests never use dashboard — send them back to funnel (or resume matrix after login). */
+  useEffect(() => {
+    if (authLoading || !isInitialized) return;
+    if (user) return;
+    const pending = (sessionData as { matrixAnonPending?: unknown[] })?.matrixAnonPending;
+    if (Array.isArray(pending) && pending.length > 0) {
+      router.replace('/flow/generate');
+      return;
+    }
+    router.replace('/flow/path-selection');
+  }, [authLoading, user, isInitialized, sessionData, router]);
   
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [remoteSession, setRemoteSession] = useState<any>(null);
@@ -104,7 +116,6 @@ export function UserDashboard() {
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   /** Kredyty opierają się na localStorage — bez tego SSR nie ma userHash, a klient tak → błąd hydratacji. */
   const [creditsSectionMounted, setCreditsSectionMounted] = useState(false);
-  const [dashboardLoginNudge, setDashboardLoginNudge] = useState(false);
   useEffect(() => {
     setCreditsSectionMounted(true);
   }, []);
@@ -694,6 +705,18 @@ export function UserDashboard() {
     }
   }, []);
 
+  // Guests: avoid flashing the full dashboard while redirect runs
+  if (!authLoading && !user && isInitialized) {
+    return (
+      <div className="flex min-h-[50vh] w-full flex-col items-center justify-center gap-4 p-8">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+        <p className="text-graphite font-modern text-sm">
+          {language === 'pl' ? 'Przekierowanie…' : 'Redirecting…'}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col w-full relative">
       {authError && (
@@ -727,13 +750,6 @@ export function UserDashboard() {
               <h1 className="text-3xl lg:text-4xl xl:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-2">
                 {language === 'pl' ? 'Moje Przestrzenie' : 'My Spaces'}
               </h1>
-              {!user && (
-                <p className="text-sm text-silver-dark font-modern max-w-2xl">
-                  {language === 'pl'
-                    ? 'Tryb gościa: widzisz pełny profil (DNA, Big Five) i podgląd ostatniej darmowej generacji. Dalsze generacje, matryca 6 obrazów i kredyty wymagają konta.'
-                    : 'Guest mode: you see the full profile (DNA, Big Five) and a preview of your last free generation. More generations, the 6-image matrix, and credits require an account.'}
-                </p>
-              )}
             </div>
 
             {/* Quick Stats */}
@@ -814,30 +830,7 @@ export function UserDashboard() {
               const userHash = getUserHash();
               if (!userHash) return null;
 
-              if (!user) {
-                return (
-                  <div className="mb-8 flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-white/15 bg-white/5">
-                    <p className="text-sm text-graphite font-modern flex-1">
-                      {language === 'pl'
-                        ? 'Zaloguj się, aby odblokować kredyty, kolejne generacje i pełną matrycę 6 wariantów.'
-                        : 'Sign in to unlock credits, further generations, and the full 6-image matrix.'}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const h = getUserHash();
-                        if (h) {
-                          void logBehavioralEvent(h, 'login_nudge', { page: 'dashboard', nudge: 'nudge_shown' });
-                        }
-                        setDashboardLoginNudge(true);
-                      }}
-                      className="text-sm font-modern px-4 py-2 rounded-xl bg-gradient-to-r from-gold to-champagne text-white"
-                    >
-                      {language === 'pl' ? 'Zaloguj się' : 'Sign in'}
-                    </button>
-                  </div>
-                );
-              }
+              if (!user) return null;
 
               return (
                 <div className="mb-8">
@@ -992,23 +985,6 @@ export function UserDashboard() {
         </div>
       )}
 
-      <LoginModal
-        isOpen={dashboardLoginNudge}
-        onClose={() => setDashboardLoginNudge(false)}
-        gateMode="soft"
-        nudgeLocation="dashboard"
-        nudgeReason="login_required"
-        onNudgeEvent={(ev) => {
-          const h = getUserHash();
-          if (h) void logBehavioralEvent(h, 'login_nudge', { page: 'dashboard', nudge: ev });
-        }}
-        message={
-          language === 'pl'
-            ? 'Zaloguj się, aby odblokować kredyty, kolejne generacje i pełną matrycę 6 wariantów.'
-            : 'Sign in to unlock credits, further generations, and the full 6-image matrix.'
-        }
-        redirectPath="/dashboard"
-      />
     </div>
   );
 }

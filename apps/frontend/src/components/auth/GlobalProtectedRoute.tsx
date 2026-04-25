@@ -9,8 +9,8 @@ const PUBLIC_PATHS = [
   '/auth/callback', // Auth callback
   '/auth/verify', // Magic link verification
   '/auth/verify-email', // Email verification after registration
-  '/dashboard', // Tymczasowo publiczny, bo stan auth nie zawsze jest poprawnie odtwarzany
-  '/dashboard/personality',
+  '/flow', // Onboarding / funnel without forced login
+  '/setup', // Profile wizard without forced login
 ];
 
 const isPublicPath = (pathname: string): boolean => {
@@ -26,15 +26,10 @@ interface GlobalProtectedRouteProps {
 }
 
 /**
- * GlobalProtectedRoute - chroni wszystkie strony oprócz landing i auth callback
- * 
- * Wszystkie strony wymagają logowania, w tym:
- * - /flow/* (onboarding flow)
- * - /setup/* (setup pages)
- * - /dashboard/*
- * - /space/*
- * - /research/*
- * - i wszystkie inne
+ * GlobalProtectedRoute - chroni strony poza listą PUBLIC_PATHS.
+ *
+ * Publiczne: `/`, `/auth/*`, `/flow/*`, `/setup/*` (funnel bez wymuszonego logowania).
+ * Chronione m.in.: `/dashboard`, `/subscription`, `/space`, `/research`.
  */
 export function GlobalProtectedRoute({ children }: GlobalProtectedRouteProps) {
   const pathname = usePathname();

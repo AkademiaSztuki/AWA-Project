@@ -96,6 +96,26 @@ gcloud sql instances describe $INSTANCE_NAME --format="value(ipAddresses.ipAddre
 
 For production, prefer **private IP + Cloud SQL Auth Proxy** from Cloud Run instead of public IP.
 
+#### Anonymous generation limits (optional but recommended)
+
+Apply `infra/gcp/sql/15_anon_usage.sql` so `backend-gcp` can enforce per-browser and per-IP caps for free anonymous generations (`POST /api/anon/check-limits`, `POST /api/anon/deduct`).
+
+From the **repository root**, with `DATABASE_URL` pointing at `awa_db` (e.g. via Cloud SQL Auth Proxy on `127.0.0.1:5432`):
+
+```bash
+export DATABASE_URL="postgresql://awa_app:PASSWORD@127.0.0.1:5432/awa_db"
+pnpm db:migrate:anon-usage
+```
+
+Equivalent (PowerShell):
+
+```powershell
+$env:DATABASE_URL = "postgresql://awa_app:PASSWORD@127.0.0.1:5432/awa_db"
+pnpm db:migrate:anon-usage
+```
+
+Set the **same** `AURA_IP_HASH_SALT` on **Cloud Run** for both `backend-gcp` and the Next.js frontend (see `apps/backend-gcp/.env.example` and `apps/frontend/.env.example`).
+
 ---
 
 ### 4. Cloud Storage buckets for images

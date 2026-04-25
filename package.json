@@ -19,7 +19,8 @@
     "dev:frontend": "cd apps/frontend && npm run dev",
     "dev:backend-gcp": "pnpm --filter @aura/backend-gcp dev",
     "deploy:frontend": "cd apps/frontend && vercel deploy",
-    "vercel:link:frontend": "cd apps/frontend && vercel link --project awa-project-frontend-fhka --yes --scope pali89s-projects"
+    "vercel:link:frontend": "cd apps/frontend && vercel link --project awa-project-frontend-fhka --yes --scope pali89s-projects",
+    "db:migrate:anon-usage": "pnpm --filter @aura/backend-gcp migrate:anon-usage"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

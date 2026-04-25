@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useGLTF, useAnimations, useEnvironment } from '@react-three/drei';
 import * as THREE from 'three';
 import { FlowStep } from '@/types';
+import { useWcagSettings } from '@/contexts/WcagSettingsContext';
 
 interface AwaModelParticlesProps {
   currentStep: FlowStep;
@@ -76,6 +77,7 @@ export const AwaModelParticles: React.FC<AwaModelParticlesProps> = ({
   const meshDataRef = useRef<MeshVertexData[]>([]);
   const [particlesGeometry, setParticlesGeometry] = useState<THREE.BufferGeometry | null>(null);
   const { scene: threeScene } = useThree();
+  const { reducedMotion: wcagReducedMotion } = useWcagSettings();
 
   // Pobierz envMap
   const envMap = useEnvironment({ preset: 'studio' });
@@ -342,9 +344,9 @@ export const AwaModelParticles: React.FC<AwaModelParticlesProps> = ({
 
   // Animation loop - najpierw użyjmy statycznych pozycji, potem dodamy synchronizację
   useFrame((state, delta) => {
-    // Aktualizuj mixer dla animacji idle
+    // Aktualizuj mixer (tylko idle) — w reduced motion zamroź pozę
     if (mixer) {
-      mixer.update(delta);
+      mixer.update(wcagReducedMotion ? 0 : delta);
     }
 
     // Aktualizuj skeleton dla wszystkich SkinnedMesh
@@ -358,7 +360,7 @@ export const AwaModelParticles: React.FC<AwaModelParticlesProps> = ({
       return;
     }
 
-    const time = state.clock.elapsedTime;
+    const time = wcagReducedMotion ? 0 : state.clock.elapsedTime;
     const points = pointsRef.current;
     const geometry = points.geometry;
     const positions = geometry.attributes.position;
@@ -456,8 +458,7 @@ export const AwaModelParticles: React.FC<AwaModelParticlesProps> = ({
     positions.needsUpdate = true;
     opacities.needsUpdate = true;
 
-    // Head tracking
-    if (headBone) {
+    if (headBone && !wcagReducedMotion) {
       const lookTarget = new THREE.Vector3(
         mousePosition.x * 2,
         mousePosition.y * 2,
@@ -468,9 +469,10 @@ export const AwaModelParticles: React.FC<AwaModelParticlesProps> = ({
       headBone.rotateZ(1.5);
     }
 
-    // Animacja oddychania (skalowanie grupy)
     if (hiddenModelRef.current) {
-      (hiddenModelRef.current as THREE.Group).scale.y = 1 + Math.sin(time * 0.5) * 0.02;
+      (hiddenModelRef.current as THREE.Group).scale.y = wcagReducedMotion
+        ? 1
+        : 1 + Math.sin(time * 0.5) * 0.02;
     }
   });
 

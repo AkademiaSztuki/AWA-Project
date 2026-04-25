@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useAnimations, useEnvironment, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { FlowStep } from '@/types';
+import { useWcagSettings } from '@/contexts/WcagSettingsContext';
 
 interface AwaModelParticlesInstancedProps {
   currentStep: FlowStep;
@@ -39,6 +40,7 @@ export const AwaModelParticlesInstanced: React.FC<AwaModelParticlesInstancedProp
   const [headBone, setHeadBone] = useState<THREE.Bone | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const { scene: threeScene } = useThree();
+  const { reducedMotion: wcagReducedMotion } = useWcagSettings();
   const envMap = useEnvironment({ preset: 'studio' });
 
   const { scene } = useGLTF('/models/SKM_Quinn.gltf');
@@ -208,14 +210,14 @@ export const AwaModelParticlesInstanced: React.FC<AwaModelParticlesInstancedProp
   }, [instanceCount]);
 
   useFrame((state, delta) => {
-    if (mixer) mixer.update(delta);
+    if (mixer) mixer.update(wcagReducedMotion ? 0 : delta);
     meshDataRef.current.forEach((m) => {
       if (m.skeleton) m.skeleton.update();
     });
 
     if (!instancedRef.current || instanceCount === 0 || meshDataRef.current.length === 0) return;
 
-    const time = state.clock.elapsedTime;
+    const time = wcagReducedMotion ? 0 : state.clock.elapsedTime;
     let offset = 0;
 
     meshDataRef.current.forEach((data) => {
@@ -278,7 +280,7 @@ export const AwaModelParticlesInstanced: React.FC<AwaModelParticlesInstancedProp
 
     instancedRef.current.instanceMatrix.needsUpdate = true;
 
-    if (headBone) {
+    if (headBone && !wcagReducedMotion) {
       const lookTarget = new THREE.Vector3(mousePosition.x * 2, mousePosition.y * 2, 5);
       headBone.lookAt(lookTarget);
       headBone.rotateX(-Math.PI / -0.1);
@@ -286,7 +288,9 @@ export const AwaModelParticlesInstanced: React.FC<AwaModelParticlesInstancedProp
     }
 
     if (groupRef.current) {
-      groupRef.current.scale.y = 1 + Math.sin(time * 0.5) * 0.02;
+      groupRef.current.scale.y = wcagReducedMotion
+        ? 1
+        : 1 + Math.sin(time * 0.5) * 0.02;
     }
   });
 

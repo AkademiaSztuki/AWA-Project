@@ -13,6 +13,7 @@ import { spacesRouter } from './routes/spaces';
 import { creditsRouter } from './routes/credits';
 import { billingRouter } from './routes/billing';
 import { authRouter } from './routes/auth';
+import { anonUsageRouter } from './routes/anon-usage';
 
 const app = express();
 
@@ -60,6 +61,7 @@ app.get('/api/debug/participants-auth-column', async (_req, res) => {
 });
 
 app.use('/api', authRouter);
+app.use('/api', anonUsageRouter);
 app.use('/api', participantsRouter);
 app.use('/api', swipesRouter);
 app.use('/api', generationsRouter);

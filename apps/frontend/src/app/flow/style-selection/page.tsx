@@ -277,7 +277,7 @@ export default function StyleSelectionPage() {
         }}
         onNudgeEvent={(ev) => {
           const h = (sessionData as { userHash?: string } | null)?.userHash;
-          if (h) void logBehavioralEvent(h, 'login_nudge', { page: 'style-selection', nudge: ev });
+          if (h) void logBehavioralEvent(h, 'login_nudge', { page: 'style-selection', location: 'style_selection', nudge: ev });
         }}
         message={
           language === 'pl'
@@ -285,7 +285,7 @@ export default function StyleSelectionPage() {
             : 'Sign in to save progress and return to this project later. You can also continue without signing in.'
         }
         redirectPath="/flow/fast-generate"
-        softMaybeLaterLabel={{ pl: 'Idź dalej bez logowania', en: 'Continue without signing in' }}
+        softMaybeLaterLabel={{ pl: 'Kontynuuj bez konta', en: 'Continue without account' }}
       />
     </div>
   );

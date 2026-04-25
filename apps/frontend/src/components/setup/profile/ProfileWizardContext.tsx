@@ -287,7 +287,8 @@ export function ProfileWizardProvider({ children }: { children: ReactNode }) {
       } as any); // Cast to any to avoid strict type conflicts if types are slightly different
 
       if (!user) {
-        setShowLoginModal(true);
+        // Anonymous funnel: continue without account (data already in session / participants).
+        router.push("/flow/inspirations");
         setIsSubmitting(false);
         return;
       }

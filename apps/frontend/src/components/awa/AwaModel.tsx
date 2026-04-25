@@ -4,6 +4,7 @@ import { useGLTF, useAnimations } from '@react-three/drei';
 import * as THREE from 'three';
 import { FlowStep } from '@/types';
 import { useAnimation, AnimationType } from '@/contexts/AnimationContext';
+import { useWcagSettings } from '@/contexts/WcagSettingsContext';
 
 // Shadery dla okrągłych cząsteczek z żółtymi kolorami + miękką maską i interakcją z myszą
 const particleVertexShader = `
@@ -162,6 +163,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
 
   const { scene: threeScene, camera } = useThree();
   const { currentAnimation, onAnimationEnd, playAnimation } = useAnimation();
+  const { reducedMotion: wcagReducedMotion } = useWcagSettings();
   
   // Sync refs when position changes
   useEffect(() => {
@@ -662,8 +664,12 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   useFrame((state) => {
     // 1. NAJPIERW aktualizuj mixer dla animacji - to aktualizuje skeleton
     if (mixer) {
-      const delta = state.clock.getDelta();
-      mixer.update(delta > 0.1 ? 0.016 : delta);
+      const raw = state.clock.getDelta();
+      const safeDelta = raw > 0.1 ? 0.016 : raw;
+      // Freeze decorative idle when WCAG "reduct motion" is on; keep scripted / talk clips
+      const animDelta =
+        wcagReducedMotion && currentAnimation === "idle1" ? 0 : safeDelta;
+      mixer.update(animDelta);
       
       // Interpoluj pozycję podczas animacji wyjsciewlewo na mobile
       const isMobile = Math.abs(initialPositionRef.current[0]) < 0.01;
@@ -759,8 +765,8 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
       }
     }
 
-    // 3. TERAZ manipuluj głową (po aktualizacji animacji)
-    if (headBone) {
+    // 3. TERAZ manipuluj głową (po aktualizacji animacji) — wyłącz śledzenie w reduced motion
+    if (headBone && !wcagReducedMotion) {
       // 1. Ustawiamy cel na podstawie kursora
       const lookTarget = new THREE.Vector3(
         mousePosition.x * 2,
@@ -789,7 +795,9 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
       const material = pointsRef.current.material as THREE.ShaderMaterial;
       if (material.uniforms) {
         if (material.uniforms.uTime) {
-          material.uniforms.uTime.value = state.clock.elapsedTime;
+          material.uniforms.uTime.value = wcagReducedMotion
+            ? 0
+            : state.clock.elapsedTime;
         }
         if (material.uniforms.uMouseWorld) {
           material.uniforms.uMouseWorld.value.copy(mouseLocalRef.current);

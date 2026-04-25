@@ -19,7 +19,8 @@ export const useSessionData = (): UseSessionDataReturn => {
     }
     
     updateSession(normalizedUpdates);
-    // Persist: useSession.updateSession schedules saveSessionToGcp (see useSession.ts).
+    // Persist: useSession.updateSession schedules debounced saveSessionToGcp for `user_hash`
+    // rows in Cloud SQL — works for anonymous participants (no auth_user_id) and logged-in users.
   }, [updateSession]);
 
   const exportSessionData = () => {

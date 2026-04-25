@@ -626,7 +626,7 @@ export default function BigFivePage() {
           }}
           onNudgeEvent={(ev) => {
             const h = sessionData?.userHash;
-            if (h) void logBehavioralEvent(h, "login_nudge", { page: "big_five", ev });
+            if (h) void logBehavioralEvent(h, "login_nudge", { page: "big_five", location: "big_five_results", nudge: ev });
           }}
           message={
             language === "pl"
@@ -635,8 +635,8 @@ export default function BigFivePage() {
           }
           redirectPath="/flow/generate?mode=anon-single"
           softMaybeLaterLabel={{
-            pl: "Kontynuuj z jedną darmową generacją",
-            en: "Continue with one free generation",
+            pl: "Kontynuuj bez konta (1 darmowa generacja)",
+            en: "Continue without account (one free generation)",
           }}
         />
       </div>

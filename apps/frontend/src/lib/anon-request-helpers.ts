@@ -39,7 +39,10 @@ export function getAnonSessionIdFromRequest(request: NextRequest | Request): str
 
 const MS_24H = TWENTY_FOUR_H;
 
-/** One free image generation on the fast path and one on the full path, per cookie session. */
+/** One free image generation on the fast path and one on the full path, per cookie session.
+ *  Production: prefer Cloud SQL via backend-gcp (`anon-db-limits.ts` → `/api/anon/*`).
+ *  Fallback: this in-memory store when `NEXT_PUBLIC_GCP_API_BASE_URL` is unset or `AWA_ANON_LIMITS_MEMORY_ONLY=true`.
+ */
 export type AnonPathScope = 'fast' | 'full';
 
 type MemAnon = {
