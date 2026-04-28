@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
@@ -10,10 +10,12 @@ import { getOrCreateProjectId, startParticipantGeneration, endParticipantGenerat
 import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { GlassSlider } from '@/components/ui/GlassSlider';
+import { GlassScalePicker } from '@/components/ui/GlassScalePicker';
 import { GenerationHistory } from '@/components/ui/GenerationHistory';
 import { AwaDialogue } from '@/components/awa';
+import { LoginModal } from '@/components/auth/LoginModal';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Wand2,
   RefreshCw,
@@ -93,7 +95,74 @@ export default function ModifyPage() {
   const router = useRouter();
   const { t, language } = useLanguage();
   const { sessionData, updateSessionData, isInitialized: isSessionInitialized } = useSessionData();
+  const { user } = useAuth();
+  const isAuthenticated = !!user;
+  const pathTypeForCredits =
+    (sessionData as { pathType?: 'fast' | 'full' } | null)?.pathType === 'fast' ? 'fast' : 'full';
+  const isGuestFullPath = !isAuthenticated && pathTypeForCredits === 'full';
+  const [guestModsQuotaBlocked, setGuestModsQuotaBlocked] = useState(false);
+  const [modifyLoginOpen, setModifyLoginOpen] = useState(false);
   const { generateSixImagesParallelWithGoogle, isLoading, error, setError } = useGoogleAI();
+
+  type CreditAction = 'generate' | 'regenerate' | 'upscale' | 'save' | 'matrix';
+  const checkCreditsWithAction = useCallback(
+    async (userHash: string, amount: number, action: CreditAction) => {
+      const response = await fetch('/api/credits/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          userHash,
+          amount,
+          action,
+          isAuthenticated,
+          ...(!isAuthenticated ? { pathScope: pathTypeForCredits } : {}),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 429) {
+        return {
+          allowed: false as const,
+          code: 429 as const,
+          reason: data.reason as string | undefined,
+        };
+      }
+      if (!response.ok) {
+        throw new Error((data as { error?: string }).error || 'Failed to check credits');
+      }
+      if (data.available === false) {
+        return { allowed: false as const, code: 200 as const, reason: 'quota' as const };
+      }
+      return { allowed: true as const, code: 200 as const };
+    },
+    [isAuthenticated, pathTypeForCredits],
+  );
+
+  useEffect(() => {
+    if (!isSessionInitialized || !isGuestFullPath) {
+      setGuestModsQuotaBlocked(false);
+      return;
+    }
+    const uh = (sessionData as { userHash?: string } | null)?.userHash;
+    if (!uh) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const cred = await checkCreditsWithAction(uh, 10, 'generate');
+        if (cancelled) return;
+        if (cred && !cred.allowed && cred.code === 429) {
+          setGuestModsQuotaBlocked(true);
+        } else {
+          setGuestModsQuotaBlocked(false);
+        }
+      } catch {
+        if (!cancelled) setGuestModsQuotaBlocked(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSessionInitialized, isGuestFullPath, sessionData?.userHash, checkCreditsWithAction]);
 
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
   const [showModifications, setShowModifications] = useState(false);
@@ -414,7 +483,12 @@ export default function ModifyPage() {
 
   const handleModification = async (modification: ModificationOption, customPrompt?: string) => {
     if (!selectedImage) return;
-    
+
+    if (isGuestFullPath && guestModsQuotaBlocked) {
+      setModifyLoginOpen(true);
+      return;
+    }
+
     if (isLoading || isModifying) {
       console.warn('[Modification] Already generating, ignoring duplicate request');
       return;
@@ -642,7 +716,12 @@ export default function ModifyPage() {
 
   const handleRemoveFurniture = async () => {
     if (!selectedImage) return;
-    
+
+    if (isGuestFullPath && guestModsQuotaBlocked) {
+      setModifyLoginOpen(true);
+      return;
+    }
+
     if (!hasAnsweredInteriorQuestion) {
       setError(t({ pl: "Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed usunięciem mebli.", en: "Please answer the question 'Is this my interior?' before removing furniture." }));
       return;
@@ -827,7 +906,12 @@ export default function ModifyPage() {
 
   const handleCustomModification = async () => {
     if (!customModificationText.trim() || !selectedImage) return;
-    
+
+    if (isGuestFullPath && guestModsQuotaBlocked) {
+      setModifyLoginOpen(true);
+      return;
+    }
+
     const customMod: ModificationOption = {
       id: 'custom_text',
       label: { pl: customModificationText.trim(), en: customModificationText.trim() },
@@ -1111,7 +1195,7 @@ export default function ModifyPage() {
                           <span>{t({ pl: "To moje wnętrze (5)", en: "My interior (5)" })}</span>
                         </div>
 
-                        <GlassSlider
+                        <GlassScalePicker
                           min={1}
                           max={5}
                           value={selectedImage.ratings.is_my_interior || 3}
@@ -1123,6 +1207,11 @@ export default function ModifyPage() {
                             }, 800);
                           }}
                           className="mb-2"
+                          highlightResetKey={selectedImage.id}
+                          ariaLabel={t({
+                            pl: 'Skala: czy to Twoje wnętrze (1–5)',
+                            en: 'Scale: is this your interior (1–5)',
+                          })}
                         />
                       </div>
                     </div>
@@ -1156,13 +1245,13 @@ export default function ModifyPage() {
 
                         <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
                           <span>{t(left)} (1)</span>
-                          <span>{t(right)} (7)</span>
+                          <span>{t(right)} (5)</span>
                         </div>
 
-                        <GlassSlider
+                        <GlassScalePicker
                           min={1}
-                          max={7}
-                          value={selectedImage.ratings[key as keyof typeof selectedImage.ratings] || 4}
+                          max={5}
+                          value={selectedImage.ratings[key as keyof typeof selectedImage.ratings] || 3}
                           onChange={(value) => {
                             handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
                             if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
@@ -1171,6 +1260,11 @@ export default function ModifyPage() {
                             }, 800);
                           }}
                           className="mb-2"
+                          highlightResetKey={`${selectedImage.id}-${String(key)}`}
+                          ariaLabel={t({
+                            pl: 'Skala zgodności z gustem (1–5)',
+                            en: 'Taste match scale (1–5)',
+                          })}
                         />
                       </div>
                     ))}
@@ -1183,6 +1277,21 @@ export default function ModifyPage() {
           {/* Modifications and History - Show after selection and after completing all questions */}
           {selectedImage && hasCompletedRatings && (
             <>
+              {isGuestFullPath && guestModsQuotaBlocked && (
+                <GlassCard variant="flatOnMobile" className="p-4 mb-4 border-gold/30 bg-gold/5">
+                  <p className="text-sm text-graphite text-center mb-3 leading-snug">
+                    {t({
+                      pl: 'Kolejne generacje i modyfikacje wymagają konta. Możesz iść dalej z wybraną wizją.',
+                      en: 'More generations and edits need an account. You can continue with your chosen vision.',
+                    })}
+                  </p>
+                  <div className="flex justify-center">
+                    <GlassButton type="button" onClick={() => setModifyLoginOpen(true)} className="px-6">
+                      {t({ pl: 'Zaloguj się lub załóż konto', en: 'Sign in or create account' })}
+                    </GlassButton>
+                  </div>
+                </GlassCard>
+              )}
               {/* Modifications Button */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -1190,12 +1299,32 @@ export default function ModifyPage() {
                 transition={{ delay: 0.3 }}
                 className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3"
               >
-                <GlassButton onClick={() => setShowModifications((m) => !m)} variant="secondary" className="w-full sm:flex-1 h-12 text-xs sm:text-sm">
+                <GlassButton
+                  onClick={() => {
+                    if (isGuestFullPath && guestModsQuotaBlocked) {
+                      setModifyLoginOpen(true);
+                      return;
+                    }
+                    setShowModifications((m) => !m);
+                  }}
+                  variant="secondary"
+                  className="w-full sm:flex-1 h-12 text-xs sm:text-sm"
+                >
                   <Settings size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
                   <span className="truncate">{showModifications ? t({ pl: 'Ukryj opcje', en: 'Hide options' }) : t({ pl: 'Modyfikuj', en: 'Modify' })}</span>
                 </GlassButton>
 
-                <GlassButton onClick={handleRemoveFurniture} variant="secondary" className="w-full sm:flex-1 h-12 text-xs sm:text-sm">
+                <GlassButton
+                  onClick={() => {
+                    if (isGuestFullPath && guestModsQuotaBlocked) {
+                      setModifyLoginOpen(true);
+                      return;
+                    }
+                    void handleRemoveFurniture();
+                  }}
+                  variant="secondary"
+                  className="w-full sm:flex-1 h-12 text-xs sm:text-sm"
+                >
                   <Home size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
                   <span className="truncate">{t({ pl: 'Usuń meble', en: 'Remove furniture' })}</span>
                 </GlassButton>
@@ -1243,7 +1372,7 @@ export default function ModifyPage() {
                                 variant="secondary"
                                 size="sm"
                                 className="justify-start text-xs sm:text-sm h-12 px-3 overflow-hidden"
-                                disabled={isLoading || isModifying}
+                                disabled={isLoading || isModifying || (isGuestFullPath && guestModsQuotaBlocked)}
                               >
                                 <span className="line-clamp-2 text-center w-full">{t(mod.label)}</span>
                               </GlassButton>
@@ -1267,7 +1396,7 @@ export default function ModifyPage() {
                                 variant="secondary"
                                 size="sm"
                                 className="justify-start text-xs sm:text-sm h-12 px-3 overflow-hidden"
-                                disabled={isLoading || isModifying}
+                                disabled={isLoading || isModifying || (isGuestFullPath && guestModsQuotaBlocked)}
                               >
                                 <span className="line-clamp-2 text-center w-full">{t(mod.label)}</span>
                               </GlassButton>
@@ -1297,11 +1426,16 @@ export default function ModifyPage() {
                                 handleCustomModification();
                               }
                             }}
-                            disabled={isLoading || isModifying}
+                            disabled={isLoading || isModifying || (isGuestFullPath && guestModsQuotaBlocked)}
                           />
                           <GlassButton 
                             onClick={handleCustomModification}
-                            disabled={isLoading || isModifying || !customModificationText.trim()}
+                            disabled={
+                              isLoading ||
+                              isModifying ||
+                              !customModificationText.trim() ||
+                              (isGuestFullPath && guestModsQuotaBlocked)
+                            }
                             className="px-8"
                           >
                             {t({ pl: 'Zmień', en: 'Change' })}
@@ -1429,6 +1563,24 @@ export default function ModifyPage() {
       <div className="w-full">
         <AwaDialogue currentStep="modification" fullWidth autoHide />
       </div>
+
+      <LoginModal
+        isOpen={modifyLoginOpen}
+        onClose={() => setModifyLoginOpen(false)}
+        gateMode="hard"
+        nudgeLocation="flow_modify_guest"
+        nudgeReason="login_required"
+        title={{ pl: 'Konto potrzebne do modyfikacji', en: 'Account required for edits' }}
+        message={t({
+          pl: 'Aby generować kolejne obrazy i modyfikować wizję, zaloguj się lub załóż konto.',
+          en: 'Sign in or create an account to generate more images and edit your vision.',
+        })}
+        redirectPath="/flow/modify"
+        onSuccess={() => {
+          setModifyLoginOpen(false);
+          setGuestModsQuotaBlocked(false);
+        }}
+      />
     </div>
   );
 }

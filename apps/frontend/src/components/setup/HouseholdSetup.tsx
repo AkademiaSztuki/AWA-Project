@@ -10,6 +10,7 @@ import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { Home, Users, Target, ArrowRight, ArrowLeft } from 'lucide-react';
 import { saveHousehold } from '@/lib/gcp-participant-profile';
 import { useSession } from '@/hooks';
+import { GLASS_CARD_SCROLL_STEP } from '@/lib/flow/glass-step-layout';
 
 interface HouseholdData {
   name: string;
@@ -138,7 +139,7 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
+                <GlassCard scrollable className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                       <Home size={24} className="text-white" aria-hidden="true" />
@@ -183,7 +184,7 @@ export function HouseholdSetup() {
                         className={`rounded-xl p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                           householdData.type === type.id
                             ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                            : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                            : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                         }`}
                       >
                         {type.label}
@@ -211,7 +212,7 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
+                <GlassCard scrollable className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                       <Users size={24} className="text-white" aria-hidden="true" />
@@ -234,7 +235,7 @@ export function HouseholdSetup() {
                         className={`rounded-xl p-6 font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                           householdData.livingSituation === situation.id
                             ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                            : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                            : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                         }`}
                       >
                         {situation.label}
@@ -266,7 +267,7 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
+                <GlassCard scrollable className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                       <Target size={24} className="text-white" aria-hidden="true" />
@@ -306,7 +307,7 @@ export function HouseholdSetup() {
                           className={`rounded-xl p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                             isSelected
                               ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                              : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700 hover:scale-105'
+                              : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.04] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                           }`}
                         >
                           {goal.label}

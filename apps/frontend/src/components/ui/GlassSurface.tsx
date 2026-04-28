@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, useId, ReactNode, CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useId,
+  type ReactNode,
+  type CSSProperties,
+  type KeyboardEvent,
+} from "react";
 
 const useDarkMode = () => {
   const [isDark, setIsDark] = useState(false);
@@ -35,6 +43,8 @@ interface GlassSurfaceProps {
   className?: string;
   style?: CSSProperties;
   onClick?: () => void;
+  'aria-label'?: string;
+  'aria-disabled'?: boolean | 'true' | 'false';
 }
 
 const GlassSurface = ({
@@ -59,6 +69,8 @@ const GlassSurface = ({
   className = "",
   style = {},
   onClick,
+  'aria-label': ariaLabel,
+  'aria-disabled': ariaDisabled,
 }: GlassSurfaceProps) => {
   const uniqueId = useId().replace(/:/g, '-');
   const filterId = `glass-filter-${uniqueId}`;
@@ -148,14 +160,25 @@ const GlassSurface = ({
     return baseStyles;
   };
 
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!onClick || ariaDisabled === true || ariaDisabled === 'true') return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick();
+    }
+  };
+
   return (
     <div
       ref={containerRef}
       className={`relative flex items-center justify-center overflow-hidden transition-opacity duration-[260ms] ease-out bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl ${className}`}
       style={getContainerStyles()}
       onClick={onClick}
+      onKeyDown={handleKeyDown}
       tabIndex={0}
       role="button"
+      aria-label={ariaLabel}
+      aria-disabled={ariaDisabled ?? undefined}
     >
       <svg
         className="w-full h-full pointer-events-none absolute inset-0 opacity-0 -z-10"

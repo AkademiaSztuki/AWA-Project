@@ -1,4 +1,4 @@
-# Deploy backendu AWA na Cloud Run z połączeniem do Cloud SQL przez socket.
+# Deploy backendu IDA na Cloud Run z połączeniem do Cloud SQL przez socket.
 # Użycie: .\deploy-backend.ps1   (z katalogu infra/gcp)
 # Zmienne bierze z apps/frontend/.env.local (albo z infra/gcp/setup.env jeśli brak .env.local).
 # Potrzebne w pliku: PROJECT_ID, REGION, HASLO_BAZY, CLOUD_SQL_CONNECTION_NAME, ewentualnie GCS_IMAGES_BUCKET.

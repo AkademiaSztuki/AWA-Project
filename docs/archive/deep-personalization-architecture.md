@@ -2,7 +2,7 @@
 
 ## Overview
 
-Complete redesign of AWA Project to support **multi-session, multi-room, multi-household** interior design with **deep personalization methodologies** and **embedded research validation**.
+Complete redesign of IDA Project to support **multi-session, multi-room, multi-household** interior design with **deep personalization methodologies** and **embedded research validation**.
 
 ## Key Innovations
 

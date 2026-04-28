@@ -13,10 +13,15 @@ import { saveSessionToGcp, logBehavioralEvent } from "@/lib/gcp-data";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoginModal } from "@/components/auth/LoginModal";
 import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
-import { RadarChart, DomainDescription } from '@/components/dashboard/BigFiveDetailed';
+import { RadarChart, DomainDescription, BigFiveAboutTestCard, type BigFiveDomainKey } from '@/components/dashboard/BigFiveDetailed';
+import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_SCROLL_STEP } from "@/lib/flow/glass-step-layout";
+import { FREE_GRANT_CREDITS } from "@/lib/credits";
+import { formatPolishUiText } from "@/lib/typography/polish-ui-text";
 import { 
   ArrowRight, 
-  ArrowLeft
+  ArrowLeft,
+  ArrowUp,
+  RefreshCw,
 } from "lucide-react";
 
 export default function BigFivePage() {
@@ -38,13 +43,39 @@ export default function BigFivePage() {
   const [isLegacyResult, setIsLegacyResult] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
+  const [openFacetDomain, setOpenFacetDomain] = useState<BigFiveDomainKey | null>(null);
+  const [radarOffscreen, setRadarOffscreen] = useState(false);
   const autoSavedRef = React.useRef(false);
   const resultsShownRef = React.useRef(false);
   const retakeInitializedRef = React.useRef(false);
   const prevRetakeRef = React.useRef(retake);
   const initializedRef = React.useRef(false);
 
-  const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[min(85vh,900px)]";
+  useEffect(() => {
+    if (!showResults) {
+      setRadarOffscreen(false);
+      setOpenFacetDomain(null);
+    }
+  }, [showResults]);
+
+  useEffect(() => {
+    if (!showResults || !scores) return undefined;
+    const el = document.getElementById("big-five-radar-anchor");
+    if (!el) return undefined;
+
+    const updateBackButtonVisibility = () => {
+      setRadarOffscreen(el.getBoundingClientRect().top < -120);
+    };
+
+    updateBackButtonVisibility();
+    window.addEventListener("scroll", updateBackButtonVisibility, { passive: true });
+    window.addEventListener("resize", updateBackButtonVisibility);
+
+    return () => {
+      window.removeEventListener("scroll", updateBackButtonVisibility);
+      window.removeEventListener("resize", updateBackButtonVisibility);
+    };
+  }, [showResults, scores]);
 
   // Reset retake initialization when retake parameter changes from false to true
   useEffect(() => {
@@ -254,7 +285,7 @@ export default function BigFivePage() {
 
   const handleSave = async () => {
     if (isLegacyResult) {
-      router.push("/dashboard");
+      router.push(shouldGoDashboard ? "/dashboard" : "/setup/room");
       return;
     }
 
@@ -310,12 +341,17 @@ export default function BigFivePage() {
         void logBehavioralEvent(hash, "flow_step_big_five_complete", { path: "big-five" });
       }
 
-      if (user || shouldGoDashboard) {
+      if (shouldGoDashboard) {
         router.push("/dashboard");
         return;
       }
 
-      setNudgeCOpen(true);
+      if (!user) {
+        setNudgeCOpen(true);
+        return;
+      }
+
+      router.push("/setup/room");
     } finally {
       setIsSubmitting(false);
     }
@@ -373,12 +409,14 @@ export default function BigFivePage() {
     void runAutoSave();
   }, [showResults, scores, responses, updateSessionData, sessionData?.userHash]); // Only depend on userHash, not entire sessionData
 
+  const postBigFiveNoLoginPath = "/setup/room";
+
   const handleSkip = () => {
-    if (!user) {
-      router.push("/flow/generate?mode=anon-single");
+    if (shouldGoDashboard) {
+      router.push("/dashboard");
       return;
     }
-    router.push("/dashboard");
+    router.push(postBigFiveNoLoginPath);
   };
 
   const handleLegacyRetake = () => {
@@ -388,6 +426,13 @@ export default function BigFivePage() {
     setShowResults(false);
     setCurrentQuestion(0);
     setIsLegacyResult(false);
+  };
+
+  const handleRetakeFullTest = () => {
+    const params = new URLSearchParams();
+    if (fromDashboard) params.set("from", "dashboard");
+    params.set("retake", "true");
+    router.push(`/flow/big-five?${params.toString()}`);
   };
 
   // Calculate progress from actual responses (more reliable than answeredCount state)
@@ -422,8 +467,8 @@ export default function BigFivePage() {
       return (
         <div className="flex flex-col w-full">
           <div className="flex-1 flex justify-center items-start">
-            <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
-              <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
+            <div className={`${FULL_FLOW_GLASS_SHELL} space-y-6`}>
+              <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
                 <div className="text-center">
                   <p className="text-lg text-graphite font-modern mb-4">
                     {t(
@@ -473,8 +518,8 @@ export default function BigFivePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
-                {/* Header */}
+              <GlassCard variant="flat" className="flex flex-col p-6 md:p-8">
+                {/* Header — no scrollable / max-height: long results use page scroll */}
                 <div className="text-center mb-8">
                   <h1 className="text-3xl md:text-4xl font-nasalization text-graphite mb-4">
                     {t("Twój Profil Osobowości", "Your Personality Profile")}
@@ -506,29 +551,49 @@ export default function BigFivePage() {
                   </div>
                 ) : (
                   <>
-                    {/* Radar Chart Section */}
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ duration: 0.5, delay: 0.1 }}
                       className="mb-8"
                     >
-                      <GlassCard className="p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20">
-                        <h2 className="text-2xl font-nasalization text-graphite mb-6 text-center">
-                          {t('Profil Osobowości', 'Personality Profile')}
-                        </h2>
-                        <RadarChart scores={scores} />
-                        <div className="mt-6 text-center text-sm text-silver-dark font-modern">
+                      <div
+                        id="big-five-radar-anchor"
+                        className="scroll-mt-28 sm:scroll-mt-36"
+                      >
+                      <div className="p-4 sm:p-8">
+                        <p className="sr-only">
                           {t(
-                            'Wykres pokazuje Twoje wyniki w pięciu głównych wymiarach osobowości',
-                            'Chart shows your scores in the five main personality dimensions'
+                            "Etykiety przy osiach wykresu działają jak przyciski: otwierają szczegóły wymiaru poniżej.",
+                            "Labels at each axis act as buttons: they open that dimension’s details below."
+                          )}
+                        </p>
+                        <RadarChart
+                          scores={scores}
+                          activeDomain={openFacetDomain}
+                          onDomainClick={(d) => {
+                            setOpenFacetDomain(d);
+                            window.setTimeout(() => {
+                              document.getElementById(`big-five-domain-${d}`)?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "center",
+                                inline: "nearest",
+                              });
+                            }, 120);
+                          }}
+                        />
+                        <div className="mt-4 text-center text-sm text-silver-dark font-modern sm:mt-6">
+                          {t(
+                            "Wykres pokazuje Twoje wyniki w pięciu głównych wymiarach osobowości.",
+                            "The chart shows your scores in the five main personality dimensions."
                           )}
                         </div>
-                      </GlassCard>
+                      </div>
+                      </div>
                     </motion.div>
 
                     {/* Detailed Descriptions */}
-                    <div className="space-y-6 mb-8">
+                    <div id="big-five-details-start" className="space-y-6 mb-8">
                       <h2 className="text-2xl font-nasalization text-graphite mb-4">
                         {t('Szczegółowe Opisy Wymiarów', 'Detailed Dimension Descriptions')}
                       </h2>
@@ -546,6 +611,11 @@ export default function BigFivePage() {
                               domain={key}
                               score={score}
                               facets={facetScores}
+                              sectionId={`big-five-domain-${key}`}
+                              facetsExpanded={openFacetDomain === key}
+                              onFacetsExpandedChange={(open) =>
+                                setOpenFacetDomain(open ? key : null)
+                              }
                             />
                           </motion.div>
                         );
@@ -555,7 +625,7 @@ export default function BigFivePage() {
                 )}
 
                 {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-4 justify-center items-stretch sm:items-center">
                   {isLegacyResult ? (
                     <>
                       <GlassButton
@@ -575,6 +645,17 @@ export default function BigFivePage() {
                   ) : (
                     <>
                       <GlassButton
+                        type="button"
+                        onClick={handleRetakeFullTest}
+                        variant="secondary"
+                        className="px-8 py-3"
+                      >
+                        <span className="flex items-center gap-2">
+                          <RefreshCw size={18} aria-hidden="true" />
+                          {t("Wykonaj test ponownie", "Retake test")}
+                        </span>
+                      </GlassButton>
+                      <GlassButton
                         onClick={handleSkip}
                         variant="secondary"
                         className="px-8 py-3"
@@ -593,17 +674,37 @@ export default function BigFivePage() {
                         </span>
                       </GlassButton>
                       {validationError && (
-                        <p className="text-sm text-amber-500 text-center sm:text-left">
+                        <p className="basis-full text-center text-sm text-amber-500 sm:text-left">
                           {validationError}
                         </p>
                       )}
                     </>
                   )}
                 </div>
+
+                <BigFiveAboutTestCard className="mt-8" />
               </GlassCard>
             </motion.div>
           </div>
         </div>
+
+        {domainEntries.length > 0 && radarOffscreen && (
+          <GlassButton
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setRadarOffscreen(false);
+              window.scrollTo({
+                top: 0,
+                behavior: "smooth",
+              });
+            }}
+            className="fixed bottom-6 right-4 z-[130] flex items-center gap-2 shadow-lg sm:right-8"
+          >
+            <ArrowUp size={18} aria-hidden="true" />
+            {t("Wróć do wykresu", "Back to chart")}
+          </GlassButton>
+        )}
 
         {/* Dialog IDA na dole */}
         <div className="w-full">
@@ -622,7 +723,7 @@ export default function BigFivePage() {
           nudgeReason="login_required"
           onMaybeLater={() => {
             setNudgeCOpen(false);
-            router.push("/flow/generate?mode=anon-single");
+            router.push(postBigFiveNoLoginPath);
           }}
           onNudgeEvent={(ev) => {
             const h = sessionData?.userHash;
@@ -630,13 +731,13 @@ export default function BigFivePage() {
           }}
           message={
             language === "pl"
-              ? "Zaloguj się, aby zapisać profil na koncie i odblokować pełną matrycę 6 wariantów + upscale. Możesz też kontynuować anonimowo z jedną darmową generacją."
-              : "Sign in to save your profile and unlock the full 6-image matrix + upscale. You can also continue anonymously with one free generation."
+              ? `Zaloguj się, żeby wynik profilu trafił bezpiecznie na konto i nie przepadł. Zyskaj ${String(FREE_GRANT_CREDITS)} darmowych kredytów do generowania twoich wnętrz.`
+              : `Sign in so your profile is saved to your account and you don’t lose it. Get ${String(FREE_GRANT_CREDITS)} free credits to generate your interior designs.`
           }
-          redirectPath="/flow/generate?mode=anon-single"
+          redirectPath="/setup/room"
           softMaybeLaterLabel={{
-            pl: "Kontynuuj bez konta (1 darmowa generacja)",
-            en: "Continue without account (one free generation)",
+            pl: "Kontynuuj bez konta",
+            en: "Continue without account",
           }}
         />
       </div>
@@ -646,13 +747,13 @@ export default function BigFivePage() {
   return (
     <div className="min-h-screen flex flex-col w-full">
       <div className="flex-1 flex justify-center items-start">
-        <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
+        <div className={`${FULL_FLOW_GLASS_SHELL} space-y-6`}>
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
+            <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
               {/* Header */}
               <div className="text-center mb-8">
                 <h1 className="text-3xl md:text-4xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-4">
@@ -685,18 +786,22 @@ export default function BigFivePage() {
               </div>
 
               {/* Question */}
-              <div className="mb-8 min-h-[280px] sm:min-h-[300px] md:min-h-[320px] flex flex-col">
-                <div className="text-center mb-6 flex-shrink-0" aria-live="polite" aria-atomic="false">
-                  <h2 className="text-xl lg:text-2xl font-nasalization text-graphite mb-4">
-                    {currentItem?.text[language] || 'Loading...'}
+              <div className="mb-8 flex flex-col gap-4 sm:gap-5">
+                <div className="text-center flex-shrink-0" aria-live="polite" aria-atomic="false">
+                  <h2 className="text-xl lg:text-2xl font-nasalization text-graphite mb-4 max-w-[min(100%,42rem)] mx-auto text-balance hyphens-none">
+                    {currentItem
+                      ? language === "pl"
+                        ? formatPolishUiText(currentItem.text.pl)
+                        : currentItem.text.en
+                      : "Loading..."}
                   </h2>
                   <p className="text-sm text-silver-dark font-modern">
                     {t("Jak bardzo się z tym zgadzasz?", "How much do you agree with this?")}
                   </p>
                 </div>
 
-                {/* Response Options */}
-                <div className="grid grid-cols-5 gap-2 sm:gap-3 md:gap-4 max-w-2xl mx-auto flex-shrink-0 mt-auto">
+                {/* Response Options — min-w-0 + break-normal avoids mid-word breaks from break-words */}
+                <div className="grid grid-cols-5 gap-1.5 sm:gap-2 md:gap-3 w-full max-w-3xl xl:max-w-4xl mx-auto flex-shrink-0">
                   {[1, 2, 3, 4, 5].map((value) => {
                     const isSelected = currentItem && responses[currentItem.id] === value;
                     return (
@@ -711,14 +816,14 @@ export default function BigFivePage() {
                                  value === 4 ? t("Zgadzam się", "Agree") :
                                  t("Zdecydowanie tak", "Strongly agree")}
                       aria-pressed={isSelected}
-                      className={`p-2 sm:p-3 md:p-4 rounded-xl font-modern transition-all duration-300 ${
+                      className={`min-w-0 px-1.5 py-2 sm:px-2 sm:py-2.5 md:px-3 md:py-3 rounded-xl font-modern transition-all duration-300 ${
                         isSelected
                           ? 'bg-gradient-to-br from-gold to-champagne text-white shadow-lg'
                           : 'bg-white/50 backdrop-blur-sm border border-white/60 hover:bg-white/60 text-graphite'
                       }`}
                     >
                       <div className="text-lg sm:text-xl md:text-2xl font-bold mb-0.5 sm:mb-1">{value}</div>
-                      <div className="text-[10px] sm:text-xs leading-tight break-words">
+                      <div className="text-[10px] sm:text-[11px] md:text-xs leading-snug text-center hyphens-none break-normal">
                         {value === 1 ? t("Zdecydowanie nie", "Strongly disagree") :
                          value === 2 ? t("Nie", "Disagree") :
                          value === 3 ? t("Neutralnie", "Neutral") :
@@ -763,6 +868,8 @@ export default function BigFivePage() {
                   </GlassButton>
                 )}
               </div>
+
+              <BigFiveAboutTestCard className="mt-8" />
             </GlassCard>
           </motion.div>
         </div>

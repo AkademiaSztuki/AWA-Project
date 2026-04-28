@@ -11,7 +11,7 @@
   wpisuj go recznie (blad "The term '>>' is not recognized").
 
   $env:PGPASSWORD = "haslo_awa_app"
-  cd C:\sciezka\do\AWA-Project\infra\gcp\scripts
+  cd C:\sciezka\do\twojego-repozytorium\infra\gcp\scripts
   .\cloud-sql-export-csv.ps1 -Port 15432 -OutFile "$HOME\Desktop\participants.csv"
 
   $env:PGPASSWORD = "haslo_awa_app"

@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -36,14 +37,37 @@ function readInitialEnabled(): boolean {
 }
 
 export function DialogueVoiceProvider({ children }: { children: React.ReactNode }) {
-  const [volume, setVolumeState] = useState(readInitialVolume);
-  const [isEnabled, setIsEnabled] = useState(readInitialEnabled);
+  // Fixed defaults so SSR + first client render match (localStorage is read after mount in useLayoutEffect).
+  const [volume, setVolumeState] = useState(0.8);
+  const [isEnabled, setIsEnabled] = useState(true);
   const skipEnableAudioSyncRef = useRef(true);
+
+  useLayoutEffect(() => {
+    const v = readInitialVolume();
+    const e = readInitialEnabled();
+    setVolumeState(v);
+    setIsEnabled(e);
+    const dialogueAudios = document.querySelectorAll(
+      'audio[data-type="dialogue"]'
+    ) as NodeListOf<HTMLAudioElement>;
+    dialogueAudios.forEach((audio) => {
+      audio.volume = v;
+      if (!e) {
+        audio.pause();
+      } else {
+        void audio.play().catch(() => {});
+      }
+    });
+  }, []);
 
   const setVolume = useCallback((newVolume: number) => {
     const clampedVolume = Math.max(0, Math.min(1, newVolume));
     setVolumeState(clampedVolume);
     safeLocalStorage.setItem("dialogue-voice-volume", clampedVolume.toString());
+
+    if (clampedVolume > 0) {
+      setIsEnabled(true);
+    }
 
     const dialogueAudios = document.querySelectorAll(
       "audio[data-type=\"dialogue\"]"

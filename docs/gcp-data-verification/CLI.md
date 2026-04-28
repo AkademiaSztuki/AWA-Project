@@ -5,7 +5,7 @@ Z **CLI** możesz natomiast: połączyć się z bazą, uruchomić SQL i **wyeksp
 
 ---
 
-## Projekt GCP (AWA — ten, którego używasz)
+## Projekt GCP (IDA — ten, którego używasz)
 
 W `.env` / zmiennych lokalnych masz np.:
 

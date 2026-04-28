@@ -4,6 +4,27 @@ import React, { useEffect, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { safeSessionStorage } from '@/lib/gcp-data';
 import { GlassButton } from '@/components/ui/GlassButton';
+import {
+  completeGoogleNativeLoginFromAccessToken,
+  persistNativeGoogleUserToLocalStorage,
+  syncGoogleNativeEmailLinkAuth,
+} from '@/lib/google-auth';
+import {
+  clearPkceOAuthSessionStorage,
+  getGoogleOAuthRedirectUri,
+  readOAuthContext,
+  readPkceOAuthContext,
+} from '@/lib/google-oauth-pkce';
+
+async function grantFreeCredits(userHash: string): Promise<void> {
+  const r = await fetch('/api/credits/grant-free', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userHash }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (d.success) console.log('[AuthCallback] Granted free credits:', userHash);
+}
 
 /**
  * Auth callback page.
@@ -19,11 +40,142 @@ function AuthCallbackContent() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const next = params.get('next') || safeSessionStorage.getItem('aura_auth_next') || '/';
-    safeSessionStorage.removeItem('aura_auth_next');
-    // Do NOT remove aura_auth_path_type here — PathSelectionScreen sets it before OAuth;
-    // OnboardingScreen / CoreProfileWizard read it and clear after apply.
-    window.location.replace(next);
+    let cancelled = false;
+
+    const run = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const hashError = hashParams.get('error');
+      const hashDesc = hashParams.get('error_description');
+      if (hashError) {
+        setErrorMsg(hashDesc || hashError || 'Logowanie przez Google zostało przerwane.');
+        clearPkceOAuthSessionStorage();
+        return;
+      }
+
+      const hashAccessToken = hashParams.get('access_token');
+      const hashState = hashParams.get('state');
+      if (hashAccessToken && hashState) {
+        const ctx = readOAuthContext(hashState);
+        if (!ctx.stateOk) {
+          setErrorMsg('Sesja logowania wygasła lub jest nieprawidłowa. Wróć do aplikacji i spróbuj ponownie.');
+          clearPkceOAuthSessionStorage();
+          return;
+        }
+
+        const currentUserHash = ctx.userHash && ctx.userHash.length > 0 ? ctx.userHash : null;
+        const result = await completeGoogleNativeLoginFromAccessToken(hashAccessToken, {
+          currentUserHash,
+          consentTimestamp: ctx.consent ?? undefined,
+          onGrantFreeCredits: grantFreeCredits,
+        });
+
+        if (cancelled) return;
+
+        if (!result.ok) {
+          clearPkceOAuthSessionStorage();
+          setErrorMsg(result.error);
+          return;
+        }
+
+        clearPkceOAuthSessionStorage();
+        persistNativeGoogleUserToLocalStorage(result.user);
+        await syncGoogleNativeEmailLinkAuth(result.user);
+
+        const next = ctx.authNext && ctx.authNext.length > 0 ? ctx.authNext : '/';
+        safeSessionStorage.removeItem('aura_auth_next');
+        window.location.replace(next);
+        return;
+      }
+
+      const oauthError = params.get('error');
+      const oauthDesc = params.get('error_description');
+      if (oauthError) {
+        setErrorMsg(oauthDesc || oauthError || 'Logowanie przez Google zostało przerwane.');
+        clearPkceOAuthSessionStorage();
+        return;
+      }
+
+      const code = params.get('code');
+      const state = params.get('state');
+
+      if (!code || !state) {
+        const next = params.get('next') || safeSessionStorage.getItem('aura_auth_next') || '/';
+        safeSessionStorage.removeItem('aura_auth_next');
+        // Do NOT remove aura_auth_path_type here — PathSelectionScreen sets it before OAuth;
+        // OnboardingScreen / CoreProfileWizard read it and clear after apply.
+        window.location.replace(next);
+        return;
+      }
+
+      const ctx = readPkceOAuthContext(state);
+      if (!ctx.stateOk || !ctx.verifier) {
+        setErrorMsg('Sesja logowania wygasła lub jest nieprawidłowa. Wróć do aplikacji i spróbuj ponownie.');
+        clearPkceOAuthSessionStorage();
+        return;
+      }
+
+      const redirectUri = getGoogleOAuthRedirectUri();
+      const tokenRes = await fetch('/api/auth/google/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          code_verifier: ctx.verifier,
+          redirect_uri: redirectUri,
+        }),
+      });
+      const tokenJson = (await tokenRes.json().catch(() => ({}))) as {
+        access_token?: string;
+        error?: string;
+        error_description?: string;
+      };
+
+      if (!tokenRes.ok || !tokenJson.access_token) {
+        clearPkceOAuthSessionStorage();
+        const desc = tokenJson.error_description ?? '';
+        setErrorMsg(
+          [
+            tokenJson.error === 'redirect_uri_mismatch' || desc.toLowerCase().includes('redirect_uri')
+              ? 'Błąd redirect_uri: w Google Cloud musi być dokładnie ten adres callback.'
+              : null,
+            desc || tokenJson.error || 'Wymiana kodu na token nie powiodła się.',
+            `Użyty redirect_uri: ${redirectUri}`,
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+        );
+        return;
+      }
+
+      const currentUserHash = ctx.userHash && ctx.userHash.length > 0 ? ctx.userHash : null;
+      const result = await completeGoogleNativeLoginFromAccessToken(tokenJson.access_token, {
+        currentUserHash,
+        consentTimestamp: ctx.consent ?? undefined,
+        onGrantFreeCredits: grantFreeCredits,
+      });
+
+      if (cancelled) return;
+
+      if (!result.ok) {
+        clearPkceOAuthSessionStorage();
+        setErrorMsg(result.error);
+        return;
+      }
+
+      clearPkceOAuthSessionStorage();
+      persistNativeGoogleUserToLocalStorage(result.user);
+      await syncGoogleNativeEmailLinkAuth(result.user);
+
+      const next = ctx.authNext && ctx.authNext.length > 0 ? ctx.authNext : '/';
+      safeSessionStorage.removeItem('aura_auth_next');
+      window.location.href = next;
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router, params]);
 
   return (

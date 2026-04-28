@@ -18,6 +18,7 @@ import {
   CheckCircle,
   Sparkles
 } from "lucide-react";
+import { GLASS_CARD_SCROLL_STEP } from "@/lib/flow/glass-step-layout";
 
 interface InspirationItem {
   id: string;
@@ -267,7 +268,7 @@ export function InspirationsStep({ data, onUpdate, onNext, onBack }: Inspiration
   const canProceed = items.length >= 1 && items.length <= 10;
 
   return (
-    <GlassCard className="p-6 md:p-8 min-h-[600px] max-h-[85vh] overflow-auto scrollbar-hide">
+    <GlassCard scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
       {/* Header */}
       <div className="text-center mb-8">
         <motion.div

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useColorAdjustment } from "@/contexts/ColorAdjustmentContext";
 import { useWcagSettings, type ContrastMode, type FontScale } from "@/contexts/WcagSettingsContext";
 import { GlassSlider } from "./GlassSlider";
+import { AwaScrollArea } from "@/components/ui/AwaScrollArea";
 import { Palette, X, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { a11yStrings } from "@/lib/a11y-i18n";
@@ -193,7 +194,7 @@ export function ColorAdjustmentPanel() {
   const hasLowAccessibility = saturation < 80 || contrast < 80;
 
   const toggleClass =
-    "relative w-12 h-6 rounded-full transition-colors focus:ring-2 focus:ring-gold-600 focus:outline-none";
+    "relative inline-flex h-6 w-12 min-w-12 max-w-12 shrink-0 rounded-full leading-none transition-colors focus:ring-2 focus:ring-gold-500 focus:outline-none";
 
   const renderToggle = (
     value: boolean,
@@ -203,7 +204,7 @@ export function ColorAdjustmentPanel() {
     <button
       type="button"
       onClick={onToggle}
-      className={`${toggleClass} ${value ? "bg-gold-600" : "bg-white/20"}`}
+      className={`${toggleClass} ${value ? "bg-gold-500" : "bg-white/20"}`}
       aria-label={ariaLabel}
       role="switch"
       aria-checked={value}
@@ -217,7 +218,7 @@ export function ColorAdjustmentPanel() {
   );
 
   const triggerClass =
-    "w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 active:bg-white/20 transition-all text-graphite flex-shrink-0 touch-target relative z-[110] pointer-events-auto focus:ring-2 focus:ring-gold-600 focus:outline-none";
+    "w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 active:bg-white/20 transition-all text-graphite flex-shrink-0 touch-target relative z-[110] pointer-events-auto focus:ring-2 focus:ring-gold-500 focus:outline-none";
 
   const trigger = (
     <button
@@ -238,7 +239,7 @@ export function ColorAdjustmentPanel() {
   }
 
   return (
-    <>
+    <React.Fragment>
       {trigger}
 
       {createPortal(
@@ -262,7 +263,8 @@ export function ColorAdjustmentPanel() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -20, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
-                className="glass-panel !fixed !z-[9999] rounded-[24px] p-4 sm:p-6 w-[min(360px,92vw)] max-w-[calc(100vw-2rem)] shadow-2xl flex flex-col max-h-[min(85vh,calc(100vh-6rem))]"
+                className="glass-panel !fixed !z-[9999] rounded-[24px] p-4 sm:p-6 w-[min(360px,92vw)] max-w-[calc(100vw-2rem)] shadow-2xl flex flex-col h-[min(85vh,calc(100vh-6rem))] overflow-hidden"
+                data-a11y-settings-panel="true"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="accessibility-panel-title"
@@ -279,7 +281,7 @@ export function ColorAdjustmentPanel() {
                   <button
                     type="button"
                     onClick={() => setIsOpen(false)}
-                    className="w-8 h-8 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 transition-all focus:ring-2 focus:ring-gold-600 focus:outline-none shrink-0"
+                    className="w-8 h-8 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 transition-all focus:ring-2 focus:ring-gold-500 focus:outline-none shrink-0"
                     aria-label={t(a11yStrings.closePanel)}
                   >
                     <X size={16} aria-hidden="true" />
@@ -304,7 +306,7 @@ export function ColorAdjustmentPanel() {
                     aria-selected={activeTab === "wcag"}
                     aria-controls="panel-wcag"
                     tabIndex={activeTab === "wcag" ? 0 : -1}
-                    className={`flex-1 rounded-full py-2 text-sm font-exo2 transition-all focus:ring-2 focus:ring-gold-600 focus:outline-none ${
+                    className={`flex-1 rounded-full py-2 text-sm font-exo2 transition-all focus:ring-2 focus:ring-gold-500 focus:outline-none ${
                       activeTab === "wcag"
                         ? "bg-white/25 text-graphite font-semibold"
                         : "text-graphite/70 hover:text-graphite"
@@ -321,7 +323,7 @@ export function ColorAdjustmentPanel() {
                     aria-selected={activeTab === "advanced"}
                     aria-controls="panel-advanced"
                     tabIndex={activeTab === "advanced" ? 0 : -1}
-                    className={`flex-1 rounded-full py-2 text-sm font-exo2 transition-all focus:ring-2 focus:ring-gold-600 focus:outline-none ${
+                    className={`flex-1 rounded-full py-2 text-sm font-exo2 transition-all focus:ring-2 focus:ring-gold-500 focus:outline-none ${
                       activeTab === "advanced"
                         ? "bg-white/25 text-graphite font-semibold"
                         : "text-graphite/70 hover:text-graphite"
@@ -332,7 +334,7 @@ export function ColorAdjustmentPanel() {
                   </button>
                 </div>
 
-                <div className="overflow-y-auto flex-1 min-h-0 pr-1 -mr-1 space-y-5">
+                <AwaScrollArea variant="flexFill" className="min-h-0 flex-1" autoHide>
                   {activeTab === "wcag" && (
                     <div
                       id="panel-wcag"
@@ -355,9 +357,9 @@ export function ColorAdjustmentPanel() {
                               type="button"
                               role="radio"
                               aria-checked={fontScale === opt.value}
-                              className={`min-w-[2.5rem] px-2 py-2 rounded-xl text-sm font-exo2 border transition-all focus:ring-2 focus:ring-gold-600 focus:outline-none ${
+                              className={`min-w-[2.5rem] px-2 py-2 rounded-xl text-sm font-exo2 border transition-all focus:ring-2 focus:ring-gold-500 focus:outline-none ${
                                 fontScale === opt.value
-                                  ? "border-gold-600 bg-gold-600/20 text-graphite font-semibold"
+                                  ? "border-gold-500 bg-gold-500/20 text-graphite font-semibold"
                                   : "border-white/20 bg-white/5 text-graphite hover:bg-white/10"
                               }`}
                               onClick={() => setFontScale(opt.value)}
@@ -384,9 +386,9 @@ export function ColorAdjustmentPanel() {
                               type="button"
                               role="radio"
                               aria-checked={contrastMode === opt.value}
-                              className={`px-2 py-2 rounded-xl text-xs sm:text-sm font-exo2 border transition-all focus:ring-2 focus:ring-gold-600 focus:outline-none ${
+                              className={`px-2 py-2 rounded-xl text-xs sm:text-sm font-exo2 border transition-all focus:ring-2 focus:ring-gold-500 focus:outline-none ${
                                 contrastMode === opt.value
-                                  ? "border-gold-600 bg-gold-600/20 text-graphite font-semibold"
+                                  ? "border-gold-500 bg-gold-500/20 text-graphite font-semibold"
                                   : "border-white/20 bg-white/5 text-graphite hover:bg-white/10"
                               }`}
                               onClick={() => setContrastMode(opt.value)}
@@ -398,20 +400,20 @@ export function ColorAdjustmentPanel() {
                       </div>
 
                       <div className="space-y-3">
-                        <label className="flex items-center justify-between gap-3 cursor-pointer">
-                          <span className="text-sm font-exo2 text-graphite">
+                        <label className="flex cursor-pointer items-center justify-between gap-3">
+                          <span className="min-w-0 flex-1 pr-1 text-sm font-exo2 text-graphite">
                             {t(a11yStrings.textSpacing)}
                           </span>
                           {renderToggle(textSpacing, () => setTextSpacing(!textSpacing), t(a11yStrings.textSpacing))}
                         </label>
-                        <label className="flex items-center justify-between gap-3 cursor-pointer">
-                          <span className="text-sm font-exo2 text-graphite">
+                        <label className="flex cursor-pointer items-center justify-between gap-3">
+                          <span className="min-w-0 flex-1 pr-1 text-sm font-exo2 text-graphite">
                             {t(a11yStrings.readableFont)}
                           </span>
                           {renderToggle(readableFont, () => setReadableFont(!readableFont), t(a11yStrings.readableFont))}
                         </label>
-                        <label className="flex items-center justify-between gap-3 cursor-pointer">
-                          <span className="text-sm font-exo2 text-graphite">
+                        <label className="flex cursor-pointer items-center justify-between gap-3">
+                          <span className="min-w-0 flex-1 pr-1 text-sm font-exo2 text-graphite">
                             {t(a11yStrings.underlineLinks)}
                           </span>
                           {renderToggle(
@@ -420,14 +422,14 @@ export function ColorAdjustmentPanel() {
                             t(a11yStrings.underlineLinks)
                           )}
                         </label>
-                        <label className="flex items-center justify-between gap-3 cursor-pointer">
-                          <span className="text-sm font-exo2 text-graphite">
+                        <label className="flex cursor-pointer items-center justify-between gap-3">
+                          <span className="min-w-0 flex-1 pr-1 text-sm font-exo2 text-graphite">
                             {t(a11yStrings.bigCursor)}
                           </span>
                           {renderToggle(bigCursor, () => setBigCursor(!bigCursor), t(a11yStrings.bigCursor))}
                         </label>
-                        <label className="flex items-center justify-between gap-3 cursor-pointer">
-                          <span className="text-sm font-exo2 text-graphite">
+                        <label className="flex cursor-pointer items-center justify-between gap-3">
+                          <span className="min-w-0 flex-1 pr-1 text-sm font-exo2 text-graphite">
                             {t(a11yStrings.readingGuide)}
                           </span>
                           {renderToggle(
@@ -436,8 +438,8 @@ export function ColorAdjustmentPanel() {
                             t(a11yStrings.readingGuide)
                           )}
                         </label>
-                        <label className="flex items-center justify-between gap-3 cursor-pointer">
-                          <span className="text-sm font-exo2 text-graphite">
+                        <label className="flex cursor-pointer items-center justify-between gap-3">
+                          <span className="min-w-0 flex-1 pr-1 text-sm font-exo2 text-graphite">
                             {t(a11yStrings.reducedMotion)}
                           </span>
                           {renderToggle(
@@ -446,8 +448,8 @@ export function ColorAdjustmentPanel() {
                             t(a11yStrings.reducedMotion)
                           )}
                         </label>
-                        <label className="flex items-center justify-between gap-3 cursor-pointer">
-                          <span className="text-sm font-exo2 text-graphite">
+                        <label className="flex cursor-pointer items-center justify-between gap-3">
+                          <span className="min-w-0 flex-1 pr-1 text-sm font-exo2 text-graphite">
                             {t(a11yStrings.focusHighlight)}
                           </span>
                           {renderToggle(
@@ -461,7 +463,7 @@ export function ColorAdjustmentPanel() {
                       <button
                         type="button"
                         onClick={resetWcag}
-                        className="w-full glass-button rounded-[16px] px-4 py-2 text-sm font-exo2 text-graphite transition-all hover:scale-[1.02] focus:ring-2 focus:ring-gold-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        className="w-full glass-button rounded-[16px] px-4 py-2 text-sm font-exo2 text-graphite transition-all hover:scale-[1.02] focus:ring-2 focus:ring-gold-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                         disabled={!isWcagAdjusted}
                       >
                         {t(a11yStrings.resetWcag)}
@@ -553,14 +555,14 @@ export function ColorAdjustmentPanel() {
                       )}
 
                       <div>
-                        <label className="flex items-center justify-between gap-3 cursor-pointer">
-                          <span className="text-sm font-exo2 text-graphite">
+                        <label className="flex cursor-pointer items-center justify-between gap-3">
+                          <span className="min-w-0 flex-1 pr-1 text-sm font-exo2 text-graphite">
                             {t({ pl: "Ukryj model 3D", en: "Hide 3D Model" })}
                           </span>
                           <button
                             type="button"
                             onClick={() => setHideModel3D(!hideModel3D)}
-                            className={`${toggleClass} ${hideModel3D ? "bg-gold-600" : "bg-white/20"}`}
+                            className={`${toggleClass} ${hideModel3D ? "bg-gold-500" : "bg-white/20"}`}
                             aria-label={t({ pl: "Przełącz widoczność modelu 3D", en: "Toggle 3D model visibility" })}
                             role="switch"
                             aria-checked={hideModel3D}
@@ -577,20 +579,20 @@ export function ColorAdjustmentPanel() {
                       <button
                         type="button"
                         onClick={resetColor}
-                        className="w-full glass-button rounded-[16px] px-4 py-2 text-sm font-exo2 text-graphite transition-all hover:scale-[1.02] focus:ring-2 focus:ring-gold-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        className="w-full glass-button rounded-[16px] px-4 py-2 text-sm font-exo2 text-graphite transition-all hover:scale-[1.02] focus:ring-2 focus:ring-gold-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                         disabled={!isColorAdjusted}
                       >
                         {t(a11yStrings.resetAdvanced)}
                       </button>
                     </div>
                   )}
-                </div>
+                </AwaScrollArea>
               </motion.div>
             </>
           )}
         </AnimatePresence>,
         document.body
       )}
-    </>
+    </React.Fragment>
   );
 }

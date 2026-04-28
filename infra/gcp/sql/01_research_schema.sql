@@ -1,4 +1,4 @@
--- AWA research schema for Cloud SQL (PostgreSQL)
+-- IDA research schema for Cloud SQL (PostgreSQL)
 -- Greenfield version based on Supabase migrations, without data.
 
 -- Extensions

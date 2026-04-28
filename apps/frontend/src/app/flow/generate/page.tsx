@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
@@ -16,8 +16,9 @@ import { countExplicitAnswers, getRegenerationInterpretation, type GenerationFee
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { AwaScrollArea } from '@/components/ui/AwaScrollArea';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { GlassSlider } from '@/components/ui/GlassSlider';
+import { GlassScalePicker } from '@/components/ui/GlassScalePicker';
 import { LoadingProgress } from '@/components/ui/LoadingProgress';
 import { GenerationHistory } from '@/components/ui/GenerationHistory';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
@@ -129,6 +130,21 @@ export default function GeneratePage() {
   const isAnonSingle = searchParams.get('mode') === 'anon-single' || (!isAuthenticated && (sessionData as { pathType?: 'fast' | 'full' })?.pathType === 'fast');
   const pathTypeForCredits = (sessionData as { pathType?: 'fast' | 'full' })?.pathType === 'fast' ? 'fast' : 'full';
   const isAnonMatrixPreview = !isAuthenticated && pathTypeForCredits === 'full' && searchParams.get('mode') !== 'anon-single';
+  /** Progressive matrix save may only populate matrixHistory before generatedImages is written */
+  const sessionMatrixHistoryLen =
+    ((sessionData as { matrixHistory?: unknown[] } | null)?.matrixHistory || []).length;
+  const sessionGeneratedRows =
+    ((sessionData as { generatedImages?: { id?: string }[] } | null)?.generatedImages || []) as {
+      id?: string;
+    }[];
+  const sessionHasStoredMatrixImages =
+    sessionMatrixHistoryLen > 0 ||
+    sessionGeneratedRows.some(
+      (g) =>
+        typeof g?.id === 'string' &&
+        (g.id.startsWith('matrix-google-') ||
+          (g.id.startsWith('matrix-') && !g.id.startsWith('mod-') && !g.id.startsWith('remove-'))),
+    );
   const { generateSixImagesParallelWithGoogle, upscaleImageWithGoogle, isLoading, error, setError } = useGoogleAI();
   const { generateLLMComment } = useModalAPI();
 
@@ -211,6 +227,8 @@ export default function GeneratePage() {
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<'positive' | 'neutral' | 'negative'>('neutral');
+  /** Anonymous full path: server says no free generate left (session/IP) — show inline guidance. */
+  const [anonGuestQuotaBlocked, setAnonGuestQuotaBlocked] = useState(false);
 
   useEffect(() => {
     const waitForApi = async () => {
@@ -342,15 +360,137 @@ export default function GeneratePage() {
   // Restore state from sessionData after page refresh
   useEffect(() => {
     if (!isSessionInitialized || !sessionData) return;
+    if (generatedImages.length > 0 || matrixImages.length > 0) return;
 
     const typedSessionData = sessionData as any;
     const savedGeneratedImages = typedSessionData?.generatedImages || [];
+    const matrixHistoryEarly = typedSessionData?.matrixHistory || [];
     const savedGenerations = typedSessionData?.generations || [];
     const imageRatings = typedSessionData?.imageRatings || {};
 
-    // Check if we have generated images in sessionData
-    if (savedGeneratedImages.length > 0 && generatedImages.length === 0) {
-      console.log('[Generate] Restoring state from sessionData:', {
+    // Progressive generation may write matrixHistory before generatedImages is batched to session
+    if (savedGeneratedImages.length === 0 && matrixHistoryEarly.length > 0) {
+      const displayOrder = typedSessionData?.synthesisResult?.displayOrder as
+        | GenerationSource[]
+        | undefined;
+      const restoredMatrixOnly: GeneratedImage[] = matrixHistoryEarly.map((item: any, index: number) => {
+        let imageUrl = item.imageUrl || item.url || '';
+        const base64 = item.base64 || '';
+        if (!imageUrl && base64) {
+          imageUrl = `data:image/png;base64,${base64}`;
+        }
+        const source = item.source as GenerationSource;
+        let displayIndex = index;
+        if (source != null && displayOrder?.length) {
+          const di = displayOrder.indexOf(source);
+          if (di >= 0) displayIndex = di;
+        }
+        return {
+          id: item.id,
+          url: imageUrl,
+          base64,
+          prompt: item.label || 'Restored from history',
+          provider: 'google' as const,
+          parameters: {
+            modificationType: 'initial' as const,
+            modifications: [],
+            iterationCount: 0,
+            usedOriginal: false,
+            source,
+            sourceLabel: source ? GENERATION_SOURCE_LABELS[source] : undefined,
+          },
+          ratings: imageRatings[item.id] || {
+            aesthetic_match: 0,
+            character: 0,
+            harmony: 0,
+            is_my_interior: 0,
+          },
+          isFavorite: false,
+          createdAt: item.timestamp || Date.now(),
+          source,
+          displayIndex,
+          isBlindSelected: !!item.isSelected,
+        };
+      });
+      restoredMatrixOnly.sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0));
+      setMatrixImages(restoredMatrixOnly);
+      setGeneratedImages(restoredMatrixOnly);
+
+      const persistedSelectedOnly = typedSessionData?.selectedImage;
+      const persistedSelectedIdOnly: string | null =
+        typeof persistedSelectedOnly === 'string'
+          ? persistedSelectedOnly
+          : (persistedSelectedOnly?.id || null);
+
+      if (persistedSelectedIdOnly) {
+        setBlindSelectionMade(false);
+        const selectedFromRestored = restoredMatrixOnly.find((img) => img.id === persistedSelectedIdOnly);
+        if (selectedFromRestored) {
+          setSelectedImage(selectedFromRestored);
+        } else if (persistedSelectedOnly?.url) {
+          setSelectedImage({
+            id: persistedSelectedIdOnly,
+            url: persistedSelectedOnly.url,
+            base64: persistedSelectedOnly.base64 || '',
+            prompt: 'Restored selected image from sessionData',
+            provider: persistedSelectedOnly.provider || 'google',
+            parameters:
+              persistedSelectedOnly.parameters || {
+                modificationType: 'initial',
+                modifications: [],
+                iterationCount: 0,
+                usedOriginal: false,
+              },
+            ratings:
+              imageRatings[persistedSelectedIdOnly] || {
+                aesthetic_match: 0,
+                character: 0,
+                harmony: 0,
+                is_my_interior: 0,
+              },
+            isFavorite: false,
+            createdAt: Date.now(),
+            source: persistedSelectedOnly.source || GenerationSource.Implicit,
+            displayIndex: persistedSelectedOnly.displayIndex || 0,
+            isBlindSelected: true,
+          } as GeneratedImage);
+        }
+      }
+
+      if (savedGenerations.length > 0) {
+        const historyOnly: Array<{
+          id: string;
+          type: 'initial' | 'micro' | 'macro';
+          label: string;
+          timestamp: number;
+          imageUrl: string;
+        }> = savedGenerations.map((gen: any) => {
+          const image = restoredMatrixOnly.find((img) =>
+            img.id.startsWith(gen.id.split('-')[0] + '-'),
+          );
+          return {
+            id: gen.id,
+            type: gen.type || 'initial',
+            label: gen.modification || gen.prompt?.substring(0, 30) || 'Generacja',
+            timestamp: gen.timestamp || Date.now(),
+            imageUrl: image?.url || '',
+          };
+        });
+        if (historyOnly.length > 0) {
+          setGenerationHistory(historyOnly);
+          setCurrentHistoryIndex(historyOnly.length - 1);
+        }
+      }
+
+      setHasAttemptedGeneration(true);
+      setGenerationCount(savedGenerations.length);
+      console.log('[Generate] State restored from matrixHistory only (progressive save).');
+      return;
+    }
+
+    if (savedGeneratedImages.length === 0) return;
+
+    console.log('[Generate] Restoring state from sessionData:', {
         savedImagesCount: savedGeneratedImages.length,
         savedGenerationsCount: savedGenerations.length,
         hasRatings: Object.keys(imageRatings).length > 0
@@ -519,11 +659,11 @@ export default function GeneratePage() {
       } else {
         // Fallback: restore from restoredImages (lightweight - no base64)
         restoredMatrixImages = restoredImages
-          .filter(img => 
-            img.id.startsWith('matrix-') &&
-            !img.id.startsWith('mod-') && 
-            !img.id.startsWith('remove-') &&
-            img.source !== GenerationSource.Implicit
+          .filter(
+            (img) =>
+              (img.id.startsWith('matrix-google-') || img.id.startsWith('matrix-')) &&
+              !img.id.startsWith('mod-') &&
+              !img.id.startsWith('remove-'),
           )
           .sort((a, b) => (a.displayIndex || 0) - (b.displayIndex || 0))
           .slice(0, 6);
@@ -559,8 +699,7 @@ export default function GeneratePage() {
       setGenerationCount(savedGenerations.length);
       
       console.log('[Generate] State restored from sessionData. Skipping auto-generation.');
-    }
-  }, [isSessionInitialized, sessionData]);
+  }, [isSessionInitialized, sessionData, generatedImages.length, matrixImages.length]);
 
   useEffect(() => {
     if (!isSessionInitialized) {
@@ -873,12 +1012,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     setAbortController(controller);
     abortControllerRef.current = controller;
     setIsGenerating(true);
-    
-    // Reset images for new generation
-    setMatrixImages([]);
-    setGeneratedImages([]);
-    setImageProgress({}); // Reset progress for new generation
-    
+
     console.log("[6-Image Matrix] Starting 6-image matrix generation...");
     const generationStartTime = Date.now();
     setMatrixGenerationStartTime(generationStartTime);
@@ -1030,7 +1164,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           }
           if (cred && !cred.allowed) {
             if (cred.code === 429) {
-              setPreGenLoginOpen(true);
+              setAnonGuestQuotaBlocked(true);
             } else {
               setError(
                 t({
@@ -1077,6 +1211,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           if (credit && !credit.allowed) {
             if (credit.code === 429) {
               setMatrixLoginWallOpen(true);
+              setError(
+                t({
+                  pl: 'Brak wystarczających kredytów lub wymagane jest konto. Zaloguj się, aby kontynuować.',
+                  en: 'Not enough credits or an account is required. Sign in to continue.',
+                }),
+              );
               setIsGenerating(false);
               isGeneratingRef.current = false;
               return;
@@ -1092,6 +1232,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           }
         }
       }
+
+      // Drop previous matrix only after credit checks — avoids empty "loading at 2%" when quota blocks a new run
+      setMatrixImages([]);
+      setGeneratedImages([]);
+      setImageProgress({});
+      setAnonGuestQuotaBlocked(false);
 
       // Step 2: Prepare prompts for parallel generation
       setLoadingProgress(45);
@@ -1117,7 +1263,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setImageProgress(() => {
         const initialProgress: Record<string, number> = {};
         prompts.forEach(({ source }) => {
-          initialProgress[source] = 2;
+          initialProgress[`google-${source}`] = 2;
         });
         return initialProgress;
       });
@@ -1237,7 +1383,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       // Track completed images for progress
       let completedCount = 0;
-      
+      /** Sources finished in this run — avoids stale `matrixImages` closure in the progress interval */
+      const completedMatrixSourcesInRun = new Set<GenerationSource>();
+
       // Track progress for each image
       const startTime = Date.now();
       let progressInterval: NodeJS.Timeout | null = null;
@@ -1248,32 +1396,29 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         const eased = 1 - Math.pow(1 - t, 4); // ease-out quart
         return Math.min(90, Math.round(2 + eased * 88)); // start at 2%, max 90%
       };
-      
+
+      const progressKey = (source: GenerationSource) => `google-${source}`;
+
       const updateProgress = () => {
-        const pendingSources = prompts
-          .map(p => p.source)
-          .filter(src => !matrixImages.some(img => img.source === src));
+        const pendingSources = prompts.map((p) => p.source).filter((src) => !completedMatrixSourcesInRun.has(src));
         const activeSource = pendingSources[0];
 
         prompts.forEach(({ source }) => {
-          // Check if image already exists
-          const existingImage = matrixImages.find(img => img.source === source);
-          if (!existingImage) {
-            const offset = progressOffsets[source] ?? 0;
-            const speedFactor = source === activeSource ? 1.35 : 1; // active slot animates faster
-            const elapsed = Math.max(0, (Date.now() - startTime - offset) * speedFactor);
-            const estimatedProgress = calcFallbackProgress(elapsed);
-            setImageProgress(prev => {
-              // Only update if not already at 100%
-              if (prev[source] !== 100 && estimatedProgress > (prev[source] ?? 0)) {
-                return {
-                  ...prev,
-                  [source]: estimatedProgress
-                };
-              }
-              return prev;
-            });
-          }
+          if (completedMatrixSourcesInRun.has(source)) return;
+          const pk = progressKey(source);
+          const offset = progressOffsets[source] ?? 0;
+          const speedFactor = source === activeSource ? 1.35 : 1;
+          const elapsed = Math.max(0, (Date.now() - startTime - offset) * speedFactor);
+          const estimatedProgress = calcFallbackProgress(elapsed);
+          setImageProgress((prev) => {
+            if (prev[pk] !== 100 && estimatedProgress > (prev[pk] ?? 0)) {
+              return {
+                ...prev,
+                [pk]: estimatedProgress,
+              };
+            }
+            return prev;
+          });
         });
       };
       
@@ -1284,9 +1429,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       const onImageReady = (result: any) => {
         // If backend sends live progress, reflect it in UI
         if (result && typeof result.progress === 'number' && !Number.isNaN(result.progress)) {
-          setImageProgress(prev => ({
+          setImageProgress((prev) => ({
             ...prev,
-            [result.source]: Math.min(100, Math.max(0, Math.round(result.progress)))
+            [`google-${result.source as GenerationSource}`]: Math.min(100, Math.max(0, Math.round(result.progress))),
           }));
         }
 
@@ -1315,9 +1460,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           };
           
           // Mark as 100% complete
-          setImageProgress(prev => ({
+          setImageProgress((prev) => ({
             ...prev,
-            [result.source]: 100
+            [`google-${result.source as GenerationSource}`]: 100,
           }));
           
           // Add to matrix images progressively
@@ -1518,6 +1663,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           // Update the onImageReady callback to handle Google images
           if (result.success) {
             completedCount++;
+            completedMatrixSourcesInRun.add(result.source as GenerationSource);
             const sourceLabel = GENERATION_SOURCE_LABELS[result.source as GenerationSource];
             const newImage: GeneratedImage = {
               id: `matrix-google-${generationCount}-${result.source}`,
@@ -1924,10 +2070,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         }
       }
 
-      if (isAnonMatrixPreview && newMatrixImages.length > 0) {
-        setPostAnonGenLoginOpen(true);
-      }
-      
+      // Do not auto-open login modal here — user can pick a vision and continue; banner and locked tiles open sign-in when needed.
+
     } catch (err: any) {
       // Check if it was an abort
       if (err.name === 'AbortError' || err.message === 'Generation cancelled') {
@@ -2192,6 +2336,27 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     void logBehavioralEvent(uid, 'login_nudge', { page: 'flow-generate', nudge: event });
   };
 
+  /** Guest matrix: open unlock modal from banner, locked tiles, or CTAs (easy re-entry to Google sign-in). */
+  const openAnonUnlockLoginModal = useCallback(() => {
+    const uid = (sessionData as { userHash?: string } | null)?.userHash;
+    if (uid) {
+      void logBehavioralEvent(uid, 'login_nudge', {
+        page: 'flow-generate',
+        nudge: 'anon_unlock_manual_open',
+      }).catch(() => {});
+    }
+    setPostAnonGenLoginOpen(true);
+  }, [sessionData]);
+
+  // Anonymous 1/6 preview: auto-select the only real tile so the primary CTA is enabled without extra tap.
+  useEffect(() => {
+    if (!isAnonMatrixPreview || blindSelectionMade || isAuthenticated) return;
+    const ready = matrixImages.filter((img) => img.provider === 'google');
+    if (ready.length !== 1) return;
+    const one = ready[0]!;
+    setSelectedImage((prev) => (prev?.id === one.id ? prev : one));
+  }, [isAnonMatrixPreview, blindSelectionMade, isAuthenticated, matrixImages]);
+
   const checkCreditsWithAction = async (userHash: string, amount: number, action: CreditAction) => {
     const response = await fetch('/api/credits/check', {
       method: 'POST',
@@ -2246,6 +2411,33 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     await Promise.all(validIds.map((imageId) => deductCreditsViaApi(userHash, imageId)));
   };
 
+  // Guest full path: surface exhausted free generation before another run ends in a confusing UI state
+  useEffect(() => {
+    if (!isSessionInitialized || !isAnonMatrixPreview || isAuthenticated) {
+      setAnonGuestQuotaBlocked(false);
+      return;
+    }
+    const uh = (sessionData as { userHash?: string } | null)?.userHash;
+    if (!uh) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const cred = await checkCreditsWithAction(uh, 10, 'generate');
+        if (cancelled) return;
+        if (cred && !cred.allowed && cred.code === 429) {
+          setAnonGuestQuotaBlocked(true);
+        } else {
+          setAnonGuestQuotaBlocked(false);
+        }
+      } catch {
+        if (!cancelled) setAnonGuestQuotaBlocked(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSessionInitialized, isAnonMatrixPreview, isAuthenticated, sessionData?.userHash, pathTypeForCredits]);
+
   const matrixAnonResumeOnce = useRef(false);
 
   useEffect(() => {
@@ -2288,7 +2480,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         }
         if (!roomImage) {
           setError(
-            t({ pl: 'Brak zdjęcia pomieszczenia — nie można wznowić matrycy.', en: 'No room image — cannot resume matrix.' }),
+            t({ pl: 'Brak zdjęcia pomieszczenia — nie można wznowić generacji.', en: 'No room image — cannot resume generation.' }),
           );
           matrixAnonResumeOnce.current = false;
           return;
@@ -2339,7 +2531,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         );
         if (!genRes.successful_count) {
           setError(
-            t({ pl: 'Nie udało się wznowić generacji matrycy.', en: 'Failed to resume matrix generation.' }),
+            t({ pl: 'Nie udało się wznowić generacji obrazów.', en: 'Failed to resume image generation.' }),
           );
           matrixAnonResumeOnce.current = false;
           return;
@@ -2399,7 +2591,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         console.error('[Matrix resume]', e);
         matrixAnonResumeOnce.current = false;
         setError(
-          t({ pl: 'Błąd wznawiania matrycy.', en: 'Error resuming matrix.' }),
+          t({ pl: 'Błąd wznawiania generacji obrazów.', en: 'Error resuming image generation.' }),
         );
       } finally {
         isGeneratingRef.current = false;
@@ -3409,6 +3601,35 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     router.push('/flow/survey1');
   };
 
+  /** Guest can still continue the flow even when anonymous generation quota is exhausted. */
+  const showAnonNoImageQuotaBlock =
+    isAnonMatrixPreview &&
+    !isAuthenticated &&
+    anonGuestQuotaBlocked &&
+    matrixImages.length === 0 &&
+    generatedImages.length === 0 &&
+    !sessionHasStoredMatrixImages;
+
+  const guestQuotaBlockedWithVision =
+    isAnonMatrixPreview &&
+    !isAuthenticated &&
+    anonGuestQuotaBlocked &&
+    (matrixImages.length > 0 || generatedImages.length > 0 || sessionHasStoredMatrixImages);
+
+  useEffect(() => {
+    if (guestQuotaBlockedWithVision) {
+      setError(null);
+    }
+  }, [guestQuotaBlockedWithVision]);
+
+  const prevAuthenticatedRef = useRef(false);
+  useEffect(() => {
+    if (isAuthenticated && !prevAuthenticatedRef.current) {
+      matrixAnonResumeOnce.current = false;
+    }
+    prevAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
   return (
     <div className="min-h-screen flex flex-col w-full relative">
       
@@ -3423,7 +3644,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         >
           {/* Only show LoadingProgress if NOT in matrix mode (when placeholders are visible) */}
           {/* Hide LoadingProgress completely when in matrix mode - placeholders show progress instead */}
-          {(isLoading || !isApiReady) && !isMatrixMode && (
+          {(isLoading || !isApiReady) && !isMatrixMode && !showAnonNoImageQuotaBlock && (
             <div className="flex items-center justify-center py-12">
               <LoadingProgress
                 currentStage={loadingStage}
@@ -3438,7 +3659,42 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             </div>
           )}
 
-          {error && (
+          {showAnonNoImageQuotaBlock ? (
+            <div className="flex flex-col items-center justify-center py-12 min-h-[55vh] px-2">
+              <GlassCard className="p-8 max-w-lg w-full border-amber-300/60 bg-amber-50/30 shadow-lg">
+                <h2 className="text-lg font-semibold text-graphite text-center mb-3 font-modern">
+                  {t({ pl: 'Odblokuj pełne doświadczenie z IDA', en: 'Unlock the full experience with IDA' })}
+                </h2>
+                <p className="text-sm text-graphite/90 text-center leading-relaxed">
+                  {t({
+                    pl: `Załóż konto, a dostaniesz ${String(FREE_GRANT_CREDITS)} kredytów na kolejne generacje, zobaczysz wszystkie obrazy i zapiszesz sesję, żeby wrócić do projektu w dowolnym momencie. Jeśli chcesz, możesz też przejść dalej bez konta.`,
+                    en: `Create an account to get ${String(FREE_GRANT_CREDITS)} credits for more generations, see all images, and save your session so you can return to this project anytime. You can also continue without an account.`,
+                  })}
+                </p>
+                <div className="flex flex-col sm:flex-row justify-center gap-3 mt-8">
+                  <GlassButton
+                    type="button"
+                    onClick={() => {
+                      setPreGenLoginOpen(true);
+                    }}
+                    className="px-8 py-3 text-base whitespace-normal break-words"
+                  >
+                    {t({ pl: `Odbierz ${String(FREE_GRANT_CREDITS)} kredytów`, en: `Claim ${String(FREE_GRANT_CREDITS)} credits` })}
+                  </GlassButton>
+                  <GlassButton
+                    type="button"
+                    variant="secondary"
+                    onClick={handleContinue}
+                    className="px-8 py-3 text-base whitespace-normal break-words"
+                  >
+                    {t({ pl: 'Kontynuuj bez konta', en: 'Continue without account' })}
+                  </GlassButton>
+                </div>
+              </GlassCard>
+            </div>
+          ) : (
+            <>
+          {error && !guestQuotaBlockedWithVision && (
             <GlassCard className="p-6 border-red-200">
               <div className="text-center text-red-600">
                 <p className="font-semibold">Wystąpił błąd podczas generowania</p>
@@ -3463,7 +3719,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
           {/* 6-Image Matrix with Loading Placeholders */}
           {/* Show grid if: matrix mode enabled OR generation in progress OR we have images */}
-          {(isMatrixMode || isGenerating || matrixImages.length > 0) && !blindSelectionMade && (
+          {(isMatrixMode ||
+            isGenerating ||
+            matrixImages.length > 0 ||
+            (isAnonMatrixPreview && sessionHasStoredMatrixImages)) &&
+            !blindSelectionMade && (
             <div className="space-y-8">
               {/*
                 If some sources are skipped due to insufficient data (e.g. no inspirations),
@@ -3495,14 +3755,31 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               </div>
 
               {isAnonMatrixPreview && !isAuthenticated && (
-                <GlassCard className="p-4 max-w-2xl mx-auto border-gold/30 bg-gold/5">
-                  <p className="text-sm text-graphite text-center font-medium">
-                    {t({
-                      pl: `Gość: widzisz 1 z 6 wariantów. Zaloguj się z Google, aby otrzymać ${String(FREE_GRANT_CREDITS)} darmowych kredytów i dokończyć pozostałe 5 wariantów oraz kolejne generacje.`,
-                      en: `Guest: you are seeing 1 of 6 variants. Sign in with Google to get ${String(FREE_GRANT_CREDITS)} free credits and finish the other 5 variants and more generations.`,
+                <div className="w-full max-w-5xl mx-auto">
+                  <button
+                    type="button"
+                    onClick={openAnonUnlockLoginModal}
+                    aria-label={t({
+                      pl: 'Załóż konto lub zaloguj się, aby zobaczyć wszystkie obrazy i kredyty',
+                      en: 'Create an account or sign in to see all images and credits',
                     })}
-                  </p>
-                </GlassCard>
+                    className="w-full text-left rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2"
+                  >
+                    <GlassCard className="px-4 py-3 sm:px-8 sm:py-4 border-gold/30 bg-gold/5 hover:border-gold/50 hover:bg-gold/10 transition-colors cursor-pointer">
+                      <p className="text-sm sm:text-[15px] text-graphite text-center font-medium leading-snug text-balance">
+                        {guestQuotaBlockedWithVision
+                          ? t({
+                              pl: `Masz już pierwszą wizję. Załóż konto lub zaloguj się, żeby wygenerować pozostałe obrazy i odebrać ${String(FREE_GRANT_CREDITS)} kredytów na start.`,
+                              en: `You already have your first vision. Sign in or create an account to generate the remaining images and claim ${String(FREE_GRANT_CREDITS)} starter credits.`,
+                            })
+                          : t({
+                              pl: `To pierwsza z 6 wizji Twojego wnętrza. Załóż konto, żeby zobaczyć wszystkie obrazy, odebrać ${String(FREE_GRANT_CREDITS)} kredytów na start i wracać do projektu, kiedy chcesz.`,
+                              en: `You're seeing the first of six visions for your space. Create an account to see all images, get ${String(FREE_GRANT_CREDITS)} starter credits, and keep your project on your profile.`,
+                            })}
+                      </p>
+                    </GlassCard>
+                  </button>
+                </div>
               )}
               
               <div className="space-y-3">
@@ -3520,7 +3797,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     firstGeneratedSource != null &&
                     expectedSource !== firstGeneratedSource;
                   // Always show loading skeleton when there is no image (unless error), except locked anon slots
-                  const slotIsLoading = !isLockedAnon && !image && !error;
+                  const slotIsLoading =
+                    isGenerating && !isLockedAnon && !image && (!error || guestQuotaBlockedWithVision);
                   const offset = progressOffsets[expectedSource || ''] ?? index * 3000;
                   const elapsedForFallback = Math.max(0, Date.now() - ((matrixGenerationStartTime || Date.now()) + offset));
                   const pendingSources = synthesisResult?.displayOrder.filter(src => !matrixImages.some(img => img.source === src && img.provider === 'google')) || [];
@@ -3562,19 +3840,20 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       {/* No GlassCard wrapper - image fills the entire placeholder */}
                       <div className="relative aspect-square w-full rounded-lg overflow-hidden group">
                         {isLockedAnon ? (
-                          <div
-                            className="relative aspect-square w-full rounded-lg overflow-hidden bg-graphite/30 backdrop-blur-sm border border-white/15 flex flex-col items-center justify-center gap-2 p-3"
-                            role="img"
-                            aria-label={t({ pl: 'Zablokowane — zaloguj się, aby dokończyć', en: 'Locked — sign in to complete' })}
+                          <button
+                            type="button"
+                            onClick={openAnonUnlockLoginModal}
+                            className="relative aspect-square w-full rounded-lg overflow-hidden bg-graphite/30 backdrop-blur-sm border border-white/15 flex flex-col items-center justify-center gap-2 p-3 cursor-pointer hover:border-gold/40 hover:bg-graphite/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2 text-left"
+                            aria-label={t({ pl: 'Załóż konto, aby odblokować', en: 'Create an account to unlock' })}
                           >
                             <Lock className="w-10 h-10 text-gold/80" aria-hidden />
                             <p className="text-center text-xs text-silver-300 leading-tight">
                               {t({
-                                pl: 'Dokończ po zalogowaniu',
-                                en: 'Complete after sign-in',
+                                pl: 'Załóż konto, aby odblokować',
+                                en: 'Create an account to unlock',
                               })}
                             </p>
-                          </div>
+                          </button>
                         ) : slotIsLoading ? (
                           /* Loading Skeleton - Futuristic transparent glass style */
                           <div 
@@ -3684,7 +3963,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             {/* Inline quality info for this source while waiting */}
                             {qualityInfo && (
                               <div className="absolute bottom-2 left-2 right-2">
-                                <div className="px-2.5 py-1.5 bg-white/15 backdrop-blur-md rounded-lg border border-white/15 text-[11px] leading-tight text-white/80 space-y-0.5 max-h-[120px] overflow-y-auto">
+                                <AwaScrollArea
+                                  variant="auto"
+                                  className="max-h-[120px] rounded-lg border border-white/15 bg-white/15 px-2.5 py-1.5 text-[11px] leading-tight text-white/80 backdrop-blur-md"
+                                  autoHide={false}
+                                >
+                                  <div className="space-y-0.5">
                                   <div className="flex justify-between gap-2">
                                     <span className="font-semibold text-white/90">{t({ pl: `Dane: ${sourceLabel}`, en: `Data: ${sourceLabel}` })}</span>
                                     <span 
@@ -3717,7 +4001,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                       </div>
                                     </div>
                                   )}
-                                </div>
+                                  </div>
+                                </AwaScrollArea>
                               </div>
                             )}
                             
@@ -3782,75 +4067,116 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 </div>
               </div>
 
-              {/* Selected Image Info - Show when image is selected */}
+              {/* Primary CTA first (above long “source” copy) + sticky on small viewports so it stays reachable */}
+              {(() => {
+                const readyCount = matrixImages.filter(img => img.provider === 'google').length;
+                const hasAtLeastOneImage = readyCount >= 1;
+                return hasAtLeastOneImage;
+              })() && (
+                <div className="md:static sticky bottom-0 z-20 -mx-2 px-2 pt-2 pb-3 md:pb-0 md:mx-0 md:pt-0 bg-gradient-to-t from-pearl-50 via-pearl-50/98 to-pearl-50/85 md:bg-transparent md:from-transparent border-t border-white/25 md:border-t-0 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] md:shadow-none rounded-t-xl md:rounded-none">
+                  {!selectedImage && !isUpscaling && (
+                    <p className="text-center text-xs text-silver-dark mb-2 md:mb-3">
+                      {t({
+                        pl: 'Dotknij jednej wizji powyżej, potem potwierdź wybór.',
+                        en: 'Tap one vision above, then confirm your choice.',
+                      })}
+                    </p>
+                  )}
+                  <div className="flex justify-center">
+                    <GlassButton
+                      onClick={() => {
+                        if (selectedImage && !isUpscaling) {
+                          handleBlindSelection(selectedImage);
+                        }
+                      }}
+                      disabled={!selectedImage || isUpscaling}
+                      className="px-8 py-3 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal break-words w-full max-w-md sm:w-auto"
+                    >
+                      {isUpscaling ? (
+                        <>
+                          <RefreshCw size={20} className="animate-spin" aria-hidden="true" />
+                          <span>{t({ pl: 'Przetwarzanie wybranej wizji...', en: 'Processing selected vision...' })}</span>
+                        </>
+                      ) : isGenerating ? (
+                        <>
+                          <CheckCircle2 size={20} aria-hidden="true" />
+                          <span>{t({ pl: 'Wybieram i idę dalej', en: 'Select and continue' })}</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={20} aria-hidden="true" />
+                          <span>{t({ pl: 'Wybieram tę wizję', en: 'I choose this vision' })}</span>
+                        </>
+                      )}
+                    </GlassButton>
+                  </div>
+                  {guestQuotaBlockedWithVision && (
+                    <div className="flex justify-center mt-3">
+                      <GlassButton
+                        type="button"
+                        variant="secondary"
+                        onClick={() => openAnonUnlockLoginModal()}
+                        className="px-6 py-2.5 text-sm whitespace-normal break-words w-full max-w-md sm:w-auto"
+                      >
+                        {t({
+                          pl: 'Załóż konto i zobacz wszystkie obrazy',
+                          en: 'Sign in to see all images',
+                        })}
+                      </GlassButton>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Selected vision detail — secondary; below the main CTA */}
               {selectedImage && (
-                <GlassCard variant="flatOnMobile" className="p-4">
+                <GlassCard variant="flatOnMobile" className="p-3 sm:p-4">
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-gold/10 rounded-lg">
+                    <div className="p-2 bg-gold/10 rounded-lg shrink-0">
                       <Eye size={20} className="text-gold" aria-hidden="true" />
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-graphite">
-                        {t({ 
-                          pl: `Wybrana wizja: ${GENERATION_SOURCE_LABELS[selectedImage.source!]?.pl || ''}`, 
-                          en: `Selected vision: ${GENERATION_SOURCE_LABELS[selectedImage.source!]?.en || GENERATION_SOURCE_LABELS[selectedImage.source!]?.pl || ''}` 
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-graphite text-sm sm:text-base">
+                        {t({
+                          pl: `Wybrana wizja: ${GENERATION_SOURCE_LABELS[selectedImage.source!]?.pl || ''}`,
+                          en: `Selected vision: ${GENERATION_SOURCE_LABELS[selectedImage.source!]?.en || GENERATION_SOURCE_LABELS[selectedImage.source!]?.pl || ''}`,
                         })}
                       </h3>
-                      <p className="text-sm text-silver-dark mt-1">
-                        {selectedImage.source === GenerationSource.Implicit && 
-                          t({ pl: "Wygenerowane na podstawie Twoich intuicyjnych wyborów z Tindera i inspiracji.", en: "Generated based on your intuitive choices from Tinder and inspirations." })}
-                        {selectedImage.source === GenerationSource.Explicit && 
-                          t({ pl: "Wygenerowane na podstawie Twoich świadomych deklaracji preferencji.", en: "Generated based on your conscious preference declarations." })}
-                        {selectedImage.source === GenerationSource.Personality && 
-                          t({ pl: "Wygenerowane na podstawie Twojego profilu osobowości Big Five.", en: "Generated based on your Big Five personality profile." })}
-                        {selectedImage.source === GenerationSource.Mixed && 
-                          t({ pl: "Mix wszystkich danych estetycznych (40% implicit, 30% explicit, 30% personality).", en: "Mix of all aesthetic data (40% implicit, 30% explicit, 30% personality)." })}
-                        {selectedImage.source === GenerationSource.MixedFunctional && 
-                          t({ pl: "Pełny mix + dane funkcjonalne (aktywności, problemy, nastrój PRS).", en: "Full mix + functional data (activities, problems, PRS mood)." })}
-                        {selectedImage.source === GenerationSource.InspirationReference && 
-                          t({ pl: "Multi-reference z polubionych inspiracji - style i kolory z obrazów referencyjnych.", en: "Multi-reference from liked inspirations - styles and colors from reference images." })}
+                      <p className="text-xs sm:text-sm text-silver-dark mt-1 leading-snug">
+                        {selectedImage.source === GenerationSource.Implicit &&
+                          t({
+                            pl: 'Wygenerowane na podstawie Twoich intuicyjnych wyborów z Tindera i inspiracji.',
+                            en: 'Generated based on your intuitive choices from Tinder and inspirations.',
+                          })}
+                        {selectedImage.source === GenerationSource.Explicit &&
+                          t({
+                            pl: 'Wygenerowane na podstawie Twoich świadomych deklaracji preferencji.',
+                            en: 'Generated based on your conscious preference declarations.',
+                          })}
+                        {selectedImage.source === GenerationSource.Personality &&
+                          t({
+                            pl: 'Wygenerowane na podstawie Twojego profilu osobowości Big Five.',
+                            en: 'Generated based on your Big Five personality profile.',
+                          })}
+                        {selectedImage.source === GenerationSource.Mixed &&
+                          t({
+                            pl: 'Mix wszystkich danych estetycznych (40% implicit, 30% explicit, 30% personality).',
+                            en: 'Mix of all aesthetic data (40% implicit, 30% explicit, 30% personality).',
+                          })}
+                        {selectedImage.source === GenerationSource.MixedFunctional &&
+                          t({
+                            pl: 'Pełny mix + dane funkcjonalne (aktywności, problemy, nastrój PRS).',
+                            en: 'Full mix + functional data (activities, problems, PRS mood).',
+                          })}
+                        {selectedImage.source === GenerationSource.InspirationReference &&
+                          t({
+                            pl: 'Multi-reference z polubionych inspiracji — style i kolory z obrazów referencyjnych.',
+                            en: 'Multi-reference from liked inspirations — styles and colors from reference images.',
+                          })}
                       </p>
                     </div>
                   </div>
                 </GlassCard>
-              )}
-              
-              {/* Select Button - Allow when at least 1 image is ready, even while generating */}
-              {(() => {
-                const readyCount = matrixImages.filter(img => img.provider === 'google').length;
-                // Allow proceeding with at least 1 generated image
-                // User can select and proceed to modifications immediately
-                const hasAtLeastOneImage = readyCount >= 1;
-                return hasAtLeastOneImage; // Removed !isGenerating - allow selection during generation
-              })() && (
-                <div className="flex justify-center">
-                  <GlassButton
-                    onClick={() => {
-                      if (selectedImage && !isUpscaling) {
-                        handleBlindSelection(selectedImage);
-                      }
-                    }}
-                    disabled={!selectedImage || isUpscaling}
-                    className="px-8 py-3 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal break-words"
-                  >
-                    {isUpscaling ? (
-                      <>
-                        <RefreshCw size={20} className="animate-spin" aria-hidden="true" />
-                        <span>{t({ pl: "Przetwarzanie wybranej wizji...", en: "Processing selected vision..." })}</span>
-                      </>
-                    ) : isGenerating ? (
-                      <>
-                        <CheckCircle2 size={20} aria-hidden="true" />
-                        <span>{t({ pl: "Wybieram i przechodzę dalej", en: "Select and continue" })}</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 size={20} aria-hidden="true" />
-                        <span>{t({ pl: "Wybieram tę wizję", en: "I choose this vision" })}</span>
-                      </>
-                    )}
-                  </GlassButton>
-                </div>
               )}
               
               {/* Upscaling feedback */}
@@ -4078,19 +4404,23 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               <span>{t({ pl: "To moje wnętrze (5)", en: "My interior (5)" })}</span>
                             </div>
 
-                            <GlassSlider
+                            <GlassScalePicker
                               min={1}
                               max={5}
                               value={(selectedImage.ratings as any).is_my_interior || 3}
                               onChange={(value) => {
                                 handleImageRating(selectedImage.id, 'is_my_interior', value, { suppressProgress: true });
-                                // Delay advancing to allow the user to actually drag and see the thumb move
                                 if (interiorAdvanceTimeoutRef.current) clearTimeout(interiorAdvanceTimeoutRef.current);
                                 interiorAdvanceTimeoutRef.current = setTimeout(() => {
                                   setHasAnsweredInteriorQuestion(true);
                                 }, 800);
                               }}
                               className="mb-2"
+                              highlightResetKey={selectedImage.id}
+                              ariaLabel={t({
+                                pl: 'Skala: czy to Twoje wnętrze (1–5)',
+                                en: 'Scale: is this your interior (1–5)',
+                              })}
                             />
                           </div>
                         </div>
@@ -4124,13 +4454,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
                             <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
                               <span>{t(left)} (1)</span>
-                              <span>{t(right)} (7)</span>
+                              <span>{t(right)} (5)</span>
                             </div>
 
-                            <GlassSlider
+                            <GlassScalePicker
                               min={1}
-                              max={7}
-                              value={(selectedImage.ratings as any)[key] || 4}
+                              max={5}
+                              value={(selectedImage.ratings as any)[key] || 3}
                               onChange={(value) => {
                                 handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
                                 if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
@@ -4139,6 +4469,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                 }, 800);
                               }}
                               className="mb-2"
+                              highlightResetKey={`${selectedImage.id}-${String(key)}`}
+                              ariaLabel={t({
+                                pl: 'Skala zgodności z gustem (1–5)',
+                                en: 'Taste match scale (1–5)',
+                              })}
                             />
                           </div>
                         ))}
@@ -4499,13 +4834,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
                                   <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
                                     <span>{left} (1)</span>
-                                    <span>{right} (7)</span>
+                                    <span>{right} (5)</span>
                                   </div>
 
-                                  <GlassSlider
+                                  <GlassScalePicker
                                     min={1}
-                                    max={7}
-                                    value={(selectedImage.ratings as any)[key] || 4}
+                                    max={5}
+                                    value={(selectedImage.ratings as any)[key] || 3}
                                     onChange={(value) => {
                                       handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
                                       if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
@@ -4514,6 +4849,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                       }, 800);
                                     }}
                                     className="mb-2"
+                                    highlightResetKey={`${selectedImage.id}-${String(key)}`}
+                                    ariaLabel={t({
+                                      pl: 'Skala zgodności z gustem (1–5)',
+                                      en: 'Taste match scale (1–5)',
+                                    })}
                                   />
                                 </div>
                               ))}
@@ -4670,7 +5010,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       >
                         <GlassButton onClick={handleContinue} className="px-8 py-4 font-semibold whitespace-normal break-words">
                           <span className="flex items-center space-x-2">
-                            <span>{t({ pl: "Przejdź do Ankiety", en: "Go to Survey" })}</span>
+                            <span>{t({ pl: 'Kontynuuj dalej', en: 'Continue' })}</span>
                             <ArrowRight size={20} aria-hidden="true" />
                           </span>
                         </GlassButton>
@@ -4691,6 +5031,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 )}
             </>
           )}
+            </>
+          )}
         </motion.div>
       </div>
       
@@ -4706,10 +5048,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       <LoginModal
         isOpen={preGenLoginOpen}
         onClose={() => setPreGenLoginOpen(false)}
+        onSuccess={() => {
+          setError(null);
+          setAnonGuestQuotaBlocked(false);
+          matrixAnonResumeOnce.current = false;
+        }}
         gateMode="hard"
         nudgeLocation="flow_generate_pre_gen"
         nudgeReason="login_required"
         onNudgeEvent={runGenNudgeTelemetry}
+        title={{ pl: 'Kontynuuj z kontem', en: 'Continue with your account' }}
         message={t({
           pl: 'Darmowa anonimowa generacja nie jest już dostępna. Zaloguj się, aby kontynuować (konto i kredyty).',
           en: 'Your free anonymous generation is not available. Sign in to continue (account and credits).',
@@ -4719,13 +5067,19 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       <LoginModal
         isOpen={postAnonGenLoginOpen}
         onClose={() => setPostAnonGenLoginOpen(false)}
-        gateMode="hard"
+        gateMode="soft"
+        onMaybeLater={() => {}}
+        softMaybeLaterLabel={{
+          pl: 'Kontynuuj bez konta',
+          en: 'Continue without account',
+        }}
         nudgeLocation="flow_generate_nudge_d"
         nudgeReason="login_required"
         onNudgeEvent={runGenNudgeTelemetry}
+        title={{ pl: 'Załóż konto i zobacz więcej', en: 'Create an account and unlock more' }}
         message={t({
-          pl: 'Zaloguj się, aby zobaczyć 5 dodatkowych wariantów, zapisać projekt na koncie i skorzystać z upscale.',
-          en: 'Sign in to unlock 5 more variants, save your project, and use upscale.',
+          pl: `Z kontem zobaczysz wszystkie obrazy, odbierzesz ${String(FREE_GRANT_CREDITS)} kredytów powitalnych i zapiszesz projekt, żeby móc do niego wrócić w dowolnym momencie.`,
+          en: `An account shows all images, more generation credits, ${String(FREE_GRANT_CREDITS)} welcome credits when you register, and ongoing access to your project.`,
         })}
         redirectPath="/flow/generate"
       />
@@ -4736,9 +5090,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         nudgeLocation="flow_generate_matrix"
         nudgeReason="login_required"
         onNudgeEvent={runGenNudgeTelemetry}
+        title={{ pl: 'Wszystkie obrazy', en: 'All images' }}
         message={t({
-          pl: 'Pełna matryca 6 obrazów wymaga konta i wystarczającej liczby kredytów.',
-          en: 'The full 6-image matrix requires an account and enough credits.',
+          pl: 'Wygenerowanie wszystkich 6 obrazów wymaga konta i wystarczającej liczby kredytów.',
+          en: 'Generating all six images requires an account and enough credits.',
         })}
         redirectPath="/flow/generate"
       />

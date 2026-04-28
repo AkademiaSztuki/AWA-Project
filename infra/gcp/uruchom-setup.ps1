@@ -1,4 +1,4 @@
-# Skrypt konfiguruje GCP pod AWA: API, Cloud SQL, bucket, konto serwisowe.
+# Skrypt konfiguruje GCP pod IDA: API, Cloud SQL, bucket, konto serwisowe.
 # Użycie: skopiuj setup.env.example do setup.env, uzupełnij, potem: .\uruchom-setup.ps1
 # Wymaga: gcloud (zalogowany: gcloud auth login), ustawiony projekt.
 
@@ -93,7 +93,7 @@ Write-Host "`n[Krok 6] Konto serwisowe awa-backend i uprawnienia..." -Foreground
 $SA = "awa-backend@${PROJECT_ID}.iam.gserviceaccount.com"
 $SaExists = gcloud iam service-accounts describe $SA --project=$PROJECT_ID 2>$null
 if ($LASTEXITCODE -ne 0) {
-    gcloud iam service-accounts create awa-backend --display-name="AWA Backend Service" --project=$PROJECT_ID
+    gcloud iam service-accounts create awa-backend --display-name="IDA Backend Service" --project=$PROJECT_ID
 }
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA" --role="roles/cloudsql.client" --quiet
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA" --role="roles/storage.objectAdmin" --quiet

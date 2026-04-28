@@ -3,6 +3,7 @@
 export { GlassCard } from './GlassCard';
 export { GlassButton } from './GlassButton'; 
 export { GlassSlider } from './GlassSlider';
+export { GlassScalePicker } from './GlassScalePicker';
 export { GlassAccordion } from './GlassAccordion';
 export { TinderCard } from './TinderCard';
 export { DesktopBackground } from './DesktopBackground';

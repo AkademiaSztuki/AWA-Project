@@ -1,4 +1,4 @@
-## Supabase usage inventory (AWA -> GCP migration)
+## Supabase usage inventory (IDA → GCP migration)
 
 > **Update:** `supabase.ts` → [`gcp-data.ts`](../../apps/frontend/src/lib/gcp-data.ts); `supabase-deep-personalization.ts` → [`gcp-participant-profile.ts`](../../apps/frontend/src/lib/gcp-participant-profile.ts). No Supabase runtime client.
 

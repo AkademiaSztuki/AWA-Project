@@ -2,7 +2,6 @@
 
 import { usePathname } from 'next/navigation';
 import { PartOneProgressBar } from '@/components/flow/PartOneProgressBar';
-import { isPartOneFlowPath } from '@/lib/flow/part-one-flow';
 
 export default function FlowLayout({
   children,
@@ -10,17 +9,13 @@ export default function FlowLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const showProgress = isPartOneFlowPath(pathname);
 
   return (
-    <div className="flex flex-col gap-2 sm:gap-8 p-3 sm:p-4 lg:p-8">
-      {showProgress && (
-        <PartOneProgressBar currentPath={pathname} />
-      )}
+    <div className="flex flex-col gap-2 sm:gap-4 p-3 sm:p-4 lg:p-8">
+      <PartOneProgressBar currentPath={pathname} />
       <div>
         {children}
       </div>
     </div>
   );
 }
-

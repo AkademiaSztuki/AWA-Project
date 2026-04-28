@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GlassCard } from '../ui/GlassCard';
 import GlassSurface from '../ui/GlassSurface';
-import { GlassSlider } from '../ui/GlassSlider';
+import { GlassScalePicker } from '../ui/GlassScalePicker';
+import { FULL_FLOW_GLASS_SHELL } from '@/lib/flow/glass-step-layout';
 import { useSessionData } from '@/hooks/useSessionData';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
@@ -37,9 +38,15 @@ const CLARITY_QUESTIONS = [
 
 export function Survey2Screen() {
   const router = useRouter();
-  const { language } = useLanguage();
+  const { language, tp } = useLanguage();
   const { updateSessionData, sessionData } = useSessionData();
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [answers, setAnswers] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    CLARITY_QUESTIONS.forEach((q) => {
+      initial[q.key] = 4;
+    });
+    return initial;
+  });
 
   const handleAnswerChange = (key: string, value: number) => {
     setAnswers(prev => ({ ...prev, [key]: value }));
@@ -59,23 +66,15 @@ export function Survey2Screen() {
       }
     });
 
-    // Persist detailed survey answers
-    if (gcpApi.isConfigured() && process.env.NEXT_PUBLIC_GCP_PERSISTENCE_MODE === 'primary') {
-      await gcpApi.research.survey({
+    // Persist detailed survey answers (best-effort — lokalna sesja jest już zapisana)
+    await gcpApi
+      .research.survey({
         userHash: sessionData.userHash,
         type: 'clarity',
         answers,
         score: clarityScore,
-      });
-    } else {
-      // Fallback: try gcpApi when not in primary mode (supabase client removed)
-      await gcpApi.research.survey({
-        userHash: sessionData.userHash,
-        type: 'clarity',
-        answers,
-        score: clarityScore,
-      }).catch(() => {});
-    }
+      })
+      .catch(() => {});
 
     stopAllDialogueAudio(); // Zatrzymaj dźwięk przed nawigacją
     router.push('/flow/thanks');
@@ -83,13 +82,16 @@ export function Survey2Screen() {
 
   const allAnswered = CLARITY_QUESTIONS.every(q => answers[q.key] !== undefined);
 
+  const handleBack = () => {
+    stopAllDialogueAudio();
+    router.push('/flow/survey1');
+  };
+
   return (
     <div className="min-h-screen flex flex-col w-full">
-      <div className="flex-1 flex items-center justify-center p-8">
-        
-
-        <div className="w-full max-w-4xl mx-auto">
-        <GlassCard variant="flatOnMobile" className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl max-h-[min(90vh,800px)] overflow-auto">
+      <div className="flex-1 flex justify-center items-start p-3 sm:p-4 lg:p-6">
+        <div className={`${FULL_FLOW_GLASS_SHELL} w-full`}>
+        <GlassCard variant="flatOnMobile" className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl">
           <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Jasność Twoich Preferencji</h1>
           <p className="text-base md:text-lg text-gray-700 font-modern mb-6 leading-relaxed" aria-live="polite">
             Ostatnie pytania o krystalizację Twojego gustu estetycznego
@@ -105,29 +107,43 @@ export function Survey2Screen() {
                   <span>Zdecydowanie tak (7)</span>
                 </div>
 
-                <GlassSlider
+                <GlassScalePicker
                   min={1}
                   max={7}
-                  value={answers[question.key] || 4}
+                  value={answers[question.key] ?? 4}
                   onChange={(value) => handleAnswerChange(question.key, value)}
                   className="mb-2"
-                  ariaValueText={language === 'pl' ? `Ocena: ${answers[question.key] || 4} z 7` : `Rating: ${answers[question.key] || 4} of 7`}
+                  ariaLabel={
+                    language === 'pl'
+                      ? `Pytanie ${index + 1}: ${question.question} (1–7), wybrano ${answers[question.key] ?? 4}`
+                      : `Question ${index + 1}: ${question.question} (1–7), selected ${answers[question.key] ?? 4}`
+                  }
                 />
               </div>
             ))}
           </div>
 
-          <div className="flex justify-center">
+          <div className="flex w-full flex-col md:flex-row gap-3 sm:gap-6 justify-center items-stretch md:items-center">
+            <GlassSurface
+              width={220}
+              height={56}
+              borderRadius={32}
+              className="!w-full md:!w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
+              onClick={handleBack}
+              aria-label={tp('Powrót', 'Back')}
+            >
+              {tp('← Powrót', '← Back')}
+            </GlassSurface>
             <GlassSurface
               width={280}
               height={56}
               borderRadius={32}
-              className={`cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl text-nowrap ${!allAnswered ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+              className={`!w-full md:!w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl text-nowrap ${!allAnswered ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
               onClick={handleFinish}
-              aria-label="Zakończ badanie"
-              style={{ opacity: 1 }}
+              aria-label={tp('Zakończ', 'Finish')}
+              aria-disabled={!allAnswered}
             >
-              Zakończ badanie
+              {tp('Zakończ', 'Finish')}
             </GlassSurface>
           </div>
         </GlassCard>

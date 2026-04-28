@@ -1,6 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  useImperativeHandle,
+  forwardRef,
+} from 'react';
 import {
   MUSIC_PREFERENCES,
   TEXTURE_PREFERENCES,
@@ -10,7 +18,7 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import Image from 'next/image';
-import { Volume2, Hand, Lightbulb, Play, Pause, Palette } from 'lucide-react';
+import { Volume2, Hand, Lightbulb, Play, Pause, Palette, Check, SwatchBook } from 'lucide-react';
 import { NatureMetaphorTest } from '@/components/research/ProjectiveTechniques';
 import { BiophiliaTest } from '@/components/research/BiophiliaTest';
 import { STYLE_OPTIONS, type StyleOption } from '@/lib/questions/style-options';
@@ -27,6 +35,7 @@ interface SensoryTestProps {
 export function SensoryTest({ type, onSelect, className = '', value, frameless = false, stepCounter }: SensoryTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
@@ -61,6 +70,7 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
 
   useEffect(() => {
     setSelectedId(value || null);
+    setHoveredId(null);
     setPlayingAudio(null);
     audioElement?.pause();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,7 +111,24 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
       ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
       : 'grid-cols-1 md:grid-cols-2';
 
-  const selectedOption = selectedId ? options.find(o => o.id === selectedId) : null;
+  const previewId = hoveredId ?? selectedId ?? null;
+  const previewOption = previewId ? options.find((o) => o.id === previewId) : undefined;
+  const previewName = previewOption ? t(previewOption.label) : undefined;
+  const isHoverPreview = Boolean(hoveredId && hoveredId !== selectedId);
+  const badgeUpper =
+    previewName == null
+      ? null
+      : isHoverPreview
+        ? language === 'pl'
+          ? 'Podgląd'
+          : 'Preview'
+        : selectedId
+          ? language === 'pl'
+            ? 'Wybrano'
+            : 'Selected'
+          : language === 'pl'
+            ? 'Podgląd'
+            : 'Preview';
 
   const ContentWrapper = frameless ? 'div' : GlassCard;
   const wrapperClass = frameless 
@@ -126,21 +153,39 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
             </p>
           </div>
         </div>
-        {selectedOption && (
-          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 bg-white/5 sm:bg-transparent p-1 sm:p-0 rounded-lg border border-white/10 sm:border-none">
-            <span className="text-[9px] uppercase tracking-wider text-silver-dark opacity-70">
-              {language === 'pl' ? 'Wybrano' : 'Selected'}
-            </span>
-            <span className="text-[10px] sm:text-xs font-bold text-gold leading-none">
-              {t(selectedOption.label)}
-            </span>
-          </div>
-        )}
+        <div className="flex max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5">
+          <span
+            className={`flex h-3 w-full items-center justify-end text-right text-[8px] uppercase leading-none tracking-wider transition-colors duration-200 sm:text-[9px] ${
+              previewName
+                ? isHoverPreview
+                  ? 'text-gold/90'
+                  : 'text-silver-dark opacity-80'
+                : 'text-transparent'
+            }`}
+            aria-hidden={!previewName}
+          >
+            {previewName ? badgeUpper : '\u00a0'}
+          </span>
+          <span
+            className={`flex min-h-[2rem] w-full items-end justify-end text-right text-[8px] leading-tight sm:text-[9px] line-clamp-2 hyphens-auto break-words ${
+              previewName ? 'font-bold text-gold' : 'font-modern text-silver-dark opacity-75'
+            }`}
+          >
+            {previewName ??
+              (language === 'pl'
+                ? 'Najedź na opcję, by zobaczyć nazwę.'
+                : 'Hover an option to preview its name.')}
+          </span>
+        </div>
       </div>
 
-      <div className={`grid ${gridCols} gap-2.5 sm:gap-4`}>
+      <div
+        className={`grid ${gridCols} gap-2.5 sm:gap-4`}
+        onMouseLeave={() => setHoveredId(null)}
+      >
         {options.map((option) => {
           const isSelected = selectedId === option.id;
+          const isHovered = hoveredId === option.id;
           const isPlaying = playingAudio === option.id;
 
           return (
@@ -148,10 +193,13 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
               key={option.id}
               type="button"
               onClick={() => handleSelect(option)}
-              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all relative z-0 ${
+              onMouseEnter={() => setHoveredId(option.id)}
+              className={`relative z-0 flex flex-col overflow-hidden rounded-2xl border text-left transition-all ${
                 isSelected
                   ? 'border-gold bg-gold/15 shadow-inner shadow-gold/10'
-                  : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
+                  : isHovered
+                    ? 'border-gold/50 shadow-md shadow-gold/15'
+                    : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
               style={{ 
                 transform: 'translateZ(0)',
@@ -262,6 +310,26 @@ interface StyleTestProps {
 
 function PaletteTest({ options, selectedId, onSelect, frameless = false, className = '', stepCounter }: PaletteTestProps) {
   const { language } = useLanguage();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const previewId = hoveredId ?? selectedId ?? null;
+  const previewPalette = previewId ? options.find((p) => p.id === previewId) : undefined;
+  const previewName = previewPalette?.label[language];
+  const isHoverPreview = Boolean(hoveredId && hoveredId !== selectedId);
+  const badgeUpper =
+    previewName == null
+      ? null
+      : isHoverPreview
+        ? language === 'pl'
+          ? 'Podgląd'
+          : 'Preview'
+        : selectedId
+          ? language === 'pl'
+            ? 'Wybrano'
+            : 'Selected'
+          : language === 'pl'
+            ? 'Podgląd'
+            : 'Preview';
 
   const ContentWrapper = frameless ? 'div' : GlassCard;
   const wrapperClass = frameless 
@@ -270,58 +338,98 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
 
   return (
     <ContentWrapper className={`${wrapperClass} keep-colors`}>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-1.5">
-        <div>
-          <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-gold font-bold leading-none mb-0.5">
-            {language === 'pl' ? 'Paleta' : 'Palette'}
-          </p>
-          <p className="text-xs sm:text-sm font-modern text-graphite leading-tight">
-            {language === 'pl'
-              ? 'Która paleta pomoże nam ustawić bazę kolorystyczną?'
-              : 'Which palette should anchor the chromatic base?'}
-          </p>
-        </div>
-        {selectedId && (
-          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 bg-white/5 sm:bg-transparent p-1 sm:p-0 rounded-lg border border-white/10 sm:border-none">
-            <span className="text-[9px] uppercase tracking-wider text-silver-dark opacity-70">
-              {language === 'pl' ? 'Wybrano' : 'Selected'}
-            </span>
-            <span className="text-[10px] sm:text-xs font-bold text-gold leading-none">
-              {options.find(p => p.id === selectedId)?.label[language]}
-            </span>
+      <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-gold to-champagne shadow-md">
+            <SwatchBook className="text-white" size={14} strokeWidth={2} aria-hidden />
           </div>
-        )}
+          <div>
+            <p className="mb-0.5 text-[9px] font-bold uppercase leading-none tracking-[0.3em] text-gold sm:text-[10px]">
+              {language === 'pl' ? 'Paleta' : 'Palette'}
+            </p>
+            <p className="text-xs font-modern leading-tight text-graphite sm:text-sm">
+              {language === 'pl'
+                ? 'Która paleta najbardziej pasuje do nastroju, w jakim chcesz mieszkać?'
+                : 'Which palette best matches the mood you want to live in?'}
+            </p>
+          </div>
+        </div>
+        <div className="flex max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5 sm:transition-colors sm:duration-200">
+          <span
+            className={`flex h-3 w-full items-center justify-end text-right text-[8px] uppercase leading-none tracking-wider transition-colors duration-200 sm:text-[9px] ${
+              previewName
+                ? isHoverPreview
+                  ? 'text-gold/90'
+                  : 'text-silver-dark opacity-80'
+                : 'text-transparent'
+            }`}
+            aria-hidden={!previewName}
+          >
+            {previewName ? badgeUpper : '\u00a0'}
+          </span>
+          <span
+            className={`flex min-h-[2rem] w-full items-end justify-end text-right text-[8px] leading-tight transition-opacity duration-200 line-clamp-2 hyphens-auto break-words sm:text-[9px] ${
+              previewName ? 'font-bold text-gold sm:text-[10px]' : 'font-modern text-silver-dark opacity-75'
+            }`}
+          >
+            {previewName ??
+              (language === 'pl'
+                ? 'Najedź na kafelek, by zobaczyć nazwę palety.'
+                : 'Hover a tile to preview the palette name.')}
+          </span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
+      <div
+        className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 md:grid-cols-3"
+        onMouseLeave={() => setHoveredId(null)}
+      >
         {options.map((palette) => {
           const isSelected = palette.id === selectedId;
+          const isHovered = palette.id === hoveredId;
+          const name = palette.label[language];
           return (
             <button
               key={palette.id}
               type="button"
               onClick={() => onSelect(palette.id)}
-              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all min-h-[90px] sm:min-h-[165px] relative z-0 ${
+              onMouseEnter={() => setHoveredId(palette.id)}
+              className={`relative flex min-h-[200px] flex-col overflow-hidden rounded-2xl border text-left transition-all sm:min-h-[180px] ${
                 isSelected
-                  ? 'border-gold bg-gold/15 shadow-inner shadow-gold/10'
-                  : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
-              }`}
-              style={{ 
+                  ? 'border-gold shadow-inner shadow-gold/10'
+                  : isHovered
+                    ? 'border-gold/50 shadow-md shadow-gold/15'
+                    : 'border-white/10 hover:border-gold/30'
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50`}
+              style={{
                 transform: 'translateZ(0)',
                 backfaceVisibility: 'hidden',
                 WebkitFontSmoothing: 'antialiased'
               }}
             >
-              <div className="relative w-full h-full overflow-hidden bg-white/5">
-                <div className="flex gap-2 h-full w-full">
-                  {palette.colors.map((color, index) => (
-                    <div
-                      key={index}
-                      className="flex-1 h-full shadow-sm"
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
+              <div className="absolute inset-0 z-0 flex flex-row">
+                {palette.colors.map((color, index) => (
+                  <div
+                    key={index}
+                    className="flex-1 shadow-sm transition-[filter] duration-200"
+                    style={{
+                      backgroundColor: color,
+                      filter: isHovered || isSelected ? 'brightness(1.05) saturate(1.06)' : undefined
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div
+                className={`absolute inset-0 z-10 rounded-2xl ${
+                  isSelected ? 'bg-gold/20' : isHovered ? 'bg-black/15' : 'bg-black/10'
+                }`}
+              />
+
+              <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col gap-0.5 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-3 py-2.5 sm:gap-1 sm:px-4 sm:py-3">
+                <h4 className="font-nasalization text-xs leading-tight text-white drop-shadow-lg sm:text-sm">
+                  {name}
+                </h4>
               </div>
             </button>
           );
@@ -329,16 +437,16 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
       </div>
 
       <div className="mt-1 flex items-center justify-between gap-4">
-        <p className="text-[9px] sm:text-xs text-silver-dark font-modern flex-1 italic opacity-80">
+        <p className="flex-1 text-[9px] font-modern italic text-silver-dark opacity-80 sm:text-xs">
           {language === 'pl'
-            ? 'Paleta ustawia bazę pod wszystkie sensoryczne decyzje.'
-            : 'The palette sets the base for every other sensory decision.'}
+            ? 'Paleta ustawia kolorystyczną bazę wnętrza.'
+            : 'The palette anchors the color story of your space.'}
         </p>
-        {stepCounter && (
-          <p className="text-[9px] sm:text-xs text-silver-dark font-modern whitespace-nowrap opacity-60">
+        {stepCounter ? (
+          <p className="whitespace-nowrap text-[9px] font-modern text-silver-dark opacity-60 sm:text-xs">
             {stepCounter}
           </p>
-        )}
+        ) : null}
       </div>
     </ContentWrapper>
   );
@@ -372,8 +480,32 @@ function getStyleImagePath(styleId: string): string | null {
 }
 
 function StyleTest({ options, selectedId, onSelect, frameless = false, className = '', stepCounter }: StyleTestProps) {
-  const { language, t } = useLanguage();
+  const { language } = useLanguage();
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const previewId = hoveredId ?? selectedId ?? null;
+  const previewStyle = previewId ? options.find((s) => s.id === previewId) : undefined;
+  const previewName = previewStyle
+    ? language === 'pl'
+      ? previewStyle.labelPl
+      : previewStyle.labelEn
+    : undefined;
+  const isHoverPreview = Boolean(hoveredId && hoveredId !== selectedId);
+  const badgeUpper =
+    previewName == null
+      ? null
+      : isHoverPreview
+        ? language === 'pl'
+          ? 'Podgląd'
+          : 'Preview'
+        : selectedId
+          ? language === 'pl'
+            ? 'Wybrano'
+            : 'Selected'
+          : language === 'pl'
+            ? 'Podgląd'
+            : 'Preview';
 
   const ContentWrapper = frameless ? 'div' : GlassCard;
   const wrapperClass = frameless 
@@ -402,24 +534,39 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
             </p>
           </div>
         </div>
-        {selectedId && (
-          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 bg-white/5 sm:bg-transparent p-1.5 sm:p-0 rounded-lg border border-white/10 sm:border-none">
-            <span className="text-[9px] uppercase tracking-wider text-silver-dark opacity-70">
-              {language === 'pl' ? 'Wybrano' : 'Selected'}
-            </span>
-            <span className="text-[10px] sm:text-xs font-bold text-gold leading-none">
-              {(() => {
-                const style = options.find(s => s.id === selectedId);
-                return style ? (language === 'pl' ? style.labelPl : style.labelEn) : '';
-              })()}
-            </span>
-          </div>
-        )}
+        <div className="flex max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5">
+          <span
+            className={`flex h-3 w-full items-center justify-end text-right text-[8px] uppercase leading-none tracking-wider transition-colors duration-200 sm:text-[9px] ${
+              previewName
+                ? isHoverPreview
+                  ? 'text-gold/90'
+                  : 'text-silver-dark opacity-80'
+                : 'text-transparent'
+            }`}
+            aria-hidden={!previewName}
+          >
+            {previewName ? badgeUpper : '\u00a0'}
+          </span>
+          <span
+            className={`flex min-h-[2rem] w-full items-end justify-end text-right text-[8px] leading-tight line-clamp-2 hyphens-auto break-words sm:text-[9px] ${
+              previewName ? 'font-bold text-gold sm:text-[10px]' : 'font-modern text-silver-dark opacity-75'
+            }`}
+          >
+            {previewName ??
+              (language === 'pl'
+                ? 'Najedź na styl, by zobaczyć nazwę.'
+                : 'Hover a style tile to preview its name.')}
+          </span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 overflow-y-auto">
+      <div
+        className="grid grid-cols-1 gap-2 overflow-y-auto awa-scrollbar sm:grid-cols-2 sm:gap-4 md:grid-cols-3"
+        onMouseLeave={() => setHoveredId(null)}
+      >
         {options.map((style) => {
           const isSelected = style.id === selectedId;
+          const isHovered = style.id === hoveredId;
           const imagePath = getStyleImagePath(style.id);
           const hasImageError = imageErrors.has(style.id);
           const hasImage = imagePath && !hasImageError;
@@ -429,10 +576,13 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
               key={style.id}
               type="button"
               onClick={() => onSelect(style.id)}
-              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all relative min-h-[200px] sm:min-h-[180px] ${
+              onMouseEnter={() => setHoveredId(style.id)}
+              className={`relative flex min-h-[200px] flex-col overflow-hidden rounded-2xl border text-left transition-all sm:min-h-[180px] ${
                 isSelected
                   ? 'border-gold shadow-inner shadow-gold/10'
-                  : 'border-white/10 hover:border-gold/30'
+                  : isHovered
+                    ? 'border-gold/50 shadow-md shadow-gold/15'
+                    : 'border-white/10 hover:border-gold/30'
               }`}
               style={{ 
                 transform: 'translateZ(0)',
@@ -457,11 +607,21 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
               )}
               
               {/* Glass overlay */}
-              <div className={`absolute inset-0 z-10 rounded-2xl ${
-                hasImage 
-                  ? (isSelected ? 'bg-gold/25' : 'bg-black/20')
-                  : (isSelected ? 'bg-gold/10' : 'bg-white/5')
-              }`} />
+              <div
+                className={`absolute inset-0 z-10 rounded-2xl ${
+                  hasImage
+                    ? isSelected
+                      ? 'bg-gold/25'
+                      : isHovered
+                        ? 'bg-black/28'
+                        : 'bg-black/20'
+                    : isSelected
+                      ? 'bg-gold/10'
+                      : isHovered
+                        ? 'bg-white/10'
+                        : 'bg-white/5'
+                }`}
+              />
               
               {/* Style name and description at bottom */}
               <div className="absolute bottom-0 left-0 right-0 z-20 px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-0.5 sm:gap-1">
@@ -497,6 +657,17 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
   );
 }
 
+type SensorySuiteTest = 'palette' | 'style' | 'music' | 'texture' | 'light' | 'nature' | 'biophilia';
+type InteractiveTest = 'music' | 'texture' | 'light';
+
+type SensorySuiteResults = {
+  music?: string;
+  texture?: string;
+  light?: string;
+  natureMetaphor?: string;
+  style?: string;
+};
+
 interface SensoryTestSuiteProps {
   onComplete: (results: {
     music: string;
@@ -518,22 +689,115 @@ interface SensoryTestSuiteProps {
   styleOptions?: StyleOption[];
   selectedStyle?: string;
   onStyleSelect?: (id: string) => void;
+  /** Restore answers when the user re-opens this step (session / profile already persisted). */
+  initialSensoryPreferences?: Partial<Pick<SensorySuiteResults, 'music' | 'texture' | 'light'>>;
+  initialNatureMetaphor?: string;
+  initialBiophiliaScore?: number;
 }
 
-type SensorySuiteTest = 'palette' | 'style' | 'music' | 'texture' | 'light' | 'nature' | 'biophilia';
-type InteractiveTest = 'music' | 'texture' | 'light';
+function subStepHasValue(
+  test: SensorySuiteTest,
+  selectedPalette: string | undefined,
+  selectedStyle: string | undefined,
+  results: SensorySuiteResults,
+  biophiliaScore: number | undefined,
+): boolean {
+  switch (test) {
+    case 'palette':
+      return Boolean(selectedPalette);
+    case 'style':
+      return Boolean(results.style || selectedStyle);
+    case 'music':
+      return Boolean(results.music);
+    case 'texture':
+      return Boolean(results.texture);
+    case 'light':
+      return Boolean(results.light);
+    case 'nature':
+      return Boolean(results.natureMetaphor);
+    case 'biophilia':
+      return typeof biophiliaScore === 'number';
+  }
+}
 
-export function SensoryTestSuite({
-  onComplete,
-  className = '',
-  profileContext,
-  paletteOptions,
-  selectedPalette,
-  onPaletteSelect,
-  styleOptions,
-  selectedStyle,
-  onStyleSelect
-}: SensoryTestSuiteProps) {
+/** Largest index such that tests[0..idx] are all answered (from the start). */
+function maxConsecutiveFilledSubStepIndex(
+  tests: SensorySuiteTest[],
+  selectedPalette: string | undefined,
+  selectedStyle: string | undefined,
+  results: SensorySuiteResults,
+  biophiliaScore: number | undefined,
+): number {
+  let max = -1;
+  for (let i = 0; i < tests.length; i++) {
+    if (!subStepHasValue(tests[i], selectedPalette, selectedStyle, results, biophiliaScore)) break;
+    max = i;
+  }
+  return Math.max(0, max);
+}
+
+function firstIncompleteSubStepIndex(
+  tests: SensorySuiteTest[],
+  selectedPalette: string | undefined,
+  selectedStyle: string | undefined,
+  results: SensorySuiteResults,
+  biophiliaScore: number | undefined,
+): number {
+  for (let i = 0; i < tests.length; i++) {
+    if (!subStepHasValue(tests[i], selectedPalette, selectedStyle, results, biophiliaScore)) {
+      return i;
+    }
+  }
+  return Math.max(0, tests.length - 1);
+}
+
+function pickInitialSensorySubStep(
+  tests: SensorySuiteTest[],
+  selectedPalette: string | undefined,
+  selectedStyle: string | undefined,
+  initialSensoryPreferences: SensoryTestSuiteProps['initialSensoryPreferences'],
+  initialNatureMetaphor: string | undefined,
+  initialBiophiliaScore: number | undefined,
+): { step: SensorySuiteTest; index: number; results: SensorySuiteResults; biophilia: number | undefined } {
+  const results: SensorySuiteResults = {
+    music: initialSensoryPreferences?.music,
+    texture: initialSensoryPreferences?.texture,
+    light: initialSensoryPreferences?.light,
+    natureMetaphor: initialNatureMetaphor,
+  };
+  const biophilia = typeof initialBiophiliaScore === 'number' ? initialBiophiliaScore : undefined;
+  const fi = firstIncompleteSubStepIndex(tests, selectedPalette, selectedStyle, results, biophilia);
+  const step = tests[fi] ?? tests[0];
+  return {
+    step,
+    index: Math.max(0, tests.indexOf(step)),
+    results,
+    biophilia,
+  };
+}
+
+export type SensoryTestSuiteHandle = {
+  /** Go one sub-step back inside the suite; returns false on the first sub-step. */
+  tryGoBackSubStep: () => boolean;
+};
+
+export const SensoryTestSuite = forwardRef<SensoryTestSuiteHandle, SensoryTestSuiteProps>(function SensoryTestSuite(
+  {
+    onComplete,
+    className = '',
+    profileContext,
+    paletteOptions,
+    selectedPalette,
+    onPaletteSelect,
+    styleOptions,
+    selectedStyle,
+    onStyleSelect,
+    initialSensoryPreferences,
+    initialNatureMetaphor,
+    initialBiophiliaScore,
+  },
+  ref
+) {
   const { language } = useLanguage();
   const hasPalette = Boolean(paletteOptions?.length && onPaletteSelect);
   const hasStyle = Boolean(styleOptions?.length && onStyleSelect);
@@ -544,21 +808,122 @@ export function SensoryTestSuite({
     baseTests.push('music', 'texture', 'light', 'nature', 'biophilia');
     return baseTests;
   }, [hasPalette, hasStyle]);
-  const [currentTest, setCurrentTest] = useState<SensorySuiteTest>(tests[0]);
-  const [results, setResults] = useState<{
-    music?: string;
-    texture?: string;
-    light?: string;
-    natureMetaphor?: string;
-    style?: string;
-  }>({});
-  const [biophiliaScore, setBiophiliaScore] = useState<number | undefined>(undefined);
+
+  const bootstrap = useMemo(
+    () =>
+      pickInitialSensorySubStep(
+        tests,
+        selectedPalette,
+        selectedStyle,
+        initialSensoryPreferences,
+        initialNatureMetaphor,
+        initialBiophiliaScore,
+      ),
+    [
+      tests,
+      selectedPalette,
+      selectedStyle,
+      initialSensoryPreferences?.music,
+      initialSensoryPreferences?.texture,
+      initialSensoryPreferences?.light,
+      initialNatureMetaphor,
+      initialBiophiliaScore,
+    ],
+  );
+
+  const [results, setResults] = useState<SensorySuiteResults>(() => ({ ...bootstrap.results }));
+  const [biophiliaScore, setBiophiliaScore] = useState<number | undefined>(() => bootstrap.biophilia);
+  const [currentTest, setCurrentTest] = useState<SensorySuiteTest>(() => bootstrap.step);
+  const [maxVisitedStepIndex, setMaxVisitedStepIndex] = useState(() => bootstrap.index);
+
+  /** Prevents duplicate `onComplete` (e.g. re-click palette/style when session already has full answers → wizard completion + login modal). */
+  const completionDispatchedRef = useRef(false);
+
+  useEffect(() => {
+    setResults((prev) => ({
+      ...prev,
+      music: prev.music || initialSensoryPreferences?.music,
+      texture: prev.texture || initialSensoryPreferences?.texture,
+      light: prev.light || initialSensoryPreferences?.light,
+      natureMetaphor: prev.natureMetaphor || initialNatureMetaphor,
+    }));
+    setBiophiliaScore((prev) =>
+      typeof prev === 'number' ? prev : typeof initialBiophiliaScore === 'number' ? initialBiophiliaScore : undefined,
+    );
+  }, [
+    initialSensoryPreferences?.music,
+    initialSensoryPreferences?.texture,
+    initialSensoryPreferences?.light,
+    initialNatureMetaphor,
+    initialBiophiliaScore,
+  ]);
 
   useEffect(() => {
     if (!tests.includes(currentTest)) {
       setCurrentTest(tests[0]);
     }
   }, [tests, currentTest]);
+
+  const currentIndex = tests.indexOf(currentTest);
+
+  useEffect(() => {
+    setMaxVisitedStepIndex((m) => Math.max(m, currentIndex));
+  }, [currentIndex]);
+
+  const filledFromSavedAnswers = useMemo(
+    () =>
+      maxConsecutiveFilledSubStepIndex(
+        tests,
+        selectedPalette,
+        selectedStyle,
+        results,
+        biophiliaScore,
+      ),
+    [tests, selectedPalette, selectedStyle, results, biophiliaScore],
+  );
+
+  /** Session / profile already had answers before this visit — allow jumping by saved progress. */
+  const prefillFromSession = Boolean(
+    initialSensoryPreferences?.music ||
+      initialSensoryPreferences?.texture ||
+      initialSensoryPreferences?.light ||
+      initialNatureMetaphor ||
+      typeof initialBiophiliaScore === 'number',
+  );
+
+  /** First-time flow: only steps you've reached (`maxVisited`) stay open ahead; saved tail does not burst all dots at once after palette+style. */
+  const furthestClickIndex = prefillFromSession
+    ? Math.max(filledFromSavedAnswers, maxVisitedStepIndex, currentIndex)
+    : Math.max(maxVisitedStepIndex, currentIndex);
+
+  const goToSubStep = useCallback(
+    (i: number) => {
+      if (i === currentIndex) return;
+      if (i > furthestClickIndex) return;
+      const next = tests[i];
+      if (next) {
+        if (i < currentIndex) {
+          completionDispatchedRef.current = false;
+        }
+        setCurrentTest(next);
+      }
+    },
+    [currentIndex, furthestClickIndex, tests],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      tryGoBackSubStep: () => {
+        const idx = tests.indexOf(currentTest);
+        if (idx <= 0) return false;
+        completionDispatchedRef.current = false;
+        setCurrentTest(tests[idx - 1]);
+        return true;
+      }
+    }),
+    [tests, currentTest]
+  );
 
   const goToNext = (testType: SensorySuiteTest) => {
     const next = tests[tests.indexOf(testType) + 1];
@@ -578,6 +943,7 @@ export function SensoryTestSuite({
   };
 
   const triggerComplete = (finalResults: typeof results, finalBiophilia: number | undefined) => {
+    if (completionDispatchedRef.current) return;
     if (
       finalBiophilia === undefined ||
       !finalResults.music ||
@@ -587,6 +953,7 @@ export function SensoryTestSuite({
     ) {
       return;
     }
+    completionDispatchedRef.current = true;
     const payload = {
       music: finalResults.music,
       texture: finalResults.texture,
@@ -606,9 +973,6 @@ export function SensoryTestSuite({
     if (testType === 'palette') {
       onPaletteSelect?.(value as string);
       goToNext(testType);
-      if (canComplete(results)) {
-        triggerComplete(results, biophiliaScore);
-      }
       return;
     }
 
@@ -618,9 +982,6 @@ export function SensoryTestSuite({
       const newResults = { ...results, style: value as string };
       setResults(newResults);
       goToNext(testType);
-      if (canComplete(newResults, biophiliaScore)) {
-        triggerComplete(newResults, biophiliaScore);
-      }
       return;
     }
 
@@ -655,8 +1016,6 @@ export function SensoryTestSuite({
     }
   };
 
-  const currentIndex = tests.indexOf(currentTest);
-
   const getTestLabel = (test: SensorySuiteTest) => {
     switch (test) {
       case 'music':
@@ -678,16 +1037,8 @@ export function SensoryTestSuite({
     }
   };
 
-  const isTestComplete = (test: SensorySuiteTest) => {
-    if (test === 'palette') return Boolean(selectedPalette);
-    if (test === 'style') return Boolean(selectedStyle);
-    if (test === 'nature') return Boolean(results.natureMetaphor);
-    if (test === 'biophilia') return typeof biophiliaScore === 'number';
-    return Boolean(results[test as InteractiveTest]);
-  };
-
   return (
-    <div className={`flex flex-col gap-1.5 sm:gap-2 h-full pb-1 w-full max-w-full overflow-x-hidden ${className}`}>
+    <div className={`flex min-h-0 flex-col gap-1.5 sm:gap-2 h-full pb-1 w-full max-w-full overflow-x-hidden ${className}`}>
       {profileContext && (
         <div className="glass-panel rounded-2xl border border-white/10 bg-white/5 p-3 text-[10px] text-silver-dark flex flex-wrap gap-3 w-full mb-1">
           {profileContext.paletteLabel && (
@@ -711,32 +1062,100 @@ export function SensoryTestSuite({
         </div>
       )}
 
-      <div className="flex gap-1 overflow-x-auto py-1 scrollbar-hide -mx-1 px-1 flex-shrink-0">
-        {tests.map((test) => (
-          <button
-            key={test}
-            onClick={() => setCurrentTest(test)}
-            className={`whitespace-nowrap px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-nasalization font-bold transition-all flex-shrink-0 sm:flex-1 border flex items-center justify-center ${
-              currentTest === test
-                ? 'bg-white/25 border-white/40 text-white shadow-sm'
-                : isTestComplete(test)
-                ? 'bg-gold/20 border-gold/30 text-gold'
-                : 'bg-white/5 border-white/10 text-white/40 hover:text-white/60'
-            }`}
-          >
-            {getTestLabel(test)}
-          </button>
-        ))}
-      </div>
+      <ol
+        className="grid w-full list-none m-0 p-0 py-2 gap-x-1 gap-y-1.5 items-start"
+        style={{ gridTemplateColumns: `repeat(${tests.length}, minmax(0, 1fr))` }}
+        aria-label={language === 'pl' ? 'Kolejność testów sensorycznych' : 'Sensory test sequence'}
+      >
+        {tests.map((test, i) => {
+          const isCurrent = i === currentIndex;
+          const isStrictlyPast = i < currentIndex;
+          const isForwardClickable = i > currentIndex && i <= furthestClickIndex;
+          const isLocked = i > furthestClickIndex;
+          const showCheck = isStrictlyPast;
+          const navLabel =
+            language === 'pl'
+              ? `${getTestLabel(test)} — krok ${i + 1} z ${tests.length}${
+                  isLocked
+                    ? '. Najpierw ukończ wcześniejsze kroki.'
+                    : isCurrent
+                      ? ', aktualny krok.'
+                      : isForwardClickable
+                        ? '. Kliknij, aby przejść do tego kroku.'
+                        : '. Kliknij, aby wrócić do tego kroku.'
+                }`
+              : `${getTestLabel(test)} — step ${i + 1} of ${tests.length}${
+                  isLocked
+                    ? '. Complete earlier steps first.'
+                    : isCurrent
+                      ? ', current step.'
+                      : isForwardClickable
+                        ? '. Click to open this step.'
+                        : '. Click to go back to this step.'
+                }`;
+          return (
+            <li key={test} className="flex min-w-0 flex-col items-center text-center">
+              <button
+                type="button"
+                disabled={isLocked}
+                onClick={() => goToSubStep(i)}
+                aria-label={navLabel}
+                aria-current={isCurrent ? 'step' : undefined}
+                className={`flex w-full flex-col items-center gap-0.5 px-0.5 rounded-lg transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/55 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent ${
+                  isCurrent
+                    ? 'opacity-100'
+                    : isStrictlyPast || isForwardClickable
+                      ? 'opacity-90'
+                      : 'opacity-45'
+                } ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                <span
+                  className={`flex h-6 w-6 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-nasalization font-bold border transition-colors ${
+                    isCurrent
+                      ? 'border-white/50 bg-white/20 text-white shadow-sm'
+                      : showCheck
+                        ? 'border-gold/35 bg-gold/15 text-gold'
+                        : isForwardClickable
+                          ? 'border-white/22 bg-white/[0.08] text-white/70'
+                          : 'border-white/12 bg-white/[0.04] text-white/50'
+                  }`}
+                >
+                  {showCheck ? (
+                    <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.5} aria-hidden />
+                  ) : (
+                    i + 1
+                  )}
+                </span>
+                <span
+                  className={`w-full text-[8px] sm:text-[9px] md:text-[10px] font-nasalization font-bold leading-tight line-clamp-2 break-words hyphens-auto ${
+                    isCurrent
+                      ? 'text-white'
+                      : showCheck
+                        ? 'text-gold/90'
+                        : isForwardClickable
+                          ? 'text-white/75'
+                          : 'text-white/45'
+                  }`}
+                >
+                  {getTestLabel(test)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
 
-      <div className="flex-1">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Native scroll: nested SimpleBar (flexFill + h-0) inside CoreProfileWizard's scroll
+            collapses palette/style grids to zero height on some viewports. */}
+        <div className="min-h-0 flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden">
         {currentTest === 'palette' && hasPalette && paletteOptions ? (
           <PaletteTest
             options={paletteOptions}
             selectedId={selectedPalette}
             onSelect={(value) => handleSelect('palette', value)}
             frameless
-            className="h-full overflow-y-auto flex flex-col justify-center"
+            className="flex h-full min-h-0 flex-col justify-center overflow-x-hidden"
             stepCounter={language === 'pl'
               ? `Krok ${currentIndex + 1} z ${tests.length}`
               : `Step ${currentIndex + 1} of ${tests.length}`}
@@ -747,7 +1166,7 @@ export function SensoryTestSuite({
             selectedId={selectedStyle}
             onSelect={(value) => handleSelect('style', value)}
             frameless
-            className="h-full overflow-y-auto flex flex-col justify-center"
+            className="flex h-full min-h-0 flex-col justify-center overflow-x-hidden"
             stepCounter={language === 'pl'
               ? `Krok ${currentIndex + 1} z ${tests.length}`
               : `Step ${currentIndex + 1} of ${tests.length}`}
@@ -755,7 +1174,7 @@ export function SensoryTestSuite({
         ) : currentTest === 'nature' ? (
           <NatureMetaphorTest
             frameless
-            className="h-full overflow-y-auto flex flex-col justify-center"
+            className="flex h-full min-h-0 flex-col justify-center overflow-x-hidden"
             onSelect={(value) => handleSelect('nature', value)}
             stepCounter={language === 'pl'
               ? `Krok ${currentIndex + 1} z ${tests.length}`
@@ -764,7 +1183,7 @@ export function SensoryTestSuite({
         ) : currentTest === 'biophilia' ? (
           <BiophiliaTest
             frameless
-            className="h-full overflow-y-auto flex flex-col justify-center"
+            className="flex h-full min-h-0 flex-col justify-center overflow-x-hidden"
             onSelect={(score) => handleSelect('biophilia', score)}
             stepCounter={language === 'pl'
               ? `Krok ${currentIndex + 1} z ${tests.length}`
@@ -774,7 +1193,7 @@ export function SensoryTestSuite({
           <SensoryTest
             type={currentTest as InteractiveTest}
             onSelect={(value) => handleSelect(currentTest, value)}
-            className="h-full overflow-y-auto flex flex-col justify-center"
+            className="flex h-full min-h-0 flex-col justify-center overflow-x-hidden"
             value={results[currentTest as InteractiveTest] || null}
             frameless
             stepCounter={language === 'pl'
@@ -782,8 +1201,9 @@ export function SensoryTestSuite({
               : `Step ${currentIndex + 1} of ${tests.length}`}
           />
         )}
+        </div>
       </div>
     </div>
   );
-}
+});
 

@@ -26,6 +26,7 @@ import {
   ArrowRight,
   ArrowLeft
 } from "lucide-react";
+import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_SCROLL_STEP } from "@/lib/flow/glass-step-layout";
 
 interface LocalInspiration {
   id: string;
@@ -39,8 +40,6 @@ interface LocalInspiration {
   persisted?: boolean;         // true when loaded from existing session (avoid duplicate appends)
   addedAt?: string;
 }
-
-const STEP_CARD_HEIGHT = "min-h-[700px] max-h-[min(85vh,900px)]";
 
 const PARTICIPANT_IMAGE_ID_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -585,13 +584,13 @@ export default function InspirationsPage() {
   return (
     <div className="min-h-screen flex flex-col w-full">
       <div className="flex-1 flex justify-center items-start">
-        <div className="w-full max-w-3xl lg:max-w-none mx-auto space-y-6">
+        <div className={`${FULL_FLOW_GLASS_SHELL} space-y-6`}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-auto scrollbar-hide`}>
+            <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
               
               {/* Header with Progress Bar */}
               <div className="mb-6">

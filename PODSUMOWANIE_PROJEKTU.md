@@ -49,7 +49,7 @@ Tradycyjne badania preferencji opierają się na **jawnych deklaracjach** użytk
 - **Zachowanie** (co użytkownik faktycznie wybiera) jest lepszym predyktorem niż samo-opis
 - **Kombinacja metod** daje pełniejszy obraz preferencji
 
-### Implementacja w AWA
+### Implementacja w IDA
 
 #### 1. **Ukryte Preferencje (Implicit Preferences)**
 
@@ -106,7 +106,7 @@ Algorytm łączy oba źródła danych:
 4. **Agreeableness (Ugodość)** - współpraca, empatia, harmonia
 5. **Neuroticism (Neurotyczność)** - lęk, wrażliwość na stres, niestabilność emocjonalna
 
-### Implementacja w AWA
+### Implementacja w IDA
 
 #### Test IPIP-60
 
@@ -623,7 +623,7 @@ Prompt syntetyzuje dane z:
 
 ## 📝 Podsumowanie
 
-AWA to **ambitny projekt doktorancki**, który łączy:
+IDA to **ambitny projekt doktorancki**, który łączy:
 
 - **Psychologię środowiskową** (PRS, biophilia)
 - **Psychologię osobowości** (Big Five)
@@ -638,7 +638,7 @@ AWA to **ambitny projekt doktorancki**, który łączy:
 ---
 
 *Ostatnia aktualizacja: Styczeń 2025*  
-*Projekt: AWA - AI Interior Design Dialogue Research Platform*  
+*Projekt: IDA - AI Interior Design Dialogue Research Platform*  
 *Kontekst: Doktorat - Akademia Sztuk Pięknych*
 
 

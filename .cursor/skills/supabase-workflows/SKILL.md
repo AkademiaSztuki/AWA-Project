@@ -1,9 +1,9 @@
 ---
 name: supabase-workflows
-description: Workflows for working with Supabase in AWA project. Use when creating or modifying Supabase queries, participant data operations, swipes, generations, or image storage. Covers participants table, participant_swipes, participant_generations, participant_images, and related helper functions.
+description: Workflows for working with Supabase in IDA project. Use when creating or modifying Supabase queries, participant data operations, swipes, generations, or image storage. Covers participants table, participant_swipes, participant_generations, participant_images, and related helper functions.
 ---
 
-# Supabase Workflows for AWA Project
+# Supabase Workflows for IDA Project
 
 ## Core Tables
 

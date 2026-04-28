@@ -20,7 +20,8 @@
     "dev:backend-gcp": "pnpm --filter @aura/backend-gcp dev",
     "deploy:frontend": "cd apps/frontend && vercel deploy",
     "vercel:link:frontend": "cd apps/frontend && vercel link --project awa-project-frontend-fhka --yes --scope pali89s-projects",
-    "db:migrate:anon-usage": "pnpm --filter @aura/backend-gcp migrate:anon-usage"
+    "db:migrate:anon-usage": "pnpm --filter @aura/backend-gcp migrate:anon-usage",
+    "db:grant-dev-credits": "pnpm --filter @aura/backend-gcp grant-dev-credits"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

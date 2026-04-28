@@ -1,21 +1,29 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { ScrollYWhenNeeded } from '@/components/ui/ScrollYWhenNeeded';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassAccordion } from '@/components/ui/GlassAccordion';
 import { AwaContainer } from '@/components/awa/AwaContainer';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { SensoryTestSuite } from '@/components/research';
+import { SensoryTestSuite, type SensoryTestSuiteHandle } from '@/components/research';
 import { COLOR_PALETTE_OPTIONS, getPaletteLabel } from '@/components/setup/paletteOptions';
+import { EducationSelect } from '@/components/setup/EducationSelect';
 import { STYLE_OPTIONS } from '@/lib/questions/style-options';
 import { ArrowRight, ArrowLeft, Sparkles, Heart, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFullFlowProgress } from '@/contexts/FullFlowProgressContext';
+import {
+  FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY,
+  minJourneyIndexForCoreProfileStep,
+  type CoreProfileWizardStepId,
+} from '@/lib/flow/full-flow-progress';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { computeWeightedDNAFromSwipes } from '@/lib/dna';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
@@ -23,8 +31,7 @@ import { saveResearchConsent, saveParticipantSwipes, safeSessionStorage, saveSes
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import Link from 'next/link';
-
-const STEP_CARD_HEIGHT = "min-h-[500px] md:min-h-[650px] max-h-[min(90vh,800px)] md:max-h-[min(78vh,900px)]";
+import { GLASS_CARD_SCROLL_STEP as STEP_CARD_HEIGHT } from '@/lib/flow/glass-step-layout';
 
 type WizardStep = 
   | 'consent'
@@ -45,6 +52,19 @@ const STEP_TO_DIALOGUE: Record<WizardStep, string> = {
 };
 
 const WIZARD_STEP_STORAGE_KEY = 'awa-core-profile-step';
+
+const WIZARD_STEPS: readonly WizardStep[] = [
+  'consent',
+  'demographics',
+  'lifestyle',
+  'tinder_swipes',
+  'semantic_diff',
+  'sensory_tests',
+] as const;
+
+function isWizardStep(value: string | null): value is WizardStep {
+  return Boolean(value && (WIZARD_STEPS as readonly string[]).includes(value));
+}
 
 // Heuristic extraction of implicit warmth / brightness / complexity from Tinder swipes
 function computeImplicitSemanticsFromSwipes(swipes: Array<{ direction: 'left' | 'right'; tags?: string[]; categories?: any }>) {
@@ -243,6 +263,13 @@ function CountrySelect({
   const selectedLabel = COUNTRY_OPTIONS.find((option) => option.code === value)?.label[language] ?? value;
 
   const [query, setQuery] = useState('');
+  const countryRootRef = useRef<HTMLDivElement>(null);
+
+  const handleCountryRootBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && countryRootRef.current?.contains(next)) return;
+    setOpen(false);
+  };
 
   const filteredOptions = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -281,7 +308,7 @@ function CountrySelect({
   };
 
   return (
-    <div className="relative" tabIndex={0} onBlur={() => setOpen(false)}>
+    <div ref={countryRootRef} className="relative min-w-0" onBlur={handleCountryRootBlur}>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -292,21 +319,21 @@ function CountrySelect({
       </button>
 
       {open && (
-        <div className="absolute z-40 bottom-full mb-3 max-h-80 w-full overflow-hidden rounded-xl border border-white/25 bg-[#c7b07a] shadow-2xl ring-1 ring-gold/35 backdrop-blur-sm">
+        <div className="absolute z-40 bottom-full mb-3 max-h-80 w-full min-w-0 overflow-hidden rounded-xl border border-white/25 bg-[#c7b07a] shadow-2xl ring-1 ring-gold/35 backdrop-blur-sm">
           <div className="border-b border-white/20 px-3 py-2 bg-[#c1a86e]/80">
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={language === 'pl' ? 'Zacznij wpisywać kraj...' : 'Type to search country...'}
-              className="w-full rounded-lg bg-white/80 px-3 py-1.5 text-xs font-modern text-graphite placeholder:text-graphite/50 focus:outline-none focus:ring-2 focus:ring-gold"
+              className="w-full min-w-0 rounded-lg bg-white/80 px-3 py-1.5 text-xs font-modern text-graphite placeholder:text-graphite/50 focus:outline-none focus:ring-2 focus:ring-gold"
             />
           </div>
-          <div className="max-h-60 overflow-auto px-1 py-1 space-y-2">
+          <div className="max-h-60 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-1 py-1 space-y-2 awa-scrollbar">
             {(Object.entries(groupedOptions) as Array<[CountryRegion, typeof COUNTRY_OPTIONS]>).map(
               ([region, options]) =>
                 options.length > 0 && (
-                  <div key={region}>
+                  <div key={region} className="min-w-0">
                     <div className="px-3 py-1 text-[11px] font-modern uppercase tracking-wide text-graphite/70">
                       {regionLabel(region as CountryRegion)}
                     </div>
@@ -315,7 +342,7 @@ function CountrySelect({
                         <li key={option.code}>
                           <button
                             type="button"
-                            className={`w-full text-left px-4 py-1.5 text-sm font-modern rounded-lg transition ${
+                            className={`w-full min-w-0 text-left px-4 py-1.5 text-sm font-modern rounded-lg transition ${
                               value === option.code
                                 ? 'bg-gold/80 text-white font-semibold shadow-inner drop-shadow-sm'
                                 : 'text-graphite/90 hover:bg-gold/70 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.55)]'
@@ -428,12 +455,15 @@ interface CoreProfileData {
  */
 export function CoreProfileWizard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { updateSessionData, sessionData, isInitialized } = useSessionData();
   const { language } = useLanguage();
   const { user, linkUserHashToAuth } = useAuth();
-  
+  const { setProfileStep } = useFullFlowProgress();
+
   const [currentStep, setCurrentStep] = useState<WizardStep>('consent');
   const hasRestoredStepRef = useRef(false);
+  const sensorySuiteRef = useRef<SensoryTestSuiteHandle>(null);
   const [profileData, setProfileData] = useState<CoreProfileData>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentInsight, setCurrentInsight] = useState<string>('');
@@ -467,28 +497,49 @@ export function CoreProfileWizard() {
     }
   }, [updateSessionData]);
 
-  const steps: WizardStep[] = [
-    'consent',
-    'demographics',
-    'lifestyle',
-    'tinder_swipes',
-    'semantic_diff',
-    'sensory_tests'
-  ];
+  const steps = WIZARD_STEPS;
 
-  // Restore saved step or skip completed intro steps on first load
+  // Restore saved step, `?step=` from progress bar (same-route navigation), or skip completed intro steps
   useEffect(() => {
-    if (!isInitialized || hasRestoredStepRef.current) return;
+    if (!isInitialized) return;
+
+    const stepFromUrl = searchParams.get('step');
+    if (isWizardStep(stepFromUrl) && typeof window !== 'undefined') {
+      const maxRaw = sessionStorage.getItem(FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY);
+      const max = parseInt(maxRaw || '0', 10);
+      const safeMax = Number.isFinite(max) && max >= 0 ? max : 0;
+      const requested = stepFromUrl as CoreProfileWizardStepId;
+      if (safeMax >= minJourneyIndexForCoreProfileStep(requested)) {
+        let resolved: WizardStep = stepFromUrl;
+        if (
+          stepFromUrl === 'demographics' &&
+          sessionData.demographics?.ageRange &&
+          sessionData.demographics?.gender
+        ) {
+          resolved = 'lifestyle';
+        }
+        setCurrentStep(resolved);
+        sessionStorage.setItem(WIZARD_STEP_STORAGE_KEY, resolved);
+        hasRestoredStepRef.current = true;
+        router.replace('/setup/profile', { scroll: false });
+        return;
+      }
+    }
+
+    if (hasRestoredStepRef.current) return;
     hasRestoredStepRef.current = true;
 
     const hasConsent = !!sessionData.consentTimestamp;
     const hasDemographics = !!(sessionData.demographics?.ageRange && sessionData.demographics?.gender);
 
     if (typeof window !== 'undefined' && hasConsent && hasDemographics) {
-      const stored = sessionStorage.getItem(WIZARD_STEP_STORAGE_KEY) as WizardStep | null;
-      if (stored && steps.includes(stored)) {
-        setCurrentStep(stored);
+      const raw = sessionStorage.getItem(WIZARD_STEP_STORAGE_KEY);
+      if (isWizardStep(raw)) {
+        setCurrentStep(raw);
         return;
+      }
+      if (raw) {
+        sessionStorage.removeItem(WIZARD_STEP_STORAGE_KEY);
       }
     }
 
@@ -499,12 +550,19 @@ export function CoreProfileWizard() {
       console.log('[CoreProfileWizard] Skipping consent, going to demographics');
       setCurrentStep('demographics');
     }
-  }, [isInitialized, sessionData, steps]);
+  }, [isInitialized, sessionData, searchParams, router]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     sessionStorage.setItem(WIZARD_STEP_STORAGE_KEY, currentStep);
   }, [currentStep]);
+
+  useEffect(() => {
+    setProfileStep(currentStep as CoreProfileWizardStepId);
+    return () => {
+      setProfileStep(null);
+    };
+  }, [currentStep, setProfileStep]);
 
   const currentStepIndex = steps.indexOf(currentStep);
 
@@ -768,19 +826,19 @@ export function CoreProfileWizard() {
   };
 
   return (
-    <div className="flex flex-col w-full">
+    <div className="awa-profile-no-scrollbars flex w-full flex-col">
       {/* Main Content */}
       <div className="flex-1 flex justify-center items-start overflow-x-hidden w-full">
         <div className="w-full max-w-full lg:max-w-none mx-auto space-y-4 sm:space-y-6">
           
           {/* Step Content */}
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={currentStep}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
             >
                   {currentStep === 'consent' && (
                     <ConsentStep 
@@ -858,22 +916,36 @@ export function CoreProfileWizard() {
               )}
 
               {currentStep === 'sensory_tests' && (
-                <GlassCard variant="flatOnMobile" className={`p-3 sm:p-5 md:p-6 min-h-[clamp(400px,64vh,800px)] max-h-[min(82vh,900px)] sm:max-h-[min(64vh,800px)] flex flex-col overflow-y-auto scrollbar-hide !shadow-none`}>
-                  <div className="min-h-full flex flex-col">
-                    <div className="flex-1">
-                      <div className="mb-1 sm:mb-2">
-                        <h2 className="text-xl md:text-2xl font-nasalization text-graphite">
-                          {language === 'pl' ? 'Testy Sensoryczne' : 'Sensory Suite'}
-                        </h2>
-                        <p className="text-graphite font-modern text-xs sm:text-sm opacity-80">
-                          {language === 'pl'
-                            ? 'Paleta, metafora natury, muzyka, tekstury, światło i biophilia w jednym oknie.'
-                            : 'Palette, nature metaphor, music, textures, light and biophilia inside one panel.'}
-                        </p>
-                      </div>
-                      
-                      <SensoryTestSuite 
-                        className="flex flex-col"
+                <GlassCard
+                  variant="flatOnMobile"
+                  className={`p-3 sm:p-5 md:p-6 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col overflow-hidden !shadow-none w-full`}
+                >
+                  <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-x-hidden">
+                    <ScrollYWhenNeeded>
+                      <SensoryTestSuite
+                        ref={sensorySuiteRef}
+                        className="flex min-h-0 w-full min-w-0 max-w-full flex-col"
+                        initialSensoryPreferences={{
+                          music:
+                            profileData.sensoryPreferences?.music ??
+                            sessionData?.sensoryPreferences?.music,
+                          texture:
+                            profileData.sensoryPreferences?.texture ??
+                            sessionData?.sensoryPreferences?.texture,
+                          light:
+                            profileData.sensoryPreferences?.light ??
+                            sessionData?.sensoryPreferences?.light,
+                        }}
+                        initialNatureMetaphor={
+                          profileData.natureMetaphor ?? sessionData?.natureMetaphor
+                        }
+                        initialBiophiliaScore={
+                          typeof profileData.biophiliaScore === 'number'
+                            ? profileData.biophiliaScore
+                            : typeof sessionData?.biophiliaScore === 'number'
+                              ? sessionData.biophiliaScore
+                              : undefined
+                        }
                         paletteOptions={COLOR_PALETTE_OPTIONS}
                         selectedPalette={profileData.colorsAndMaterials?.selectedPalette}
                         onPaletteSelect={(paletteId) =>
@@ -956,10 +1028,16 @@ export function CoreProfileWizard() {
                           handleNext();
                         }}
                       />
-                    </div>
+                    </ScrollYWhenNeeded>
 
-                    <div className="flex justify-between mt-8">
-                      <GlassButton onClick={handleBack} variant="secondary">
+                    <div className="mt-6 flex shrink-0 justify-between sm:mt-8">
+                      <GlassButton
+                        onClick={() => {
+                          if (sensorySuiteRef.current?.tryGoBackSubStep()) return;
+                          handleBack();
+                        }}
+                        variant="secondary"
+                      >
                         <ArrowLeft size={18} />
                         {language === 'pl' ? 'Wstecz' : 'Back'}
                       </GlassButton>
@@ -1118,8 +1196,9 @@ function ConsentStep({
   const canProceedConsent = consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13;
 
   return (
-    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto !shadow-none`}>
-      <div className="min-h-full flex flex-col">
+    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col overflow-hidden !shadow-none`}>
+      <ScrollYWhenNeeded>
+      <div className="min-h-0 flex flex-col">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
             {texts.title}
@@ -1344,6 +1423,7 @@ function ConsentStep({
           </GlassButton>
         </div>
       </div>
+      </ScrollYWhenNeeded>
     </GlassCard>
   );
 }
@@ -1382,8 +1462,9 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto !shadow-none`}>
-        <div className="min-h-full flex flex-col">
+      <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col overflow-hidden !shadow-none`}>
+        <ScrollYWhenNeeded>
+        <div className="min-h-0 flex flex-col">
           <div className="flex-1">
             <h2 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
               {texts.title}
@@ -1406,7 +1487,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
                       className={`rounded-lg p-3 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                         data.ageRange === range
                           ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                          : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                          : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                       }`}
                     >
                       {range}
@@ -1433,7 +1514,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
                       className={`rounded-lg p-4 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                         data.gender === option.id
                           ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                          : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                          : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                       }`}
                     >
                       {option.label}
@@ -1446,27 +1527,11 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
                 <label className="block text-sm font-semibold text-graphite mb-2">
                   {texts.education}
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {[
-                    { id: 'high-school', label: language === 'pl' ? 'Średnie' : 'High School' },
-                    { id: 'bachelor', label: language === 'pl' ? 'Licencjat' : 'Bachelor\'s' },
-                    { id: 'master', label: language === 'pl' ? 'Magister' : 'Master\'s' },
-                    { id: 'doctorate', label: language === 'pl' ? 'Doktorat' : 'Doctorate' }
-                  ].map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => onUpdate({ ...data, education: option.id })}
-                      className={`rounded-lg p-3 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
-                        data.education === option.id
-                          ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                          : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+                <EducationSelect
+                  value={data.education}
+                  onChange={(id) => onUpdate({ ...data, education: id })}
+                  language={language}
+                />
               </div>
 
               <div>
@@ -1494,6 +1559,7 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
             </GlassButton>
           </div>
         </div>
+        </ScrollYWhenNeeded>
       </GlassCard>
     </motion.div>
   );
@@ -1528,8 +1594,9 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
   const canProceed = lifestyleData.livingSituation && lifestyleData.lifeVibe && lifestyleData.goals?.length > 0;
 
   return (
-    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} overflow-y-auto scrollbar-hide !shadow-none`}>
-      <div className="min-h-full flex flex-col">
+    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col overflow-hidden !shadow-none`}>
+      <ScrollYWhenNeeded>
+      <div className="min-h-0 flex flex-col">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
             {language === 'pl' ? 'Twój Styl Życia' : 'Your Lifestyle'}
@@ -1553,7 +1620,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
                     className={`rounded-lg p-4 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                       lifestyleData.livingSituation === option.id
                         ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                        : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                        : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                     }`}
                   >
                     {option.label[language]}
@@ -1576,7 +1643,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
                     className={`rounded-lg p-3 sm:p-4 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                       lifestyleData.lifeVibe === option.id
                         ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                        : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                        : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                     }`}
                   >
                     {option.label[language]}
@@ -1602,7 +1669,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
                     className={`rounded-lg p-4 text-xs sm:text-sm md:text-base font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                       lifestyleData.goals?.includes(option.id)
                         ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                        : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                        : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                     }`}
                   >
                     {option.label[language]}
@@ -1627,6 +1694,7 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
           </GlassButton>
         </div>
       </div>
+      </ScrollYWhenNeeded>
     </GlassCard>
   );
 }
@@ -1634,6 +1702,8 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
 function TinderSwipesStep({ onComplete, onBack }: any) {
   const { language } = useLanguage();
   const { sessionData } = useSessionData();
+  const reduceMotion = useReducedMotion();
+  const firstPhotoHintDoneRef = useRef(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipes, setSwipes] = useState<Array<{
     imageId: number;
@@ -1704,11 +1774,29 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
   }, [currentIndex, images]);
 
   const currentImage = images[currentIndex];
+  const isFirstCard = currentIndex === 0;
+  useEffect(() => {
+    if (currentIndex > 0) firstPhotoHintDoneRef.current = true;
+  }, [currentIndex]);
+  const firstCardCta = isFirstCard && !reduceMotion && !isLoading && !firstPhotoHintDoneRef.current;
   const progress = images.length > 0 ? (currentIndex / images.length) * 100 : 0;
 
   useEffect(() => {
     setStartTime(Date.now());
   }, [currentIndex]);
+
+  const handleBackClick = () => {
+    if (showInstructions) {
+      onBack();
+      return;
+    }
+    if (currentIndex > 0) {
+      setCurrentIndex((i) => i - 1);
+      setSwipes((s) => s.slice(0, -1));
+      return;
+    }
+    setShowInstructions(true);
+  };
 
   const handleSwipe = (direction: 'left' | 'right') => {
     
@@ -1768,36 +1856,39 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
 
   if (showInstructions) {
     return (
-      <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} flex flex-col justify-center items-center relative overflow-y-auto scrollbar-hide !shadow-none overscroll-none`}>
-        <div className="min-h-full flex flex-col justify-center items-center touch-none">
-          <div className="flex-1 flex flex-col justify-center items-center">
+      <GlassCard
+        variant="flatOnMobile"
+        className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} relative flex min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-hidden !shadow-none overscroll-none`}
+      >
+        <div className="flex w-full min-h-0 flex-1 flex-col items-center touch-none">
+          <div className="flex w-full min-h-0 flex-1 flex-col items-center justify-center">
             <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-3">
               {language === 'pl' ? 'Wnętrzarski Tinder' : 'Interior Design Tinder'}
             </h2>
-            <p className="text-graphite font-modern mb-4 text-sm">
+            <p className="min-h-[2.75rem] md:min-h-[3.25rem] text-graphite font-modern mb-4 text-sm [text-wrap:balance]">
               {language === 'pl' 
                 ? `${isLoading ? 'Ładowanie...' : `Pokażę Ci ${images.length} różnych wnętrz. Reaguj sercem, nie głową!`}`
                 : `${isLoading ? 'Loading...' : `I'll show you ${images.length} different interiors. React with your heart, not your head!`}`}
             </p>
             
-            <div className="flex justify-center gap-8 mb-6">
+            <div className="mb-6 flex justify-center gap-8">
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-full glass-panel bg-red-500/10 backdrop-blur-xl border border-red-400/20 flex items-center justify-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-red-400/20 bg-red-500/10 glass-panel backdrop-blur-xl">
                   <X className="text-red-500" size={18} />
                 </div>
-                <span className="text-sm text-graphite font-modern">{language === 'pl' ? 'Nie' : 'No'}</span>
+                <span className="text-sm font-modern text-graphite">{language === 'pl' ? 'Nie' : 'No'}</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-full glass-panel bg-green-500/10 backdrop-blur-xl border border-green-400/20 flex items-center justify-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-green-400/20 bg-green-500/10 glass-panel backdrop-blur-xl">
                   <Heart className="text-green-500" size={18} />
                 </div>
-                <span className="text-sm text-graphite font-modern">{language === 'pl' ? 'Tak!' : 'Yes!'}</span>
+                <span className="text-sm font-modern text-graphite">{language === 'pl' ? 'Tak!' : 'Yes!'}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-between w-full mt-8">
-            <GlassButton onClick={onBack} variant="secondary">
+          <div className="mt-2 flex w-full max-w-full shrink-0 items-center justify-between gap-3">
+            <GlassButton onClick={handleBackClick} variant="secondary">
               <ArrowLeft size={18} />
               {language === 'pl' ? 'Wstecz' : 'Back'}
             </GlassButton>
@@ -1812,70 +1903,172 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
   }
 
   return (
-    <GlassCard variant="flatOnMobile" className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex flex-col overflow-hidden md:overflow-y-auto scrollbar-hide !shadow-none overscroll-none select-none`}>
+      <GlassCard variant="flatOnMobile" className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col overflow-hidden !shadow-none overscroll-none select-none`}>
       <div className="min-h-full flex flex-col touch-none">
-        <div className="flex-1 flex flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           {isLoading ? (
             <div className="flex flex-1 items-center justify-center text-silver-dark">
               {language === 'pl' ? 'Ładowanie zdjęć...' : 'Loading images...'}
             </div>
           ) : (
-            <div className="flex-1 flex flex-col">
-              {/* Swipe Card - Moved to top for better mobile swiping */}
-              <div className="relative h-[380px] sm:h-[450px] md:h-[550px] mb-6">
-                {/* Hidden preload of next image for Next.js Image optimization */}
-                {images[currentIndex + 1] && (
-                  <div className="absolute opacity-0 pointer-events-none w-1 h-1 overflow-hidden">
-                    <Image
-                      src={images[currentIndex + 1].url}
-                      alt=""
-                      width={1}
-                      height={1}
-                      loading="eager"
-                    />
-                  </div>
-                )}
-                <AnimatePresence>
-                  {currentImage && (
-                    <motion.div
-                      key={currentImage.id}
-                      className="absolute inset-0 cursor-grab active:cursor-grabbing"
-                      drag="x"
-                      dragConstraints={{ left: 0, right: 0 }}
-                      onDragEnd={handleDragEnd}
-                      initial={{ scale: 0, rotate: 0 }}
-                      animate={{ scale: 1, rotate: 0 }}
-                      exit={{ 
-                        scale: 0, 
-                        opacity: 0,
-                        transition: { duration: 0.2 }
-                      }}
-                      whileDrag={{ scale: 1.05, rotate: 5 }}
-                      style={{ touchAction: 'none' }}
-                    >
-                      <div className="h-full rounded-2xl overflow-hidden shadow-2xl border-4 border-white/20">
-                        <div className="relative h-full w-full">
-                          <Image
-                            src={currentImage.url}
-                            alt="Interior"
-                            fill
-                            draggable={false}
-                            className="object-cover w-full h-full select-none"
-                            priority={currentIndex === 0}
-                            quality={75}
-                            sizes="100vw"
-                            loading={currentIndex < 3 ? "eager" : "lazy"}
-                          />
-                        </div>
-                      </div>
-                    </motion.div>
+            <div className="grid min-h-0 w-full flex-1 grid-rows-[auto_auto_minmax(0,1fr)] content-start gap-y-3">
+              {/* Swipe card + glass actions inset at bottom of image */}
+              <div>
+                <div className="relative h-[380px] sm:h-[450px] md:h-[550px] overflow-hidden rounded-2xl">
+                  {/* Hidden preload of next image for Next.js Image optimization */}
+                  {images[currentIndex + 1] && (
+                    <div className="absolute opacity-0 pointer-events-none w-1 h-1 overflow-hidden">
+                      <Image
+                        src={images[currentIndex + 1].url}
+                        alt=""
+                        width={1}
+                        height={1}
+                        loading="eager"
+                      />
+                    </div>
                   )}
-                </AnimatePresence>
+                  <AnimatePresence>
+                    {currentImage && (
+                      <motion.div
+                        key={currentImage.id}
+                        className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                        drag="x"
+                        dragConstraints={{ left: 0, right: 0 }}
+                        onDragEnd={handleDragEnd}
+                        initial={{ scale: 0, rotate: 0 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        exit={{
+                          scale: 0,
+                          opacity: 0,
+                          transition: { duration: 0.2 }
+                        }}
+                        whileDrag={{ scale: 1.05, rotate: 5 }}
+                        style={{ touchAction: 'none' }}
+                      >
+                        <div className="h-full rounded-2xl overflow-hidden shadow-2xl border-4 border-white/20">
+                          <div className="relative h-full w-full">
+                            <Image
+                              src={currentImage.url}
+                              alt="Interior"
+                              fill
+                              draggable={false}
+                              className="object-cover w-full h-full select-none"
+                              priority={currentIndex === 0}
+                              quality={75}
+                              sizes="100vw"
+                              loading={currentIndex < 3 ? "eager" : "lazy"}
+                            />
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center bg-gradient-to-t from-black/35 via-black/10 to-transparent px-4 pb-4 pt-10 sm:px-5 sm:pb-5 sm:pt-12">
+                    <div className="pointer-events-auto flex items-center gap-6 sm:gap-8">
+                      <motion.button
+                        whileHover={{ scale: 1.06 }}
+                        whileTap={{ scale: 0.94 }}
+                        onClick={() => handleSwipe('left')}
+                        className="relative group flex h-16 w-16 items-center justify-center overflow-visible rounded-full border border-white/35 bg-white/12 shadow-lg backdrop-blur-xl transition-colors duration-200 hover:border-red-400/55 hover:bg-red-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40 sm:h-[4.5rem] sm:w-[4.5rem]"
+                        aria-label={language === 'pl' ? 'Nie podoba mi się' : 'Dislike'}
+                        initial={firstCardCta ? { opacity: 0, y: 18, scale: 0.86 } : false}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={
+                          firstCardCta
+                            ? {
+                                opacity: { delay: 0.35, duration: 0.4, ease: [0.22, 1, 0.36, 1] },
+                                y: { delay: 0.35, type: 'spring', stiffness: 420, damping: 26 },
+                                scale: { delay: 0.35, type: 'spring', stiffness: 420, damping: 26 },
+                              }
+                            : undefined
+                        }
+                      >
+                        {firstCardCta && (
+                          <motion.span
+                            aria-hidden
+                            className="pointer-events-none absolute inset-0 rounded-full"
+                            initial={{ boxShadow: '0 0 0 0px rgba(248, 113, 113, 0.55)' }}
+                            animate={{
+                              boxShadow: [
+                                '0 0 0 0px rgba(248, 113, 113, 0.45)',
+                                '0 0 0 12px rgba(248, 113, 113, 0.12)',
+                                '0 0 0 0px rgba(248, 113, 113, 0.35)',
+                                '0 0 0 12px rgba(248, 113, 113, 0.1)',
+                                '0 0 0 0px rgba(248, 113, 113, 0.45)',
+                              ],
+                            }}
+                            transition={{
+                              delay: 0.8,
+                              duration: 1.4,
+                              times: [0, 0.25, 0.5, 0.75, 1],
+                              repeat: 1,
+                              ease: 'easeInOut',
+                            }}
+                          />
+                        )}
+                        <X
+                          size={22}
+                          strokeWidth={2.25}
+                          className="relative z-[1] text-red-400 transition-colors duration-200 group-hover:text-red-200"
+                          aria-hidden="true"
+                        />
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.06 }}
+                        whileTap={{ scale: 0.94 }}
+                        onClick={() => handleSwipe('right')}
+                        className="relative group flex h-16 w-16 items-center justify-center overflow-visible rounded-full border border-white/35 bg-white/12 shadow-lg backdrop-blur-xl transition-colors duration-200 hover:border-green-400/55 hover:bg-green-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/40 sm:h-[4.5rem] sm:w-[4.5rem]"
+                        aria-label={language === 'pl' ? 'Podoba mi się' : 'Like'}
+                        initial={firstCardCta ? { opacity: 0, y: 18, scale: 0.86 } : false}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={
+                          firstCardCta
+                            ? {
+                                opacity: { delay: 0.5, duration: 0.4, ease: [0.22, 1, 0.36, 1] },
+                                y: { delay: 0.5, type: 'spring', stiffness: 420, damping: 26 },
+                                scale: { delay: 0.5, type: 'spring', stiffness: 420, damping: 26 },
+                              }
+                            : undefined
+                        }
+                      >
+                        {firstCardCta && (
+                          <motion.span
+                            aria-hidden
+                            className="pointer-events-none absolute inset-0 rounded-full"
+                            initial={{ boxShadow: '0 0 0 0px rgba(74, 222, 128, 0.45)' }}
+                            animate={{
+                              boxShadow: [
+                                '0 0 0 0px rgba(74, 222, 128, 0.4)',
+                                '0 0 0 12px rgba(74, 222, 128, 0.12)',
+                                '0 0 0 0px rgba(74, 222, 128, 0.3)',
+                                '0 0 0 12px rgba(74, 222, 128, 0.1)',
+                                '0 0 0 0px rgba(74, 222, 128, 0.4)',
+                              ],
+                            }}
+                            transition={{
+                              delay: 0.95,
+                              duration: 1.4,
+                              times: [0, 0.25, 0.5, 0.75, 1],
+                              repeat: 1,
+                              ease: 'easeInOut',
+                            }}
+                          />
+                        )}
+                        <Heart
+                          size={22}
+                          strokeWidth={2.25}
+                          className="relative z-[1] text-green-400 transition-colors duration-200 group-hover:text-green-200"
+                          aria-hidden="true"
+                        />
+                      </motion.button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Progress - Moved below images as requested */}
-              <div className="mb-8">
-                <div className="flex justify-between items-center mb-2" aria-live="polite" aria-atomic="true">
+              <div>
+                <div className="flex justify-end items-center gap-2 mb-2" aria-live="polite" aria-atomic="true">
                   <span className="text-sm text-silver-dark font-modern">
                     {language === 'pl' ? 'Postęp' : 'Progress'}
                   </span>
@@ -1893,33 +2086,14 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
                 </div>
               </div>
 
-              {/* Action Buttons - Styled with Glass design and subtle color hints */}
-              <div className="flex justify-center gap-8 mb-4">
-                <motion.button
-                  whileHover={{ scale: 1.1, backgroundColor: 'rgba(239, 68, 68, 0.15)' }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => handleSwipe('left')}
-                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-full glass-panel bg-red-500/10 backdrop-blur-xl border border-red-400/20 shadow-xl flex items-center justify-center transition-all z-10 pointer-events-auto group"
-                  aria-label={language === 'pl' ? 'Nie podoba mi się' : 'Dislike'}
-                >
-                  <X size={18} strokeWidth={2.5} className="text-red-400/60 group-hover:text-red-500 transition-colors sm:size-18" aria-hidden="true" />
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.1, backgroundColor: 'rgba(34, 197, 94, 0.15)' }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => handleSwipe('right')}
-                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-full glass-panel bg-green-500/10 backdrop-blur-xl border border-green-400/20 shadow-xl flex items-center justify-center transition-all z-10 pointer-events-auto group"
-                  aria-label={language === 'pl' ? 'Podoba mi się' : 'Like'}
-                >
-                  <Heart size={18} strokeWidth={2.5} className="text-green-400/60 group-hover:text-green-500 transition-colors sm:size-18" aria-hidden="true" />
-                </motion.button>
-              </div>
+              {/* Soaks extra card height so controls stay directly under the progress bar */}
+              <div className="min-h-0" aria-hidden="true" />
             </div>
           )}
         </div>
 
-        <div className="flex justify-between mt-8">
-          <GlassButton onClick={onBack} variant="secondary">
+        <div className="flex justify-between mt-4">
+          <GlassButton onClick={handleBackClick} variant="secondary">
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
@@ -1963,6 +2137,14 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
 
   const currentQ = questions[currentQuestion];
 
+  const handleBackClick = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion((q) => q - 1);
+      return;
+    }
+    onBack();
+  };
+
   const handleChoice = (side: 'left' | 'right') => {
     const value = side === 'left' ? 0.2 : 0.8;
     const newAnswers = { ...answers, [currentQ.id]: value };
@@ -1977,8 +2159,9 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
   };
 
   return (
-    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex flex-col justify-center overflow-y-auto scrollbar-hide !shadow-none`}>
-      <div className="min-h-full flex flex-col justify-center">
+    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col justify-center overflow-hidden !shadow-none`}>
+      <ScrollYWhenNeeded>
+      <div className="min-h-0 flex flex-col justify-center">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2 text-center">
             {currentQ.question[language]}
@@ -2037,12 +2220,13 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
         </div>
 
         <div className="flex justify-between mt-8">
-          <GlassButton onClick={onBack} variant="secondary">
+          <GlassButton onClick={handleBackClick} variant="secondary">
             <ArrowLeft size={18} />
             {language === 'pl' ? 'Wstecz' : 'Back'}
           </GlassButton>
         </div>
       </div>
+      </ScrollYWhenNeeded>
     </GlassCard>
   );
 }

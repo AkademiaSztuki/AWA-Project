@@ -26,7 +26,7 @@ pnpm --version
 
 ## Krok 3: Zainstaluj zależności projektu
 
-W głównym katalogu projektu (`AWA-Project`) uruchom:
+W głównym katalogu repozytorium uruchom:
 
 ```powershell
 pnpm install
@@ -44,7 +44,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 NEXT_PUBLIC_MODAL_API_URL=your-modal-endpoint
 NEXT_PUBLIC_GCP_API_BASE_URL=https://your-backend-gcp.example.run.app
 # Optional: force in-process anon limits (skip Cloud SQL tables)
-# AWA_ANON_LIMITS_MEMORY_ONLY=true
+# IDA_ANON_LIMITS_MEMORY_ONLY=true
+# (legacy: AWA_ANON_LIMITS_MEMORY_ONLY=true)
 ```
 
 **Uwaga:** Projekt może działać lokalnie bez tych zmiennych, ale niektóre funkcje mogą nie działać.

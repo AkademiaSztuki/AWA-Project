@@ -155,7 +155,7 @@ export default function PathSelectionScreen() {
                 className="text-left w-full"
                 onClick={() => handlePathSelection('fast')}
               >
-                <GlassCard variant="interactive" className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-silver/50 transition-all group rounded-xl sm:rounded-2xl">
+                <GlassCard variant="interactive" className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-silver/50 transition-all group">
                   <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                     <div className="w-10 h-10 sm:w-12 sm:h-14 rounded-lg sm:rounded-xl bg-gradient-to-br from-silver to-platinum flex items-center justify-center flex-shrink-0">
                       <Zap size={20} className="sm:w-7 sm:h-7 text-graphite" aria-hidden="true" />
@@ -182,9 +182,9 @@ export default function PathSelectionScreen() {
                 className="text-left w-full"
                 onClick={() => handlePathSelection('full')}
               >
-                <GlassCard 
+                <GlassCard
                   variant="highlighted"
-                  className="p-4 sm:p-5 md:p-6 lg:p-8 h-full hover:border-gold/50 transition-all group rounded-xl sm:rounded-2xl relative overflow-hidden"
+                  className="p-4 sm:p-5 md:p-6 lg:p-8 h-full transition-all group relative isolate"
                 >
                   <div className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-gradient-to-r from-gold to-champagne text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-bold whitespace-nowrap z-10">
                     ✨ {texts.recommended}

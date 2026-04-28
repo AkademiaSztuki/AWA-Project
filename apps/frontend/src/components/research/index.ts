@@ -4,5 +4,6 @@
 export { MoodGrid, MoodGridComparison } from './MoodGrid';
 export { BiophiliaTest, BiophiliaResult } from './BiophiliaTest';
 export { SensoryTest, SensoryTestSuite } from './SensoryTests';
+export type { SensoryTestSuiteHandle } from './SensoryTests';
 export { NatureMetaphorTest, AspirationalSelfPrompt } from './ProjectiveTechniques';
 

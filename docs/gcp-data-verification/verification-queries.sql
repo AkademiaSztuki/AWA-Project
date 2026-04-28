@@ -1,5 +1,5 @@
 -- ============================================================================
--- AWA — zapytania kontrolne zapisu w Cloud SQL (PostgreSQL)
+-- IDA — zapytania kontrolne zapisu w Cloud SQL (PostgreSQL)
 -- Użycie: zamień :user_hash, :auth_user_id, :user_id_text, :session_id na literały
 --         lub użyj prepared statements ($1, $2, …) w psql / aplikacji.
 -- ============================================================================

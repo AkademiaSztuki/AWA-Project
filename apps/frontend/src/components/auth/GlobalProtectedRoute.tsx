@@ -7,6 +7,7 @@ import { ProtectedRoute } from './ProtectedRoute';
 const PUBLIC_PATHS = [
   '/', // Landing page
   '/auth/callback', // Auth callback
+  '/auth/google', // Google OAuth PKCE return (/auth/google/callback)
   '/auth/verify', // Magic link verification
   '/auth/verify-email', // Email verification after registration
   '/flow', // Onboarding / funnel without forced login
@@ -39,7 +40,7 @@ export function GlobalProtectedRoute({ children }: GlobalProtectedRouteProps) {
     return <>{children}</>;
   }
   
-  // Wszystkie inne strony - wymagają logowania (w tym /flow/* i /setup/*)
+  // Wszystkie inne strony wymagają logowania. (/flow i /setup są publiczne wyżej)
   return <ProtectedRoute>{children}</ProtectedRoute>;
 }
 

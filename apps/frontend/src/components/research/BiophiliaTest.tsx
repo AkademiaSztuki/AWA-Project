@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BIOPHILIA_OPTIONS, BiophiliaOption } from '@/lib/questions/validated-scales';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -29,12 +29,33 @@ interface BiophiliaTestProps {
 export function BiophiliaTest({ onSelect, className = '', frameless = false, stepCounter }: BiophiliaTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const handleSelect = (option: BiophiliaOption) => {
     setSelectedId(option.id);
     onSelect(option.score, option.id);
   };
+
+  const previewId = hoveredId ?? selectedId ?? null;
+  const previewOption = previewId ? BIOPHILIA_OPTIONS.find((o) => o.id === previewId) : undefined;
+  const previewName = previewOption
+    ? `${getBiophiliaLevelLabel(previewOption.score, language)} · ${t(previewOption.label)}`
+    : undefined;
+  const isHoverPreview = Boolean(hoveredId && hoveredId !== selectedId);
+  const badgeUpper =
+    previewName == null
+      ? null
+      : isHoverPreview
+        ? language === 'pl'
+          ? 'Podgląd'
+          : 'Preview'
+        : selectedId
+          ? language === 'pl'
+            ? 'Wybrano'
+            : 'Selected'
+          : language === 'pl'
+            ? 'Podgląd'
+            : 'Preview';
 
   const content = (
     <>
@@ -49,40 +70,56 @@ export function BiophiliaTest({ onSelect, className = '', frameless = false, ste
             </p>
             <p className="text-xs sm:text-sm font-modern text-graphite leading-tight">
               {language === 'pl'
-                ? 'Która wersja najbardziej TY?'
-                : 'Which version is most YOU?'}
+                ? 'Która opcja najbardziej do Ciebie pasuje?'
+                : 'Which option feels most like you?'}
             </p>
           </div>
         </div>
-        {selectedId && (
-          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 bg-white/5 sm:bg-transparent p-1 sm:p-0 rounded-lg border border-white/10 sm:border-none">
-            <span className="text-[9px] uppercase tracking-wider text-silver-dark opacity-70">
-              {language === 'pl' ? 'Wybrano' : 'Selected'}
+        <div className="flex min-h-[2.75rem] max-w-[14rem] flex-shrink-0 flex-row items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-2 sm:min-h-0 sm:max-w-[18rem] sm:flex-col sm:items-end sm:gap-0.5 sm:bg-white/[0.06] sm:p-2">
+          {previewName && badgeUpper ? (
+            <>
+              <span
+                className={`text-[9px] uppercase tracking-wider transition-colors duration-200 ${
+                  isHoverPreview ? 'text-gold/90' : 'text-silver-dark opacity-80'
+                }`}
+              >
+                {badgeUpper}
+              </span>
+              <span className="text-right text-[10px] font-bold leading-tight text-gold sm:text-xs">
+                {previewName}
+              </span>
+            </>
+          ) : (
+            <span className="text-right text-[9px] font-modern leading-snug text-silver-dark opacity-75 sm:text-[10px]">
+              {language === 'pl'
+                ? 'Najedź na wariant, by zobaczyć podgląd.'
+                : 'Hover a tile to preview your choice.'}
             </span>
-            <span className="text-[10px] sm:text-xs font-bold text-gold leading-none">
-              {getBiophiliaLevelLabel(
-                BIOPHILIA_OPTIONS.find((o) => o.id === selectedId)?.score || 0,
-                language
-              )}
-            </span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Options Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4">
+      <div
+        className="grid grid-cols-1 gap-2 sm:gap-4 md:grid-cols-2"
+        onMouseLeave={() => setHoveredId(null)}
+      >
         {BIOPHILIA_OPTIONS.map((option) => {
           const isSelected = selectedId === option.id;
+          const isHovered = hoveredId === option.id;
 
           return (
             <button
               key={option.id}
               type="button"
               data-biophilia-button
-              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all min-h-[160px] sm:min-h-[220px] ${
+              onMouseEnter={() => setHoveredId(option.id)}
+              className={`flex min-h-[160px] flex-col overflow-hidden rounded-2xl border text-left transition-all sm:min-h-[220px] ${
                 isSelected
                   ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
-                  : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
+                  : isHovered
+                    ? 'border-gold/50 shadow-md shadow-gold/15'
+                    : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
               style={{ 
                 transform: 'translateZ(0)',

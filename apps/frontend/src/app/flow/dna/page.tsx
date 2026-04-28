@@ -166,7 +166,7 @@ export default function VisualDNAPage() {
   return (
     <div className="min-h-screen flex flex-col w-full">
       <div className="flex-1 flex items-center justify-center p-8">
-        <GlassCard className="w-full p-6 md:p-8 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-[48px] max-h-[min(90vh,900px)] overflow-auto scrollbar-hide">
+        <GlassCard scrollable className="flex min-h-0 w-full max-h-[min(90vh,900px)] flex-col rounded-[48px] border border-white/20 bg-white/10 p-6 shadow-xl backdrop-blur-xl md:p-8">
         {isAnalyzing && (
           <motion.div
             initial={{ opacity: 0 }}

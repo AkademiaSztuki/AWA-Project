@@ -1,4 +1,4 @@
-# AWA Project - Master Plan
+# IDA Project - Master Plan
 
 **Status**: In Development  
 **Last Updated**: October 2025  
@@ -112,7 +112,7 @@ Thanks (/flow/thanks)
 - `TinderCard` - Swipe card component
 - All styled with **glassmorphism**, **no emojis**, **no colorful icons**
 
-**AWA** (`components/awa/`):
+**IDA** (`components/awa/`):
 - `AwaContainer` - 3D model container
 - `AwaDialogue` - Bottom dialogue bar
 - `AwaModel` - Three.js 3D character
@@ -705,5 +705,5 @@ apps/frontend/src/
 ---
 
 *Last Review: October 2025*
-*Maintainer: AWA Research Team*
+*Maintainer: IDA Research Team*
 

@@ -9,14 +9,13 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { Palette, Check } from 'lucide-react';
+import { Check, ArrowLeft } from 'lucide-react';
 import { STYLE_OPTIONS } from '@/lib/questions/style-options';
-import { safeSessionStorage, logBehavioralEvent } from '@/lib/gcp-data';
-import { useAuth } from '@/contexts/AuthContext';
-import { LoginModal } from '@/components/auth/LoginModal';
+import { safeSessionStorage } from '@/lib/gcp-data';
+import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_SCROLL_STEP } from '@/lib/flow/glass-step-layout';
 
 /** Tells /flow/fast-generate to ignore any cached fast preview (survives in-memory/GCP merge quirks). */
-const AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY = 'awa_fast_track_require_fresh_gen';
+const IDA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY = 'awa_fast_track_require_fresh_gen';
 
 // Map style IDs to image filenames
 const STYLE_IMAGE_MAP: Record<string, string> = {
@@ -55,9 +54,7 @@ export default function StyleSelectionPage() {
   const router = useRouter();
   const { sessionData, updateSession } = useSession();
   const { language } = useLanguage();
-  const { user } = useAuth();
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
-  const [nudgeAOpen, setNudgeAOpen] = useState(false);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   const handleImageError = (styleId: string) => {
@@ -66,18 +63,20 @@ export default function StyleSelectionPage() {
 
   const texts = {
     pl: {
-      title: 'Wybierz Swój Styl',
+      title: 'Wybierz swój styl',
       subtitle: 'W jakim stylu chcesz urządzić swoje wnętrze?',
       description: 'Wybierz jeden styl, który najbardziej Ci odpowiada. Pomoże mi to stworzyć idealne wizualizacje.',
       continue: 'Dalej',
-      selectOne: 'Wybierz jeden styl aby kontynuować'
+      selectOne: 'Wybierz jeden styl, aby kontynuować',
+      back: 'Wstecz',
     },
     en: {
       title: 'Choose Your Style',
       subtitle: 'What style would you like for your interior?',
       description: 'Select one style that resonates with you. This will help me create perfect visualizations.',
       continue: 'Continue',
-      selectOne: 'Select one style to continue'
+      selectOne: 'Select one style to continue',
+      back: 'Back',
     }
   };
 
@@ -119,7 +118,7 @@ export default function StyleSelectionPage() {
       fastTrackLastGeneratedStyle: undefined,
     });
 
-    safeSessionStorage.setItem(AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY, '1');
+    safeSessionStorage.setItem(IDA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY, '1');
 
     // Go to fast track generation
     router.push('/flow/fast-generate');
@@ -127,37 +126,38 @@ export default function StyleSelectionPage() {
 
   const handleContinue = async () => {
     if (!selectedStyle) return;
-    if (!user) {
-      setNudgeAOpen(true);
-      return;
-    }
     await applyStyleAndGoToGenerate();
+  };
+
+  const handleBack = () => {
+    router.push('/flow/fast-track');
   };
 
   return (
     <div className="min-h-screen flex flex-col w-full">
-      <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
-        <GlassCard variant="flatOnMobile" className="w-full max-w-6xl p-6 md:p-8 lg:glass-panel lg:shadow-xl rounded-2xl max-h-[min(90vh,900px)] overflow-auto scrollbar-hide">
+      <div className="flex-1 flex justify-center items-start">
+        <div className={`${FULL_FLOW_GLASS_SHELL} space-y-6`}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center shadow-lg">
-                <Palette size={28} className="text-white" />
-              </div>
-              <h1 className="text-3xl lg:text-4xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent">
-                {t.title}
-              </h1>
-            </div>
-            <p className="text-graphite font-modern text-lg">
+          <div className="mb-6">
+            <h1 className="font-nasalization text-xl text-graphite md:text-2xl">
+              {t.title}
+            </h1>
+            <p className="mt-3 text-sm font-modern text-graphite">
               {t.subtitle}
             </p>
-            <p className="text-silver-dark font-modern text-sm mt-2">
+            <p className="mt-2 text-sm font-modern text-silver-dark">
               {t.description}
             </p>
           </div>
 
           {/* Style Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          <div className="mb-8 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 md:grid-cols-3">
             {STYLE_OPTIONS.map((style) => {
               const isSelected = selectedStyle === style.id;
               const imagePath = getStyleImagePath(style.id);
@@ -170,10 +170,10 @@ export default function StyleSelectionPage() {
                   onClick={() => setSelectedStyle(style.id)}
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`relative rounded-2xl overflow-hidden text-left transition-all duration-300 min-h-[200px] ${
+                  className={`relative min-h-[200px] overflow-hidden rounded-2xl border text-left transition-all duration-300 sm:min-h-[180px] ${
                     isSelected
-                      ? 'border-2 border-gold shadow-xl'
-                      : 'border border-white/10 hover:border-gold/50'
+                      ? 'border-gold shadow-inner shadow-gold/10'
+                      : 'border-white/10 hover:border-gold/30'
                   }`}
                   style={{ 
                     transform: 'translateZ(0)',
@@ -218,14 +218,14 @@ export default function StyleSelectionPage() {
                   )}
                   
                   {/* Style name and description at bottom */}
-                  <div className="absolute bottom-0 left-0 right-0 z-20 px-4 py-4 flex flex-col gap-1">
-                    <h3 className={`font-nasalization text-lg leading-tight ${
+                  <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col gap-0.5 px-3 py-2.5 sm:gap-1 sm:px-4 sm:py-3">
+                    <h3 className={`font-nasalization text-xs leading-tight sm:text-sm ${
                       hasImage ? 'text-white drop-shadow-lg' : 'text-graphite'
                     }`}>
                       {language === 'pl' ? style.labelPl : style.labelEn}
                     </h3>
-                    <p className={`text-xs font-modern leading-tight ${
-                      hasImage ? 'text-white/80 drop-shadow-md' : 'text-silver-dark'
+                    <p className={`line-clamp-2 text-[9px] font-modern leading-tight sm:text-[10px] ${
+                      hasImage ? 'text-white/90 drop-shadow-md' : 'text-silver-dark'
                     }`}>
                       {language === 'pl' ? (style.descriptionPl || style.description) : style.description}
                     </p>
@@ -235,18 +235,31 @@ export default function StyleSelectionPage() {
             })}
           </div>
 
-          {/* Continue Button */}
-          <div className="flex justify-center">
+          {/* Back + continue (same pattern as fast-track photo step) */}
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <GlassButton
+              type="button"
+              variant="secondary"
+              onClick={handleBack}
+              size="lg"
+              className="w-full sm:w-auto"
+            >
+              <ArrowLeft size={18} />
+              {t.back}
+            </GlassButton>
+            <GlassButton
+              type="button"
               onClick={handleContinue}
               disabled={!selectedStyle}
               size="lg"
-              className="px-8"
+              className="px-8 w-full sm:w-auto"
             >
               {selectedStyle ? t.continue : t.selectOne}
             </GlassButton>
           </div>
-        </GlassCard>
+            </GlassCard>
+          </motion.div>
+        </div>
       </div>
 
       {/* Dialog IDA na dole */}
@@ -260,33 +273,6 @@ export default function StyleSelectionPage() {
             : 'Choose a style that inspires you. Don\'t worry - you can adjust it later!'}
         />
       </div>
-
-      <LoginModal
-        isOpen={nudgeAOpen}
-        onClose={() => setNudgeAOpen(false)}
-        gateMode="soft"
-        nudgeLocation="style_selection"
-        nudgeReason="login_required"
-        onMaybeLater={async () => {
-          const h = (sessionData as { userHash?: string } | null)?.userHash;
-          if (h) {
-            void logBehavioralEvent(h, 'login_nudge', { page: 'style-selection', nudge: 'nudge_soft_later' });
-          }
-          setNudgeAOpen(false);
-          await applyStyleAndGoToGenerate();
-        }}
-        onNudgeEvent={(ev) => {
-          const h = (sessionData as { userHash?: string } | null)?.userHash;
-          if (h) void logBehavioralEvent(h, 'login_nudge', { page: 'style-selection', location: 'style_selection', nudge: ev });
-        }}
-        message={
-          language === 'pl'
-            ? 'Zaloguj się, aby zapisać postęp i później wrócić do tego samego projektu. Możesz też od razu iść dalej bez logowania.'
-            : 'Sign in to save progress and return to this project later. You can also continue without signing in.'
-        }
-        redirectPath="/flow/fast-generate"
-        softMaybeLaterLabel={{ pl: 'Kontynuuj bez konta', en: 'Continue without account' }}
-      />
     </div>
   );
 }

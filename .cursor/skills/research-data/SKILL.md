@@ -1,9 +1,9 @@
 ---
 name: research-data
-description: Research data collection and handling patterns for AWA project. Use when working with participant data, behavioral tracking, GDPR compliance, data anonymization, or research analytics. Covers data collection workflows, consent management, and data export.
+description: Research data collection and handling patterns for IDA project. Use when working with participant data, behavioral tracking, GDPR compliance, data anonymization, or research analytics. Covers data collection workflows, consent management, and data export.
 ---
 
-# Research Data Handling for AWA Project
+# Research Data Handling for IDA Project
 
 ## Data Architecture
 

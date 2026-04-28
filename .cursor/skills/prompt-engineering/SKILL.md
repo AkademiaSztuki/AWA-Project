@@ -1,9 +1,9 @@
 ---
 name: prompt-engineering
-description: Prompt engineering for FLUX AI image generation in AWA project. Use when creating or modifying prompts, working with personality-based style derivation, facet mapping, or prompt synthesis. Covers facet-derivation.ts, scoring.ts, data-quality.ts, and research-mappings.
+description: Prompt engineering for FLUX AI image generation in IDA project. Use when creating or modifying prompts, working with personality-based style derivation, facet mapping, or prompt synthesis. Covers facet-derivation.ts, scoring.ts, data-quality.ts, and research-mappings.
 ---
 
-# Prompt Engineering for AWA Project
+# Prompt Engineering for IDA Project
 
 ## Architecture
 

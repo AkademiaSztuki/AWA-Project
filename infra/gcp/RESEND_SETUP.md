@@ -15,13 +15,13 @@ W pliku **`apps/frontend/.env.local`** dopisz (bez cudzysłowów, w jednej linii
 
 ```env
 RESEND_API_KEY=re_TwojKluczZResend
-RESEND_FROM=AWA <onboarding@resend.dev>
+RESEND_FROM=IDA <onboarding@resend.dev>
 ```
 
 - **`RESEND_API_KEY`** – klucz z [Resend Dashboard](https://resend.com/api-keys) → Create API Key. Skopiuj klucz (zaczyna się od `re_`) i wklej tutaj.
 - **`RESEND_FROM`** – nadawca maila.  
-  - Na start możesz zostawić `AWA <onboarding@resend.dev>` (domena testowa Resend).  
-  - Żeby wysyłać z własnej domeny (np. `login@twoja-domena.com`): w [Resend → Domains](https://resend.com/domains) dodaj domenę, dodaj podane rekordy DNS (SPF, DKIM), po weryfikacji ustaw np. `RESEND_FROM=AWA <login@twoja-domena.com>`.
+  - Na start możesz zostawić `IDA <onboarding@resend.dev>` (domena testowa Resend).  
+  - Żeby wysyłać z własnej domeny (np. `login@twoja-domena.com`): w [Resend → Domains](https://resend.com/domains) dodaj domenę, dodaj podane rekordy DNS (SPF, DKIM), po weryfikacji ustaw np. `RESEND_FROM=IDA <login@twoja-domena.com>`.
 
 Plik `.env.local` jest w `.gitignore` – klucz nie trafi do repozytorium.
 
@@ -39,7 +39,7 @@ cd infra/gcp
 1. [Resend](https://resend.com) → **Domains** → **Add Domain** → wpisz domenę (np. `twoja-domena.com`).
 2. W DNS domeny dodaj rekordy, które Resend pokaże (SPF, DKIM – zwykle 2–3 wpisy CNAME/TXT).
 3. Po weryfikacji (status „Verified”) ustaw w `.env.local`:  
-   `RESEND_FROM=AWA <login@twoja-domena.com>`  
+   `RESEND_FROM=IDA <login@twoja-domena.com>`  
    (albo inny adres z tej domeny, np. `noreply@twoja-domena.com`).
 4. Zrób ponownie `.\deploy-backend.ps1`.
 

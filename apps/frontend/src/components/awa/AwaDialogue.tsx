@@ -351,6 +351,9 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
 }) => {
   const { language } = useLanguage();
   const isMobile = useIsMobile();
+  const audioManager = useAudioManager();
+  const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
+  const { playAnimation } = useAnimation();
   
   // Ustawienia prędkości i pauz - wszystko w jednym miejscu
   const TYPING_SPEED = 14.8; // Prędkość wyświetlania tekstu (ms między znakami)
@@ -360,14 +363,11 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const PAUSE_AFTER_ROOM_ANALYSIS = 600; // Dodatkowe opóźnienie po „Sprawdź…”, żeby nie uciąć ostatniego słowa audio
   const PAUSE_AFTER_TEXT = 0; // Pauza w TextType po zakończeniu tekstu (ms) - wyłączona, bo mamy PAUSE_BETWEEN_SENTENCES
   
-  // Zabezpieczenie przed undefined
-  if (!currentStep) {
-    console.error('AwaDialogue: currentStep is undefined');
-    return null;
-  }
-  
   // Get dialogues for current language - use useMemo to ensure it's always up to date
   const dialogues = useMemo(() => {
+    if (!currentStep) {
+      return [];
+    }
     const stepDialogues = DIALOGUE_MAP[currentStep];
     const baseDialogues = skipBaseDialogues
       ? []
@@ -397,9 +397,10 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       }
       return ["Cześć! Jestem IDA."];
     }
-  }, [currentStep, language, customMessage]);
+  }, [currentStep, language, customMessage, skipBaseDialogues]);
   
-  const audioFile = disableAudio ? '' : getAudioFile(currentStep, language);
+  const audioFile =
+    disableAudio || !currentStep ? '' : getAudioFile(currentStep, language);
   
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [isDone, setIsDone] = useState(false);
@@ -417,15 +418,16 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   
   // Track transitioning state to prevent double-triggering
   const isTransitioningRef = useRef<boolean>(false);
-  
-  if (!dialogues || dialogues.length === 0) {
-    return null;
-  }
-  
+
+  /** When autoHide finishes, hide UI and notify parent (e.g. session “shown once” flags). */
+  const finishAutoHideAndNotify = () => {
+    setIsVisible(false);
+    if (!onDialogueEnd || onDialogueEndCalledRef.current) return;
+    onDialogueEndCalledRef.current = true;
+    onDialogueEnd();
+  };
+
   // console.log('AwaDialogue render:', { currentStep, language, dialogues, audioFile, fullWidth, autoHide, audioReady, hasStarted, currentSentenceIndex });
-  const audioManager = useAudioManager();
-  const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
-  const { playAnimation } = useAnimation();
 
   // console.log('AwaDialogue: useDialogueVoice hook returned:', { voiceVolume, voiceEnabled });
 
@@ -494,7 +496,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
         if (audioEnded || !voiceEnabled || !audioFile) {
           setTimeout(() => {
             console.log('AwaDialogue: Hiding dialogue after completion');
-            setIsVisible(false);
+            finishAutoHideAndNotify();
           }, PAUSE_AFTER_ALL_SENTENCES);
         }
         // If audio is still playing, hide will be called in handleAudioEnded
@@ -546,13 +548,13 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       hideScheduledRef.current = true;
       setTimeout(() => {
         console.log('AwaDialogue: Hiding dialogue after audio ended');
-        setIsVisible(false);
+        finishAutoHideAndNotify();
       }, PAUSE_AFTER_ALL_SENTENCES);
     } else if (autoHide && allSentencesCompleted && hideScheduledRef.current) {
       // If hide was already scheduled from handleSentenceComplete, execute it now after audio ends
       setTimeout(() => {
         console.log('AwaDialogue: Executing hide after audio ended');
-        setIsVisible(false);
+        finishAutoHideAndNotify();
       }, PAUSE_AFTER_ALL_SENTENCES);
     }
   };
@@ -598,7 +600,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       hasInitializedRef.current = true;
       
       // Auto-start for non-landing steps - use requestAnimationFrame to ensure state is set
-      if (currentStep !== 'landing') {
+      if (currentStep !== 'landing' && dialogues.length > 0) {
         const stepToStart = currentStep;
         console.log('AwaDialogue: Auto-starting for step:', stepToStart);
         
@@ -631,11 +633,13 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
         isResettingRef.current = false;
       }
     }
-  }, [currentStep, language, playAnimation]);
+  }, [currentStep, language, playAnimation, dialogues, isMobile]);
   
   // Handle customMessage changes - reset dialogue when customMessage appears
   const prevCustomMessageRef = React.useRef<string | string[] | undefined>(undefined);
   useEffect(() => {
+    if (!currentStep) return;
+
     const customMessageStr = JSON.stringify(customMessage);
     const prevCustomMessageStr = JSON.stringify(prevCustomMessageRef.current);
     
@@ -718,7 +722,8 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     console.log('User skipped dialogue');
     setIsDone(true);
     setIsVisible(false);
-    if (onDialogueEnd) {
+    if (onDialogueEnd && !onDialogueEndCalledRef.current) {
+      onDialogueEndCalledRef.current = true;
       onDialogueEnd();
     }
   };
@@ -727,7 +732,13 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // This handles edge cases where reset useEffect might not have triggered
   // But don't run if we're currently resetting
   useEffect(() => {
-    if (currentStep !== 'landing' && !hasStarted && !audioReady && !isResettingRef.current) {
+    if (
+      currentStep !== 'landing' &&
+      dialogues.length > 0 &&
+      !hasStarted &&
+      !audioReady &&
+      !isResettingRef.current
+    ) {
       // Wait a bit to see if main reset will trigger
       const timer = setTimeout(() => {
         // Double-check we're still not resetting and haven't started
@@ -744,9 +755,14 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       }, 300); // Shorter delay - main reset should happen in 100ms
       return () => clearTimeout(timer);
     }
-  }, [currentStep, hasStarted, audioReady, playAnimation]);
+  }, [currentStep, hasStarted, audioReady, playAnimation, dialogues.length]);
 
   const isLanding = currentStep === 'landing';
+
+  // No scripted lines (or missing step): skip UI — must run only after all hooks above.
+  if (!currentStep || dialogues.length === 0) {
+    return null;
+  }
   
   // For landing, show click prompt if not ready
   if (!audioReady && currentStep === 'landing') {

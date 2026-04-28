@@ -39,12 +39,12 @@ export const MATERIAL_TRANSLATIONS: Record<string, { pl: string; en: string }> =
   'unfinished': { pl: 'Niefinirowany', en: 'Unfinished' },
   
   // Sensory texture materials (with underscores)
-  'soft_fabric': { pl: 'Miękka tkanina', en: 'Soft fabric' },
-  'smooth_wood': { pl: 'Gładkie drewno', en: 'Smooth wood' },
-  'cold_metal': { pl: 'Zimny metal', en: 'Cold metal' },
-  'rough_stone': { pl: 'Szorstki kamień', en: 'Rough stone' },
-  'warm_leather': { pl: 'Ciepła skóra', en: 'Warm leather' },
-  'warm_wood': { pl: 'Ciepłe drewno', en: 'Warm wood' },
+  'soft_fabric': { pl: 'Tkanina', en: 'Fabric' },
+  'smooth_wood': { pl: 'Drewno', en: 'Wood' },
+  'cold_metal': { pl: 'Metal', en: 'Metal' },
+  'rough_stone': { pl: 'Kamień', en: 'Stone' },
+  'warm_leather': { pl: 'Skóra', en: 'Leather' },
+  'warm_wood': { pl: 'Drewno', en: 'Wood' },
 };
 
 // Color name translations for dashboard display

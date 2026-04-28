@@ -1,4 +1,4 @@
-# AWA - AI Interior Design Dialogue Research Platform
+# IDA - AI Interior Design Dialogue Research Platform
 
 ## Architecture
 
@@ -26,7 +26,7 @@ pnpm run deploy:frontend   # Vercel
 
 ## Project layout
 
-- `apps/frontend/` - Next.js app (AWA character, flows, GCP client)
+- `apps/frontend/` - Next.js app (IDA character, flows, GCP client)
 - `apps/backend-gcp/` - Cloud Run API (Postgres, research routes, auth helpers)
 - `infra/gcp/sql/` - **Source of truth** for Cloud SQL schema
 - `docs/archive/modal-backend/` - Legacy Modal.com Python backend (archived)

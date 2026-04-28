@@ -4,12 +4,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { PRSMoodGridData, PRS_MOOD_GRID_CONFIG } from '@/lib/questions/validated-scales';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { cn } from '@/lib/utils';
 
 interface MoodGridProps {
   initialPosition?: PRSMoodGridData;
   onPositionChange: (position: PRSMoodGridData) => void;
   question?: string;  // Override default question
   mode?: 'current' | 'target' | 'design';  // Visual styling hints
+  /** When embedded in a step that already has title + instructions, skip duplicate titles and footer. */
+  variant?: 'default' | 'embedded';
   className?: string;
 }
 
@@ -27,9 +30,11 @@ export function MoodGrid({
   onPositionChange,
   question,
   mode = 'current',
+  variant = 'default',
   className = ''
 }: MoodGridProps) {
   const { t, language } = useLanguage();
+  const isEmbedded = variant === 'embedded';
   const [position, setPosition] = useState<PRSMoodGridData>(
     initialPosition || { x: 0, y: 0 }
   );
@@ -92,20 +97,22 @@ export function MoodGrid({
   const markerColor = modeColors[mode];
 
   return (
-    <GlassCard className={`p-6 ${className}`}>
-      {/* Question */}
-      <div className="mb-6 text-center">
-        <h3 className="text-xl lg:text-2xl font-nasalization text-gray-800 mb-2">
-          {question || t(config.axes.x.label)}
-        </h3>
-        {!hasClicked && (
-          <p className="text-sm text-gray-600 font-modern">
-            {language === 'pl' 
-              ? 'Kliknij w miejsce na mapie które odpowiada Twojemu pokojowi' 
-              : 'Click on the map where your room belongs'}
-          </p>
-        )}
-      </div>
+    <div className={cn('w-full', className)}>
+      {/* Standalone: axis summary + click hint. Embedded: parent already provides title + how-to. */}
+      {!isEmbedded && (
+        <div className="mb-6 text-center">
+          <h3 className="text-xl lg:text-2xl font-nasalization text-gray-800 mb-2">
+            {question || t(config.axes.x.label)}
+          </h3>
+          {!hasClicked && (
+            <p className="text-sm text-gray-600 font-modern">
+              {language === 'pl'
+                ? 'Kliknij w miejsce na mapie, które odpowiada Twojemu odczuciu w tej przestrzeni'
+                : 'Click on the map where this space feels right for you'}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Grid Container */}
       <div className="flex flex-col items-center w-full max-w-[min(500px,90vw)] mx-auto">
@@ -126,6 +133,14 @@ export function MoodGrid({
               ref={gridRef}
               className="relative bg-gradient-to-br from-white/40 to-white/10 backdrop-blur-sm border-2 border-white/30 rounded-lg cursor-crosshair overflow-hidden shadow-lg w-full h-full"
               onClick={handleGridClick}
+              {...(isEmbedded
+                ? {
+                    'aria-label':
+                      language === 'pl'
+                        ? 'Mapa nastroju: oś pozioma energetyzujący–uspokajający, oś pionowa nudny–inspirujący. Kliknij w wybrane miejsce.'
+                        : 'Mood map: horizontal energizing–calming, vertical boring–inspiring. Click to place your point.'
+                  }
+                : {})}
             >
               {/* Quadrant lines */}
               <div className="absolute top-0 left-1/2 w-px h-full bg-white/30" />
@@ -182,13 +197,14 @@ export function MoodGrid({
         </div>
       )}
 
-      {/* Help text */}
-      <div className="mt-4 text-xs text-center text-gray-500 font-modern">
-        {language === 'pl' 
-          ? 'Ta mapa pomaga nam zrozumieć jaki nastrój i energię chcesz w swoim pokoju' 
-          : 'This map helps us understand the mood and energy you want in your room'}
-      </div>
-    </GlassCard>
+      {!isEmbedded && (
+        <div className="mt-4 text-xs text-center text-gray-500 font-modern">
+          {language === 'pl'
+            ? 'Ta mapa pomaga nam zrozumieć nastrój i energię, jaką chcesz w tej przestrzeni'
+            : 'This map helps us understand the mood and energy you want in this space'}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -211,7 +227,7 @@ function getPositionLabel(position: PRSMoodGridData, language: 'pl' | 'en'): str
   // Determine Y descriptor
   let yDesc = '';
   if (y < -0.33) {
-    yDesc = language === 'pl' ? 'Spokojny' : 'Quiet';
+    yDesc = language === 'pl' ? 'Nudny' : 'Boring';
   } else if (y > 0.33) {
     yDesc = language === 'pl' ? 'Inspirujący' : 'Inspiring';
   } else {

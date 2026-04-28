@@ -1,4 +1,4 @@
-# Instrukcja krok po kroku: AWA na Google Cloud (kredyty EDU)
+# Instrukcja krok po kroku: IDA na Google Cloud (kredyty EDU)
 
 Poniżej masz **jedną listę rzeczy do wypełnienia** na początku, a potem **gotowe komendy do wklejenia** w terminalu. Możesz też uruchomić **jeden skrypt**, który zrobi prawie wszystko za Ciebie.
 
@@ -44,7 +44,7 @@ Jeśli tworzysz **nowy projekt** i chcesz go od razu podpiąć pod kredyty:
 
 ```powershell
 # Utwórz nowy projekt (opcjonalnie)
-gcloud projects create TWOJ_PROJECT_ID --name="AWA Research"
+gcloud projects create TWOJ_PROJECT_ID --name="IDA Research"
 
 # Podłącz konto rozliczeniowe (wklej BILLING_ACCOUNT z setup.env)
 gcloud beta billing projects link TWOJ_PROJECT_ID --billing-account=BILLING_ACCOUNT
@@ -96,7 +96,7 @@ Zapisz ten adres (np. `10.x.x.x` lub adres publiczny). Pełny connection string:
 postgresql://awa_app:HASLO_BAZY@ADRES_IP:5432/awa_db
 ```
 
-**4d. Załaduj schemat tabel (tabele badawcze AWA):**
+**4d. Załaduj schemat tabel (tabele badawcze IDA):**
 
 **Opcja A – w konsoli GCP (najprostsza):**
 
@@ -116,7 +116,7 @@ postgresql://awa_app:HASLO_BAZY@ADRES_IP:5432/awa_db
 # Uruchom Cloud SQL Proxy w osobnym oknie (pobierz z Google, np. cloud-sql-proxy.exe)
 # ./cloud-sql-proxy PROJECT_ID:europe-west4:awa-research-sql
 
-# W katalogu projektu AWA
+# W katalogu głównym repozytorium
 Get-Content infra\gcp\sql\01_research_schema.sql | psql "postgresql://awa_app:HASLO_BAZY@127.0.0.1:5432/awa_db"
 ```
 
@@ -147,7 +147,7 @@ Zapisz nazwę bucketa – przyda się jako `GCS_IMAGES_BUCKET` w backendzie.
 ## Krok 6: Konto serwisowe dla backendu (Cloud Run)
 
 ```powershell
-gcloud iam service-accounts create awa-backend --display-name="AWA Backend Service"
+gcloud iam service-accounts create awa-backend --display-name="IDA Backend Service"
 ```
 
 Nadaj uprawnienia (zamień `TWOJ_PROJECT_ID` i `NAZWA_BUCKETA`):
@@ -165,7 +165,7 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA"
 
 ## Krok 7: Wdrożenie backendu na Cloud Run
 
-Z katalogu **głównego repozytorium AWA** (tam gdzie jest `apps/backend-gcp`):
+Z katalogu **głównego repozytorium** (tam gdzie jest `apps/backend-gcp`):
 
 ```powershell
 cd apps/backend-gcp

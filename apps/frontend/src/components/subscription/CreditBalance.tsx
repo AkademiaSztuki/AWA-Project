@@ -9,6 +9,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 interface CreditBalanceProps {
   userHash: string;
   className?: string;
+  /** When true, no outer GlassCard — for nesting inside a parent glass panel. */
+  embedded?: boolean;
 }
 
 const PLAN_NAMES: Record<string, string> = {
@@ -17,7 +19,7 @@ const PLAN_NAMES: Record<string, string> = {
   studio: 'Studio',
 };
 
-export function CreditBalance({ userHash, className }: CreditBalanceProps) {
+export function CreditBalance({ userHash, className, embedded = false }: CreditBalanceProps) {
   const { t } = useLanguage();
   const [balance, setBalance] = useState<CreditBalanceType | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null);
@@ -94,7 +96,23 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
     }
   };
 
+  const panelClass = embedded
+    ? `rounded-2xl border border-gold/20 bg-gradient-to-br from-white/[0.1] to-white/[0.03] p-4 sm:p-5 ${className ?? ''}`
+    : `p-4 sm:p-5 ${className ?? ''}`;
+
   if (loading) {
+    if (embedded) {
+      return (
+        <div className={panelClass}>
+          <div className="flex min-h-[88px] items-center gap-3">
+            <div className="h-6 w-6 flex-shrink-0 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+            <span className="text-graphite font-modern text-sm">
+              {t({ pl: 'Ładowanie...', en: 'Loading...' })}
+            </span>
+          </div>
+        </div>
+      );
+    }
     return (
       <GlassCard className={`p-6 ${className}`}>
         <div className="flex items-center gap-3">
@@ -129,15 +147,14 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
   // Oblicz wykorzystane kredyty z subskrypcji
   const usagePercentage = creditsAllocated > 0 ? (creditsUsed / creditsAllocated) * 100 : 0;
 
-  return (
-    <GlassCard variant="flatOnMobile" className={`p-4 sm:p-5 ${className}`}>
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
+  const inner = (
+    <div className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <h3 className="text-xs font-modern font-semibold uppercase tracking-wider text-silver-dark mb-1">
               {t({ pl: 'Twój Balans', en: 'Your Balance' })}
             </h3>
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="text-xl sm:text-2xl font-nasalization text-graphite">
                 {totalCredits.toLocaleString()}
               </span>
@@ -148,14 +165,14 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
           </div>
 
           {hasActiveSubscription && (
-            <div className="flex items-center gap-4 text-[10px] sm:text-xs text-silver-dark font-modern bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+            <div className="flex flex-shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-[10px] sm:text-xs text-silver-dark font-modern bg-white/5 px-3 py-1.5 rounded-full border border-white/10 sm:max-w-full sm:justify-end">
               <div className="flex gap-1.5">
                 <span>{t({ pl: 'Plan:', en: 'Plan:' })}</span>
                 <span className="text-graphite font-semibold">
                   {PLAN_NAMES[subscription.plan_id] || subscription.plan_id}
                 </span>
               </div>
-              <div className="w-px h-3 bg-white/20" />
+              <div className="hidden h-3 w-px bg-white/20 sm:block" />
               <div className="flex gap-1.5">
                 <span>{t({ pl: 'Ważny do:', en: 'Until:' })}</span>
                 <span className="text-graphite font-semibold">
@@ -204,22 +221,34 @@ export function CreditBalance({ userHash, className }: CreditBalanceProps) {
         )}
 
         {!hasActiveSubscription && (
-          <div className="flex items-center justify-between gap-4 pt-2 border-t border-white/5">
+          <div
+            className={`flex items-center gap-4 pt-2 ${
+              embedded ? 'border-t border-gold/15' : 'border-t border-white/5'
+            } ${totalCredits < 10 ? 'justify-between' : 'justify-end'}`}
+          >
             {totalCredits < 10 && (
               <p className="text-[10px] text-amber-500/80 font-modern italic">
                 {t({ pl: 'Niski stan kredytów', en: 'Low credits' })}
               </p>
             )}
             <GlassButton
-              onClick={() => window.location.href = '/subscription/plans'}
+              onClick={() => (window.location.href = '/subscription/plans')}
               variant="secondary"
-              className="py-1.5 px-4 text-xs h-auto min-h-0"
+              className="h-auto min-h-0 px-4 py-1.5 text-xs"
             >
               {t({ pl: 'Wybierz plan', en: 'Choose plan' })}
             </GlassButton>
           </div>
         )}
-      </div>
+    </div>
+  );
+
+  if (embedded) {
+    return <div className={panelClass}>{inner}</div>;
+  }
+  return (
+    <GlassCard variant="flatOnMobile" className={panelClass}>
+      {inner}
     </GlassCard>
   );
 }

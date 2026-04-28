@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { GlassCard } from "@/components/ui/GlassCard";
 import GlassSurface from "@/components/ui/GlassSurface";
-import { GlassSlider } from "@/components/ui/GlassSlider";
+import { GlassScalePicker } from "@/components/ui/GlassScalePicker";
+import { FULL_FLOW_GLASS_SHELL } from "@/lib/flow/glass-step-layout";
 import { useSessionData } from "@/hooks/useSessionData";
 import { gcpApi } from "@/lib/gcp-api-client";
 import { stopAllDialogueAudio } from "@/hooks/useAudioManager";
@@ -398,11 +399,11 @@ export default function Survey1Page() {
 
   return (
     <div className="min-h-screen flex flex-col w-full">
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-full lg:max-w-4xl mx-auto">
+      <div className="flex-1 flex justify-center items-start p-3 sm:p-4 lg:p-6">
+        <div className={`${FULL_FLOW_GLASS_SHELL} w-full`}>
           <GlassCard
             variant="flatOnMobile"
-            className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl max-h-[min(90vh,900px)] overflow-auto py-6"
+            className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl py-6"
           >
             {step === "sus" ? (
               <>
@@ -426,23 +427,24 @@ export default function Survey1Page() {
                         <span>{t(SUS_TEXTS.scaleLabels.stronglyAgree)}</span>
                       </div>
 
-                      <GlassSlider
+                      <GlassScalePicker
                         min={1}
                         max={5}
                         value={susAnswers[question.key]}
                         onChange={(value) => handleSusChange(question.key, value)}
                         className="mb-2"
+                        ariaLabel={`SUS ${index + 1} (1–5): ${t(question.question)}`}
                       />
                     </div>
                   ))}
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-3 sm:gap-6 justify-center items-stretch md:items-center">
+                <div className="flex w-full flex-col md:flex-row gap-3 sm:gap-6 justify-center items-stretch md:items-center">
                   <GlassSurface
                     width={220}
                     height={56}
                     borderRadius={32}
-                    className="w-full md:w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
+                    className="!w-full md:!w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
                     onClick={() => router.push("/flow/generate")}
                     aria-label={t(SUS_TEXTS.ariaLabels.back)}
                     style={{ opacity: 1 }}
@@ -453,7 +455,7 @@ export default function Survey1Page() {
                     width={260}
                     height={56}
                     borderRadius={32}
-                    className={`w-full md:w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base md:text-base font-exo2 font-bold text-white rounded-2xl text-nowrap ${!susAllAnswered ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
+                    className={`!w-full md:!w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base md:text-base font-exo2 font-bold text-white rounded-2xl md:text-nowrap ${!susAllAnswered ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
                     onClick={() => void handleSusContinue()}
                     aria-label={t(SUS_TEXTS.ariaLabels.nextSus)}
                     style={{ opacity: 1 }}
@@ -483,28 +485,28 @@ export default function Survey1Page() {
                         <span>{t(EXP_TEXTS.scaleMax)}</span>
                       </div>
 
-                      <GlassSlider
+                      <GlassScalePicker
                         min={1}
                         max={7}
                         value={expAnswers[question.key] ?? 4}
                         onChange={(value) => handleExpChange(question.key, value)}
                         className="mb-2"
-                        ariaValueText={
+                        ariaLabel={
                           language === "pl"
-                            ? `Ocena: ${expAnswers[question.key] ?? 4} z 7`
-                            : `Rating: ${expAnswers[question.key] ?? 4} of 7`
+                            ? `Pytanie ${index + 1}: ${t(question.question)} (1–7), wybrano ${expAnswers[question.key] ?? 4}`
+                            : `Question ${index + 1}: ${t(question.question)} (1–7), selected ${expAnswers[question.key] ?? 4}`
                         }
                       />
                     </div>
                   ))}
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-3 sm:gap-6 justify-center items-stretch md:items-center">
+                <div className="flex w-full flex-col md:flex-row gap-3 sm:gap-6 justify-center items-stretch md:items-center">
                   <GlassSurface
                     width={220}
                     height={56}
                     borderRadius={32}
-                    className="w-full md:w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
+                    className="!w-full md:!w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base font-exo2 font-bold text-white rounded-2xl"
                     onClick={() => setStep("sus")}
                     aria-label={t(SUS_TEXTS.ariaLabels.back)}
                     style={{ opacity: 1 }}
@@ -515,7 +517,7 @@ export default function Survey1Page() {
                     width={260}
                     height={56}
                     borderRadius={32}
-                    className={`w-full md:w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base md:text-base font-exo2 font-bold text-white rounded-2xl text-nowrap ${!expAllAnswered ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
+                    className={`!w-full md:!w-auto cursor-pointer select-none transition-transform duration-200 hover:scale-105 shadow-xl focus:outline-none focus:ring-2 focus:ring-gold-400 flex items-center justify-center text-base md:text-base font-exo2 font-bold text-white rounded-2xl md:text-nowrap ${!expAllAnswered ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
                     onClick={() => void handleExperienceFinish()}
                     aria-label={t(SUS_TEXTS.ariaLabels.nextFinal)}
                     style={{ opacity: 1 }}

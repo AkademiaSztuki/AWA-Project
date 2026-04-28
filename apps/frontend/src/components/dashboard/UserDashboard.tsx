@@ -4,46 +4,42 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
-import { useDashboardAccess } from '@/hooks/useDashboardAccess';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import {
-  fetchSessionSnapshotFromGcp,
-  DISABLE_SESSION_SYNC,
-  safeLocalStorage,
-  safeSessionStorage,
-} from '@/lib/gcp-data';
-import { getUserHouseholds, saveHousehold, getCompletionStatus, getUserProfile } from '@/lib/gcp-participant-profile';
+import { safeLocalStorage, safeSessionStorage } from '@/lib/gcp-data';
+import { getUserProfile } from '@/lib/gcp-participant-profile';
 import { fetchParticipantImages, fetchParticipantSpaces, createParticipantSpace, toggleParticipantImageFavorite, deleteParticipantImage, updateSpaceName, deleteSpace } from '@/lib/remote-spaces';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  Home, 
-  Plus, 
-  Image as ImageIcon,
-  Clock,
+import {
+  Home,
+  Plus,
   Heart,
   Sparkles,
   ChevronRight,
-  ArrowLeft,
   User,
   Eye,
   Pencil,
   Trash2,
   Check,
-  X
+  X,
+  ArrowUp,
 } from 'lucide-react';
 import Image from 'next/image';
 import {
   PreferencesOverviewSection,
-  RoomAnalysisSection,
   InspirationsPreviewSection,
-  GenerationStatsSection
+  GenerationStatsSection,
 } from '@/components/dashboard/ProfileSections';
-import { CompletionStatus } from '@/types/deep-personalization';
 import { CreditBalance } from '@/components/subscription/CreditBalance';
 import { mergeInspirationLists } from '@/lib/inspiration-merge';
+import { DashboardTopPanel } from '@/components/dashboard/DashboardTopPanel';
+import { DashboardJourneySteps } from '@/components/dashboard/DashboardJourneySteps';
+
+/** sessionStorage — IDA na dashboardzie: jedna pełna odtworzona sekwencja na sesję karty. */
+const IDA_SESSION_DASHBOARD_IDA_DIALOGUE_SHOWN_KEY = 'awa_session_dashboard_ida_dialogue_shown';
+const DASHBOARD_RETURN_SCROLL_Y_KEY = 'awa_dashboard_return_scroll_y';
 
 interface Space {
   id: string;
@@ -86,6 +82,7 @@ export function UserDashboard() {
   const { sessionData, updateSessionData, isInitialized } = useSessionData();
   const { language } = useLanguage();
   const { user, linkUserHashToAuth, isLoading: authLoading } = useAuth();
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -94,6 +91,44 @@ export function UserDashboard() {
     if (sessionData.currentStep === 'dashboard') return;
     void updateSessionData({ currentStep: 'dashboard' });
   }, [isInitialized, user, sessionData.currentStep, updateSessionData]);
+
+  useEffect(() => {
+    const updateBackToTopVisibility = () => {
+      setShowBackToTop(window.scrollY > 420);
+    };
+
+    updateBackToTopVisibility();
+    window.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', updateBackToTopVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('restoreScroll') !== '1') return;
+
+    const savedScrollY = Number(safeSessionStorage.getItem(DASHBOARD_RETURN_SCROLL_Y_KEY));
+    url.searchParams.delete('restoreScroll');
+    window.history.replaceState({}, '', url.toString());
+
+    if (!Number.isFinite(savedScrollY) || savedScrollY <= 0) return;
+
+    let attempts = 0;
+    const restoreScroll = () => {
+      attempts += 1;
+      window.scrollTo({ top: savedScrollY, behavior: attempts === 1 ? 'smooth' : 'auto' });
+
+      if (attempts < 30 && Math.abs(window.scrollY - savedScrollY) > 16) {
+        window.setTimeout(restoreScroll, 150);
+      } else {
+        safeSessionStorage.removeItem(DASHBOARD_RETURN_SCROLL_Y_KEY);
+      }
+    };
+
+    window.setTimeout(restoreScroll, 150);
+  }, []);
 
   /** Guests never use dashboard — send them back to funnel (or resume matrix after login). */
   useEffect(() => {
@@ -108,8 +143,6 @@ export function UserDashboard() {
   }, [authLoading, user, isInitialized, sessionData, router]);
   
   const [spaces, setSpaces] = useState<Space[]>([]);
-  const [remoteSession, setRemoteSession] = useState<any>(null);
-  const [completionStatus, setCompletionStatus] = useState<CompletionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [actionSpaceId, setActionSpaceId] = useState<string | null>(null);
@@ -118,6 +151,18 @@ export function UserDashboard() {
   const [creditsSectionMounted, setCreditsSectionMounted] = useState(false);
   useEffect(() => {
     setCreditsSectionMounted(true);
+  }, []);
+
+  const [showDashboardIdaDialogue, setShowDashboardIdaDialogue] = useState<boolean | null>(null);
+  useEffect(() => {
+    setShowDashboardIdaDialogue(
+      safeSessionStorage.getItem(IDA_SESSION_DASHBOARD_IDA_DIALOGUE_SHOWN_KEY) !== '1'
+    );
+  }, []);
+
+  const markDashboardIdaDialogueShown = useCallback(() => {
+    safeSessionStorage.setItem(IDA_SESSION_DASHBOARD_IDA_DIALOGUE_SHOWN_KEY, '1');
+    setShowDashboardIdaDialogue(false);
   }, []);
 
   // Blokada dashboardu po core profile została wyłączona – dashboard jest dostępny
@@ -178,6 +223,77 @@ export function UserDashboard() {
       });
   }, [spaces, extractUrl]);
 
+  const primarySpaceId = useMemo(() => {
+    const sid = (sessionData as any)?.currentSpaceId as string | undefined;
+    if (sid && spaces.some((s) => s.id === sid)) return sid;
+    return spaces[0]?.id;
+  }, [sessionData, spaces]);
+
+  const dashboardStats = useMemo(() => {
+    const typedSession = sessionData as any;
+    const roomCount = typedSession?.roomType ? 1 : 0;
+    const spacesCount = Math.max(spaces.length, roomCount);
+    const generatedFromSpaces = spaces.reduce(
+      (sum, s) => sum + (s.images?.filter((img) => img.type === 'generated').length || 0),
+      0,
+    );
+    const generatedFromSession = spaces.length === 0 ? typedSession?.generatedImages?.length || 0 : 0;
+    const generatedCount = generatedFromSpaces > 0 ? generatedFromSpaces : generatedFromSession;
+    const inspirationsFromSpaces = spaces.reduce(
+      (sum, s) => sum + (s.images?.filter((img) => img.type === 'inspiration').length || 0),
+      0,
+    );
+    const inspirationsFromSession = typedSession?.inspirations?.length || 0;
+    const inspirationsCount = Math.max(inspirationsFromSpaces, inspirationsFromSession);
+    return { spacesCount, generatedCount, inspirationsCount };
+  }, [spaces, sessionData]);
+
+  const completedJourneyStepIndices = useMemo(() => {
+    const typedSession = sessionData as any;
+    const completed = new Set<number>();
+
+    if (typedSession?.userHash || getUserHash()) completed.add(0);
+    if (
+      typedSession?.demographics ||
+      typedSession?.age ||
+      typedSession?.household ||
+      typedSession?.lifestyle ||
+      typedSession?.currentStep === 'dashboard'
+    ) {
+      completed.add(1);
+    }
+    if (typedSession?.visualDNA || typedSession?.tinderResults || (typedSession?.swipes?.length || 0) > 0) {
+      completed.add(2);
+    }
+    if (typedSession?.semanticDifferential || typedSession?.colorsAndMaterials?.selectedStyle) {
+      completed.add(3);
+    }
+    if (typedSession?.sensoryPreferences || typedSession?.roomPreferences?.sensoryPreferences) {
+      completed.add(4);
+    }
+    if (dashboardStats.inspirationsCount > 0) completed.add(5);
+    if (typedSession?.bigFive?.scores) completed.add(6);
+
+    const hasAnySpace = spaces.length > 0 || !!typedSession?.currentSpaceId || !!typedSession?.roomImage;
+    const hasRoomSetup =
+      !!typedSession?.roomPreferences ||
+      !!typedSession?.roomType ||
+      spaces.some((space) => (space.images || []).length > 0);
+    const hasRoomMood =
+      !!typedSession?.roomPreferences?.prsCurrent ||
+      !!typedSession?.roomPreferences?.prsTarget ||
+      !!typedSession?.roomPreferences?.biophiliaScore ||
+      !!typedSession?.biophiliaScore;
+
+    if (hasAnySpace) completed.add(7);
+    if (hasRoomSetup) completed.add(8);
+    if (hasRoomMood) completed.add(9);
+    if (dashboardStats.generatedCount > 0 || (typedSession?.generations?.length || 0) > 0) completed.add(10);
+    if (typedSession?.currentStep === 'dashboard' && dashboardStats.generatedCount > 0) completed.add(11);
+
+    return Array.from(completed).sort((a, b) => a - b);
+  }, [dashboardStats, getUserHash, sessionData, spaces]);
+
   const handleToggleFavorite = useCallback(async (imageId?: string, imageUrl?: string) => {
     if (!imageUrl && !imageId) return;
     const userHash = (sessionData as any)?.userHash;
@@ -233,18 +349,6 @@ export function UserDashboard() {
         }
       }
       
-      // Pull freshest session snapshot from GCP (used for completion flags)
-      if (!DISABLE_SESSION_SYNC) {
-      try {
-        const remote = await fetchSessionSnapshotFromGcp(userHash);
-        if (remote) {
-          setRemoteSession(remote);
-        }
-      } catch (e) {
-        console.warn('[Dashboard] Failed to load remote session snapshot', e);
-        }
-      }
-
       // Load user profile from GCP participants (Big Five, explicit preferences, etc.)
       try {
         const userProfile = await getUserProfile(userHash);
@@ -347,14 +451,6 @@ export function UserDashboard() {
         }
       } catch (e) {
         console.warn('[Dashboard] Failed to load user profile from Supabase:', e);
-      }
-
-      // Completion status (RPC) – may fail on unauthenticated clients
-      try {
-        const status = await getCompletionStatus(userHash, user?.id);
-        if (status) setCompletionStatus(status);
-      } catch (e) {
-        console.warn('[Dashboard] getCompletionStatus failed (likely unauthenticated):', e);
       }
 
       // Fetch spaces + images from participant_* (source of truth)
@@ -601,7 +697,12 @@ export function UserDashboard() {
     setPendingDelete(null);
   }, []);
 
+  const saveDashboardReturnPosition = useCallback(() => {
+    safeSessionStorage.setItem(DASHBOARD_RETURN_SCROLL_Y_KEY, String(window.scrollY));
+  }, []);
+
   const handleOpenSpace = (spaceId: string) => {
+    saveDashboardReturnPosition();
     router.push(`/space/${spaceId}`);
   };
 
@@ -718,7 +819,7 @@ export function UserDashboard() {
   }
 
   return (
-    <div className="flex flex-col w-full relative">
+    <div id="dashboard-top" className="flex flex-col w-full relative scroll-mt-24">
       {authError && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-xl p-3 rounded-lg glass-panel border border-gold/30">
           <p className="text-sm text-graphite font-modern text-center">
@@ -728,225 +829,155 @@ export function UserDashboard() {
         </div>
       )}
       
-      {/* Dialog IDA na dole - tylko standardowe teksty z DIALOGUE_MAP */}
-      <div className="w-full">
-        <AwaDialogue 
-          currentStep="dashboard" 
-          fullWidth={true}
-          autoHide={true}
-        />
-      </div>
+      {/* Dialog IDA — max raz na sesję przeglądarki (sessionStorage) */}
+      {showDashboardIdaDialogue === true && (
+        <div className="w-full">
+          <AwaDialogue
+            currentStep="dashboard"
+            fullWidth={true}
+            autoHide={true}
+            onDialogueEnd={markDashboardIdaDialogueShown}
+          />
+        </div>
+      )}
 
       <div className="flex-1 p-4 lg:p-8 pb-32">
-        <div className="max-w-3xl lg:max-w-none mx-auto">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="mb-4"
-          >
-            <div className="mb-4">
-              <h1 className="text-3xl lg:text-4xl xl:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-2">
-                {language === 'pl' ? 'Moje Przestrzenie' : 'My Spaces'}
-              </h1>
-            </div>
-
-            {/* Quick Stats */}
-            {(() => {
-              // Calculate stats from multiple sources
-              const typedSession = sessionData as any;
-              
-              // Rooms/Spaces count
-              const roomCount = typedSession?.roomType ? 1 : 0;
-              const spacesCount = Math.max(spaces.length, roomCount);
-              
-              // Generated images - count only actual images from spaces (source of truth)
-              // Don't use generations.length as it counts sessions, not images
-              const generatedFromSpaces = spaces.reduce((sum, s) => 
-                sum + (s.images?.filter(img => img.type === 'generated').length || 0), 0);
-              // Fallback to session data only if no spaces exist yet
-              const generatedFromSession = spaces.length === 0 ? (typedSession?.generatedImages?.length || 0) : 0;
-              const generatedCount = generatedFromSpaces > 0 ? generatedFromSpaces : generatedFromSession;
-              
-              // Inspirations - check multiple sources
-              const inspirationsFromSpaces = spaces.reduce((sum, s) => 
-                sum + (s.images?.filter(img => img.type === 'inspiration').length || 0), 0);
-              const inspirationsFromSession = typedSession?.inspirations?.length || 0;
-              const inspirationsCount = Math.max(inspirationsFromSpaces, inspirationsFromSession);
-              
-              return (
-                <div className="grid grid-cols-3 gap-2 sm:gap-6 lg:gap-8">
-                  <GlassCard variant="flatOnMobile" className="p-2 sm:p-6 min-h-[60px] sm:min-h-[80px]">
-                    <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 text-center sm:text-left">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                        <Home size={16} className="text-white sm:w-5 sm:h-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-lg sm:text-2xl font-nasalization text-graphite leading-none sm:leading-normal">{spacesCount}</p>
-                        <p className="text-[10px] sm:text-xs text-silver-dark font-modern truncate">
-                          {language === 'pl' ? 'Pokoje' : 'Rooms'}
-                        </p>
-                      </div>
-                    </div>
-                  </GlassCard>
-
-                  <GlassCard variant="flatOnMobile" className="p-2 sm:p-6 min-h-[60px] sm:min-h-[80px]">
-                    <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 text-center sm:text-left">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                        <ImageIcon size={16} className="text-white sm:w-5 sm:h-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-lg sm:text-2xl font-nasalization text-graphite leading-none sm:leading-normal">{generatedCount}</p>
-                        <p className="text-[10px] sm:text-xs text-silver-dark font-modern truncate">
-                          {language === 'pl' ? 'Obrazy' : 'Generated'}
-                        </p>
-                      </div>
-                    </div>
-                  </GlassCard>
-
-                  <GlassCard variant="flatOnMobile" className="p-2 sm:p-6 min-h-[60px] sm:min-h-[80px]">
-                    <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 text-center sm:text-left">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-                        <Sparkles size={16} className="text-white sm:w-5 sm:h-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-lg sm:text-2xl font-nasalization text-graphite leading-none sm:leading-normal">{inspirationsCount}</p>
-                        <p className="text-[10px] sm:text-xs text-silver-dark font-modern truncate">
-                          {language === 'pl' ? 'Inspiracje' : 'Inspirations'}
-                        </p>
-                      </div>
-                    </div>
-                  </GlassCard>
-                </div>
-              );
+        <div className="mx-auto max-w-3xl lg:max-w-none">
+          <DashboardTopPanel
+            language={language}
+            onAddSpace={handleAddSpace}
+            spacesCount={dashboardStats.spacesCount}
+            generatedCount={dashboardStats.generatedCount}
+            inspirationsCount={dashboardStats.inspirationsCount}
+            creditsSlot={(() => {
+              try {
+                if (!creditsSectionMounted) return null;
+                const userHash = getUserHash();
+                if (!userHash || !user) return null;
+                return <CreditBalance userHash={userHash} embedded />;
+              } catch (error) {
+                console.error('Error rendering credits/subscription:', error);
+                return null;
+              }
             })()}
-          </motion.div>
-
-          {/* Credits & Subscription */}
-          {(() => {
-            try {
-              if (!creditsSectionMounted) return null;
-              const userHash = getUserHash();
-              if (!userHash) return null;
-
-              if (!user) return null;
-
-              return (
-                <div className="mb-8">
-                  <CreditBalance userHash={userHash} />
-                </div>
-              );
-            } catch (error) {
-              console.error('Error rendering credits/subscription:', error);
-              return null;
-            }
-          })()}
-
-          {/* User Profile Overview */}
-          <ProfileOverview
-            sessionData={sessionData}
-            remoteSession={remoteSession}
-            completionStatus={completionStatus}
-            spaces={spaces}
           />
 
-          {/* Big Five Results - Enhanced with details link */}
+          <DashboardJourneySteps
+            primarySpaceId={primarySpaceId}
+            completedStepIndices={completedJourneyStepIndices}
+            onNeedSpace={handleAddSpace}
+          />
+
           <BigFiveResults userHash={(sessionData as any)?.userHash} />
 
-          {/* Połączone preferencje (ukryte + jawne) */}
-          {(() => {
-            return null;
-          })()}
           <PreferencesOverviewSection
             sessionData={sessionData}
             visualDNA={(sessionData as any)?.visualDNA}
+            onRetakeImplicit={() => router.push('/setup/profile?step=tinder_swipes')}
+            onRetakeExplicit={() => router.push('/setup/profile?step=semantic_diff')}
           />
 
-          {/* Room Analysis - ukryte, komentarz wyświetlany w dialogu na dole */}
+          {/* Room Analysis - disabled; copy surfaced in dialogue */}
           {/* <RoomAnalysisSection 
             roomAnalysis={(sessionData as any)?.roomAnalysis}
             roomImage={(sessionData as any)?.roomImage}
           /> */}
 
-          {/* Inspirations Preview */}
-          <InspirationsPreviewSection 
-            inspirations={(() => {
-              const typedSession = sessionData as any;
-              if (typedSession?.inspirations && typedSession.inspirations.length > 0) {
-                return mergeInspirationLists(typedSession.inspirations, []);
+          <section id="dashboard-inspirations" className="scroll-mt-24">
+            <InspirationsPreviewSection
+              inspirations={(() => {
+                const typedSession = sessionData as any;
+                if (typedSession?.inspirations && typedSession.inspirations.length > 0) {
+                  return mergeInspirationLists(typedSession.inspirations, []);
+                }
+                const inspirationImages = spaces
+                  .flatMap((space) => space.images || [])
+                  .filter((img) => img.type === 'inspiration')
+                  .map((img) => ({
+                    id: img.id,
+                    url: img.url,
+                    imageBase64: img.url,
+                    tags: img.tags || {},
+                    description: undefined,
+                    addedAt: img.addedAt,
+                  }));
+                return mergeInspirationLists(inspirationImages, []);
+              })()}
+              explicitBiophilia={
+                (sessionData as any)?.roomPreferences?.biophiliaScore ??
+                (sessionData as any)?.biophiliaScore
               }
-              const inspirationImages = spaces
-                .flatMap(space => space.images || [])
-                .filter(img => img.type === 'inspiration')
-                .map(img => ({
-                  id: img.id,
-                  url: img.url,
-                  imageBase64: img.url,
-                  tags: img.tags || {},
-                  description: undefined,
-                  addedAt: img.addedAt
-                }));
-              return mergeInspirationLists(inspirationImages, []);
-            })()}
-            explicitBiophilia={
-              (sessionData as any)?.roomPreferences?.biophiliaScore ??
-              (sessionData as any)?.biophiliaScore
-            }
-            onViewAll={() => {
-              const spaces = (sessionData as any)?.spaces || [];
-              if (spaces.length > 0) {
-                router.push(`/space/${spaces[0].id}?filter=inspiration`);
-              }
-            }}
-            onAddInspirations={() => router.push('/flow/inspirations?from=dashboard')}
-            onDeleteInspiration={handleDeleteInspiration}
-          />
+              onViewAll={() => {
+                const sessSpaces = (sessionData as any)?.spaces || [];
+                if (sessSpaces.length > 0) {
+                  saveDashboardReturnPosition();
+                  router.push(`/space/${sessSpaces[0].id}?filter=inspiration`);
+                }
+              }}
+              onAddInspirations={() => router.push('/flow/inspirations?from=dashboard')}
+              onDeleteInspiration={handleDeleteInspiration}
+            />
+          </section>
 
-          {/* Generation Stats */}
-          <div className={!user ? 'opacity-60' : undefined}>
-            <GenerationStatsSection 
+          <section id="dashboard-generated-images" className={`scroll-mt-24${!user ? ' opacity-60' : ''}`}>
+            <GenerationStatsSection
               generations={(sessionData as any)?.generations || []}
               generatedImages={allGeneratedImages}
               onToggleFavorite={(imageId, imageUrl) => handleToggleFavorite(imageId, imageUrl)}
             />
-          </div>
+          </section>
 
-          {/* Quick access: add new space near generated images */}
-          {spaces.length > 0 && (
-            <AddSpaceCallout
-              language={language}
-              onAddSpace={handleAddSpace}
-            />
-          )}
-
-          {/* Spaces List */}
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="inline-block w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin" />
-              <p className="mt-4 text-silver-dark font-modern">
-                {language === 'pl' ? 'Ładowanie...' : 'Loading...'}
+          <section id="dashboard-rooms" className="scroll-mt-24">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4 }}
+              className="mb-4 mt-10"
+            >
+              <h2 className="font-nasalization text-xl text-graphite sm:text-2xl">
+                {language === 'pl' ? 'Twoje pomieszczenia' : 'Your rooms'}
+              </h2>
+              <p className="mt-1 font-modern text-sm text-silver-dark">
+                {language === 'pl'
+                  ? 'Twoje pomieszczenia w jednym miejscu — kliknij kartę i zajrzyj do środka.'
+                  : 'Your spaces, all in one place—tap a card to step inside.'}
               </p>
-            </div>
-          ) : spaces.length === 0 ? (
-            <EmptyState onAddSpace={handleAddSpace} />
-          ) : (
-            <div className="space-y-6">
-              {spaces.map((space, index) => (
-                <SpaceCard
-                  key={space.id}
-                  space={space}
-                  index={index}
-                  onOpenSpace={() => handleOpenSpace(space.id)}
-                  onRenameSpace={handleRenameSpace}
-                  onDeleteSpace={(id, name) => requestDeleteSpace(id, name)}
-                  isBusy={actionSpaceId === space.id}
-                />
-              ))}
-            </div>
-          )}
+            </motion.div>
+
+            {isLoading ? (
+              <div className="py-12 text-center">
+                <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-gold border-t-transparent" />
+                <p className="mt-4 font-modern text-silver-dark">
+                  {language === 'pl' ? 'Ładowanie...' : 'Loading...'}
+                </p>
+              </div>
+            ) : spaces.length === 0 ? (
+              <EmptyState onAddSpace={handleAddSpace} />
+            ) : (
+              <div className="space-y-6">
+                {spaces.map((space, index) => (
+                  <SpaceCard
+                    key={space.id}
+                    space={space}
+                    index={index}
+                    onOpenSpace={() => handleOpenSpace(space.id)}
+                    onRenameSpace={handleRenameSpace}
+                    onDeleteSpace={(id, name) => requestDeleteSpace(id, name)}
+                    isBusy={actionSpaceId === space.id}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
         </div>
       </div>
+
+      <FloatingBackToTopAction language={language} isVisible={showBackToTop} />
+
+      {spaces.length > 0 && (
+        <FloatingAddSpaceAction language={language} onAddSpace={handleAddSpace} />
+      )}
 
       {/* Delete confirmation modal */}
       {pendingDelete && (
@@ -991,130 +1022,6 @@ export function UserDashboard() {
 
 // ========== SUB-COMPONENTS ==========
 
-function ProfileOverview({
-  sessionData,
-  remoteSession,
-  completionStatus,
-  spaces,
-}: {
-  sessionData: any;
-  remoteSession: any;
-  completionStatus: CompletionStatus | null;
-  spaces: Space[];
-}) {
-  const { language } = useLanguage();
-  const router = useRouter();
-
-  const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
-
-  // Do not use `remoteSession || sessionData` alone: GCP snapshot may omit inspirations/spaces
-  // while the client session + participant_spaces state still has them.
-  const sd = sessionData || {};
-  const rs = remoteSession || {};
-  const source = { ...sd, ...rs };
-
-  const inspirationInSpaces = (spaces: Space[]) =>
-    spaces.some((s) => (s.images || []).some((img) => img.type === 'inspiration'));
-
-  // Calculate profile completion (prefer remote snapshot / RPC)
-  const hasVisualDNA =
-    !!source?.visualDNA ||
-    !!completionStatus?.coreProfileComplete;
-
-  const hasExplicitPreferences =
-    !!(source?.colorsAndMaterials?.selectedStyle ||
-      source?.colorsAndMaterials?.selectedPalette ||
-      source?.sensoryPreferences?.light ||
-      source?.sensoryPreferences?.texture ||
-      completionStatus?.coreProfileComplete);
-
-  const hasBigFive = !!source?.bigFive || !!completionStatus?.coreProfileComplete;
-
-  const hasInspirations =
-    (sd.inspirations?.length || 0) > 0 ||
-    (rs.inspirations?.length || 0) > 0 ||
-    inspirationInSpaces(spaces);
-
-  const hasSpacesInSession =
-    (sd.spaces?.length || 0) > 0 || (rs.spaces?.length || 0) > 0;
-  const hasGeneratedImages =
-    [...(sd.spaces || []), ...(rs.spaces || [])].some((space: any) =>
-      space.images?.some((img: any) => img.type === 'generated'),
-    ) || false;
-
-  const hasRoom =
-    !!sd.roomImage ||
-    !!rs.roomImage ||
-    !!sd.currentRoomId ||
-    !!rs.currentRoomId ||
-    !!(completionStatus?.roomCount && completionStatus.roomCount > 0) ||
-    hasSpacesInSession ||
-    (spaces?.length || 0) > 0 ||
-    (spaces || []).some((s) => (s.images || []).length > 0) ||
-    hasGeneratedImages;
-
-  const completedItems = [hasVisualDNA, hasExplicitPreferences, hasBigFive, hasInspirations, hasRoom].filter(Boolean).length;
-  const totalItems = 5;
-  const completionPercentage = Math.round((completedItems / totalItems) * 100);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="mb-6"
-    >
-      <GlassCard variant="flatOnMobile" className="p-4 sm:p-6">
-        <div className="flex items-center gap-3 sm:gap-4 mb-4">
-          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
-            <User size={24} className="sm:w-8 sm:h-8 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl sm:text-2xl font-nasalization text-graphite">
-              {t('Twój Profil', 'Your Profile')}
-            </h2>
-            <p className="text-xs sm:text-sm text-silver-dark font-modern">
-              {t(`Ukończono ${completionPercentage}%`, `${completionPercentage}% Complete`)}
-            </p>
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="w-full bg-white/20 rounded-full h-2 sm:h-3 mb-4">
-          <div
-            className="bg-gradient-to-r from-gold to-champagne h-2 sm:h-3 rounded-full transition-all duration-1000"
-            style={{ width: `${completionPercentage}%` }}
-          />
-        </div>
-
-        {/* Profile Items */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
-          <ProfileItem completed={hasVisualDNA} label={t('Ukryte preferencje', 'Implicit preferences')} />
-          <ProfileItem completed={hasExplicitPreferences} label={t('Jawne preferencje', 'Explicit preferences')} />
-          <ProfileItem completed={hasBigFive} label={t('Big Five', 'Big Five')} />
-          <ProfileItem completed={hasInspirations} label={t('Inspiracje', 'Inspirations')} />
-          <ProfileItem completed={hasRoom} label={t('Pokój', 'Room')} />
-        </div>
-      </GlassCard>
-    </motion.div>
-  );
-}
-
-function ProfileItem({ completed, label }: { completed: boolean; label: string }) {
-  return (
-    <div className="flex items-center gap-2 text-sm">
-      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
-        completed ? 'bg-gold' : 'bg-white/20'
-      }`}>
-        {completed && <span className="text-white text-xs">✓</span>}
-      </div>
-      <span className={`font-modern ${completed ? 'text-graphite' : 'text-silver-dark'}`}>
-        {label}
-      </span>
-    </div>
-  );
-}
-
 function SpaceCard({ space, index, onOpenSpace, onRenameSpace, onDeleteSpace, isBusy }: {
   space: Space;
   index: number;
@@ -1153,11 +1060,9 @@ function SpaceCard({ space, index, onOpenSpace, onRenameSpace, onDeleteSpace, is
   const orderedImages = sortImagesDescending(space.images || []);
   const generatedImages = orderedImages.filter(img => img.type === 'generated');
   const inspirationImages = orderedImages.filter(img => img.type === 'inspiration');
-  
-  // In "Moja Główna Przestrzeń" show only generated images, not inspirations
-  // Inspirations should be shown in the separate "Inspiracje" section
-  const displayImages = generatedImages.slice(0, 6);
-  const remainingCount = generatedImages.length - displayImages.length;
+  const previewLimit = orderedImages.length > 5 ? 4 : 5;
+  const previewImages = orderedImages.slice(0, previewLimit);
+  const remainingCount = orderedImages.length - previewImages.length;
 
   return (
     <motion.div
@@ -1170,9 +1075,9 @@ function SpaceCard({ space, index, onOpenSpace, onRenameSpace, onDeleteSpace, is
       }}
       className="cursor-pointer"
     >
-      <GlassCard variant="flatOnMobile" className="p-4 sm:p-6 lg:p-8 hover:border-gold/50 transition-all duration-300">
+      <GlassCard variant="flatOnMobile" className="p-4 sm:p-5 lg:p-6 hover:border-gold/50 transition-all duration-300">
         {/* Space Header */}
-        <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3">
+        <div className="flex items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center flex-shrink-0">
               <Home size={20} className="sm:w-6 sm:h-6 text-white" />
@@ -1214,7 +1119,7 @@ function SpaceCard({ space, index, onOpenSpace, onRenameSpace, onDeleteSpace, is
                     {space.name}
                   </h2>
                   <p className="text-xs sm:text-sm text-silver-dark font-modern">
-                    {generatedImages.length} {language === 'pl' ? 'wyg.' : 'gen.'} • {inspirationImages.length} {language === 'pl' ? 'insp.' : 'insp.'}
+                    {generatedImages.length} {language === 'pl' ? 'wygenerowanych' : 'generated'} • {inspirationImages.length} {language === 'pl' ? 'inspiracji' : 'inspirations'}
                   </p>
                 </>
               )}
@@ -1257,41 +1162,36 @@ function SpaceCard({ space, index, onOpenSpace, onRenameSpace, onDeleteSpace, is
           </div>
         </div>
 
-        {/* Images Gallery Preview */}
-        {displayImages.length > 0 ? (
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
-            {displayImages.map((image, idx) => (
-              <div key={image.id} className="relative aspect-square rounded-lg overflow-hidden glass-panel group">
+        {previewImages.length > 0 ? (
+          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {previewImages.map((image) => (
+              <div key={image.id} className="relative aspect-[4/3] w-[128px] flex-none overflow-hidden rounded-xl glass-panel sm:w-[150px] lg:w-[170px]">
                 <Image
                   src={image.url}
-                  alt={image.type === 'generated' ? 'Generated' : 'Inspiration'}
+                  alt={image.type === 'generated' ? 'Generated interior preview' : 'Inspiration preview'}
                   fill
-                  className="object-cover transition-transform duration-300 group-hover:scale-110"
+                  sizes="(max-width: 640px) 25vw, 160px"
+                  className="object-cover transition-transform duration-300 hover:scale-105"
                 />
-                {/* Badge indicating type */}
-                <div className="absolute top-1 right-1">
-                  {image.type === 'generated' ? (
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center shadow-lg">
-                      <Sparkles size={12} className="sm:w-3.5 sm:h-3.5 text-white" />
-                    </div>
-                  ) : (
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-champagne to-platinum flex items-center justify-center shadow-lg">
-                      <Heart size={12} className="sm:w-3.5 sm:h-3.5 text-white" />
-                    </div>
-                  )}
+                <div className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-white/70 shadow-sm backdrop-blur">
+                  {image.type === 'generated'
+                    ? <Sparkles size={11} className="text-gold" aria-hidden />
+                    : <Heart size={11} className="text-gold" aria-hidden />}
                 </div>
               </div>
             ))}
             {remainingCount > 0 && (
-              <div className="relative aspect-square rounded-lg overflow-hidden glass-panel flex items-center justify-center bg-gradient-to-br from-gold/20 to-champagne/20">
-                <span className="text-base sm:text-xl font-nasalization text-graphite">+{remainingCount}</span>
+              <div className="flex aspect-[4/3] w-[128px] flex-none items-center justify-center rounded-xl border border-gold/20 bg-gold/10 sm:w-[150px] lg:w-[170px]">
+                <span className="font-nasalization text-sm text-graphite">+{remainingCount}</span>
               </div>
             )}
           </div>
         ) : (
-          <div className="text-center py-8 sm:py-12">
-            <p className="text-sm sm:text-base text-silver-dark font-modern">
-              {language === 'pl' ? 'Brak obrazów w tej przestrzeni' : 'No images in this space yet'}
+          <div className="rounded-xl border border-dashed border-gold/25 bg-white/[0.04] px-4 py-5 text-center">
+            <p className="font-modern text-sm text-silver-dark">
+              {language === 'pl'
+                ? 'Jeszcze bez obrazów — otwórz pomieszczenie, żeby zacząć generowanie.'
+                : 'No images yet — open the room to start generating.'}
             </p>
           </div>
         )}
@@ -1344,40 +1244,57 @@ function EmptyState({ onAddSpace }: { onAddSpace: () => void }) {
   );
 }
 
-function AddSpaceCallout({ onAddSpace, language }: { onAddSpace: () => void; language: 'pl' | 'en' }) {
+function FloatingAddSpaceAction({ onAddSpace, language }: { onAddSpace: () => void; language: 'pl' | 'en' }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="mb-6"
+      initial={{ opacity: 0, y: 36, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+      className="pointer-events-none fixed bottom-4 inset-x-4 z-40 flex justify-center sm:bottom-6 lg:inset-x-8 xl:translate-x-[calc(15vw+1.25rem)] 2xl:translate-x-[250px]"
     >
-            <GlassCard variant="flatOnMobile" className="p-4 sm:p-5 lg:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-              <Plus size={18} className="text-white" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-lg sm:text-xl font-nasalization text-graphite truncate">
-                {language === 'pl' ? 'Dodaj nową przestrzeń' : 'Add a new space'}
-              </p>
-              <p className="text-sm text-silver-dark font-modern truncate">
-                {language === 'pl'
-                  ? 'Dodaj kolejną przestrzeń w swoim projekcie.'
-                  : 'Add another space to your project.'}
-              </p>
-            </div>
-          </div>
-          <GlassButton
-            onClick={onAddSpace}
-            className="w-full sm:w-auto justify-center px-4 py-2 flex items-center gap-2"
-          >
-            <Plus size={16} />
-            <span>{language === 'pl' ? 'Dodaj przestrzeń' : 'Add space'}</span>
-          </GlassButton>
-        </div>
-      </GlassCard>
+      <GlassButton
+        type="button"
+        onClick={onAddSpace}
+        className="pointer-events-auto flex min-h-[56px] w-full max-w-xl items-center justify-center gap-2 rounded-full border border-white/35 bg-white/45 px-6 py-3 shadow-[0_20px_60px_rgba(68,49,20,0.18)] backdrop-blur-glass transition hover:-translate-y-0.5 hover:bg-white/60 hover:shadow-[0_26px_70px_rgba(68,49,20,0.22)] sm:px-8 lg:max-w-2xl"
+      >
+        <Plus size={18} aria-hidden />
+        <span className="font-modern text-sm font-semibold">
+          {language === 'pl' ? 'Dodaj pomieszczenie' : 'Add a room'}
+        </span>
+      </GlassButton>
+    </motion.div>
+  );
+}
+
+function FloatingBackToTopAction({ language, isVisible }: { language: 'pl' | 'en'; isVisible: boolean }) {
+  return (
+    <motion.div
+      initial={false}
+      animate={isVisible
+        ? { opacity: 1, y: 0, pointerEvents: 'auto' }
+        : { opacity: 0, y: 12, pointerEvents: 'none' }}
+      transition={{ duration: 0.2 }}
+      className="fixed bottom-24 right-4 z-40 sm:bottom-28 sm:right-6 lg:right-8"
+    >
+      <GlassButton
+        type="button"
+        variant="secondary"
+        onClick={() => {
+          document.getElementById('dashboard-top')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          });
+          window.history.replaceState(
+            null,
+            '',
+            `${window.location.pathname}${window.location.search}`,
+          );
+        }}
+        className="min-h-[44px] px-4 py-2 text-sm shadow-[0_14px_40px_rgba(68,49,20,0.18)]"
+      >
+        <ArrowUp size={16} aria-hidden />
+        {language === 'pl' ? 'Wróć na górę' : 'Back to top'}
+      </GlassButton>
     </motion.div>
   );
 }

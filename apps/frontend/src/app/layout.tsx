@@ -3,6 +3,7 @@ import { cookies, headers } from 'next/headers';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Inter, Audiowide, Exo_2, Atkinson_Hyperlegible } from 'next/font/google';
 import './globals.css';
+import 'simplebar-react/dist/simplebar.min.css';
 import AmbientMusic from '@/components/ui/AmbientMusic';
 import { LandscapeGuard } from '@/components/ui/LandscapeGuard';
 import { ResponsiveLayoutWrapper } from '@/components/ui/ResponsiveLayoutWrapper';
@@ -17,6 +18,7 @@ import { ReadingGuide } from '@/components/ui/ReadingGuide';
 import { DialogueVoiceProvider } from '@/contexts/DialogueVoiceContext';
 import { GlassHeader } from '@/components/ui/GlassHeader';
 import { GlobalProtectedRoute } from '@/components/auth/GlobalProtectedRoute';
+import { FullFlowProgressProviderGate } from '@/components/flow/FullFlowProgressProviderGate';
 import type { Language } from '@/lib/questions/validated-scales';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -84,7 +86,7 @@ export default function RootLayout({
 
   return (
     <html lang={initialLanguage} className={`${inter.variable} ${atkinson.variable} ${audiowide.variable} ${exo2.variable}`}>
-      <body className="min-h-screen overflow-y-auto font-nasalization">
+      <body className="min-h-[100dvh] font-nasalization">
         {/* Skip to main content link for accessibility */}
         <a 
           href="#main-content" 
@@ -106,9 +108,10 @@ export default function RootLayout({
                     <AmbientMusic volume={0.3} audioFile="/audio/ambient.mp3" />
                     
                     <GlobalProtectedRoute>
+                      <FullFlowProgressProviderGate>
                       <main 
                         id="main-content"
-                        className="relative z-10 min-h-screen w-full px-1.5 sm:px-4 md:px-8"
+                        className="relative z-10 min-h-[100dvh] w-full px-1.5 sm:px-4 md:px-8"
                         role="main"
                         aria-label="Główna treść aplikacji"
                         style={{
@@ -130,6 +133,7 @@ export default function RootLayout({
                           </div>
                         </div>
                       </main>
+                      </FullFlowProgressProviderGate>
                     </GlobalProtectedRoute>
                     <SpeedInsights />
                   </ResponsiveLayoutWrapper>

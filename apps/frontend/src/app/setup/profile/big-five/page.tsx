@@ -8,6 +8,7 @@ import { GlassButton } from "@/components/ui/GlassButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useProfileWizard } from "@/components/setup/profile/ProfileWizardContext";
 import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
+import { formatPolishUiText } from "@/lib/typography/polish-ui-text";
 import { 
   Brain, 
   ArrowRight, 
@@ -270,9 +271,9 @@ export default function BigFivePage() {
                   <span className="text-2xl font-bold text-gold">{score}%</span>
                 </div>
                 
-                <div className="w-full bg-white/20 rounded-full h-3 mb-2">
-                  <div 
-                    className="bg-gradient-to-r from-gold to-champagne h-3 rounded-full transition-all duration-1000"
+                <div className="mb-2 h-3 w-full overflow-hidden rounded-full border border-white/25 bg-white/[0.08] shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-gold-500/55 via-gold-500/45 to-gold-400/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] ring-1 ring-inset ring-white/20 transition-all duration-1000"
                     style={{ width: `${score}%` }}
                   />
                 </div>
@@ -373,8 +374,12 @@ export default function BigFivePage() {
         {/* Question */}
         <div className="mb-8">
           <div className="text-center mb-6">
-            <h2 className="text-xl lg:text-2xl font-nasalization text-graphite mb-4">
-              {currentItem?.text[language] || 'Loading...'}
+            <h2 className="text-xl lg:text-2xl font-nasalization text-graphite mb-4 max-w-[min(100%,42rem)] mx-auto text-balance hyphens-none">
+              {currentItem
+                ? language === "pl"
+                  ? formatPolishUiText(currentItem.text.pl)
+                  : currentItem.text.en
+                : "Loading..."}
             </h2>
             <p className="text-sm text-silver-dark font-modern">
               {t("Jak bardzo się z tym zgadzasz?", "How much do you agree with this?")}

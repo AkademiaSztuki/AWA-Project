@@ -12,6 +12,105 @@
   display: none !important;  /* Chrome, Safari and Opera */
 }
 
+/* Route-level document scrollbar hide (visual only, scrolling remains possible). */
+html.awa-hide-document-scrollbar,
+body.awa-hide-document-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+html.awa-hide-document-scrollbar::-webkit-scrollbar,
+body.awa-hide-document-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Profile wizard should scroll by wheel/touch only; no visible bars during step transitions. */
+.awa-profile-no-scrollbars,
+.awa-profile-no-scrollbars * {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.awa-profile-no-scrollbars::-webkit-scrollbar,
+.awa-profile-no-scrollbars *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+html:has(.awa-profile-no-scrollbars),
+body:has(.awa-profile-no-scrollbars) {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+html:has(.awa-profile-no-scrollbars)::-webkit-scrollbar,
+body:has(.awa-profile-no-scrollbars)::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/**
+ * Minimal glass scrollbar — neutral (no system blue), no arrow strips on Windows Chromium.
+ */
+.awa-scrollbar {
+  padding-inline-end: 8px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.22) transparent;
+}
+
+.awa-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+/* Windows Edge/Chrome: collapse arrow-button strip (top/bottom of vertical bar) */
+.awa-scrollbar::-webkit-scrollbar-button,
+.awa-scrollbar::-webkit-scrollbar-button:single-button:vertical:decrement,
+.awa-scrollbar::-webkit-scrollbar-button:single-button:vertical:increment,
+.awa-scrollbar::-webkit-scrollbar-button:single-button:horizontal:decrement,
+.awa-scrollbar::-webkit-scrollbar-button:single-button:horizontal:increment {
+  display: block !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.awa-scrollbar::-webkit-scrollbar-track {
+  margin-block: 0;
+  background: transparent;
+  border-radius: 9999px;
+}
+
+.awa-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-color: rgb(255 255 255 / 0.16) !important;
+  background-image: none !important;
+  background-clip: padding-box;
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+.awa-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(255 255 255 / 0.28) !important;
+  background-image: none !important;
+  background-clip: padding-box;
+}
+
+.awa-scrollbar::-webkit-scrollbar-thumb:active {
+  background-color: rgb(255 255 255 / 0.34) !important;
+  background-image: none !important;
+  background-clip: padding-box;
+}
+
 /* Force horizontal scroll */
 .overflow-x-auto {
   overflow-x: auto !important;
@@ -51,8 +150,16 @@
   }
 
   .glass-button {
-    @apply bg-gold-500/20 backdrop-blur-glass border border-gold-600/45 shadow-glass-inset;
-    @apply hover:bg-gold-600/25 hover:border-gold-600 transition-all duration-300;
+    @apply bg-gold-400/20 backdrop-blur-glass border border-gold-400/50;
+    @apply text-graphite transition-all duration-300 ease-out;
+    @apply hover:scale-[1.02] hover:bg-gold-400/40 hover:border-gold-400/70;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
+  }
+
+  .glass-button:hover {
+    box-shadow:
+      0 0 28px -8px rgba(255, 229, 92, 0.45),
+      inset 0 0 0 1px rgba(255, 248, 220, 0.35);
   }
 
   .glass-slider {
@@ -136,21 +243,67 @@
   }
 }
 
-/* Custom scrollbar */
+/* Default page scrollbar — minimal, no arrows, no Windows accent blue on hover */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-button,
+::-webkit-scrollbar-button:single-button:vertical:decrement,
+::-webkit-scrollbar-button:single-button:vertical:increment,
+::-webkit-scrollbar-button:single-button:horizontal:decrement,
+::-webkit-scrollbar-button:single-button:horizontal:increment {
+  display: block !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-pearl-100/20 backdrop-blur-glass;
+  margin-block: 0;
+  margin-inline: 0;
+  background: transparent;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gold-600/70 rounded-full;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-color: rgb(255 255 255 / 0.14) !important;
+  background-image: none !important;
+  background-clip: padding-box;
+  box-shadow: none !important;
+  transition: none !important;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gold-500/80;
+  background-color: rgb(255 255 255 / 0.24) !important;
+  background-image: none !important;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: rgb(255 255 255 / 0.3) !important;
+  background-image: none !important;
+  background-clip: padding-box;
+}
+
+html {
+  color-scheme: light;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.2) transparent;
+  /* Single page scroll: avoids body vs document fighting; stable gutter tames 1px overflow flashes */
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 /* Smooth transitions */
@@ -338,8 +491,18 @@ html, body, #__next, #root {
   position: relative;
 }
 
+/* Long glass wizards: reserve gutter for vertical overflow-y:auto (avoids one-frame bar flash) */
+.awa-scroll-y-stable {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
 body {
-  @apply min-h-screen overflow-y-auto font-nasalization;
+  @apply min-h-[100dvh] font-nasalization;
+  /* Scroll is on <html> only — avoids double vertical scroll and transient thumb flicker. */
+  overflow-x: visible;
+  overflow-y: visible;
   /* Usunięto padding z body - tło musi pokrywać cały ekran włącznie z safe-area */
   /* Padding będzie na main/content zamiast na body */
 }
@@ -376,6 +539,13 @@ html.a11y-text-spacing * {
 
 html.a11y-text-spacing p {
   margin-bottom: 2em !important;
+}
+
+/* Panel chrome: keep normal tracking so flex rows (e.g. WCAG toggles) stay fixed-width */
+html.a11y-text-spacing [data-a11y-settings-panel="true"],
+html.a11y-text-spacing [data-a11y-settings-panel="true"] * {
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
 }
 
 html.a11y-readable-font,
@@ -449,22 +619,35 @@ html.a11y-contrast-grayscale {
   filter: grayscale(1) !important;
 }
 
-.simplebar-scrollbar:before {
-  background: rgba(251, 191, 36, 0.7); /* Twój kolor gold */
-  border-radius: 8px;
-}
-.simplebar-track.simplebar-vertical {
+/* SimpleBar (AwaScrollArea / GlassCard scrollable) — neutral glass, no OS arrows */
+.awa-simplebar .simplebar-track.simplebar-vertical {
   width: 8px;
-  right: 2px;
-  border-radius: 8px;
+  right: 4px;
+  border-radius: 9999px;
   background: transparent;
 }
-.simplebar-scrollbar {
-  border-radius: 8px;
+
+.awa-simplebar .simplebar-scrollbar:before {
+  left: 0;
+  right: 0;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.18);
+  opacity: 1;
 }
 
-.simplebar-content {
+.awa-simplebar .simplebar-scrollbar:hover:before {
+  background: rgb(255 255 255 / 0.3);
+}
+
+.awa-simplebar .simplebar-scrollbar {
+  border-radius: 9999px;
+}
+
+.awa-simplebar .simplebar-content {
   margin-right: 0 !important;
+  padding-right: 6px;
 }
 
 /* Screen reader only class - hides visually but accessible to screen readers */
@@ -509,15 +692,55 @@ html.a11y-contrast-grayscale {
   outline-offset: 2px;
 }
 
-/* Styl natywnego scrollbara tylko w GlassCard */
-.glass-scroll::-webkit-scrollbar {
-  width: 8px;
+/* Legacy alias — same as .awa-scrollbar (minimal glass) */
+.glass-scroll {
+  padding-inline-end: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.22) transparent;
 }
-.glass-scroll::-webkit-scrollbar-thumb {
-  background: rgba(251, 191, 36, 0.4); /* gold, półprzezroczysty */
-  border-radius: 8px;
+.glass-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.glass-scroll::-webkit-scrollbar-button,
+.glass-scroll::-webkit-scrollbar-button:single-button:vertical:decrement,
+.glass-scroll::-webkit-scrollbar-button:single-button:vertical:increment,
+.glass-scroll::-webkit-scrollbar-button:single-button:horizontal:decrement,
+.glass-scroll::-webkit-scrollbar-button:single-button:horizontal:increment {
+  display: block !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 .glass-scroll::-webkit-scrollbar-track {
+  margin-block: 0;
   background: transparent;
-  border-radius: 8px;
+  border-radius: 9999px;
+}
+.glass-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-color: rgb(255 255 255 / 0.16) !important;
+  background-image: none !important;
+  background-clip: padding-box;
+  box-shadow: none !important;
+  transition: none !important;
+}
+.glass-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(255 255 255 / 0.28) !important;
+  background-image: none !important;
+  background-clip: padding-box;
+}
+.glass-scroll::-webkit-scrollbar-thumb:active {
+  background-color: rgb(255 255 255 / 0.34) !important;
+  background-image: none !important;
+  background-clip: padding-box;
+}
+
+/* Fewer short-line widows where the browser supports it (complements joinPolishOrphans for PL). */
+body {
+  text-wrap: pretty;
 }

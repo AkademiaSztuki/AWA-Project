@@ -1,13 +1,18 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Language, LocalizedText, getLocalizedText } from '@/lib/questions/validated-scales';
+import { joinPolishOrphans } from '@/lib/typography/join-polish-orphans';
 import { safeLocalStorage } from '@/lib/gcp-data';
 
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: (text: LocalizedText) => string;
+  /** Polish-only string (e.g. aria-label): ties short words to the next token. */
+  joinCopy: (text: string) => string;
+  /** Bilingual UI line: PL gets orphan-safe typography; EN unchanged. */
+  tp: (pl: string, en: string) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -79,8 +84,18 @@ export function LanguageProvider({ children, initialLanguage = 'pl' }: LanguageP
     return getLocalizedText(text, language);
   };
 
+  const joinCopy = useCallback(
+    (text: string) => (language === 'pl' ? joinPolishOrphans(text) : text),
+    [language]
+  );
+
+  const tp = useCallback(
+    (pl: string, en: string) => (language === 'pl' ? joinPolishOrphans(pl) : en),
+    [language]
+  );
+
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage, t, joinCopy, tp }}>
       {children}
     </LanguageContext.Provider>
   );

@@ -9,7 +9,9 @@ import {
 import { gcpApi } from './gcp-api-client';
 
 function useAnonMemoryOnly(): boolean {
-  const v = process.env.AWA_ANON_LIMITS_MEMORY_ONLY?.toLowerCase();
+  const v = (
+    process.env.IDA_ANON_LIMITS_MEMORY_ONLY ?? process.env.AWA_ANON_LIMITS_MEMORY_ONLY
+  )?.toLowerCase();
   return v === '1' || v === 'true' || v === 'yes';
 }
 

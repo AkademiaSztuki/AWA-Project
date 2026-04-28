@@ -1,7 +1,24 @@
 /**
  * Google Identity Services (GIS) – logowanie bezpośrednio przez Google, bez Supabase.
  * Wymaga: NEXT_PUBLIC_GOOGLE_CLIENT_ID (OAuth 2.0 Client ID z GCP Console).
+ *
+ * Domyślnie używa GIS token popup, bo ten flow nie wymaga redirect URI.
+ * W Cursorze/Electron dev przełącza się na implicit token redirect przez istniejące `/auth/callback`,
+ * bo Google GIS popup może otwierać pusty `https://accounts.google.com/gsi/transform`.
+ * Opcjonalnie: NEXT_PUBLIC_GOOGLE_OAUTH_USE_PKCE_REDIRECT=1 wymusza redirect PKCE wszędzie.
+ *
+ * W Google Cloud → Credentials → OAuth client → Authorized redirect URIs dodaj:
+ *   http://localhost:3000/auth/google/callback
+ *   (oraz produkcyjny URL /auth/google/callback)
  */
+
+import { gcpApi } from '@/lib/gcp-api-client';
+import { safeLocalStorage } from '@/lib/gcp-data';
+import { GOOGLE_AUTH_EMAIL_STORAGE_KEY, GOOGLE_AUTH_USER_ID_STORAGE_KEY } from '@/lib/auth-storage-keys';
+import {
+  persistImplicitTokenSessionAndRedirect,
+  persistPkceSessionAndRedirect,
+} from '@/lib/google-oauth-pkce';
 
 declare global {
   interface Window {
@@ -11,7 +28,8 @@ declare global {
           initTokenClient: (config: {
             client_id: string;
             scope: string;
-            callback: (response: { access_token: string }) => void;
+            callback: (response: { access_token?: string }) => void;
+            error_callback?: (err: { type?: string; message?: string }) => void;
           }) => { requestAccessToken: (overrideConfig?: { prompt?: string }) => void };
         };
         id?: {
@@ -43,20 +61,20 @@ function loadScript(): Promise<void> {
   });
 }
 
-/** Dekoduje payload JWT (bez weryfikacji – do użycia sub/email w UI; w produkcji można weryfikować na backendzie). */
-function decodeJwtPayload(token: string): { sub?: string; email?: string; name?: string } {
-  try {
-    const parts = token.split('.');
-    if (parts.length < 2) return {};
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return {
-      sub: payload.sub,
-      email: payload.email ?? undefined,
-      name: payload.name ?? payload.email ?? undefined,
-    };
-  } catch {
-    return {};
-  }
+/** Załaduj skrypt GIS wcześniej (np. przy otwarciu modala), żeby requestAccessToken szedł w tym samym „user gesture” co klik. */
+export function preloadGoogleIdentityScript(): void {
+  if (typeof window === 'undefined') return;
+  void loadScript().catch(() => {});
+}
+
+const GIS_TOKEN_FLOW_MS = 120_000;
+
+function shouldUsePkceForEmbeddedBrowser(): boolean {
+  if (process.env.NODE_ENV === 'production') return false;
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  if (host !== 'localhost' && host !== '127.0.0.1') return false;
+  return /Electron\//i.test(navigator.userAgent) || /\bCursor\b/i.test(navigator.userAgent);
 }
 
 export interface GoogleNativeUser {
@@ -70,23 +88,131 @@ export type SignInWithGoogleNativeResult =
   | { ok: true; user: GoogleNativeUser }
   | { ok: false; error: string };
 
-/**
- * Uruchamia logowanie przez Google (token model), łączy konto z user_hash w backendzie GCP.
- * Wymaga: NEXT_PUBLIC_GOOGLE_CLIENT_ID, NEXT_PUBLIC_GCP_API_BASE_URL, tryb primary.
- */
-export async function signInWithGoogleNative(options: {
+export async function completeGoogleNativeLoginFromAccessToken(
+  accessToken: string,
+  options: {
+    currentUserHash: string | null;
+    consentTimestamp?: string;
+    onGrantFreeCredits?: (userHash: string) => Promise<void>;
+  },
+): Promise<SignInWithGoogleNativeResult> {
+  try {
+    const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!userInfoRes.ok) {
+      return { ok: false, error: 'Nie udało się pobrać danych konta Google.' };
+    }
+    const userInfo = (await userInfoRes.json()) as { id: string; email?: string; name?: string };
+    const authUserId = userInfo.id;
+    const email = userInfo.email;
+    const name = userInfo.name;
+
+    const userHash = options.currentUserHash || `anon-${authUserId.slice(0, 8)}-${Date.now().toString(36)}`;
+    const linkRes = await gcpApi.participants.linkAuth({
+      userHash,
+      authUserId,
+      consentTimestamp: options.consentTimestamp,
+      email: email || undefined,
+    });
+
+    if (!linkRes.ok) {
+      return { ok: false, error: linkRes.error || 'link-auth failed' };
+    }
+
+    const effectiveHash = linkRes.data?.existingUserHash ?? userHash;
+    if (options.onGrantFreeCredits) {
+      try {
+        await options.onGrantFreeCredits(effectiveHash);
+      } catch {
+        // ignore
+      }
+    }
+
+    return {
+      ok: true,
+      user: {
+        authUserId,
+        email,
+        name,
+        userHash: effectiveHash,
+      },
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Unknown error',
+    };
+  }
+}
+
+export function persistNativeGoogleUserToLocalStorage(user: GoogleNativeUser): void {
+  safeLocalStorage.setItem('aura_user_hash', user.userHash);
+  safeLocalStorage.setItem(GOOGLE_AUTH_USER_ID_STORAGE_KEY, user.authUserId);
+  if (user.email && user.email.trim().length > 0) {
+    safeLocalStorage.setItem(GOOGLE_AUTH_EMAIL_STORAGE_KEY, user.email.trim());
+  }
+}
+
+export async function syncGoogleNativeEmailLinkAuth(user: GoogleNativeUser): Promise<void> {
+  if (!user.email?.trim()) return;
+  try {
+    const sync = await gcpApi.participants.linkAuth({
+      userHash: user.userHash,
+      authUserId: user.authUserId,
+      email: user.email.trim().toLowerCase(),
+    });
+    if (!sync.ok) {
+      console.warn('[google-auth] linkAuth after Google sign-in failed:', sync.error);
+    }
+  } catch (e) {
+    console.warn('[google-auth] linkAuth after Google sign-in error:', e);
+  }
+}
+
+export type SignInWithGoogleNativeOptions = {
   currentUserHash: string | null;
   consentTimestamp?: string;
   onGrantFreeCredits?: (userHash: string) => Promise<void>;
-}): Promise<SignInWithGoogleNativeResult> {
+  /** Used after PKCE redirect (and stored for /auth/google/callback). */
+  authNextPath?: string | null;
+};
+
+/**
+ * Uruchamia logowanie przez Google (token model + link-auth).
+ * W embedded browser / popup_failed_to_open przechodzi na PKCE redirect przez `/auth/callback`.
+ */
+export async function signInWithGoogleNative(
+  options: SignInWithGoogleNativeOptions,
+): Promise<SignInWithGoogleNativeResult> {
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) {
     return { ok: false, error: 'NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set' };
   }
 
-  const { gcpApi } = await import('@/lib/gcp-api-client');
   if (!gcpApi.isConfigured()) {
     return { ok: false, error: 'GCP API base URL is not set' };
+  }
+
+  const usePkceOnly = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_USE_PKCE_REDIRECT === '1';
+  if (usePkceOnly) {
+    await persistPkceSessionAndRedirect({
+      clientId,
+      currentUserHash: options.currentUserHash,
+      consentTimestamp: options.consentTimestamp ?? new Date().toISOString(),
+      authNextPath: options.authNextPath,
+    });
+    return new Promise(() => {});
+  }
+
+  if (shouldUsePkceForEmbeddedBrowser()) {
+    persistImplicitTokenSessionAndRedirect({
+      clientId,
+      currentUserHash: options.currentUserHash,
+      consentTimestamp: options.consentTimestamp ?? new Date().toISOString(),
+      authNextPath: options.authNextPath,
+    });
+    return new Promise(() => {});
   }
 
   await loadScript();
@@ -97,68 +223,65 @@ export async function signInWithGoogleNative(options: {
   }
 
   return new Promise((resolve) => {
+    let settled = false;
+    let timeoutId: number | undefined;
+
+    const finish = (result: SignInWithGoogleNativeResult) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      resolve(result);
+    };
+
+    timeoutId = window.setTimeout(() => {
+      finish({
+        ok: false,
+        error:
+          'Logowanie przez Google przekroczyło limit czasu. Zamknij ewentualne okna Google i spróbuj ponownie.',
+      });
+    }, GIS_TOKEN_FLOW_MS);
+
     const client = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: 'openid email profile',
+      error_callback: (err) => {
+        if (settled) return;
+        const type = err?.type ?? '';
+        const message = typeof err?.message === 'string' ? err.message : '';
+        const combined = `${type} ${message}`.toLowerCase();
+
+        if (type === 'popup_failed_to_open' || combined.includes('failed to open')) {
+          if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+          persistImplicitTokenSessionAndRedirect({
+            clientId,
+            currentUserHash: options.currentUserHash,
+            consentTimestamp: options.consentTimestamp ?? new Date().toISOString(),
+            authNextPath: options.authNextPath,
+          });
+          settled = true;
+          return;
+        }
+        if (type === 'popup_closed' || message.includes('closed')) {
+          finish({ ok: false, error: 'Logowanie anulowane (okno Google zostało zamknięte).' });
+          return;
+        }
+        finish({
+          ok: false,
+          error: message || type || 'Logowanie przez Google nie powiodło się.',
+        });
+      },
       callback: async (response) => {
         const accessToken = response.access_token;
         if (!accessToken) {
-          resolve({ ok: false, error: 'No token from Google' });
+          finish({ ok: false, error: 'Brak tokenu z Google. Spróbuj ponownie.' });
           return;
         }
-        // Token model zwraca access_token; do identyfikacji używamy UserInfo API lub przekazujemy token do backendu.
-        // W najprostszej wersji wywołujemy UserInfo endpoint Google po access_token, żeby dostać sub/email.
-        try {
-          const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          if (!userInfoRes.ok) {
-            resolve({ ok: false, error: 'Failed to fetch user info' });
-            return;
-          }
-          const userInfo = (await userInfoRes.json()) as { id: string; email?: string; name?: string };
-          const authUserId = userInfo.id;
-          const email = userInfo.email;
-          const name = userInfo.name;
-
-          const { gcpApi } = await import('@/lib/gcp-api-client');
-          const userHash = options.currentUserHash || `anon-${authUserId.slice(0, 8)}-${Date.now().toString(36)}`;
-          const linkRes = await gcpApi.participants.linkAuth({
-            userHash,
-            authUserId,
-            consentTimestamp: options.consentTimestamp,
-            email: email || undefined,
-          });
-
-          if (!linkRes.ok) {
-            resolve({ ok: false, error: linkRes.error || 'link-auth failed' });
-            return;
-          }
-
-          const effectiveHash = linkRes.data?.existingUserHash ?? userHash;
-          if (options.onGrantFreeCredits) {
-            try {
-              await options.onGrantFreeCredits(effectiveHash);
-            } catch {
-              // ignore
-            }
-          }
-
-          resolve({
-            ok: true,
-            user: {
-              authUserId,
-              email,
-              name,
-              userHash: effectiveHash,
-            },
-          });
-        } catch (e) {
-          resolve({
-            ok: false,
-            error: e instanceof Error ? e.message : 'Unknown error',
-          });
-        }
+        const result = await completeGoogleNativeLoginFromAccessToken(accessToken, {
+          currentUserHash: options.currentUserHash,
+          consentTimestamp: options.consentTimestamp,
+          onGrantFreeCredits: options.onGrantFreeCredits,
+        });
+        finish(result);
       },
     });
     client.requestAccessToken({ prompt: '' });

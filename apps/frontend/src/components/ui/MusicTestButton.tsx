@@ -32,9 +32,15 @@ export const MusicTestButton: React.FC = () => {
     const updatePosition = () => {
       if (isOpen && buttonRef.current) {
         const rect = buttonRef.current.getBoundingClientRect();
+        const w = window.innerWidth;
+        const margin = 16;
+        const panelW = Math.min(320, w * 0.9);
+        const idealRight = w - rect.right;
+        const maxRight = Math.max(0, w - panelW - margin);
+        const right = Math.max(0, Math.min(idealRight, maxRight));
         setPanelPosition({
           top: rect.bottom + 8,
-          right: window.innerWidth - rect.right,
+          right,
         });
       }
     };
@@ -319,10 +325,11 @@ export const MusicTestButton: React.FC = () => {
                             setVoiceVolume(0);
                             toggleVoiceEnabled();
                           } else {
-                            const restored =
+                            const fromRef =
                               voiceVolumeBeforeMuteRef.current > 0
                                 ? voiceVolumeBeforeMuteRef.current
                                 : 0.8;
+                            const restored = voiceVolume > 0 ? voiceVolume : fromRef;
                             const dialogueAudios = document.querySelectorAll(
                               'audio[data-type="dialogue"]'
                             ) as NodeListOf<HTMLAudioElement>;
@@ -330,7 +337,6 @@ export const MusicTestButton: React.FC = () => {
                               audio.volume = restored;
                             });
                             setVoiceVolume(restored);
-                            toggleVoiceEnabled();
                           }
                         }}
                         className="w-8 h-8 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 transition-all focus:ring-2 focus:ring-gold-400 focus:outline-none"

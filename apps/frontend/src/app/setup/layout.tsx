@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { PartOneProgressBar } from '@/components/flow/PartOneProgressBar';
-import { isPartOneFlowPath } from '@/lib/flow/part-one-flow';
+import { isFullFlowJourneyPath } from '@/lib/flow/full-flow-progress';
 
 export default function SetupLayout({
   children,
@@ -10,14 +10,16 @@ export default function SetupLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const showProgress = isPartOneFlowPath(pathname);
+  const showProgress = isFullFlowJourneyPath(pathname);
 
   return (
     <div className="flex flex-col gap-8 p-4 lg:p-8">
       {showProgress && (
-        <PartOneProgressBar currentPath={pathname} />
+        <div className="px-2 sm:px-3">
+          <PartOneProgressBar currentPath={pathname} />
+        </div>
       )}
-      <div>
+      <div className="min-w-0 px-2 sm:px-3">
         {children}
       </div>
     </div>

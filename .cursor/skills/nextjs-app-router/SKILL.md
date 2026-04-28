@@ -1,9 +1,9 @@
 ---
 name: nextjs-app-router
-description: Next.js 14 App Router patterns for AWA project. Use when creating or modifying pages, API routes, layouts, or server components. Covers App Router structure, server/client components, data fetching, and routing patterns.
+description: Next.js 14 App Router patterns for IDA project. Use when creating or modifying pages, API routes, layouts, or server components. Covers App Router structure, server/client components, data fetching, and routing patterns.
 ---
 
-# Next.js App Router Patterns for AWA Project
+# Next.js App Router Patterns for IDA Project
 
 ## Project Structure
 
@@ -253,7 +253,7 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 ```typescript
 // app/page.tsx
 export const metadata = {
-  title: 'AWA Project',
+  title: 'IDA Project',
   description: 'AI Interior Design',
 };
 
@@ -274,7 +274,7 @@ export async function generateMetadata({ params }) {
 5. **Optimize images** - Use `next/image` component
 6. **Use TypeScript** - Type all params, searchParams, etc.
 
-## Common Patterns in AWA
+## Common Patterns in IDA
 
 ### Flow Screens
 

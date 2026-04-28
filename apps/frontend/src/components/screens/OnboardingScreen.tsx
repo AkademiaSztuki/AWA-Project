@@ -1,16 +1,18 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GlassCard, GlassButton, GlassAccordion } from '@/components/ui';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { useRouter } from 'next/navigation';
 import { useSessionData } from '@/hooks/useSessionData';
+import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { saveResearchConsent, safeSessionStorage } from '@/lib/gcp-data';
 import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
+import { EducationSelect } from '@/components/setup/EducationSelect';
 import { ChevronDown } from 'lucide-react';
 
 const getDefaultCountry = (language: 'pl' | 'en') => (language === 'pl' ? 'PL' : 'US');
@@ -60,9 +62,16 @@ function CountrySelect({
 }) {
   const [open, setOpen] = useState(false);
   const selectedLabel = COUNTRY_OPTIONS.find((option) => option.code === value)?.label[language] ?? value;
+  const countryRootRef = useRef<HTMLDivElement>(null);
+
+  const handleCountryRootBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && countryRootRef.current?.contains(next)) return;
+    setOpen(false);
+  };
 
   return (
-    <div className="relative" tabIndex={0} onBlur={() => setOpen(false)}>
+    <div ref={countryRootRef} className="relative min-w-0" onBlur={handleCountryRootBlur}>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -73,8 +82,8 @@ function CountrySelect({
       </button>
 
       {open && (
-        <div className="absolute z-40 bottom-full mb-3 max-h-64 w-full overflow-auto rounded-xl border border-white/25 bg-[#c7b07a] shadow-2xl ring-1 ring-gold/35 backdrop-blur-sm">
-          <ul className="py-1 space-y-0.5">
+        <div className="absolute z-40 bottom-full mb-3 max-h-64 w-full min-w-0 overflow-hidden rounded-xl border border-white/25 bg-[#c7b07a] shadow-2xl ring-1 ring-gold/35 backdrop-blur-sm">
+          <ul className="max-h-56 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain py-1 space-y-0.5 awa-scrollbar">
             {COUNTRY_OPTIONS.map((option) => (
               <li key={option.code}>
                 <button
@@ -165,8 +174,39 @@ const OnboardingScreen: React.FC = () => {
     }
   }, [isInitialized, sessionData, step]);
 
+  // Restore demographics from session when returning to this screen (e.g. Wstecz z fast-track).
+  // Local state starts empty on mount; without hydration „Kontynuuj” stays disabled.
+  useEffect(() => {
+    if (!isInitialized || step !== 'demographics') return;
+    const d = sessionData?.demographics;
+    if (!d || typeof d !== 'object') return;
+    setDemographics((prev) => {
+      if (prev.ageRange || prev.gender || prev.education) return prev;
+      return {
+        ageRange: typeof d.ageRange === 'string' ? d.ageRange : '',
+        gender: typeof d.gender === 'string' ? d.gender : '',
+        education: typeof d.education === 'string' ? d.education : '',
+        country:
+          typeof d.country === 'string' && d.country.trim()
+            ? d.country
+            : getDefaultCountry(language),
+      };
+    });
+  }, [isInitialized, step, sessionData?.demographics, language]);
+
   const canProceedDemographics = demographics.ageRange && demographics.gender && demographics.education && demographics.country;
   const canProceedConsent = consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13;
+
+  /** From demographics: consent step auto-skips forward when consentTimestamp exists — do not setStep('consent') or we bounce in a loop. */
+  const handleDemographicsBack = () => {
+    stopAllDialogueAudio();
+    const hasConsent = !!getSessionStoreSnapshot().consentTimestamp;
+    if (hasConsent) {
+      router.push('/flow/path-selection');
+    } else {
+      setStep('consent');
+    }
+  };
 
   const handleConsentSubmit = async () => {
     if (!canProceedConsent) return;
@@ -209,28 +249,25 @@ const OnboardingScreen: React.FC = () => {
   };
 
   const handleDemographicsSubmit = async () => {
-    if (canProceedDemographics) {
-      stopAllDialogueAudio();
-      await updateSessionData({
-        demographics: demographics
-      });
-      
-      // Check path type and route accordingly
-      // Default to 'fast' when pathType is missing – onboarding screen is primarily for fast track
-      const pathType = ((sessionData as any)?.pathType ?? 'fast') as 'fast' | 'full';
-      console.log('[Onboarding] Demographics complete');
-      console.log('[Onboarding] pathType:', pathType);
-      console.log('[Onboarding] pathType === "fast":', pathType === 'fast');
-      console.log('[Onboarding] Full sessionData:', sessionData);
-      
-      if (pathType === 'fast') {
-        console.log('[Onboarding] ⚡ FAST TRACK - routing to photo upload');
-        router.push('/flow/fast-track');
-      } else {
-        // Full experience: go to setup/profile (CoreProfileWizard) first
-        console.log('[Onboarding] 🌟 FULL EXPERIENCE - routing to setup/profile');
-        router.push('/setup/profile');
-      }
+    if (!canProceedDemographics) return;
+
+    stopAllDialogueAudio();
+    await updateSessionData({
+      demographics: demographics,
+    });
+
+    // Use store snapshot — `sessionData` from render can be stale right after `updateSessionData`.
+    const latest = getSessionStoreSnapshot() as { pathType?: 'fast' | 'full' };
+    const pathType = (latest.pathType ?? 'fast') as 'fast' | 'full';
+
+    console.log('[Onboarding] Demographics complete, pathType:', pathType);
+
+    if (pathType === 'fast') {
+      console.log('[Onboarding] FAST TRACK → photo upload');
+      router.push('/flow/fast-track');
+    } else {
+      console.log('[Onboarding] FULL EXPERIENCE → setup/profile');
+      router.push('/setup/profile');
     }
   };
 
@@ -543,6 +580,7 @@ const OnboardingScreen: React.FC = () => {
                 {/* Przyciski */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <GlassButton
+                    type="button"
                     variant="secondary"
                     onClick={() => {
                       stopAllDialogueAudio();
@@ -553,6 +591,7 @@ const OnboardingScreen: React.FC = () => {
                   </GlassButton>
 
                   <GlassButton
+                    type="button"
                     onClick={handleConsentSubmit}
                     size="lg"
                     disabled={!canProceedConsent}
@@ -568,7 +607,7 @@ const OnboardingScreen: React.FC = () => {
             <DemographicsStep
               data={demographics}
               onUpdate={setDemographics}
-              onBack={() => setStep('consent')}
+              onBack={handleDemographicsBack}
               onSubmit={handleDemographicsSubmit}
               canProceed={canProceedDemographics}
             />
@@ -646,7 +685,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
                   className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                     data.ageRange === range
                       ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                      : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                      : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                   }`}
                 >
                   {range}
@@ -674,7 +713,7 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
                   className={`rounded-lg p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                     data.gender === option.id
                       ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                      : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                      : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                   }`}
                 >
                   {option.label}
@@ -688,27 +727,11 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
             <label className="block text-sm font-semibold text-graphite mb-2">
               {texts.education}
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {[
-                { id: 'high-school', label: language === 'pl' ? 'Średnie' : 'High School' },
-                { id: 'bachelor', label: language === 'pl' ? 'Licencjat' : 'Bachelor\'s' },
-                { id: 'master', label: language === 'pl' ? 'Magister' : 'Master\'s' },
-                { id: 'doctorate', label: language === 'pl' ? 'Doktorat' : 'Doctorate' }
-              ].map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => onUpdate({ ...data, education: option.id })}
-                  className={`rounded-lg p-3 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
-                    data.education === option.id
-                      ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                      : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            <EducationSelect
+              value={data.education}
+              onChange={(id) => onUpdate({ ...data, education: id })}
+              language={language}
+            />
           </div>
 
           {/* Country */}
@@ -725,11 +748,12 @@ function DemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed }: any)
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
-          <GlassButton variant="secondary" onClick={onBack}>
+          <GlassButton type="button" variant="secondary" onClick={onBack}>
             ← {texts.back}
           </GlassButton>
 
           <GlassButton
+            type="button"
             disabled={!canProceed}
             onClick={onSubmit}
             size="lg"

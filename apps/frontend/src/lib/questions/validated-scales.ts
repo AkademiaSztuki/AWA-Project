@@ -1,3 +1,5 @@
+import { joinPolishOrphans } from '@/lib/typography/join-polish-orphans';
+
 // TIER 1: Validated Research Scales
 // These questions are IMMUTABLE - required for research validity
 // Based on established environmental psychology instruments
@@ -94,8 +96,8 @@ export const BIOPHILIA_TEST: ValidatedScale = {
   source: 'Kellert (2008) - Patterns of Biophilic Design',
   type: 'visual_choice',
   question: {
-    pl: 'Która wersja najbardziej TY?',
-    en: 'Which version is most YOU?'
+    pl: 'Która opcja najbardziej do Ciebie pasuje?',
+    en: 'Which option feels most like you?'
   }
 };
 
@@ -283,13 +285,13 @@ export const MUSIC_PREFERENCES: SensoryOption[] = [
   },
   { 
     id: 'classical', 
-    label: { pl: 'Klasyczna', en: 'Classical' }, 
+    label: { pl: 'Klasyka', en: 'Classical' }, 
     audioUrl: '/research/sensory/music-classical.mp3', 
     description: { pl: 'Elegancka, ponadczasowa, spokojna', en: 'Elegant, timeless, calm' }
   },
   { 
     id: 'electronic', 
-    label: { pl: 'Elektroniczna', en: 'Electronic' }, 
+    label: { pl: 'Elektronika', en: 'Electronic' }, 
     audioUrl: '/research/sensory/music-electronic.mp3', 
     description: { pl: 'Nowoczesna, energetyczna, skoncentrowana', en: 'Modern, energetic, focused' }
   },
@@ -316,31 +318,31 @@ export const MUSIC_PREFERENCES: SensoryOption[] = [
 export const TEXTURE_PREFERENCES: SensoryOption[] = [
   { 
     id: 'soft_fabric', 
-    label: { pl: 'Miękka tkanina', en: 'Soft fabric' }, 
+    label: { pl: 'Tkanina', en: 'Fabric' }, 
     imageUrl: '/research/sensory/soft_fabric.jpeg', 
     description: { pl: 'Przytulna, komfortowa, ciepła', en: 'Cozy, comfort, warmth' }
   },
   { 
     id: 'smooth_wood', 
-    label: { pl: 'Gładkie drewno', en: 'Smooth wood' }, 
+    label: { pl: 'Drewno', en: 'Wood' }, 
     imageUrl: '/research/sensory/smooth_wood.jpeg', 
     description: { pl: 'Naturalne, ciepłe, organiczne', en: 'Natural, warm, organic' }
   },
   { 
     id: 'cold_metal', 
-    label: { pl: 'Zimny metal', en: 'Cold metal' }, 
+    label: { pl: 'Metal', en: 'Metal' }, 
     imageUrl: '/research/sensory/cold_metal.jpeg', 
     description: { pl: 'Nowoczesny, elegancki, industrialny', en: 'Modern, sleek, industrial' }
   },
   { 
     id: 'rough_stone', 
-    label: { pl: 'Szorstki kamień', en: 'Rough stone' }, 
+    label: { pl: 'Kamień', en: 'Stone' }, 
     imageUrl: '/research/sensory/rough_stone.jpeg', 
     description: { pl: 'Solidny, uziemiony, surowy', en: 'Solid, grounded, raw' }
   },
   { 
     id: 'warm_leather', 
-    label: { pl: 'Ciepła skóra', en: 'Warm leather' }, 
+    label: { pl: 'Skóra', en: 'Leather' }, 
     imageUrl: '/research/sensory/warm_leather.jpeg', 
     description: { pl: 'Luksusowa, bogata, wyrafinowana', en: 'Luxurious, rich, sophisticated' }
   },
@@ -444,7 +446,8 @@ export const VALIDATED_SCALES = {
 // =========================
 
 export function getLocalizedText(text: LocalizedText, lang: Language = 'pl'): string {
-  return text[lang];
+  const raw = text[lang];
+  return lang === 'pl' ? joinPolishOrphans(raw) : raw;
 }
 
 // Research note: All scales maintain construct validity while being gamified

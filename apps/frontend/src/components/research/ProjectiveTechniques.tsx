@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { NATURE_METAPHOR_OPTIONS, SensoryOption } from '@/lib/questions/validated-scales';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -24,13 +24,32 @@ interface NatureMetaphorTestProps {
 export function NatureMetaphorTest({ onSelect, className = '', frameless = false, stepCounter }: NatureMetaphorTestProps) {
   const { t, language } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
-  
 
   const handleSelect = (option: SensoryOption) => {
     setSelectedId(option.id);
     onSelect(option.id);
   };
+
+  const previewId = hoveredId ?? selectedId ?? null;
+  const previewOption = previewId ? NATURE_METAPHOR_OPTIONS.find((o) => o.id === previewId) : undefined;
+  const previewName = previewOption ? t(previewOption.label) : undefined;
+  const isHoverPreview = Boolean(hoveredId && hoveredId !== selectedId);
+  const badgeUpper =
+    previewName == null
+      ? null
+      : isHoverPreview
+        ? language === 'pl'
+          ? 'Podgląd'
+          : 'Preview'
+        : selectedId
+          ? language === 'pl'
+            ? 'Wybrano'
+            : 'Selected'
+          : language === 'pl'
+            ? 'Podgląd'
+            : 'Preview';
 
   const content = (
     <>
@@ -50,32 +69,53 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
             </p>
           </div>
         </div>
-        {selectedId && (
-          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 bg-white/5 sm:bg-transparent p-1 sm:p-0 rounded-lg border border-white/10 sm:border-none">
-            <span className="text-[9px] uppercase tracking-wider text-silver-dark opacity-70">
-              {language === 'pl' ? 'Wybrano' : 'Selected'}
-            </span>
-            <span className="text-[10px] sm:text-xs font-bold text-gold leading-none">
-              {t(NATURE_METAPHOR_OPTIONS.find(o => o.id === selectedId)!.label)}
-            </span>
-          </div>
-        )}
+        <div className="flex max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5">
+          <span
+            className={`flex h-3 w-full items-center justify-end text-right text-[8px] uppercase leading-none tracking-wider transition-colors duration-200 sm:text-[9px] ${
+              previewName
+                ? isHoverPreview
+                  ? 'text-gold/90'
+                  : 'text-silver-dark opacity-80'
+                : 'text-transparent'
+            }`}
+            aria-hidden={!previewName}
+          >
+            {previewName ? badgeUpper : '\u00a0'}
+          </span>
+          <span
+            className={`flex min-h-[2rem] w-full items-end justify-end text-right text-[8px] leading-tight line-clamp-2 hyphens-auto break-words sm:text-[9px] ${
+              previewName ? 'font-bold text-gold sm:text-[10px]' : 'font-modern text-silver-dark opacity-75'
+            }`}
+          >
+            {previewName ??
+              (language === 'pl'
+                ? 'Najedź na metaforę, by zobaczyć nazwę.'
+                : 'Hover a metaphor to preview its name.')}
+          </span>
+        </div>
       </div>
 
       {/* Options Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
+      <div
+        className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 md:grid-cols-3"
+        onMouseLeave={() => setHoveredId(null)}
+      >
         {NATURE_METAPHOR_OPTIONS.map((option) => {
           const isSelected = selectedId === option.id;
+          const isHovered = hoveredId === option.id;
 
           return (
             <button
               key={option.id}
               type="button"
               data-nature-metaphor-button
-              className={`rounded-2xl border overflow-hidden text-left flex flex-col transition-all min-h-[160px] sm:min-h-[220px] ${
+              onMouseEnter={() => setHoveredId(option.id)}
+              className={`flex min-h-[160px] flex-col overflow-hidden rounded-2xl border text-left transition-all sm:min-h-[220px] ${
                 isSelected
                   ? 'border-gold bg-gold/10 shadow-inner shadow-gold/10'
-                  : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
+                  : isHovered
+                    ? 'border-gold/50 shadow-md shadow-gold/15'
+                    : 'border-white/10 hover:border-gold/30 hover:bg-white/5'
               }`}
               style={{ 
                 transform: 'translateZ(0)',

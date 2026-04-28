@@ -1,16 +1,21 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { ArrowLeft, Heart, Sparkles, Trash2, Download, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Heart, Sparkles, Trash2, Download, X, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import Image from 'next/image';
-import { deleteParticipantImage, fetchParticipantImages, fetchParticipantSpaces } from '@/lib/remote-spaces';
-import { safeLocalStorage } from '@/lib/gcp-data';
+import {
+  createParticipantSpace,
+  deleteParticipantImage,
+  fetchParticipantImages,
+  fetchParticipantSpaces,
+} from '@/lib/remote-spaces';
+import { safeLocalStorage, safeSessionStorage } from '@/lib/gcp-data';
 
 interface SpaceImage {
   id: string;
@@ -38,6 +43,28 @@ const sortImagesDescending = (images: SpaceImage[]): SpaceImage[] =>
     return tb - ta;
   });
 
+type SpaceNavMeta = {
+  id: string;
+  name: string;
+  type: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const normalizeSpaceId = (id?: string | null): string => {
+  if (!id) return '';
+  return id.startsWith('space_') ? id.substring(6) : id;
+};
+
+const sortSpacesNavDescending = (list: SpaceNavMeta[]): SpaceNavMeta[] =>
+  [...(list || [])].sort((a, b) => {
+    const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+    return tb - ta;
+  });
+
+const DASHBOARD_RETURN_SCROLL_Y_KEY = 'awa_dashboard_return_scroll_y';
+
 export default function SpaceDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -49,6 +76,100 @@ export default function SpaceDetailPage() {
   const [space, setSpace] = useState<Space | null>(null);
   const [selectedImage, setSelectedImage] = useState<SpaceImage | null>(null);
   const [filter, setFilter] = useState<'all' | 'generated' | 'inspiration'>('all');
+  const [navSpaces, setNavSpaces] = useState<SpaceNavMeta[]>([]);
+  const [isCreatingSpace, setIsCreatingSpace] = useState(false);
+
+  const getUserHash = useCallback((): string | undefined => {
+    let userHash = (sessionData as any)?.userHash as string | undefined;
+
+    if (!userHash) {
+      userHash =
+        safeLocalStorage.getItem('aura_user_hash') || safeSessionStorage.getItem('aura_user_hash') || undefined;
+    }
+
+    return userHash;
+  }, [sessionData]);
+
+  const normalizedRouteSpaceId = useMemo(() => normalizeSpaceId(spaceId), [spaceId]);
+
+  const sortedNavSpaces = useMemo(() => sortSpacesNavDescending(navSpaces), [navSpaces]);
+
+  const galleryNavIndex = useMemo(() => {
+    if (!normalizedRouteSpaceId) return -1;
+    return sortedNavSpaces.findIndex((s) => normalizeSpaceId(s.id) === normalizedRouteSpaceId);
+  }, [normalizedRouteSpaceId, sortedNavSpaces]);
+
+  const prevGallerySpace = galleryNavIndex > 0 ? sortedNavSpaces[galleryNavIndex - 1] : null;
+  const nextGallerySpace =
+    galleryNavIndex >= 0 && galleryNavIndex < sortedNavSpaces.length - 1
+      ? sortedNavSpaces[galleryNavIndex + 1]
+      : null;
+
+  const navigateToGallerySpace = useCallback(
+    (targetId: string) => {
+      const qs = filter !== 'all' ? `?filter=${encodeURIComponent(filter)}` : '';
+      setSelectedImage(null);
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      router.push(`/space/${targetId}${qs}`);
+    },
+    [filter, router],
+  );
+
+  const handleAddSpace = useCallback(async () => {
+    if (isCreatingSpace) return;
+
+    try {
+      setIsCreatingSpace(true);
+
+      const userHash = getUserHash();
+      if (!userHash) {
+        console.error('[SpacePage] No user hash found for adding space');
+        router.push('/');
+        return;
+      }
+
+      const newSpaceName = `${language === 'pl' ? 'Przestrzeń' : 'Space'} ${sortedNavSpaces.length + 1}`;
+      const created = await createParticipantSpace(userHash, {
+        name: newSpaceName,
+        type: (sessionData as any)?.roomType || 'personal',
+      });
+      const newSpaceId = created?.id;
+      if (!newSpaceId) return;
+
+      const nowIso = new Date().toISOString();
+      const newNavMeta: SpaceNavMeta = {
+        id: newSpaceId,
+        name: newSpaceName,
+        type: (sessionData as any)?.roomType || 'personal',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      setNavSpaces((prev) => sortSpacesNavDescending([newNavMeta, ...prev]));
+
+      const existingSpaces = ((sessionData as any)?.spaces || []) as Space[];
+      const newSessionSpace: Space = {
+        id: newSpaceId,
+        name: newSpaceName,
+        type: (sessionData as any)?.roomType || 'personal',
+        images: [],
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      updateSessionData({
+        spaces: [newSessionSpace, ...existingSpaces],
+        currentSpaceId: newSpaceId,
+      } as any);
+
+      safeSessionStorage.setItem(DASHBOARD_RETURN_SCROLL_Y_KEY, String(window.scrollY));
+      router.push(`/setup/room/${newSpaceId}`);
+    } catch (error) {
+      console.error('[SpacePage] Error creating space:', error);
+    } finally {
+      setIsCreatingSpace(false);
+    }
+  }, [getUserHash, isCreatingSpace, language, router, sessionData, sortedNavSpaces.length, updateSessionData]);
 
   useEffect(() => {
     if (!isInitialized || !spaceId) return;
@@ -57,6 +178,26 @@ export default function SpaceDetailPage() {
       currentSpaceId: spaceId,
     });
   }, [isInitialized, spaceId, updateSessionData]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (selectedImage) return;
+      if (!e.altKey) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+
+      if (e.key === 'ArrowLeft' && prevGallerySpace) {
+        e.preventDefault();
+        navigateToGallerySpace(prevGallerySpace.id);
+      }
+      if (e.key === 'ArrowRight' && nextGallerySpace) {
+        e.preventDefault();
+        navigateToGallerySpace(nextGallerySpace.id);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [navigateToGallerySpace, nextGallerySpace, prevGallerySpace, selectedImage]);
 
   useEffect(() => {
     (async () => {
@@ -71,6 +212,33 @@ export default function SpaceDetailPage() {
           userHash ? fetchParticipantImages(userHash) : Promise.resolve([]),
           userHash ? fetchParticipantSpaces(userHash) : Promise.resolve([])
         ]);
+
+        const remoteNavSpaces = sortSpacesNavDescending(
+          (participantSpaces || []).map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            type: s.type || 'personal',
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt || s.createdAt,
+          })),
+        );
+
+        if (remoteNavSpaces.length > 0) {
+          setNavSpaces(remoteNavSpaces);
+        } else {
+          const sessionSpaces = (sessionData as any)?.spaces || [];
+          setNavSpaces(
+            sortSpacesNavDescending(
+              sessionSpaces.map((s: Space) => ({
+                id: s.id,
+                name: s.name,
+                type: s.type,
+                createdAt: s.createdAt,
+                updatedAt: s.updatedAt,
+              })),
+            ),
+          );
+        }
 
         const defaultSpaceId =
           (participantSpaces || []).find((s: any) => s.isDefault)?.id ||
@@ -121,8 +289,13 @@ export default function SpaceDetailPage() {
           return result;
         })();
 
-        const roomName = (sessionData as any)?.roomName || 'Moja Przestrzeń';
-        const roomType = (sessionData as any)?.roomType || 'personal';
+        const currentSpaceMeta = (participantSpaces || []).find((s: any) => {
+          const sid = s.id?.startsWith('space_') ? s.id.substring(6) : s.id;
+          return sid === normalizedSpaceId;
+        });
+
+        const roomName = currentSpaceMeta?.name || (sessionData as any)?.roomName || 'Moja Przestrzeń';
+        const roomType = currentSpaceMeta?.type || (sessionData as any)?.roomType || 'personal';
 
         const newSpace: Space = {
           id: spaceId,
@@ -140,22 +313,33 @@ export default function SpaceDetailPage() {
       }
 
       // Fallback to session data
-    const spaces = (sessionData as any)?.spaces || [];
-    const foundSpace = spaces.find((s: Space) => s.id === spaceId);
-    if (foundSpace) {
-      setSpace({ ...foundSpace, images: sortImagesDescending(foundSpace.images || []) });
-      return;
-    }
+      const spaces = (sessionData as any)?.spaces || [];
+      setNavSpaces(
+        sortSpacesNavDescending(
+          spaces.map((s: Space) => ({
+            id: s.id,
+            name: s.name,
+            type: s.type,
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt,
+          })),
+        ),
+      );
+      const foundSpace = spaces.find((s: Space) => s.id === spaceId);
+      if (foundSpace) {
+        setSpace({ ...foundSpace, images: sortImagesDescending(foundSpace.images || []) });
+        return;
+      }
 
-    // If nothing found, still stop infinite loading state
-    setSpace({
-      id: spaceId,
-      name: (sessionData as any)?.roomName || 'Moja Przestrzeń',
-      type: (sessionData as any)?.roomType || 'personal',
-      images: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
+      // If nothing found, still stop infinite loading state
+      setSpace({
+        id: spaceId,
+        name: (sessionData as any)?.roomName || 'Moja Przestrzeń',
+        type: (sessionData as any)?.roomType || 'personal',
+        images: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
     })();
   }, [spaceId, sessionData]);
 
@@ -204,8 +388,23 @@ export default function SpaceDetailPage() {
 
       // Refresh from participant_images
       const participantImages = userHash ? await fetchParticipantImages(userHash) : [];
+      const participantSpaces = userHash ? await fetchParticipantSpaces(userHash) : [];
+
+      const defaultSpaceId =
+        (participantSpaces || []).find((s: any) => s.isDefault)?.id || (participantSpaces || [])[0]?.id || null;
+      const normalizedDefaultSpaceId = defaultSpaceId?.startsWith('space_')
+        ? defaultSpaceId.substring(6)
+        : defaultSpaceId;
+
       const refreshed = participantImages
-        .filter((img: any) => img.type === 'generated' || img.type === 'inspiration')
+        .filter((img: any) => {
+          if (img.type !== 'generated' && img.type !== 'inspiration') return false;
+          if (img.spaceId) {
+            const imgSpaceId = img.spaceId?.startsWith('space_') ? img.spaceId.substring(6) : img.spaceId;
+            return imgSpaceId === normalizedRouteSpaceId;
+          }
+          return !!normalizedDefaultSpaceId && normalizedRouteSpaceId === normalizedDefaultSpaceId;
+        })
         .map((img: any) => ({
           id: img.id,
           url: img.url,
@@ -213,7 +412,7 @@ export default function SpaceDetailPage() {
           addedAt: img.createdAt || img.created_at || new Date().toISOString(),
           isFavorite: img.isFavorite ?? img.is_favorite,
           thumbnailUrl: img.thumbnailUrl || img.thumbnail_url,
-          tags: img.tags
+          tags: img.tags,
         })) as SpaceImage[];
 
       setSpace((prev) =>
@@ -262,16 +461,48 @@ export default function SpaceDetailPage() {
             transition={{ duration: 0.6 }}
             className="mb-8"
           >
-            <GlassButton
-              onClick={() => router.push('/dashboard')}
-              variant="secondary"
-              className="mb-4"
-            >
-              <ArrowLeft size={20} className="mr-2" />
-              {language === 'pl' ? 'Powrót do Dashboard' : 'Back to Dashboard'}
-            </GlassButton>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <GlassButton
+                onClick={() => {
+                  const hasSavedDashboardPosition = safeSessionStorage.getItem('awa_dashboard_return_scroll_y');
+                  router.push(hasSavedDashboardPosition ? '/dashboard?restoreScroll=1' : '/dashboard');
+                }}
+                variant="secondary"
+                className="w-full sm:w-auto"
+              >
+                <ArrowLeft size={20} className="mr-2" />
+                {language === 'pl' ? 'Powrót do Dashboard' : 'Back to Dashboard'}
+              </GlassButton>
 
-            <h1 className="text-3xl lg:text-4xl xl:text-5xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-2">
+              {sortedNavSpaces.length > 1 && (
+                <div className="flex w-full justify-stretch gap-2 sm:w-auto sm:justify-end">
+                  <GlassButton
+                    type="button"
+                    variant="secondary"
+                    disabled={!prevGallerySpace}
+                    onClick={() => prevGallerySpace && navigateToGallerySpace(prevGallerySpace.id)}
+                    className="flex-1 justify-center sm:flex-none"
+                    aria-label={language === 'pl' ? 'Poprzednia galeria' : 'Previous gallery'}
+                  >
+                    <ChevronLeft size={18} className="mr-2" aria-hidden />
+                    {language === 'pl' ? 'Poprzednia' : 'Previous'}
+                  </GlassButton>
+                  <GlassButton
+                    type="button"
+                    variant="secondary"
+                    disabled={!nextGallerySpace}
+                    onClick={() => nextGallerySpace && navigateToGallerySpace(nextGallerySpace.id)}
+                    className="flex-1 justify-center sm:flex-none"
+                    aria-label={language === 'pl' ? 'Następna galeria' : 'Next gallery'}
+                  >
+                    {language === 'pl' ? 'Następna' : 'Next'}
+                    <ChevronRight size={18} className="ml-2" aria-hidden />
+                  </GlassButton>
+                </div>
+              )}
+            </div>
+
+            <h1 className="text-3xl lg:text-4xl xl:text-5xl font-nasalization text-graphite mb-2">
               {space.name}
             </h1>
             <p className="text-base lg:text-lg text-graphite font-modern">
@@ -407,108 +638,151 @@ export default function SpaceDetailPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center px-1.5 sm:px-4 md:px-8 py-4 md:py-8 bg-black/80"
+            className="fixed inset-0 z-[300] flex flex-col items-center justify-center px-1.5 sm:px-4 md:px-8 py-4 md:py-8 bg-black/80"
             onClick={() => setSelectedImage(null)}
             role="dialog"
             aria-modal="true"
             aria-label={language === 'pl' ? 'Powiększone zdjęcie' : 'Zoomed image'}
           >
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }}
-              className="absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
-              aria-label={language === 'pl' ? 'Zamknij' : 'Close'}
-            >
-              <X size={24} className="text-white" aria-hidden="true" />
-            </button>
-
             {/* Grid aligned with layout: left col = IDA spacer, right col = header/content */}
             <div className="w-full max-w-screen-2xl mx-auto flex-1 flex flex-col xl:grid xl:grid-cols-[minmax(320px,0.3fr)_minmax(400px,0.7fr)] xl:gap-10 xl:items-start min-h-0">
               <div className="hidden xl:block" aria-hidden="true" />
               <div className="w-full flex flex-col items-center justify-center min-h-0">
-            <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              transition={{ duration: 0.2 }}
-              className="relative flex flex-col items-center justify-center w-full max-h-[calc(100vh-8rem)]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="relative w-full flex-1 min-h-0 flex items-center justify-center">
-                {/* Lightbox image – full header width, rounded corners, plain img for reliable styling */}
-                <div
-                  className="relative w-full h-[calc(100vh-14rem)] flex items-center justify-center overflow-hidden rounded-3xl"
-                  style={{ borderRadius: '1.5rem' }}
+                <motion.div
+                  initial={{ scale: 0.9 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0.9 }}
+                  transition={{ duration: 0.2 }}
+                  className="relative flex flex-col items-center justify-center w-full max-h-[calc(100vh-8rem)]"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={selectedImage.url}
-                    alt={selectedImage.type}
-                    className="max-w-full max-h-full w-auto h-auto object-contain object-center"
-                    style={{ borderRadius: 'inherit' }}
-                  />
-                </div>
-                {/* Prev/next overlaid on image edges – only when multiple images */}
-                {filteredImages.length > 1 && (() => {
-                  const idx = filteredImages.findIndex((img) => img.id === selectedImage.id);
-                  const canGoPrev = idx > 0;
-                  const canGoNext = idx >= 0 && idx < filteredImages.length - 1;
-                  return (
-                    <>
-                      {canGoPrev && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedImage(filteredImages[idx - 1]);
-                          }}
-                          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
-                          aria-label={language === 'pl' ? 'Poprzednie zdjęcie' : 'Previous image'}
-                        >
-                          <ChevronLeft size={28} className="text-white" aria-hidden="true" />
-                        </button>
-                      )}
-                      {canGoNext && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedImage(filteredImages[idx + 1]);
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
-                          aria-label={language === 'pl' ? 'Następne zdjęcie' : 'Next image'}
-                        >
-                          <ChevronRight size={28} className="text-white" aria-hidden="true" />
-                        </button>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
+                  <div className="relative w-full flex-1 min-h-0 flex items-center justify-center">
+                    {/* Lightbox image – full header width, rounded corners, plain img for reliable styling */}
+                    <div
+                      className="relative w-full h-[calc(100vh-14rem)] flex items-center justify-center overflow-hidden rounded-3xl"
+                      style={{ borderRadius: '1.5rem' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedImage(null);
+                        }}
+                        className="absolute right-3 top-3 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm transition-colors hover:bg-black/60 sm:right-4 sm:top-4"
+                        aria-label={language === 'pl' ? 'Zamknij' : 'Close'}
+                      >
+                        <X size={22} className="text-white" aria-hidden="true" />
+                      </button>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={selectedImage.url}
+                        alt={selectedImage.type}
+                        className="max-w-full max-h-full w-auto h-auto object-contain object-center"
+                        style={{ borderRadius: 'inherit' }}
+                      />
+                    </div>
 
-              <div className="mt-4 flex gap-2 justify-center flex-shrink-0">
-                <GlassButton
-                  onClick={() => handleDownloadImage(selectedImage.url)}
-                  variant="secondary"
-                >
-                  <Download size={20} className="mr-2" />
-                  {language === 'pl' ? 'Pobierz' : 'Download'}
-                </GlassButton>
-                <GlassButton
-                  onClick={() => handleDeleteImage(selectedImage.id)}
-                  variant="secondary"
-                  className="bg-red-500/20 hover:bg-red-500/40"
-                >
-                  <Trash2 size={20} className="mr-2" />
-                  {language === 'pl' ? 'Usuń' : 'Delete'}
-                </GlassButton>
-              </div>
-            </motion.div>
+                    {/* Prev/next overlaid on image edges – only when multiple images */}
+                    {filteredImages.length > 1 && (() => {
+                      const idx = filteredImages.findIndex((img) => img.id === selectedImage.id);
+                      const canGoPrev = idx > 0;
+                      const canGoNext = idx >= 0 && idx < filteredImages.length - 1;
+                      return (
+                        <>
+                          {canGoPrev && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedImage(filteredImages[idx - 1]);
+                              }}
+                              className="absolute left-2 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/40"
+                              aria-label={language === 'pl' ? 'Poprzednie zdjęcie' : 'Previous image'}
+                            >
+                              <ChevronLeft size={28} className="text-white" aria-hidden="true" />
+                            </button>
+                          )}
+                          {canGoNext && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedImage(filteredImages[idx + 1]);
+                              }}
+                              className="absolute right-14 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/40 sm:right-16"
+                              aria-label={language === 'pl' ? 'Następne zdjęcie' : 'Next image'}
+                            >
+                              <ChevronRight size={28} className="text-white" aria-hidden="true" />
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="-mt-2 flex gap-2 justify-center flex-shrink-0 sm:-mt-3">
+                    <GlassButton
+                      onClick={() => handleDownloadImage(selectedImage.url)}
+                      variant="secondary"
+                      className="text-white hover:text-white"
+                    >
+                      <Download size={20} className="mr-2" />
+                      {language === 'pl' ? 'Pobierz' : 'Download'}
+                    </GlassButton>
+                    <GlassButton
+                      onClick={() => handleDeleteImage(selectedImage.id)}
+                      variant="secondary"
+                      className="bg-red-500/25 text-white hover:bg-red-500/45 hover:text-white"
+                    >
+                      <Trash2 size={20} className="mr-2" />
+                      {language === 'pl' ? 'Usuń' : 'Delete'}
+                    </GlassButton>
+                  </div>
+                </motion.div>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {!selectedImage && (
+        <SpaceGalleryFloatingAddSpace
+          language={language}
+          disabled={isCreatingSpace}
+          onAddSpace={handleAddSpace}
+        />
+      )}
     </div>
+  );
+}
+
+function SpaceGalleryFloatingAddSpace({
+  language,
+  onAddSpace,
+  disabled,
+}: {
+  language: 'pl' | 'en';
+  onAddSpace: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 36, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+      className="pointer-events-none fixed bottom-4 inset-x-4 z-[280] flex justify-center sm:bottom-6 lg:inset-x-8 xl:translate-x-[calc(15vw+1.25rem)] 2xl:translate-x-[250px]"
+    >
+      <GlassButton
+        type="button"
+        onClick={onAddSpace}
+        disabled={disabled}
+        className="pointer-events-auto flex min-h-[56px] w-full max-w-xl items-center justify-center gap-2 rounded-full border border-white/35 bg-white/45 px-6 py-3 shadow-[0_20px_60px_rgba(68,49,20,0.18)] backdrop-blur-glass transition hover:-translate-y-0.5 hover:bg-white/60 hover:shadow-[0_26px_70px_rgba(68,49,20,0.22)] sm:px-8 lg:max-w-2xl"
+      >
+        <Plus size={18} aria-hidden />
+        <span className="font-modern text-sm font-semibold">
+          {language === 'pl' ? 'Dodaj pomieszczenie' : 'Add a room'}
+        </span>
+      </GlassButton>
+    </motion.div>
   );
 }

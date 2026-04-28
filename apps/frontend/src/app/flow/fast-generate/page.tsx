@@ -10,13 +10,14 @@ import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavi
 import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { GlassSlider } from '@/components/ui/GlassSlider';
+import { GlassScalePicker } from '@/components/ui/GlassScalePicker';
 import { LoadingProgress } from '@/components/ui/LoadingProgress';
 import { GenerationHistory } from '@/components/ui/GenerationHistory';
 import { AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal, type LoginNudgeEvent } from '@/components/auth/LoginModal';
+import { FREE_GRANT_CREDITS } from '@/lib/credits';
 import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import {
   Wand2,
@@ -44,7 +45,9 @@ import {
   buildModificationPromptLogEntry,
 } from '@/lib/modification-prompt-log';
 
-const AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY = 'awa_fast_track_require_fresh_gen';
+const IDA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY = 'awa_fast_track_require_fresh_gen';
+/** Session-only: do not re-show soft “save profile” nudge after dismiss or refresh. */
+const IDA_FAST_TRACK_SAVE_PROFILE_NUDGE_DISMISSED_KEY = 'awa_fast_track_save_profile_nudge_dismissed';
 
 interface GeneratedImage {
   id: string;
@@ -101,6 +104,41 @@ const MACRO_MODIFICATIONS: ModificationOption[] = [
   { id: 'shabby_chic', label: { pl: 'Shabby Chic', en: 'Shabby Chic' }, icon: null, category: 'macro' },
 ];
 
+const buildFastMicroModificationPrompt = (modification: ModificationOption, currentStyle: string) => {
+  const microPrompts: Record<string, string> = {
+    warmer_colors: `SYSTEM INSTRUCTION: Image-to-image color modification. KEEP: walls, windows, doors, furniture shapes, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: shift the color palette toward warm beige, cream, terracotta, and soft golden tones throughout this ${currentStyle} interior. Recolor existing surfaces, upholstery, textiles, and accessories without replacing furniture or changing object shapes.`,
+    cooler_colors: `SYSTEM INSTRUCTION: Image-to-image color modification. KEEP: walls, windows, doors, furniture shapes, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: shift the color palette toward cool blue-gray, silver, slate, and icy neutral tones throughout this ${currentStyle} interior. Recolor existing surfaces, upholstery, textiles, and accessories without replacing furniture or changing object shapes.`,
+    more_lighting: `SYSTEM INSTRUCTION: Image-to-image lighting enhancement. KEEP: walls, windows, doors, all furniture, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: increase the amount of visible lighting and brightness. Add or enhance lamps, sconces, ceiling fixtures, natural window light, and warm ambient glow. Do not replace furniture, do not change furniture shapes, and do not rearrange the room.`,
+    darker_mood: `SYSTEM INSTRUCTION: Image-to-image mood modification. KEEP: walls, windows, doors, all furniture, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: create a darker, more intimate mood with dimmer lighting, deeper shadows, and a cozy evening atmosphere. Do not replace furniture or change the room layout.`,
+    natural_materials: `SYSTEM INSTRUCTION: Image-to-image material refinement. KEEP: walls, windows, doors, furniture shapes, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: make visible finishes and textures feel more natural: wood, stone, linen, wool, rattan, clay, and organic fabrics. Preserve all furniture silhouettes and positions.`,
+    more_plants: `SYSTEM INSTRUCTION: Image-to-image plant addition. KEEP: walls, windows, doors, all furniture, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: add potted plants, hanging greenery, and botanical accents in realistic empty spaces around the existing furniture. Do not replace or move furniture.`,
+    less_plants: `SYSTEM INSTRUCTION: Image-to-image plant removal. KEEP: walls, windows, doors, all furniture, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: remove plants, flowers, and greenery, then seamlessly inpaint the surfaces behind them. Do not replace or move furniture.`,
+    change_furniture: `SYSTEM INSTRUCTION: Image-to-image furniture replacement. KEEP: walls, windows, doors, floor, ceiling, lighting, decorations, camera angle, room layout - IDENTICAL. CHANGE ONLY: replace all furniture with new furniture pieces that match the ${currentStyle} style. New furniture must keep similar scale, proportions, and positions. Only furniture changes - everything else remains exactly the same.`,
+    add_decorations: `SYSTEM INSTRUCTION: Image-to-image decoration addition. KEEP: walls, windows, doors, all furniture, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: add artwork, decorative accessories, cushions, vases, and styling elements that match this ${currentStyle} interior. Do not replace or move furniture.`,
+    change_flooring: `SYSTEM INSTRUCTION: Image-to-image floor modification. KEEP: walls, windows, doors, all furniture, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: replace the visible floor material or pattern with a new realistic flooring finish. Keep every other element exactly the same.`,
+  };
+
+  return microPrompts[modification.id] || `SYSTEM INSTRUCTION: Image-to-image micro modification. KEEP: walls, windows, doors, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: ${modification.label.en} in this ${currentStyle} interior.`;
+};
+
+const buildFastMacroModificationPrompt = (modification: ModificationOption) => {
+  const stylePrompts: Record<string, string> = {
+    scandinavian: 'Transform the interior into Scandinavian style: light oak, airy neutrals, simple functional furniture, soft textiles, hygge atmosphere, clean lines, natural light, and a calm palette of whites, creams, and warm grays',
+    minimalist: 'Transform the interior into minimalist style: uncluttered surfaces, geometric furniture, neutral whites and grays, hidden storage, strong negative space, refined simplicity, and serene balance',
+    classic: 'Transform the interior into classic style: elegant traditional furniture, refined symmetry, rich wood, luxurious upholstery, subtle decorative molding, warm ambient lighting, and timeless European details',
+    industrial: 'Transform the interior into industrial style: raw concrete, metal accents, weathered leather, exposed structure, reclaimed wood, Edison-style lighting, muted grays and browns, and urban loft character',
+    eclectic: 'Transform the interior into eclectic style: curated mix of vintage and modern pieces, layered textures, expressive art, confident color accents, varied patterns, and collected objects from different eras',
+    glamour: 'Transform the interior into glamour style: velvet upholstery, metallic accents, marble or mirrored surfaces, crystal-like lighting, jewel tones, glossy finishes, and sophisticated drama',
+    bohemian: 'Transform the interior into bohemian style: layered rugs and textiles, woven textures, plants, warm earth tones, global patterns, relaxed vintage furniture, and cozy collected details',
+    rustic: 'Transform the interior into rustic style: reclaimed wood, stone textures, linen, wrought iron, earth tones, handmade ceramics, baskets, and a warm farmhouse atmosphere',
+    provencal: 'Transform the interior into Provencal French countryside style: whitewashed wood, lavender and sage accents, natural stone, toile or floral textiles, lace, fresh flowers, and soft romantic daylight',
+    shabby_chic: 'Transform the interior into shabby chic style: distressed white furniture, pastel accents, vintage floral textiles, lace details, weathered wood, delicate porcelain, and soft nostalgic atmosphere',
+  };
+
+  const styleChange = stylePrompts[modification.id] || `Transform the interior into ${modification.label.en} style`;
+  return `SYSTEM INSTRUCTION: Image-to-image style transformation. KEEP: walls, windows, doors, ceiling, camera angle, and architectural structure - IDENTICAL. CHANGE: ${styleChange}. Update furniture, colors, decorations, flooring, lighting fixtures, and accessories to match the style while preserving the room perspective and architectural layout.`;
+};
+
 // Helper to get image dimensions
 const getImageDimensions = (base64: string): Promise<{ width: number; height: number }> => {
   return new Promise((resolve, reject) => {
@@ -138,12 +176,15 @@ export default function FastGeneratePage() {
   const router = useRouter();
   const { language } = useLanguage();
   const { user } = useAuth();
+  const authUserRef = useRef(user);
+  authUserRef.current = user;
   const { sessionData, updateSessionData, isInitialized: isSessionInitialized } = useSessionData();
   const { generateSixImagesParallelWithGoogle, upscaleImageWithGoogle, isLoading, error, setError } = useGoogleAI();
   const isAuthenticated = !!user;
 
   const [loginWallOpen, setLoginWallOpen] = useState(false);
   const [loginGateMode, setLoginGateMode] = useState<'soft' | 'hard'>('hard');
+  const [saveProfileNudgeOpen, setSaveProfileNudgeOpen] = useState(false);
 
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]); // Store all generated images
@@ -529,6 +570,14 @@ export default function FastGeneratePage() {
         await endPageView(typedSessionData.userHash, viewId);
       }
 
+      if (
+        typeof window !== 'undefined' &&
+        !authUserRef.current &&
+        !sessionStorage.getItem(IDA_FAST_TRACK_SAVE_PROFILE_NUDGE_DISMISSED_KEY)
+      ) {
+        requestAnimationFrame(() => setSaveProfileNudgeOpen(true));
+      }
+
     } catch (err) {
       console.error('Generation failed:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas generacji.');
@@ -555,7 +604,7 @@ export default function FastGeneratePage() {
 
     const requireFreshGen =
       typeof window !== 'undefined' &&
-      safeSessionStorage.getItem(AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY) === '1';
+      safeSessionStorage.getItem(IDA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY) === '1';
 
     if (requireFreshGen && !isGenerating && !generatedImage) {
       if (fastFreshGenClearInFlight) return;
@@ -574,7 +623,7 @@ export default function FastGeneratePage() {
             fastTrackLastGeneratedStyle: undefined,
           } as any);
         } finally {
-          safeSessionStorage.removeItem(AWA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY);
+          safeSessionStorage.removeItem(IDA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY);
           fastFreshGenClearInFlight = false;
         }
         queueMicrotask(() => {
@@ -733,26 +782,9 @@ export default function FastGeneratePage() {
     try {
       const currentStyle = (sessionData as any)?.visualDNA?.dominantStyle || 'modern';
       
-      // Special handling for change_furniture
-      let modificationPrompt: string;
-      if (modification.id === 'change_furniture') {
-        modificationPrompt =
-          language === 'pl'
-            ? `SYSTEM INSTRUCTION (PL): Image-to-image furniture replacement. ZACHOWAJ: ściany, okna, drzwi, podłogę, sufit, oświetlenie, dekoracje, kadr kamery, układ pomieszczenia – IDENTYCZNE. ZMIEŃ: ZASTĄP wszystkie meble nowymi meblami, które idealnie pasują do stylu ${currentStyle}. Nowe meble muszą być spójne stylistycznie, harmonizować z paletą kolorów i materiałów, mieć podobną skalę i proporcje oraz znajdować się w tych samych miejscach. Zmieniamy tylko meble – wszystko inne pozostaje takie samo.`
-            : `SYSTEM INSTRUCTION: Image-to-image furniture replacement. KEEP: walls, windows, doors, floor, ceiling, lighting, decorations, camera angle, room layout - IDENTICAL. CHANGE: REPLACE all furniture with new furniture pieces that perfectly match the ${currentStyle} style. The new furniture must be stylistically appropriate, harmonize with the existing color palette and materials, maintain similar scale and proportions, and be placed in the same positions. Only furniture changes - everything else remains exactly the same.`;
-      } else {
-        const localizedLabel = language === 'pl' ? modification.label.pl : modification.label.en;
-        modificationPrompt = JSON.stringify({
-          instruction:
-            language === 'pl'
-              ? `Zastosuj modyfikację "${localizedLabel}" do wnętrza`
-              : `Apply "${localizedLabel}" modification to the interior`,
-          style: modification.category === 'macro' ? modification.id : currentStyle,
-          modification_type: modification.category,
-          preserve: ['room structure', 'camera perspective', 'overall layout'],
-          modify: [localizedLabel],
-        });
-      }
+      const modificationPrompt = isMacro
+        ? buildFastMacroModificationPrompt(modification)
+        : buildFastMicroModificationPrompt(modification, currentStyle);
 
       const baseImageSource = generatedImage.base64;
 
@@ -941,6 +973,17 @@ export default function FastGeneratePage() {
     <div className="min-h-screen flex flex-col w-full">
       <div className="flex-1 p-4 lg:p-8 pb-32">
         <div className="w-full max-w-6xl mx-auto pt-8 space-y-6">
+          {/* Error — top + sticky so user always sees it (not buried below image/history) */}
+          {error && (
+            <div className="sticky top-2 z-[70]" role="alert" aria-live="polite">
+              <GlassCard className="p-4 sm:p-6 bg-red-500/15 border-red-400/40 shadow-lg ring-1 ring-red-400/20">
+                <p className="text-red-700 dark:text-red-400 font-modern text-sm sm:text-base leading-snug">
+                  {error}
+                </p>
+              </GlassCard>
+            </div>
+          )}
+
           {/* Loading State */}
           {isGenerating && (
             <LoadingProgress
@@ -1003,18 +1046,23 @@ export default function FastGeneratePage() {
                                 <span>{language === 'pl' ? 'To moje wnętrze (5)' : 'This is my interior (5)'}</span>
                               </div>
 
-                              <GlassSlider
+                              <GlassScalePicker
                                 min={1}
                                 max={5}
                                 value={(generatedImage.ratings as any).is_my_interior || 3}
                                 onChange={(value) => {
                                   handleImageRating(generatedImage.id, 'is_my_interior', value);
-                                  // Delay hiding the bar to allow smooth exit animation
                                   setTimeout(() => {
                                     setHasAnsweredInteriorQuestion(true);
                                   }, 800);
                                 }}
                                 className="mb-2"
+                                highlightResetKey={generatedImage.id}
+                                ariaLabel={
+                                  language === 'pl'
+                                    ? 'Skala: czy to Twoje wnętrze (1–5)'
+                                    : 'Scale: is this your interior (1–5)'
+                                }
                               />
                             </div>
                           </div>
@@ -1048,15 +1096,21 @@ export default function FastGeneratePage() {
 
                               <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
                                 <span>{left} (1)</span>
-                                <span>{right} (7)</span>
+                                <span>{right} (5)</span>
                               </div>
 
-                              <GlassSlider
+                              <GlassScalePicker
                                 min={1}
-                                max={7}
-                                value={(generatedImage.ratings as any)[key] || 4}
+                                max={5}
+                                value={(generatedImage.ratings as any)[key] || 3}
                                 onChange={(value) => handleImageRating(generatedImage.id, key as any, value)}
                                 className="mb-2"
+                                highlightResetKey={`${generatedImage.id}-${String(key)}`}
+                                ariaLabel={
+                                  language === 'pl'
+                                    ? 'Skala zgodności z gustem (1–5)'
+                                    : 'Taste match scale (1–5)'
+                                }
                               />
                             </div>
                           ))}
@@ -1192,13 +1246,6 @@ export default function FastGeneratePage() {
               </motion.div>
             </>
           )}
-
-          {/* Error Display */}
-          {error && (
-            <GlassCard className="p-6 bg-red-500/10 border-red-400/30">
-              <p className="text-red-600 font-modern">{error}</p>
-            </GlassCard>
-          )}
         </div>
       </div>
 
@@ -1218,12 +1265,49 @@ export default function FastGeneratePage() {
         nudgeLocation="fast_generate"
         nudgeReason="login_required"
         onNudgeEvent={runCreditsFunnelEvent}
+        title={{ pl: 'Dokończ obraz', en: 'Finish your image' }}
         message={
           language === 'pl'
-            ? 'Ta akcja wymaga konta (regeneracje, modyfikacje, zapis). Zaloguj się, aby kontynuować.'
-            : 'This action requires an account (regenerations, modifications, save). Sign in to continue.'
+            ? `Zaloguj się — ${String(FREE_GRANT_CREDITS)} darmowych kredytów na start i zapis zmian.`
+            : `Sign in for ${String(FREE_GRANT_CREDITS)} free starter credits and to save your edits.`
         }
         redirectPath="/flow/fast-generate"
+      />
+
+      <LoginModal
+        isOpen={saveProfileNudgeOpen}
+        onClose={() => {
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem(IDA_FAST_TRACK_SAVE_PROFILE_NUDGE_DISMISSED_KEY, '1');
+          }
+          setSaveProfileNudgeOpen(false);
+        }}
+        gateMode="soft"
+        nudgeLocation="fast_generate_post_first_image"
+        nudgeReason="login_required"
+        onMaybeLater={() => {
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem(IDA_FAST_TRACK_SAVE_PROFILE_NUDGE_DISMISSED_KEY, '1');
+          }
+          setSaveProfileNudgeOpen(false);
+        }}
+        onNudgeEvent={(ev) => {
+          const uid = (sessionData as { userHash?: string } | null)?.userHash;
+          if (!uid) return;
+          void logBehavioralEvent(uid, 'login_nudge', {
+            path: 'fast-generate',
+            phase: 'post_first_image',
+            nudge: ev,
+          });
+        }}
+        title={{ pl: 'Zapisz na koncie', en: 'Save to your account' }}
+        message={
+          language === 'pl'
+            ? `${String(FREE_GRANT_CREDITS)} kredytów na start po zalogowaniu i zapis pracy — nic nie zginie. Możesz też iść dalej bez konta.`
+            : `${String(FREE_GRANT_CREDITS)} starter credits when you sign in, plus saved work—or continue without an account.`
+        }
+        redirectPath="/flow/fast-generate"
+        softMaybeLaterLabel={{ pl: 'Kontynuuj bez konta', en: 'Continue without account' }}
       />
     </div>
   );

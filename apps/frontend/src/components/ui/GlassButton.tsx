@@ -17,9 +17,11 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
   ...props
 }) => {
   const variants = {
-    primary: 'glass-button text-gold-700 hover:text-gold-800 font-medium bg-white/10 backdrop-blur-xl border border-white/20',
-    secondary: 'bg-silver-400/20 backdrop-blur-xl border border-white/20 text-gray-700 hover:bg-silver-300/30',
-    subtle: 'bg-pearl-100/10 backdrop-blur-xl border border-pearl-200/30 text-gray-600 hover:bg-pearl-200/20'
+    primary: 'glass-button font-medium',
+    secondary:
+      'bg-silver-400/20 backdrop-blur-xl border border-white/20 text-gray-700 transition-all duration-300 ease-out hover:scale-[1.02] hover:bg-silver-300/35 hover:border-white/35 hover:shadow-[0_0_20px_-8px_rgba(255,255,255,0.2)]',
+    subtle:
+      'bg-pearl-100/10 backdrop-blur-xl border border-pearl-200/30 text-gray-600 transition-all duration-300 ease-out hover:scale-[1.02] hover:bg-pearl-100/25 hover:border-pearl-200/50'
   };
 
   const sizes = {
@@ -33,7 +35,7 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
       className={cn(
         'rounded-[32px] transition-all duration-300 font-nasalization',
         'flex items-center justify-center gap-2',
-        'active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed',
+        'active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100',
         variants[variant],
         sizes[size],
         className

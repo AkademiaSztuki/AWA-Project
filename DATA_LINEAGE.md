@@ -1,6 +1,6 @@
-# AWA Project - Data Lineage Diagram
+# IDA Project - Data Lineage Diagram
 
-This document visualizes the complete data flow and lineage throughout the AWA (Aura) project, showing how data moves from user input through various transformations to final storage and display.
+This document visualizes the complete data flow and lineage throughout the IDA (Aura) project, showing how data moves from user input through various transformations to final storage and display.
 
 ## Comprehensive Data Lineage Overview
 

@@ -101,8 +101,8 @@ export function AccountSettingsPanel() {
         </h2>
         <p className="text-sm text-silver-dark font-modern mb-4">
           {language === 'pl'
-            ? 'Ustawienia logowania do Twojego konta AWA.'
-            : 'Login settings for your AWA account.'}
+            ? 'Ustawienia logowania do Twojego konta IDA.'
+            : 'Login settings for your IDA account.'}
         </p>
 
         <div className="mb-6">

@@ -1,6 +1,6 @@
-## GCP core setup for AWA (EDU credits)
+## GCP core setup for IDA (EDU credits)
 
-This document describes how to provision the **core Google Cloud resources** for the AWA project using your **education credits**:
+This document describes how to provision the **core Google Cloud resources** for the IDA project using your **education credits**:
 
 - Project & billing
 - Cloud SQL for PostgreSQL
@@ -20,12 +20,12 @@ Where you see `PROJECT_ID`, `BILLING_ACCOUNT`, `REGION`, or `INSTANCE_NAME`, rep
    - remaining **credit amount**,
    - **expiration date**,
    - which **projects** are attached to this billing account.
-4. Ensure the AWA project you want to use is attached to this billing account.
+4. Ensure the IDA project you want to use is attached to this billing account.
 
 If you need a dedicated project:
 
 ```bash
-gcloud projects create PROJECT_ID --name="AWA Research"
+gcloud projects create PROJECT_ID --name="IDA Research"
 gcloud beta billing projects link PROJECT_ID \
   --billing-account=BILLING_ACCOUNT
 ```
@@ -68,7 +68,7 @@ gcloud sql instances create $INSTANCE_NAME \
   --backup-start-time=03:00
 ```
 
-Create a database for AWA:
+Create a database for IDA:
 
 ```bash
 gcloud sql databases create awa_db --instance=$INSTANCE_NAME
@@ -150,7 +150,7 @@ Create a service account for the backend API:
 
 ```bash
 gcloud iam service-accounts create awa-backend \
-  --display-name="AWA Backend Service"
+  --display-name="IDA Backend Service"
 ```
 
 Grant it minimum roles:

@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { AwaScrollArea } from '@/components/ui/AwaScrollArea';
 import { 
   Brain, 
   Palette, 
@@ -131,10 +132,14 @@ export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
 // Combined preferences overview (implicit + explicit in one card)
 export function PreferencesOverviewSection({
   sessionData,
-  visualDNA
+  visualDNA,
+  onRetakeImplicit,
+  onRetakeExplicit,
 }: {
   sessionData: any;
   visualDNA: any;
+  onRetakeImplicit?: () => void;
+  onRetakeExplicit?: () => void;
 }) {
   const { language } = useLanguage();
 
@@ -271,7 +276,7 @@ export function PreferencesOverviewSection({
       className="mb-6"
     >
       <GlassCard className="p-6 hover:border-gold/50 transition-all duration-300">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3 mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
               <Sparkles size={20} className="text-white" />
@@ -290,8 +295,30 @@ export function PreferencesOverviewSection({
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
           <div className="grid grid-cols-3 gap-3 px-4 py-3 text-xs uppercase tracking-[0.2em] text-silver-dark font-modern border-b border-white/10">
             <span>{t('Kategoria', 'Category')}</span>
-            <span>{t('Ukryte (Tinder)', 'Implicit (swipe)')}</span>
-            <span>{t('Jawne (świadome)', 'Explicit (conscious)')}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span>{t('Ukryte', 'Implicit')}</span>
+              {onRetakeImplicit && (
+                <button
+                  type="button"
+                  onClick={onRetakeImplicit}
+                  className="rounded-full border border-gold/25 bg-white/10 px-2.5 py-1 font-modern text-[10px] normal-case tracking-normal text-graphite transition hover:border-gold/50 hover:bg-gold/10"
+                >
+                  {t('Ponów test', 'Retake test')}
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span>{t('Jawne', 'Explicit')}</span>
+              {onRetakeExplicit && (
+                <button
+                  type="button"
+                  onClick={onRetakeExplicit}
+                  className="rounded-full border border-gold/25 bg-white/10 px-2.5 py-1 font-modern text-[10px] normal-case tracking-normal text-graphite transition hover:border-gold/50 hover:bg-gold/10"
+                >
+                  {t('Ponów test', 'Retake test')}
+                </button>
+              )}
+            </div>
           </div>
           <div className="divide-y divide-white/10">
             {rows.map((row) => (
@@ -690,8 +717,13 @@ export function InspirationsPreviewSection({
         </div>
 
         {/* Images Grid */}
+        <AwaScrollArea
+          variant="auto"
+          className={`mb-4${isExpanded ? ' max-h-[500px]' : ''}`}
+          autoHide={isExpanded}
+        >
         <motion.div 
-          className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mb-4 ${isExpanded ? 'max-h-[500px] overflow-y-auto pr-1' : ''}`}
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2"
           initial={false}
           animate={{ height: isExpanded ? 'auto' : 'auto' }}
         >
@@ -732,6 +764,7 @@ export function InspirationsPreviewSection({
             );
           })}
         </motion.div>
+        </AwaScrollArea>
 
         {/* Show remaining count or add more button */}
         <div className="mt-4 pt-4 border-t border-white/20 flex items-center justify-between gap-4">
@@ -843,8 +876,13 @@ export function GenerationStatsSection({ generations, generatedImages, onToggleF
 
         {/* Images Grid */}
         {totalImages > 0 && (
+          <AwaScrollArea
+            variant="auto"
+            className={`mb-4${isExpanded ? ' max-h-[500px]' : ''}`}
+            autoHide={isExpanded}
+          >
           <motion.div 
-            className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mb-4 ${isExpanded ? 'max-h-[500px] overflow-y-auto pr-1' : ''}`}
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2"
             initial={false}
           >
             {displayImages.map((img) => {
@@ -887,6 +925,7 @@ export function GenerationStatsSection({ generations, generatedImages, onToggleF
               );
             })}
           </motion.div>
+          </AwaScrollArea>
         )}
 
         {remainingCount > 0 && (

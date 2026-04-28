@@ -15,7 +15,7 @@ function normalizeEmail(email: string): string {
 
 // Resend is ESM-only; import lazily when needed to avoid type issues
 const resendKey = process.env.RESEND_API_KEY;
-const resendFrom = process.env.RESEND_FROM || 'AWA <onboarding@project-ida.com>';
+const resendFrom = process.env.RESEND_FROM || 'IDA <onboarding@project-ida.com>';
 const smtpHost = process.env.SMTP_HOST;
 const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
@@ -128,7 +128,7 @@ authRouter.post('/auth/send-magic-link', async (req, res) => {
     });
   }
 
-  const subject = 'Zaloguj się do AWA / Sign in to AWA';
+    const subject = 'Zaloguj się do IDA / Sign in to IDA';
   const html = `<p>Kliknij aby się zalogować / Click to sign in:</p><p><a href="${link}">${link}</a></p><p>Link wygasa za ${MAGIC_LINK_EXPIRY_MINUTES} minut.</p>`;
   const text = `Kliknij aby się zalogować: ${link}\n\nClick to sign in: ${link}`;
 
@@ -261,9 +261,9 @@ authRouter.post('/auth/register', async (req, res) => {
       return res.status(500).json({ ok: false, error: 'link_generation_failed' });
     }
 
-    const subject = 'Potwierdź swój adres e‑mail w AWA / Verify your email';
-    const html = `<p>Dziękujemy za rejestrację w AWA.</p><p>Kliknij, aby potwierdzić adres e‑mail:</p><p><a href="${link}">${link}</a></p><p>Link wygaśnie za ${EMAIL_VERIFY_EXPIRY_HOURS} godzin.</p>`;
-    const text = `Dziękujemy za rejestrację w AWA.\n\nKliknij, aby potwierdzić adres e‑mail: ${link}\n\nLink wygaśnie za ${EMAIL_VERIFY_EXPIRY_HOURS} godzin.`;
+    const subject = 'Potwierdź swój adres e‑mail w IDA / Verify your email';
+    const html = `<p>Dziękujemy za rejestrację w IDA.</p><p>Kliknij, aby potwierdzić adres e‑mail:</p><p><a href="${link}">${link}</a></p><p>Link wygaśnie za ${EMAIL_VERIFY_EXPIRY_HOURS} godzin.</p>`;
+    const text = `Dziękujemy za rejestrację w IDA.\n\nKliknij, aby potwierdzić adres e‑mail: ${link}\n\nLink wygaśnie za ${EMAIL_VERIFY_EXPIRY_HOURS} godzin.`;
 
     try {
       await sendEmail({ to: email, subject, html, text });
@@ -572,9 +572,9 @@ authRouter.post('/auth/resend-verification', async (req, res) => {
       return res.status(500).json({ ok: false, error: 'link_generation_failed' });
     }
 
-    const subject = 'Potwierdź swój adres e‑mail w AWA / Verify your email';
-    const html = `<p>Wygląda na to, że konto w AWA czeka na potwierdzenie.</p><p>Kliknij, aby potwierdzić adres e‑mail:</p><p><a href="${link}">${link}</a></p><p>Link wygaśnie za ${EMAIL_VERIFY_EXPIRY_HOURS} godzin.</p>`;
-    const text = `Wygląda na to, że konto w AWA czeka na potwierdzenie.\n\nKliknij, aby potwierdzić adres e‑mail: ${link}\n\nLink wygaśnie za ${EMAIL_VERIFY_EXPIRY_HOURS} godzin.`;
+    const subject = 'Potwierdź swój adres e‑mail w IDA / Verify your email';
+    const html = `<p>Wygląda na to, że konto w IDA czeka na potwierdzenie.</p><p>Kliknij, aby potwierdzić adres e‑mail:</p><p><a href="${link}">${link}</a></p><p>Link wygaśnie za ${EMAIL_VERIFY_EXPIRY_HOURS} godzin.</p>`;
+    const text = `Wygląda na to, że konto w IDA czeka na potwierdzenie.\n\nKliknij, aby potwierdzić adres e‑mail: ${link}\n\nLink wygaśnie za ${EMAIL_VERIFY_EXPIRY_HOURS} godzin.`;
 
     try {
       await sendEmail({ to: email, subject, html, text });

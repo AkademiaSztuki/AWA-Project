@@ -6,8 +6,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { cn } from '@/lib/utils';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { AwaScrollArea } from '@/components/ui/AwaScrollArea';
 import { GlassButton } from '@/components/ui/GlassButton';
+import { preloadGoogleIdentityScript } from '@/lib/google-auth';
 import { X, Mail, Sparkles } from 'lucide-react';
 
 export type LoginNudgeEvent = 'nudge_shown' | 'nudge_dismissed' | 'nudge_cta' | 'nudge_soft_later';
@@ -18,6 +21,8 @@ interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  /** When omitted, default headline is “Save your profile” (bilingual). */
+  title?: { pl: string; en: string };
   message?: string;
   redirectPath?: string;
   /** Dismiss (soft) for logged-out funnel – “maybe later” */
@@ -34,6 +39,7 @@ export function LoginModal({
   isOpen,
   onClose,
   onSuccess,
+  title,
   message,
   redirectPath,
   onMaybeLater,
@@ -55,7 +61,8 @@ export function LoginModal({
   const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [mounted, setMounted] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
-  const firstFocusableRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const showSoftSkip = gateMode === 'soft' && !!onMaybeLater;
 
   useEffect(() => {
     setMounted(true);
@@ -63,18 +70,23 @@ export function LoginModal({
   }, []);
 
   useEffect(() => {
+    if (!isOpen) return;
+    preloadGoogleIdentityScript();
+  }, [isOpen]);
+
+  useEffect(() => {
     if (isOpen && (gateMode === 'soft' || gateMode === 'hard')) {
       onNudgeEvent?.('nudge_shown');
     }
   }, [isOpen, gateMode, nudgeLocation, nudgeReason, onNudgeEvent]);
 
-  // Focus management for accessibility
+  // Focus the dialog itself so no CTA appears selected on open.
   useEffect(() => {
-    if (isOpen && firstFocusableRef.current) {
-      setTimeout(() => {
-        firstFocusableRef.current?.focus();
-      }, 100);
-    }
+    if (!isOpen) return;
+    const focusTimer = window.setTimeout(() => {
+      modalRef.current?.focus();
+    }, 100);
+    return () => window.clearTimeout(focusTimer);
   }, [isOpen]);
 
   // Close on Escape key
@@ -151,6 +163,7 @@ export function LoginModal({
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setError('');
+    preloadGoogleIdentityScript();
     try {
       onNudgeEvent?.('nudge_cta');
       await signInWithGoogle(getEffectiveRedirectPath());
@@ -158,6 +171,7 @@ export function LoginModal({
       // Calling router.push in onSuccess creates a race condition that blocks Safari.
     } catch (err: any) {
       setError(err.message || 'Failed to sign in with Google');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -209,6 +223,15 @@ export function LoginModal({
 
   if (!isOpen || !mounted) return null;
 
+  const headline =
+    title != null
+      ? language === 'pl'
+        ? title.pl
+        : title.en
+      : language === 'pl'
+        ? 'Zapisz Swój Profil'
+        : 'Save Your Profile';
+
   const modalContent = (
     <AnimatePresence>
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -233,13 +256,28 @@ export function LoginModal({
           aria-modal="true"
           aria-labelledby="login-modal-title"
           aria-describedby="login-modal-description"
+          tabIndex={-1}
         >
-          <GlassCard className="p-6 md:p-8">
+          <GlassCard
+            variant="flat"
+            className={cn(
+              'relative z-0 overflow-hidden p-6 md:p-8 rounded-2xl antialiased',
+              'border border-white/45 shadow-glass backdrop-blur-glass',
+              'bg-gradient-to-br from-pearl-50/72 via-pearl-100/38 to-pearl-200/18',
+              'ring-1 ring-inset ring-white/25',
+            )}
+          >
+            <div
+              className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/35 via-transparent to-pearl-100/10"
+              aria-hidden="true"
+            />
+            <div className="relative">
             {/* Close Button */}
             <button
-              ref={firstFocusableRef}
+              ref={closeButtonRef}
+              type="button"
               onClick={handleClose}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors focus:ring-2 focus:ring-gold-400 focus:outline-none"
+              className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/40 flex items-center justify-center transition-colors focus:ring-2 focus:ring-gold-400 focus:outline-none shadow-glass-inset"
               aria-label={language === 'pl' ? 'Zamknij modal logowania' : 'Close login modal'}
             >
               <X size={18} className="text-graphite" aria-hidden="true" />
@@ -247,13 +285,19 @@ export function LoginModal({
 
             {/* Header */}
             <div className="text-center mb-6">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gold via-champagne to-platinum flex items-center justify-center" aria-hidden="true">
-                <Sparkles size={28} className="text-white" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gold via-champagne to-platinum flex items-center justify-center shadow-glass border border-white/30" aria-hidden="true">
+                <Sparkles size={28} className="text-white drop-shadow-sm" />
               </div>
-              <h2 id="login-modal-title" className="text-xl md:text-2xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-2">
-                {language === 'pl' ? 'Zapisz Swój Profil' : 'Save Your Profile'}
+              <h2
+                id="login-modal-title"
+                className="text-xl md:text-2xl font-nasalization mb-3 tracking-tight text-graphite [text-shadow:0_1px_0_rgba(255,255,255,0.55)]"
+              >
+                {headline}
               </h2>
-              <p id="login-modal-description" className="text-sm text-graphite font-modern">
+              <p
+                id="login-modal-description"
+                className="text-sm md:text-[0.95rem] leading-relaxed text-graphite font-modern px-1 [text-shadow:0_1px_0_rgba(255,255,255,0.55)]"
+              >
                 {message || (language === 'pl' 
                   ? 'Zaloguj się aby zachować swój postęp i wracać kiedy chcesz'
                   : 'Sign in to save your progress and return anytime')}
@@ -267,10 +311,10 @@ export function LoginModal({
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
                   <Mail size={28} className="text-green-600" />
                 </div>
-                <h3 className="text-lg font-nasalization text-graphite mb-2">
+                <h3 className="text-lg font-nasalization text-graphite mb-2 [text-shadow:0_1px_0_rgba(255,255,255,0.5)]">
                   {language === 'pl' ? 'Sprawdź Swoją Skrzynkę!' : 'Check Your Inbox!'}
                 </h3>
-                <p className="text-sm text-graphite font-modern mb-4">
+                <p className="text-sm text-graphite/90 font-modern mb-4">
                   {language === 'pl'
                     ? `Jeśli konto istnieje lub zostało utworzone, wysłaliśmy e‑mail na ${email}. Sprawdź też folder Spam/Oferty.`
                     : `If the account exists or was created, we sent an email to ${email}. Please also check your Spam/Promotions folder.`}
@@ -278,22 +322,25 @@ export function LoginModal({
               </div>
             ) : (
               <div className="space-y-4">
-                {gateMode === 'soft' && onMaybeLater && (
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleMaybeLater}
-                      className="text-sm text-silver-dark hover:text-graphite font-modern underline underline-offset-2"
-                    >
-                      {softMaybeLaterLabel
-                        ? language === 'pl'
-                          ? softMaybeLaterLabel.pl
-                          : softMaybeLaterLabel.en
-                        : language === 'pl'
-                          ? 'Może później'
-                          : 'Maybe later'}
-                    </button>
-                  </div>
+                {showSoftSkip && (
+                  <button
+                    type="button"
+                    onClick={handleMaybeLater}
+                    className={cn(
+                      'w-full min-h-[52px] rounded-[28px] px-4 py-3 text-center text-base font-semibold font-modern',
+                      'bg-pearl-50/40 backdrop-blur-md border-2 border-white/50 text-graphite shadow-glass',
+                      'transition-all duration-300 ease-out hover:scale-[1.02] hover:border-gold-400/50 hover:bg-gold-400/18 hover:shadow-[0_0_28px_-8px_rgba(255,229,92,0.4),inset_0_0_0_1px_rgba(255,248,200,0.5)]',
+                      'focus:outline-none focus:ring-2 focus:ring-gold-400 focus:ring-offset-2 focus:ring-offset-transparent',
+                    )}
+                  >
+                    {softMaybeLaterLabel
+                      ? language === 'pl'
+                        ? softMaybeLaterLabel.pl
+                        : softMaybeLaterLabel.en
+                      : language === 'pl'
+                        ? 'Może później'
+                        : 'Maybe later'}
+                  </button>
                 )}
                 {/* Google Sign In */}
                 <GlassButton
@@ -315,10 +362,10 @@ export function LoginModal({
                 {/* Divider */}
                 <div className="relative my-4">
                   <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-white/20"></div>
+                    <div className="w-full border-t border-white/30" />
                   </div>
                   <div className="relative flex justify-center text-xs">
-                    <span className="px-2 bg-transparent text-graphite font-modern">
+                    <span className="px-3 py-1 rounded-full bg-pearl-50/55 backdrop-blur-md text-graphite font-modern font-medium border border-white/40 shadow-glass-inset">
                       {language === 'pl' ? 'lub' : 'or'}
                     </span>
                   </div>
@@ -380,7 +427,7 @@ export function LoginModal({
                       aria-required="true"
                       aria-invalid={!!error}
                       aria-describedby={error ? 'email-error' : undefined}
-                      className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/30 text-graphite font-modern focus:border-gold/50 focus:ring-2 focus:ring-gold/20 outline-none transition-all"
+                      className="w-full px-4 py-3 rounded-2xl bg-white/50 backdrop-blur-md border border-white/60 text-graphite placeholder:text-silver-dark/60 font-modern focus:border-gold-500/50 focus:ring-2 focus:ring-gold-400/30 outline-none transition-all shadow-glass-inset"
                       disabled={isLoading}
                     />
                   </div>
@@ -401,7 +448,7 @@ export function LoginModal({
                         placeholder={language === 'pl' ? 'min. 8 znaków' : 'min. 8 characters'}
                         required
                         minLength={8}
-                        className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/30 text-graphite font-modern focus:border-gold/50 focus:ring-2 focus:ring-gold/20 outline-none transition-all"
+                        className="w-full px-4 py-3 rounded-2xl bg-white/50 backdrop-blur-md border border-white/60 text-graphite placeholder:text-silver-dark/60 font-modern focus:border-gold-500/50 focus:ring-2 focus:ring-gold-400/30 outline-none transition-all shadow-glass-inset"
                         disabled={isLoading}
                       />
                     </div>
@@ -446,9 +493,13 @@ export function LoginModal({
                 </form>
 
                 {error && (
+                  <AwaScrollArea
+                    variant="auto"
+                    className="mt-4 max-h-40 rounded-lg border border-red-300/30 bg-red-100/20 p-3"
+                    autoHide={false}
+                  >
                   <div 
                     id="email-error"
-                    className="mt-4 p-3 bg-red-100/20 border border-red-300/30 rounded-lg max-h-40 overflow-y-auto"
                     role="alert"
                     aria-live="polite"
                   >
@@ -484,16 +535,18 @@ export function LoginModal({
                       </div>
                     )}
                   </div>
+                  </AwaScrollArea>
                 )}
 
                 {/* Privacy Note */}
-                <p className="text-xs text-silver-dark text-center mt-4 font-modern">
+                <p className="text-xs text-graphite/85 text-center mt-4 font-modern [text-shadow:0_1px_0_rgba(255,255,255,0.45)]">
                   {language === 'pl'
                     ? 'Twoje dane są bezpieczne i anonimowe. Logowanie pozwala tylko zachować postęp.'
                     : 'Your data is safe and anonymous. Login only allows saving progress.'}
                 </p>
               </div>
             )}
+            </div>
           </GlassCard>
         </motion.div>
       </div>

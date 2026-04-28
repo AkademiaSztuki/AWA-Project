@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface GlassSliderProps {
   min: number;
@@ -27,12 +28,12 @@ export const GlassSlider: React.FC<GlassSliderProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
-  const percentage = ((value - min) / (max - min)) * 100;
-  const thumbWidth = 48; // w-12 = 12 * 4px
-  const thumbHalf = thumbWidth / 2; // 24px
-  
-  // Oblicz pozycję tak żeby thumb był dokładnie na krawędziach
-  const leftPosition = `calc(${percentage}% - ${percentage / 100 * thumbWidth}px)`;
+  const span = max - min;
+  const percentage = span === 0 ? 0 : ((value - min) / span) * 100;
+  /** Must match thumb `w-12` (3rem) — use rem so position stays correct when WCAG font scale changes root font-size */
+  const thumbWidthRem = 3;
+  const ratio = span === 0 ? 0 : (value - min) / span;
+  const leftPosition = `calc((100% - ${thumbWidthRem}rem) * ${ratio})`;
 
   const handleChange = (newValue: number) => {
     if (!hasInteracted) {
@@ -47,30 +48,48 @@ export const GlassSlider: React.FC<GlassSliderProps> = ({
     return `${value} z zakresu ${min} do ${max}`;
   };
 
+  const thumbAccent = isDragging
+    ? "scale-110 border-gold/85 bg-white/75 ring-2 ring-gold-400 shadow-[0_0_28px_rgba(250,204,21,0.65),0_0_0_1px_rgba(255,255,255,0.35)_inset]"
+    : hasInteracted
+      ? "border-gold/60 bg-white/65 ring-2 ring-gold-400/55 shadow-[0_0_22px_rgba(251,191,36,0.5),0_0_0_1px_rgba(255,255,255,0.25)_inset]"
+      : "border-white/50 bg-white/40 shadow-xl";
+
   return (
-    <div className={`relative ${className} min-h-[20px] w-full`}>
+    <div className={cn("relative min-h-[20px] w-full", className)}>
       {/* Glass container - pill-shaped like GlassSurface buttons */}
-      <div className="relative w-full h-5 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-[20px] overflow-visible">
+      <div
+        className={cn(
+          "relative w-full h-5 overflow-visible rounded-[20px] border bg-white/10 shadow-xl backdrop-blur-xl transition-[box-shadow,border-color] duration-300",
+          hasInteracted
+            ? "border-gold-400/35 shadow-[0_0_20px_rgba(251,191,36,0.18),inset_0_1px_0_rgba(255,255,255,0.12)]"
+            : "border-white/20",
+        )}
+      >
         {/* Track background */}
-        <div className="absolute inset-0 bg-black/10 rounded-[20px]" aria-hidden="true"></div>
-        
-        {/* Progress track - bardziej przezroczysty */}
-        <div 
-          className="absolute top-1/2 transform -translate-y-1/2 h-1.5 bg-gradient-to-r from-yellow-400 to-yellow-300 rounded-full transition-all duration-300 ease-in-out"
+        <div className="absolute inset-0 rounded-[20px] bg-black/10" aria-hidden="true" />
+
+        {/* Progress track */}
+        <div
+          className={cn(
+            "absolute top-1/2 h-1.5 -translate-y-1/2 transform rounded-full bg-gradient-to-r transition-all duration-300 ease-in-out",
+            hasInteracted
+              ? "from-amber-300 via-yellow-300 to-amber-200 shadow-[0_0_14px_rgba(253,224,71,0.45)]"
+              : "from-yellow-400 to-yellow-300",
+          )}
           style={{ width: `${percentage}%` }}
           aria-hidden="true"
-        ></div>
-        
-        {/* Slider thumb - styled like bottom buttons */}
-        <div 
-          className={`absolute top-1/2 transform -translate-y-1/2 w-12 h-4 bg-white/40 backdrop-blur-xl border border-white/50 shadow-xl rounded-[16px] pointer-events-none transition-all duration-300 ease-in-out ${
-            isDragging ? 'scale-110 border-gold/60 ring-2 ring-gold-400' : ''
-          }`}
+        />
+
+        {/* Decorative thumb (native thumb is invisible) */}
+        <div
+          className={cn(
+            "pointer-events-none absolute top-1/2 h-4 w-12 -translate-y-1/2 transform rounded-[16px] border backdrop-blur-xl transition-all duration-300 ease-in-out",
+            thumbAccent,
+          )}
           style={{ left: leftPosition }}
           aria-hidden="true"
-        >
-        </div>
-        
+        />
+
         {/* Accessible input */}
         <input
           id={id}
@@ -78,11 +97,12 @@ export const GlassSlider: React.FC<GlassSliderProps> = ({
           min={min}
           max={max}
           value={value}
-          onChange={(e) => handleChange(parseInt(e.target.value))}
-          onMouseDown={() => setIsDragging(true)}
-          onMouseUp={() => setIsDragging(false)}
-          onMouseLeave={() => setIsDragging(false)}
-          className="glass-slider-input absolute inset-0 w-full h-full cursor-pointer focus:outline-none z-10"
+          onChange={(e) => handleChange(parseInt(e.target.value, 10))}
+          onPointerDown={() => setIsDragging(true)}
+          onPointerUp={() => setIsDragging(false)}
+          onPointerCancel={() => setIsDragging(false)}
+          onPointerLeave={() => setIsDragging(false)}
+          className="glass-slider-input absolute inset-0 z-10 h-full w-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
           style={{
             WebkitAppearance: 'none',
             appearance: 'none',
@@ -90,9 +110,6 @@ export const GlassSlider: React.FC<GlassSliderProps> = ({
             outline: 'none',
             margin: 0,
             padding: 0,
-          }}
-          onFocus={(e) => {
-            e.target.blur();
           }}
           aria-label={ariaLabel || 'Suwak'}
           aria-valuemin={min}

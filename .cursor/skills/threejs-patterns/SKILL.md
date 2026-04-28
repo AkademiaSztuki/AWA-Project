@@ -1,9 +1,9 @@
 ---
 name: threejs-patterns
-description: Three.js and React Three Fiber patterns for AWA project. Use when working with 3D models, animations, shaders, or the IDA character system. Covers AwaModel.tsx, AwaDialogue.tsx, particle systems, and Three.js integration.
+description: Three.js and React Three Fiber patterns for IDA project. Use when working with 3D models, animations, shaders, or the IDA character system. Covers AwaModel.tsx, AwaDialogue.tsx, particle systems, and Three.js integration.
 ---
 
-# Three.js Patterns for AWA Project
+# Three.js Patterns for IDA Project
 
 ## Architecture
 

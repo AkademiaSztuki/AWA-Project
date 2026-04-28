@@ -146,6 +146,19 @@ export const useAmbientMusic = (): AmbientMusicControls => {
       audioElement.volume = clampedVolume;
       console.log('useAmbientMusic: Directly set volume to:', clampedVolume);
     }
+
+    if (clampedVolume > 0) {
+      if (typeof window !== 'undefined') {
+        (window as any).ambientMusicUserManuallyPaused = false;
+      }
+      if (audioElement && audioElement.paused) {
+        void audioElement.play().then(() => {
+          setIsPlaying(true);
+        }).catch(() => {});
+      } else if (audioElement) {
+        setIsPlaying(true);
+      }
+    }
     
     // 2. Wywołaj funkcję z AmbientMusic komponentu (dla synchronizacji state'u)
     if (typeof window !== 'undefined' && (window as any).setAmbientMusicVolume) {

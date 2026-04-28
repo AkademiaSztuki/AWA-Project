@@ -1,5 +1,5 @@
 /**
- * Client for AWA backend-gcp API (Cloud Run).
+ * Client for IDA backend-gcp API (Cloud Run).
  * This backend is currently safest as an optional mirror, not the primary store.
  */
 

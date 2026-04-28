@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
+import { flushSync } from 'react-dom';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -9,8 +10,8 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassSlider } from '@/components/ui/GlassSlider';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { MoodGrid } from '@/components/research';
-import { ACTIVITY_QUESTIONS, PAIN_POINTS } from '@/lib/questions/adaptive-questions';
-import { ArrowRight, ArrowLeft, Camera, Activity, AlertCircle, Target, X, Heart, Sparkles } from 'lucide-react';
+import { PAIN_POINTS, getQuestionsForRoom } from '@/lib/questions/adaptive-questions';
+import { ArrowRight, ArrowLeft, Camera, X, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 import { useModalAPI } from '@/hooks/useModalAPI';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
@@ -26,13 +27,21 @@ import { RoomPreferencePayload, RoomActivity } from '@/types/deep-personalizatio
 import { fileToNormalizedBase64 } from '@/lib/utils';
 import { COLOR_PALETTE_OPTIONS, getPaletteLabel } from '@/components/setup/paletteOptions';
 import { STYLE_OPTIONS, getStyleLabel } from '@/lib/questions/style-options';
-import { SensoryTestSuite } from '@/components/research/SensoryTests';
+import { SensoryTestSuite, type SensoryTestSuiteHandle } from '@/components/research/SensoryTests';
 import {
   SEMANTIC_DIFFERENTIAL_DIMENSIONS,
   MUSIC_PREFERENCES,
   TEXTURE_PREFERENCES,
   LIGHT_PREFERENCES
 } from '@/lib/questions/validated-scales';
+import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_SCROLL_STEP } from '@/lib/flow/glass-step-layout';
+import { useFullFlowProgress } from '@/contexts/FullFlowProgressContext';
+import {
+  FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY,
+  FULL_FLOW_PROFILE_STEP_QUERY_KEY,
+  fullFlowIndexFromRoomStep,
+  type RoomSetupStepId,
+} from '@/lib/flow/full-flow-progress';
 import { mapActivitiesToRecommendations } from '@/lib/preferences/activity-mapping';
 import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
 
@@ -75,6 +84,9 @@ const BASE_STEPS: SetupStep[] = [
   'prs_target',
   'summary'
 ];
+
+/** Visual A/B count in PreferenceQuestionsStep; index === length means sensory suite. */
+const PREFERENCE_VISUAL_QUESTION_COUNT = 3;
 
 const buildRoomStepStorageKey = (roomId: string) => `awa-room-setup-step:${roomId}`;
 
@@ -123,8 +135,10 @@ interface RoomData {
  */
 export function RoomSetup({ householdId }: { householdId: string }) {
   const router = useRouter();
-  const { language } = useLanguage();
+  const searchParams = useSearchParams();
+  const { language, tp, joinCopy } = useLanguage();
   const { sessionData, updateSessionData } = useSessionData();
+  const { setRoomStep } = useFullFlowProgress();
   const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
   
   const [currentStep, setCurrentStep] = useState<SetupStep>('photo_upload');
@@ -158,6 +172,9 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   const [pendingGeminiAfterInitial, setPendingGeminiAfterInitial] = useState(false);
   const waitingForTtsToShowFurnitureSuggestionRef = useRef<boolean>(false);
   const geminiTextPendingSeenRef = useRef<string | null>(null);
+  /** Survives unmount of PreferenceQuestionsStep so Back from e.g. prs_current reopens last phase, not visual Q1. */
+  const [preferenceQuestionsProgress, setPreferenceQuestionsProgress] = useState(0);
+  const prevRoomStepRef = useRef<SetupStep | null>(null);
 
   const shouldShowPreferenceQuestions = roomData.preferenceSource === 'complete';
   const steps = useMemo(
@@ -170,6 +187,22 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   const stepStorageKey = useMemo(() => buildRoomStepStorageKey(householdId), [householdId]);
 
   useEffect(() => {
+    const stepFromUrl = searchParams.get(FULL_FLOW_PROFILE_STEP_QUERY_KEY);
+    const urlStep = getValidStep(steps, stepFromUrl);
+    if (urlStep && typeof window !== 'undefined') {
+      const maxRaw = sessionStorage.getItem(FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY);
+      const maxParsed = parseInt(maxRaw || '0', 10);
+      const safeMax = Number.isFinite(maxParsed) && maxParsed >= 0 ? maxParsed : 0;
+      const minIndex = fullFlowIndexFromRoomStep(urlStep as RoomSetupStepId);
+      if (safeMax >= minIndex) {
+        setCurrentStep(urlStep);
+        sessionStorage.setItem(stepStorageKey, urlStep);
+        hasRestoredStepRef.current = true;
+        router.replace(`/setup/room/${householdId}`, { scroll: false });
+        return;
+      }
+    }
+
     if (hasRestoredStepRef.current) return;
     hasRestoredStepRef.current = true;
     if (typeof window === 'undefined') return;
@@ -178,7 +211,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     if (restored) {
       setCurrentStep(restored);
     }
-  }, [stepStorageKey, steps]);
+  }, [searchParams, steps, stepStorageKey, householdId, router]);
 
   useEffect(() => {
     if (!steps.includes(currentStep)) {
@@ -191,8 +224,22 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     sessionStorage.setItem(stepStorageKey, currentStep);
   }, [stepStorageKey, currentStep]);
 
+  useEffect(() => {
+    setRoomStep(currentStep as RoomSetupStepId);
+    return () => {
+      setRoomStep(null);
+    };
+  }, [currentStep, setRoomStep]);
+
+  useLayoutEffect(() => {
+    const prev = prevRoomStepRef.current;
+    if (currentStep === 'preference_questions' && prev === 'prs_current') {
+      setPreferenceQuestionsProgress(PREFERENCE_VISUAL_QUESTION_COUNT);
+    }
+    prevRoomStepRef.current = currentStep;
+  }, [currentStep]);
+
   const currentStepIndex = Math.max(0, steps.indexOf(currentStep));
-  const progress = ((currentStepIndex + 1) / steps.length) * 100;
 
   const stopDialogsAndAudio = useCallback(() => {
     stopAllDialogueAudio();
@@ -232,7 +279,9 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     if (prevIndex >= 0) {
       setCurrentStep(steps[prevIndex]);
     } else {
-      router.push('/dashboard');
+      // Leave room setup: use history so /setup/household → room returns to household,
+      // dashboard → room returns to dashboard. Pushing /dashboard broke anon onboarding (home redirect).
+      router.back();
     }
   };
 
@@ -352,7 +401,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
       const maybeExistingSpace = existingSpaces.find((s) => s.id === targetSpaceId);
       const spaceName =
         roomData.name?.trim() ||
-        (language === 'pl' ? 'Nowa przestrzeń' : 'New Space');
+        (tp("Nowa przestrzeń", "New Space"));
 
       const spacePayload = {
         id: targetSpaceId,
@@ -438,9 +487,10 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                 console.warn('[RoomSetup] Room photo cloud save incomplete:', res);
                 if (typeof window !== 'undefined') {
                   window.alert(
-                    language === 'pl'
-                      ? 'Nie udało się zapisać zdjęcia pokoju w chmurze. Sprawdź połączenie lub spróbuj ponownie później.'
-                      : 'Could not save your room photo to cloud storage. Check your connection or try again later.',
+                    tp(
+                      'Nie udało się zapisać zdjęcia pokoju w chmurze. Sprawdź połączenie lub spróbuj ponownie później.',
+                      'Could not save your room photo to cloud storage. Check your connection or try again later.',
+                    ),
                   );
                 }
               }
@@ -462,16 +512,23 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   };
 
   const roomAnalysis = (sessionData as any)?.roomAnalysis;
-  const roomComment = language === 'pl'
-    ? (roomAnalysis?.comment_pl ?? roomAnalysis?.human_comment ?? roomAnalysis?.comment)
-    : (roomAnalysis?.comment_en ?? roomAnalysis?.comment);
+  const roomCommentRaw =
+    language === 'pl'
+      ? (roomAnalysis?.comment_pl ?? roomAnalysis?.human_comment ?? roomAnalysis?.comment)
+      : (roomAnalysis?.comment_en ?? roomAnalysis?.comment);
+  const roomComment =
+    roomCommentRaw == null || roomCommentRaw === ''
+      ? undefined
+      : joinCopy(String(roomCommentRaw));
   const hasPhotos = roomData.photos && roomData.photos.length > 0;
   const isAlreadySeen = (sessionData as any)?.roomAnalysisCommentSeen === roomComment;
   const shouldShowAnalysis = currentStep === 'photo_upload' && hasPhotos && roomComment && !isAlreadySeen;
   const shouldShowInitialDialog = currentStep === 'photo_upload' && hasPhotos && !initialDialogShownRef.current;
-  const analysisExtraInfo = language === 'pl'
-    ? "Sugestia: Jeśli chcesz, możesz usunąć meble ze zdjęcia przyciskiem poniżej. Pomoże to stworzyć zupełnie nową aranżację bez sugerowania się obecnym układem."
-    : "Pro Tip: You can remove furniture using the button below. This helps create a completely new arrangement without being influenced by the current layout.";
+  const analysisExtraInfo = joinCopy(
+    language === 'pl'
+      ? 'Sugestia: Jeśli chcesz, możesz usunąć meble ze zdjęcia przyciskiem poniżej. Pomoże to stworzyć zupełnie nową aranżację bez sugerowania się obecnym układem.'
+      : 'Pro Tip: You can remove furniture using the button below. This helps create a completely new arrangement without being influenced by the current layout.',
+  );
 
   const requestTts = useCallback((text: string, force = false) => {
     if (!text || !voiceEnabled) return;
@@ -574,7 +631,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   }, [ttsAudioUrl]);
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
+    <div className="relative flex min-h-screen w-full min-w-0 flex-col">
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
       {/* Dialog IDA na dole - dynamiczny dla każdego kroku, pokazuje komentarz IDA jeśli dostępny */}
@@ -697,28 +754,12 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         />
       )}
 
-      <div className="flex-1 p-4 lg:p-8 pb-32">
-        <div className="max-w-3xl lg:max-w-none mx-auto">
-          {/* Progress */}
-          <div className="mb-8 h-12">
-            <div className="flex items-center justify-between text-sm text-silver-dark mb-2 font-modern h-6">
-              <span aria-live="polite" aria-atomic="true">
-                {language === 'pl' ? 'Krok' : 'Step'} {currentStepIndex + 1} / {steps.length}
-              </span>
-              <span aria-live="polite" aria-atomic="true">{Math.round(progress)}%</span>
-            </div>
-            <div className="glass-panel rounded-full h-3 overflow-hidden">
-              <motion.div 
-                className="h-full bg-gradient-to-r from-gold via-champagne to-gold"
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.5 }}
-              />
-            </div>
-          </div>
-
+      <div className="flex min-w-0 w-full flex-1 flex-col px-0 pb-32 pt-6 sm:pt-8 lg:pt-10">
+        <div className={FULL_FLOW_GLASS_SHELL}>
           <AnimatePresence mode="wait">
             {currentStep === 'photo_upload' && (
-              <PhotoUploadStep 
+              <PhotoUploadStep
+                key="photo_upload"
                 photos={roomData.photos}
                 roomType={roomData.roomType}
                 onUpdate={(photos: string[], roomType: string, roomName: string) => 
@@ -731,6 +772,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
 
             {currentStep === 'preference_source' && (
               <PreferenceSourceStep
+                key="preference_source"
                 sessionData={sessionData}
                 preferenceSource={roomData.preferenceSource}
                 onBack={handleBack}
@@ -747,6 +789,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                     ...roomData,
                     preferenceSource: 'complete'
                   });
+                  setPreferenceQuestionsProgress(0);
                   setCurrentStep('preference_questions');
                 }}
               />
@@ -754,6 +797,9 @@ export function RoomSetup({ householdId }: { householdId: string }) {
 
             {currentStep === 'preference_questions' && (
               <PreferenceQuestionsStep
+                key="preference_questions"
+                visualQuestionIndex={preferenceQuestionsProgress}
+                onVisualQuestionIndexChange={setPreferenceQuestionsProgress}
                 explicitPreferences={roomData.explicitPreferences}
                 onBack={handleBack}
                 onSubmit={(payload) => {
@@ -774,33 +820,32 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard variant="flatOnMobile" className="p-6 lg:p-8">
-                  <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite mb-4 text-center">
-                    {language === 'pl' ? 'Stan Obecny' : 'Current State'}
+                <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+                  <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
+                    {tp("Jak czujesz się obecnie w tym pomieszczeniu?", "How do you feel right now in this space?")}
                   </h1>
-                  <p className="text-graphite font-modern mb-6 text-center">
-                    {language === 'pl'
-                      ? 'Gdzie jest to pomieszczenie teraz?'
-                      : 'Where is this space now?'}
+                  <p className="mx-auto max-w-2xl text-center text-graphite font-modern mb-6 leading-relaxed">
+                    {tp("Zaznacz na mapie punkt zgodny z tym, jak teraz odczuwasz tę przestrzeń, będąc w niej.", "Mark the point on the map that matches how you experience this space right now, while you’re in it.")}
                   </p>
-                  
-                  <MoodGrid 
+
+                  <MoodGrid
                     initialPosition={roomData.prsCurrent}
                     onPositionChange={(pos) => setRoomData({ ...roomData, prsCurrent: pos })}
                     mode="current"
+                    variant="embedded"
                   />
 
-                  <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-6">
+                  <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-8">
                     <GlassButton onClick={handleBack} variant="secondary" className="w-full sm:w-auto">
                       <ArrowLeft size={18} />
-                      {language === 'pl' ? 'Wstecz' : 'Back'}
+                      {tp("Wstecz", "Back")}
                     </GlassButton>
                     <GlassButton 
                       onClick={handleNext}
                       disabled={!roomData.prsCurrent}
                       className="w-full sm:w-auto"
                     >
-                      {language === 'pl' ? 'Dalej' : 'Next'}
+                      {tp("Dalej", "Next")}
                       <ArrowRight size={18} />
                     </GlassButton>
                   </div>
@@ -809,7 +854,8 @@ export function RoomSetup({ householdId }: { householdId: string }) {
             )}
 
             {currentStep === 'usage_context' && (
-              <UsageContextStep 
+              <UsageContextStep
+                key="usage_context"
                 usageType={roomData.usageType}
                 onUpdate={(type: 'solo' | 'shared') => setRoomData({ ...roomData, usageType: type })}
                 onNext={handleNext}
@@ -818,7 +864,8 @@ export function RoomSetup({ householdId }: { householdId: string }) {
             )}
 
             {currentStep === 'activities' && (
-              <ActivitiesStep 
+              <ActivitiesStep
+                key="activities"
                 roomType={roomData.roomType}
                 activities={roomData.activities}
                 onUpdate={(activities: RoomActivity[]) => 
@@ -830,7 +877,8 @@ export function RoomSetup({ householdId }: { householdId: string }) {
             )}
 
             {currentStep === 'pain_points' && (
-              <PainPointsStep 
+              <PainPointsStep
+                key="pain_points"
                 selected={roomData.painPoints}
                 onUpdate={(points: string[]) => setRoomData({ ...roomData, painPoints: points })}
                 onNext={handleNext}
@@ -845,33 +893,32 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard variant="flatOnMobile" className="p-6 lg:p-8">
-                  <h1 className="text-2xl lg:text-3xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-4 text-center">
-                    {language === 'pl' ? 'Cel: Gdzie Ma Być?' : 'Goal: Where Should It Be?'}
+                <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+                  <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
+                    {tp("Jak chcesz się czuć w tym pomieszczeniu po zmianach?", "How do you want this space to feel after the redesign?")}
                   </h1>
-                  <p className="text-graphite font-modern mb-6 text-center">
-                    {language === 'pl'
-                      ? 'Gdzie POWINNO być to pomieszczenie idealnie?'
-                      : 'Where SHOULD this space be ideally?'}
+                  <p className="mx-auto max-w-2xl text-center text-graphite font-modern mb-6 leading-relaxed">
+                    {tp("Wskaż docelowy nastrój tej przestrzeni po zmianach (odczucie, nie układ mebli).", "Mark the mood you want in this room after the redesign—atmosphere, not furniture layout.")}
                   </p>
-                  
-                  <MoodGrid 
+
+                  <MoodGrid
                     initialPosition={roomData.prsTarget}
                     onPositionChange={(pos) => setRoomData({ ...roomData, prsTarget: pos })}
                     mode="target"
+                    variant="embedded"
                   />
 
-                  <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-6">
+                  <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-8">
                     <GlassButton onClick={handleBack} variant="secondary" className="w-full sm:w-auto">
                       <ArrowLeft size={18} />
-                      {language === 'pl' ? 'Wstecz' : 'Back'}
+                      {tp("Wstecz", "Back")}
                     </GlassButton>
                     <GlassButton 
                       onClick={handleNext}
                       disabled={!roomData.prsTarget}
                       className="w-full sm:w-auto"
                     >
-                      {language === 'pl' ? 'Dalej' : 'Next'}
+                      {tp("Dalej", "Next")}
                       <ArrowRight size={18} />
                     </GlassButton>
                   </div>
@@ -880,7 +927,8 @@ export function RoomSetup({ householdId }: { householdId: string }) {
             )}
 
             {currentStep === 'summary' && (
-              <RoomSummaryStep 
+              <RoomSummaryStep
+                key="summary"
                 data={roomData}
                 onComplete={handleComplete}
                 onBack={handleBack}
@@ -897,33 +945,33 @@ export function RoomSetup({ householdId }: { householdId: string }) {
 // ========== STEP COMPONENTS ==========
 
 function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
-  const { language } = useLanguage();
+  const { language, tp } = useLanguage();
   const [selectedUsage, setSelectedUsage] = useState('solo');
 
   const usageOptions = [
     { 
       id: 'solo', 
-      label: language === 'pl' ? 'Tylko ja' : 'Just me',
+      label: tp("Tylko ja", "Just me"),
     },
     { 
       id: 'couple', 
-      label: language === 'pl' ? 'Ja i partner/ka' : 'Me and partner',
+      label: tp("Ja i partner/ka", "Me and partner"),
     },
     { 
       id: 'family', 
-      label: language === 'pl' ? 'Rodzina z dziećmi' : 'Family with children',
+      label: tp("Rodzina z dziećmi", "Family with children"),
     },
     { 
       id: 'roommates', 
-      label: language === 'pl' ? 'Współlokatorzy' : 'Roommates',
+      label: tp("Współlokatorzy", "Roommates"),
     },
     { 
       id: 'multigenerational', 
-      label: language === 'pl' ? 'Wielopokoleniowa rodzina' : 'Multigenerational family',
+      label: tp("Wielopokoleniowa rodzina", "Multigenerational family"),
     },
     { 
       id: 'shared', 
-      label: language === 'pl' ? 'Dzielone z innymi' : 'Shared with others',
+      label: tp("Dzielone z innymi", "Shared with others"),
     },
   ];
 
@@ -939,20 +987,13 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[400px] sm:min-h-[500px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <Target size={24} className="text-white" />
-          </div>
-          <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
-            {language === 'pl' ? 'Kto Używa?' : 'Who Uses It?'}
+      <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+        <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
+          {tp("Kto korzysta z tego pomieszczenia?", "Who uses this space?")}
         </h1>
-          </div>
 
-        <p className="text-graphite font-modern mb-6">
-          {language === 'pl'
-            ? 'Kto używa tego pomieszczenia?'
-            : 'Who uses this space?'}
+        <p className="mx-auto mb-6 max-w-2xl text-center font-modern leading-relaxed text-graphite">
+          {tp("Wskaż, kto na co dzień przebywa w tej przestrzeni — np. tylko Ty, Ty z partnerem, rodzina czy współlokatorzy.", "Pick who’s here day to day—just you, you and a partner, family, roommates, and so on.")}
         </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
@@ -963,7 +1004,7 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
               className={`rounded-xl p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                 selectedUsage === option.id
                   ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                  : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                  : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
               }`}
             >
               <p className="text-center leading-tight">{option.label}</p>
@@ -974,10 +1015,10 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
         <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4">
           <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
             <ArrowLeft size={18} />
-            {language === 'pl' ? 'Wstecz' : 'Back'}
+            {tp("Wstecz", "Back")}
           </GlassButton>
           <GlassButton onClick={onNext} className="w-full sm:w-auto">
-            {language === 'pl' ? 'Dalej' : 'Next'}
+            {tp("Dalej", "Next")}
             <ArrowRight size={18} />
           </GlassButton>
         </div>
@@ -987,7 +1028,7 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
 }
 
 export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: any) {
-  const { language } = useLanguage();
+  const { language, tp, joinCopy } = useLanguage();
   const { analyzeRoom, generateLLMComment } = useModalAPI();
   const { sessionData, updateSessionData } = useSessionData();
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>(photos || []);
@@ -1127,7 +1168,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
 
   const handleRemoveFurniture = async () => {
     if (!uploadedPhotosBase64 || uploadedPhotosBase64.length === 0) {
-      alert(language === 'pl' ? 'Najpierw dodaj zdjęcie' : 'Please add a photo first');
+      alert(tp("Najpierw dodaj zdjęcie", "Please add a photo first"));
       return;
     }
 
@@ -1210,9 +1251,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       console.log('[PhotoUploadStep] Successfully removed furniture from image');
     } catch (error) {
       console.error('[PhotoUploadStep] Error removing furniture:', error);
-      alert(language === 'pl' 
-        ? 'Nie udało się usunąć mebli. Spróbuj ponownie lub przejdź dalej z oryginalnym zdjęciem.'
-        : 'Failed to remove furniture. Try again or continue with the original image.');
+      alert(tp("Nie udało się usunąć mebli. Spróbuj ponownie lub przejdź dalej z oryginalnym zdjęciem.", "Failed to remove furniture. Try again or continue with the original image."));
     } finally {
       setIsRemovingFurniture(false);
     }
@@ -1296,11 +1335,14 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           suggestions: [] as string[]
         };
         setRoomAnalysis(roomAnalysisData);
-        const commentForLang = language === 'pl'
-          ? (metadata.comment_pl ?? metadata.humanComment)
-          : (metadata.comment_en ?? metadata.comment);
+        const commentRaw =
+          language === 'pl'
+            ? (metadata.comment_pl ?? metadata.humanComment)
+            : (metadata.comment_en ?? metadata.comment);
+        const commentForLang =
+          commentRaw == null || commentRaw === '' ? '' : joinCopy(String(commentRaw));
         setLlmComment({ comment: commentForLang, suggestions: [] });
-        setHumanComment(commentForLang);
+        setHumanComment(commentForLang || null);
 
         // Save to sessionData so dialogue can access it
         console.log('[PhotoUploadStep] Saving example image roomAnalysis to sessionData:', {
@@ -1400,33 +1442,33 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <Camera size={24} className="text-white" />
-          </div>
-          <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
-            {language === 'pl' ? 'Pokaż Nam Pomieszczenie' : 'Show Us the Space'}
-          </h1>
-        </div>
+      <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+        {!selectedImage && (
+          <>
+            <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
+              {tp("Prześlij zdjęcie swojego wnętrza", "Upload a photo of your interior")}
+            </h1>
 
-        <p className="text-graphite font-modern mb-6">
-          {language === 'pl'
-            ? 'Prześlij zdjęcie obecnego stanu pomieszczenia. IDA przeanalizuje je i automatycznie rozpozna typ pomieszczenia.'
-            : 'Upload a photo of the current space state. IDA will analyze it and automatically detect the room type.'}
-        </p>
+            <p className="mx-auto mb-6 max-w-2xl text-center font-modern leading-relaxed text-graphite">
+              {tp(
+                "To zdjęcie będzie punktem wyjścia do stworzenia nowych koncepcji Twojego wnętrza. IDA odczyta charakter przestrzeni, światło i układ, a następnie wygeneruje propozycje dopasowane do Ciebie oraz miejsca, które chcesz odmienić.",
+                "This photo will be the starting point for creating new concepts for your interior. IDA will read the space, lighting, and layout, then generate ideas tailored to you and the place you want to transform.",
+              )}
+            </p>
+          </>
+        )}
 
         {/* Room Analysis Results */}
         {isAnalyzing && (
-          <div className="mb-6 p-6 glass-panel rounded-2xl">
+          <div className="mb-6 rounded-xl border border-white/20 bg-white/5 p-6 shadow-sm">
             <div className="flex items-center gap-4">
               <div className="w-6 h-6 border-2 border-gold/40 border-t-gold rounded-full animate-spin"></div>
               <div>
                 <p className="text-graphite font-modern font-semibold text-lg">
-                  {language === 'pl' ? 'IDA analizuje pomieszczenie...' : 'IDA is analyzing the room...'}
+                  {tp("IDA analizuje pomieszczenie...", "IDA is analyzing the room...")}
                 </p>
                 <p className="text-silver-dark text-sm font-modern">
-                  {language === 'pl' ? 'To może potrwać chwilę' : 'This may take a moment'}
+                  {tp("To może potrwać chwilę", "This may take a moment")}
                 </p>
               </div>
             </div>
@@ -1435,7 +1477,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         
         {/* Room type display and selection - always show if image is uploaded */}
         {selectedImage && !isAnalyzing && (
-          <div className="mb-6 p-6 md:glass-panel rounded-2xl relative overflow-hidden">
+          <div className="relative mb-6 overflow-hidden rounded-xl border border-white/20 bg-white/5 p-6 shadow-sm">
             {!processedImage && detectedRoomType !== 'empty_room' && (
               <div className="absolute top-0 right-0 w-64 h-64 bg-gold/5 blur-3xl -z-10 animate-pulse" />
             )}
@@ -1448,7 +1490,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                       <p className="text-graphite font-modern font-bold text-lg">
-                        {language === 'pl' ? 'IDA wykryła: ' : 'IDA detected: '}
+                        {tp("IDA wykryła: ", "IDA detected: ")}
                         <span className="text-gold">
                           {ROOM_TYPE_TRANSLATIONS[detectedRoomType] || detectedRoomType}
                         </span>
@@ -1459,13 +1501,13 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                         onClick={() => setShowRoomTypeSelection(true)}
                         className="px-4 py-2 bg-white/10 hover:bg-white/20 text-graphite text-xs font-modern font-semibold rounded-xl transition-all duration-200 border border-white/20"
                       >
-                        {language === 'pl' ? 'Zmień pomieszczenie' : 'Change room'}
+                        {tp("Zmień typ pomieszczenia", "Change room type")}
                       </button>
                     </div>
                   </div>
                 ) : (
                   <p className="text-graphite font-modern font-bold text-lg mb-3">
-                    {language === 'pl' ? 'Wybierz typ pomieszczenia:' : 'Select room type:'}
+                    {tp("Wybierz typ pomieszczenia:", "Select room type:")}
                   </p>
                 )}
               </div>
@@ -1475,19 +1517,19 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
 
         {/* Room type selection - hidden until "Zmień" is clicked */}
         {showRoomTypeSelection && (
-          <div className="mb-6 p-6 glass-panel rounded-2xl">
+          <div className="mb-6 rounded-xl border border-white/20 bg-white/5 p-6 shadow-sm">
             <h3 className="text-sm font-bold text-graphite mb-3 font-modern">
-              {language === 'pl' ? 'Typ pomieszczenia' : 'Room type'}
+              {tp("Typ pomieszczenia", "Room type")}
             </h3>
             <div className="flex flex-wrap gap-2">
               {[
-                { id: 'living_room', label: language === 'pl' ? 'Pokój dzienny' : 'Living Room' },
-                { id: 'bedroom', label: language === 'pl' ? 'Sypialnia' : 'Bedroom' },
-                { id: 'kitchen', label: language === 'pl' ? 'Kuchnia' : 'Kitchen' },
-                { id: 'dining_room', label: language === 'pl' ? 'Jadalnia' : 'Dining Room' },
-                { id: 'bathroom', label: language === 'pl' ? 'Łazienka' : 'Bathroom' },
-                { id: 'office', label: language === 'pl' ? 'Biuro' : 'Office' },
-                { id: 'empty_room', label: language === 'pl' ? 'Puste pomieszczenie' : 'Empty Room' },
+                { id: 'living_room', label: tp("Pokój dzienny", "Living Room") },
+                { id: 'bedroom', label: tp("Sypialnia", "Bedroom") },
+                { id: 'kitchen', label: tp("Kuchnia", "Kitchen") },
+                { id: 'dining_room', label: tp("Jadalnia", "Dining Room") },
+                { id: 'bathroom', label: tp("Łazienka", "Bathroom") },
+                { id: 'office', label: tp("Biuro", "Office") },
+                { id: 'empty_room', label: tp("Puste pomieszczenie", "Empty Room") },
               ].map((opt) => (
                 <button
                   key={opt.id}
@@ -1513,16 +1555,16 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         {/* Upload Area - hide after image is uploaded */}
         {!selectedImage && (
           <>
-        <div className="md:glass-panel rounded-2xl p-8 border-2 border-dashed border-gold/30 hover:border-gold/50 transition-colors mb-6">
+        <div className="mb-6 rounded-xl border-2 border-dashed border-gold/30 bg-white/5 p-8 transition-colors hover:border-gold/50">
           <label className="cursor-pointer flex flex-col items-center">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center mb-4">
               <Camera size={32} className="text-white" aria-hidden="true" />
             </div>
             <p className="text-graphite font-semibold mb-2">
-                  {language === 'pl' ? 'Kliknij aby dodać zdjęcie' : 'Click to add photo'}
+                  {tp("Kliknij aby dodać zdjęcie", "Click to add photo")}
             </p>
             <p className="text-sm text-silver-dark">
-              {language === 'pl' ? 'Lub przeciągnij i upuść' : 'Or drag and drop'}
+              {tp("Lub przeciągnij i upuść", "Or drag and drop")}
             </p>
             <input
               type="file"
@@ -1530,17 +1572,17 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
               onChange={handleFileUpload}
               className="hidden"
               disabled={isAnalyzing}
-              aria-label={language === 'pl' ? 'Wybierz zdjęcie wnętrza' : 'Choose interior photo'}
+              aria-label={tp("Wybierz zdjęcie wnętrza", "Choose interior photo")}
             />
           </label>
         </div>
 
-            {/* Example images */}
-            <div className="mb-6">
+            {/* Example images — full width under upload box, three equal tiles */}
+            <div className="mb-6 w-full">
               <h3 className="text-sm font-bold text-graphite mb-3 font-modern">
-                {language === 'pl' ? 'Przykładowe zdjęcia' : 'Example photos'}
+                {tp("Przykładowe zdjęcia", "Example photos")}
               </h3>
-              <div className="flex gap-3 justify-center flex-wrap">
+              <div className="grid w-full grid-cols-3 gap-2 sm:gap-3 md:gap-4">
                 {[
                   '/images/tinder/Living Room (1).jpg',
                   '/images/tinder/Living Room (2).jpg',
@@ -1550,10 +1592,14 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                     key={img}
                     type="button"
                     onClick={() => handleExampleSelect(img)}
-                    className="border-2 border-transparent hover:border-gold rounded-xl transition-all"
+                    className="relative aspect-[4/3] min-h-0 w-full min-w-0 overflow-hidden rounded-2xl border-2 border-transparent shadow-md ring-1 ring-black/5 transition-all hover:border-gold hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50"
                     disabled={isAnalyzing}
                   >
-                    <img src={img} alt={`Przykład ${idx + 1}`} className="w-24 h-16 rounded-xl object-cover" />
+                    <img
+                      src={img}
+                      alt={`Przykład ${idx + 1}`}
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
                   </button>
                 ))}
               </div>
@@ -1566,9 +1612,10 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-graphite font-modern">
-                {language === 'pl' 
-                  ? (processedImage ? 'Zdjęcie bez mebli' : 'Wybrane zdjęcie')
-                  : (processedImage ? 'Image without furniture' : 'Selected photo')}
+                {tp(
+                  processedImage ? 'Zdjęcie bez mebli' : 'Wybrane zdjęcie',
+                  processedImage ? 'Image without furniture' : 'Selected photo',
+                )}
               </h3>
               <div className="flex gap-3">
                 {processedImage && (
@@ -1580,8 +1627,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                       className="text-[10px] px-2 h-8 min-h-0 rounded-lg"
                     >
                       {isRemovingFurniture 
-                        ? (language === 'pl' ? 'Ponowne usuwanie...' : 'Retrying...')
-                        : (language === 'pl' ? 'Spróbuj ponownie' : 'Try again')}
+                        ? (tp("Ponowne usuwanie...", "Retrying..."))
+                        : (tp("Spróbuj ponownie", "Try again"))}
                     </GlassButton>
                     <button
                       onClick={() => {
@@ -1590,7 +1637,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                       }}
                       className="text-[10px] px-3 h-8 bg-white/10 hover:bg-white/20 text-graphite font-modern rounded-lg transition-all border border-white/20"
                     >
-                      {language === 'pl' ? 'Przywróć meble' : 'Restore furniture'}
+                      {tp("Przywróć meble", "Restore furniture")}
                     </button>
                   </>
                 )}
@@ -1607,31 +1654,29 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                   }}
                   className="text-xs text-silver-dark hover:text-gold transition-colors font-modern underline underline-offset-4"
                 >
-                  {language === 'pl' ? 'Zmień zdjęcie' : 'Change photo'}
+                  {tp("Zmień zdjęcie", "Change photo")}
                 </button>
               </div>
             </div>
             <div className="relative">
               <img 
                 src={processedImage || selectedImage} 
-                alt={language === 'pl' ? 'Wybrane zdjęcie' : 'Selected photo'} 
+                alt={tp("Wybrane zdjęcie", "Selected photo")} 
                 className="w-full max-w-md mx-auto rounded-xl shadow-lg"
               />
               {processedImage && (
                 <div className="mt-2 text-xs text-silver-dark text-center font-modern">
-                  {language === 'pl' 
-                    ? '✓ Meble zostały usunięte. To zdjęcie będzie używane podczas generowania.'
-                    : '✓ Furniture removed. This image will be used during generation.'}
+                  {tp("✓ Meble zostały usunięte. To zdjęcie będzie używane podczas generowania.", "✓ Furniture removed. This image will be used during generation.")}
                 </div>
               )}
             </div>
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-4 mt-6">
+        <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
           <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
             <ArrowLeft size={18} />
-            {language === 'pl' ? 'Wstecz' : 'Back'}
+            {tp("Wstecz", "Back")}
           </GlassButton>
 
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center w-full sm:w-auto">
@@ -1651,13 +1696,13 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                   <Sparkles size={18} className="text-gold-700 group-hover:animate-pulse" />
                   <span className="hidden sm:inline">
                     {isRemovingFurniture 
-                      ? (language === 'pl' ? 'Usuwanie...' : 'Removing...')
-                      : (language === 'pl' ? 'Usuń meble (Zalecane)' : 'Remove furniture (Recommended)')}
+                      ? (tp("Usuwanie...", "Removing..."))
+                      : (tp("Usuń meble (Zalecane)", "Remove furniture (Recommended)"))}
                   </span>
                   <span className="sm:hidden">
                     {isRemovingFurniture 
-                      ? (language === 'pl' ? 'Usuwanie...' : 'Removing...')
-                      : (language === 'pl' ? 'Usuń meble' : 'Remove furniture')}
+                      ? (tp("Usuwanie...", "Removing..."))
+                      : (tp("Usuń meble", "Remove furniture"))}
                   </span>
                 </GlassButton>
               </motion.div>
@@ -1667,7 +1712,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
               onClick={() => {
                 // Use detected room type or allow manual selection
                 const finalRoomType = detectedRoomType || roomType || 'empty_room';
-                const finalRoomName = roomName || (language === 'pl' ? 'Pomieszczenie' : 'Room');
+                const finalRoomName = roomName || (tp("Pomieszczenie", "Room"));
                 onUpdate(uploadedPhotosBase64, finalRoomType, finalRoomName);
                 onNext();
               }}
@@ -1676,8 +1721,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
               className="w-full sm:w-auto"
             >
               {isAnalyzing 
-                ? (language === 'pl' ? 'Analizuje...' : 'Analyzing...')
-                : (language === 'pl' ? 'Dalej' : 'Next')
+                ? (tp("Analizuje...", "Analyzing..."))
+                : (tp("Dalej", "Next"))
               }
               <ArrowRight size={18} />
             </GlassButton>
@@ -1698,6 +1743,9 @@ interface PreferenceSourceStepProps {
 
 interface PreferenceQuestionsStepProps {
   explicitPreferences?: RoomPreferencePayload;
+  /** 0..visualQuestions.length-1 = visual A/B; length = sensory suite (persists across step unmount). */
+  visualQuestionIndex: number;
+  onVisualQuestionIndexChange: (index: number) => void;
   onBack: () => void;
   onSubmit: (payload: RoomPreferencePayload) => void;
 }
@@ -1731,7 +1779,7 @@ function PreferenceSourceStep({
   onSelectProfile,
   onSelectQuestions
 }: PreferenceSourceStepProps) {
-  const { language } = useLanguage();
+  const { language, tp } = useLanguage();
 
   const hasProfileData = Boolean(
     sessionData?.colorsAndMaterials?.selectedPalette ||
@@ -1751,18 +1799,18 @@ function PreferenceSourceStep({
   const profileSensory = sessionData?.sensoryPreferences;
   const profilePreview = [
     profilePaletteLabel
-      ? `${language === 'pl' ? 'Paleta' : 'Palette'}: ${profilePaletteLabel}`
+      ? `${tp("Paleta", "Palette")}: ${profilePaletteLabel}`
       : null,
     profileStyleLabel
-      ? `${language === 'pl' ? 'Styl' : 'Style'}: ${profileStyleLabel}`
+      ? `${tp("Styl", "Style")}: ${profileStyleLabel}`
       : null,
     profileSemantic && profileSemantic.warmth !== undefined && profileSemantic.warmth !== null
-      ? `${language === 'pl' ? 'Ciepło' : 'Warmth'} ${Math.round(
+      ? `${tp("Ciepło", "Warmth")} ${Math.round(
           (profileSemantic.warmth > 1 ? profileSemantic.warmth / 100 : profileSemantic.warmth) * 100,
         )}%`
       : null,
     profileSensory?.music
-      ? `${language === 'pl' ? 'Muzyka' : 'Music'}: ${profileSensory.music}`
+      ? `${tp("Muzyka", "Music")}: ${profileSensory.music}`
       : null
   ].filter(Boolean);
 
@@ -1773,99 +1821,91 @@ function PreferenceSourceStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <Target size={24} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
-              {language === 'pl' ? 'Jak mamy poznać Twój styl?' : 'How should we learn this room?'}
-            </h1>
-            <p className="text-sm text-silver-dark font-modern">
-              {language === 'pl'
-                ? 'Wybierz szybkie użycie profilu lub przejdź do krótkich pytań dla tego pokoju.'
-                : 'Pick the fast profile reuse or move to a short, room-specific questionnaire.'}
-            </p>
-          </div>
-        </div>
+      <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+        <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
+          {tp("Skąd weźmiemy preferencje do tego pomieszczenia?", "Where should preferences for this space come from?")}
+        </h1>
 
-        <div className="grid lg:grid-cols-2 gap-6 mb-10">
+        <p className="mx-auto mb-6 max-w-2xl text-center font-modern leading-relaxed text-graphite">
+          {tp("Możesz szybko zastosować zapisany profil albo odpowiedzieć na krótką ankietę dopasowaną do tego pomieszczenia.", "Reuse your saved profile, or answer a short questionnaire tailored to this room.")}
+        </p>
+
+        <div className="mb-8 grid gap-6 lg:grid-cols-2 lg:items-stretch">
           <div
-            className={`glass-panel rounded-2xl p-6 border transition-all ${
+            className={`flex h-full min-h-0 flex-col rounded-xl border p-6 transition-all duration-300 ${
               preferenceSource === 'complete'
-                ? 'border-gold bg-gold/5 shadow-lg shadow-gold/10'
-                : 'border-white/10'
+                ? 'border-2 border-gold bg-gold/30 text-graphite shadow-lg'
+                : 'border border-white/30 bg-white/10 text-graphite hover:scale-[1.01] hover:border-gold-400/50 hover:bg-gold-400/10'
             }`}
           >
             <p className="uppercase text-xs tracking-[0.3em] text-silver-dark mb-2">
-              {language === 'pl' ? 'Dokładniejsze' : 'Complete mode'}
+              {tp("Dokładniejsze", "Complete mode")}
             </p>
             <h3 className="text-xl font-nasalization text-graphite mb-4">
-              {language === 'pl' ? 'Odpowiem na pytania' : 'Answer quick room questions'}
+              {tp("Odpowiem na pytania", "Answer quick room questions")}
             </h3>
             <p className="text-sm text-silver-dark font-modern mb-4">
-              {language === 'pl'
-                ? '3 krótkie sekcje zajmą ~2 minuty i dadzą IDA pełny kontekst dla tego pokoju.'
-                : 'Three short sections take ~2 minutes and give IDA a complete, room-specific context.'}
+              {tp("Trzy krótkie sekcje (~2 min) dadzą IDA pełny kontekst właśnie dla tego pomieszczenia.", "Three short sections (~2 min) give IDA full context for this specific space.")}
             </p>
-            <GlassButton variant="secondary" onClick={onSelectQuestions}>
-              {language === 'pl' ? 'Przejdź do pytań' : 'Go to questions'}
-              <ArrowRight size={16} />
-            </GlassButton>
+            <div className="mt-auto border-t border-white/10 pt-4">
+              <GlassButton variant="secondary" onClick={onSelectQuestions} className="w-full sm:w-auto">
+                {tp("Przejdź do pytań", "Go to questions")}
+                <ArrowRight size={16} />
+              </GlassButton>
+            </div>
           </div>
 
           <div
-            className={`glass-panel rounded-2xl p-6 border transition-all ${
+            className={`flex h-full min-h-0 flex-col rounded-xl border p-6 transition-all duration-300 ${
               preferenceSource === 'profile'
-                ? 'border-gold bg-gold/5 shadow-lg shadow-gold/10'
-                : 'border-white/10'
+                ? 'border-2 border-gold bg-gold/30 text-graphite shadow-lg'
+                : 'border border-white/30 bg-white/10 text-graphite hover:scale-[1.01] hover:border-gold-400/50 hover:bg-gold-400/10'
             }`}
           >
             <p className="uppercase text-xs tracking-[0.3em] text-silver-dark mb-2">
-              {language === 'pl' ? 'Szybka opcja' : 'Fast path'}
+              {tp("Szybka opcja", "Fast path")}
             </p>
             <h3 className="text-xl font-nasalization text-graphite mb-3">
-              {language === 'pl' ? 'Użyj mojego profilu' : 'Use my profile preferences'}
+              {tp("Użyj mojego profilu", "Use my profile preferences")}
             </h3>
-            {hasProfileData ? (
-              <ul className="space-y-2 text-sm text-graphite font-modern">
-                {profilePreview.map((item, idx) => (
-                  <li key={idx} className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-gold" />
-                    {item}
-                  </li>
-                ))}
-                {profilePreview.length === 0 && (
-                  <li className="text-silver-dark">
-                    {language === 'pl'
-                      ? 'Twoje globalne dane preferencji są zapisane i gotowe do użycia.'
-                      : 'Your global preference data is saved and ready to reuse.'}
-                  </li>
-                )}
-              </ul>
-            ) : (
-              <p className="text-sm text-silver-dark font-modern">
-                {language === 'pl'
-                  ? 'Uzupełnij najpierw profil główny, aby skorzystać z tej opcji.'
-                  : 'Complete the core profile first to unlock this option.'}
-              </p>
-            )}
-            <GlassButton
-              className="mt-6"
-              onClick={onSelectProfile}
-              disabled={!hasProfileData}
-            >
-              {language === 'pl' ? 'Zastosuj profil' : 'Apply my profile'}
-              <ArrowRight size={16} />
-            </GlassButton>
+            <div className="min-h-0 flex-1">
+              {hasProfileData ? (
+                <ul className="space-y-2 text-sm text-graphite font-modern">
+                  {profilePreview.map((item, idx) => (
+                    <li key={idx} className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-gold" />
+                      {item}
+                    </li>
+                  ))}
+                  {profilePreview.length === 0 && (
+                    <li className="text-silver-dark">
+                      {tp("Twoje globalne dane preferencji są zapisane i gotowe do użycia.", "Your global preference data is saved and ready to reuse.")}
+                    </li>
+                  )}
+                </ul>
+              ) : (
+                <p className="text-sm text-silver-dark font-modern">
+                  {tp("Uzupełnij najpierw profil główny, aby skorzystać z tej opcji.", "Complete the core profile first to unlock this option.")}
+                </p>
+              )}
+            </div>
+            <div className="mt-auto border-t border-white/10 pt-4">
+              <GlassButton
+                onClick={onSelectProfile}
+                disabled={!hasProfileData}
+                className="w-full sm:w-auto"
+              >
+                {tp("Zastosuj profil", "Apply my profile")}
+                <ArrowRight size={16} />
+              </GlassButton>
+            </div>
           </div>
         </div>
 
-        <div className="flex justify-start">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-start">
           <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
             <ArrowLeft size={18} />
-            {language === 'pl' ? 'Wstecz' : 'Back'}
+            {tp("Wstecz", "Back")}
           </GlassButton>
         </div>
       </GlassCard>
@@ -1875,14 +1915,15 @@ function PreferenceSourceStep({
 
 function PreferenceQuestionsStep({
   explicitPreferences,
+  visualQuestionIndex,
+  onVisualQuestionIndexChange,
   onBack,
   onSubmit
 }: PreferenceQuestionsStepProps) {
-  const { language } = useLanguage();
+  const { language, tp, joinCopy } = useLanguage();
   const [localPrefs, setLocalPrefs] = useState<RoomPreferencePayload>(() => buildDefaultPreferences(explicitPreferences));
   const [natureMetaphor, setNatureMetaphor] = useState<string | undefined>(explicitPreferences?.natureMetaphor);
   const [biophiliaScore, setBiophiliaScore] = useState<number | undefined>(explicitPreferences?.biophiliaScore);
-  const [currentVisualQuestion, setCurrentVisualQuestion] = useState(0);
   const [visualAnswers, setVisualAnswers] = useState<Record<string, number>>(() => {
     const sem = explicitPreferences?.semanticDifferential;
     return {
@@ -1924,7 +1965,7 @@ function PreferenceQuestionsStep({
   ];
 
   const handleVisualChoice = (side: 'left' | 'right') => {
-    const currentQ = visualQuestions[currentVisualQuestion];
+    const currentQ = visualQuestions[visualQuestionIndex];
     const value = side === 'left' ? 0.2 : 0.8; // skala 0–1 (jak CoreProfileWizard)
     const newAnswers = { ...visualAnswers, [currentQ.id]: value };
     setVisualAnswers(newAnswers);
@@ -1940,11 +1981,11 @@ function PreferenceQuestionsStep({
       }
     }));
     
-    if (currentVisualQuestion + 1 < visualQuestions.length) {
-      setCurrentVisualQuestion(currentVisualQuestion + 1);
+    if (visualQuestionIndex + 1 < visualQuestions.length) {
+      onVisualQuestionIndexChange(visualQuestionIndex + 1);
     } else {
       // All visual questions completed, show sensory tests
-      setCurrentVisualQuestion(visualQuestions.length);
+      onVisualQuestionIndexChange(visualQuestions.length);
     }
   };
 
@@ -1960,6 +2001,7 @@ function PreferenceQuestionsStep({
   };
 
   const [selectedStyle, setSelectedStyle] = useState<string | undefined>(explicitPreferences?.colorsAndMaterials?.selectedStyle);
+  const sensorySuiteRef = useRef<SensoryTestSuiteHandle>(null);
 
   const handleStyleSelect = (styleId: string) => {
     setSelectedStyle(styleId);
@@ -1987,50 +2029,40 @@ function PreferenceQuestionsStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[60vh] max-h-[min(90vh,900px)] h-auto overflow-auto scrollbar-hide flex flex-col">
-        <div className="mb-6">
-          <h1 className="text-xl md:text-2xl font-nasalization text-graphite">
-            {language === 'pl' ? 'Testy Sensoryczne' : 'Sensory Suite'}
-          </h1>
-          <p className="text-graphite font-modern text-sm">
-            {language === 'pl'
-              ? 'Paleta, metafora natury, muzyka, tekstury, światło i biophilia w jednym spójnym oknie.'
-              : 'Palette, nature metaphor, music, textures, light and biophilia inside one coherent panel.'}
-          </p>
-        </div>
-        <div className="flex-1 flex flex-col justify-center">
+      <GlassCard
+        className={`flex min-h-0 w-full flex-col overflow-hidden p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}
+      >
+        <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
+          {/* Single scroll: SensoryTestSuite scrolls internally — avoid nested overflow-y-auto (double scrollbar on card edge). */}
           <AnimatePresence mode="wait">
-            {currentVisualQuestion < visualQuestions.length ? (
+            {visualQuestionIndex < visualQuestions.length ? (
             // Step 1: Visual Questions
             <motion.div
               key="visual_questions"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="flex flex-col items-center justify-center h-full"
+              className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden"
             >
-              <h3 className="text-xl md:text-2xl font-nasalization text-graphite mb-2 text-center">
-                {visualQuestions[currentVisualQuestion].question[language]}
+              <h3 className="mb-2 w-full max-w-3xl self-center text-center font-nasalization text-xl text-graphite md:text-2xl">
+                {joinCopy(visualQuestions[visualQuestionIndex].question[language])}
               </h3>
-              <p className="text-graphite font-modern mb-6 text-sm text-center">
-                {language === 'pl' ? 'Reaguj intuicyjnie, nie myśl za długo' : 'React intuitively, don\'t overthink'}
-              </p>
               
               <div className="mb-6">
                 <div className="text-xs text-silver-dark text-center mb-2 font-modern">
-                  {language === 'pl' ? 'Pytanie' : 'Question'} {currentVisualQuestion + 1} / {visualQuestions.length}
+                  {tp("Pytanie", "Question")} {visualQuestionIndex + 1} / {visualQuestions.length}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-6 w-full">
+              <div className="mx-auto mb-6 grid w-full max-w-3xl grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => handleVisualChoice('left')}
                   className="group relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-white/30 hover:border-gold/50 transition-all hover:scale-[1.02] cursor-pointer"
                 >
                   <Image
-                    src={visualQuestions[currentVisualQuestion].leftImage}
-                    alt={visualQuestions[currentVisualQuestion].leftLabel[language]}
+                    src={visualQuestions[visualQuestionIndex].leftImage}
+                    alt={joinCopy(visualQuestions[visualQuestionIndex].leftLabel[language])}
                     fill
                     className="object-cover"
                     style={{ objectPosition: 'center 30%' }}
@@ -2041,7 +2073,7 @@ function PreferenceQuestionsStep({
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
                     <p className="text-white font-modern text-sm font-semibold">
-                      {visualQuestions[currentVisualQuestion].leftLabel[language]}
+                      {joinCopy(visualQuestions[visualQuestionIndex].leftLabel[language])}
                     </p>
                   </div>
                 </button>
@@ -2052,8 +2084,8 @@ function PreferenceQuestionsStep({
                   className="group relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-white/30 hover:border-gold/50 transition-all hover:scale-[1.02] cursor-pointer"
                 >
                   <Image
-                    src={visualQuestions[currentVisualQuestion].rightImage}
-                    alt={visualQuestions[currentVisualQuestion].rightLabel[language]}
+                    src={visualQuestions[visualQuestionIndex].rightImage}
+                    alt={joinCopy(visualQuestions[visualQuestionIndex].rightLabel[language])}
                     fill
                     className="object-cover"
                     style={{ objectPosition: 'center 30%' }}
@@ -2064,7 +2096,7 @@ function PreferenceQuestionsStep({
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
                     <p className="text-white font-modern text-sm font-semibold">
-                      {visualQuestions[currentVisualQuestion].rightLabel[language]}
+                      {visualQuestions[visualQuestionIndex].rightLabel[language]}
                     </p>
                   </div>
                 </button>
@@ -2077,10 +2109,11 @@ function PreferenceQuestionsStep({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="w-full h-full"
+              className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-hidden"
             >
               <SensoryTestSuite
-                className="flex flex-col h-full"
+                ref={sensorySuiteRef}
+                className="flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col"
                 paletteOptions={COLOR_PALETTE_OPTIONS}
                 selectedPalette={localPrefs.colorsAndMaterials?.selectedPalette}
                 onPaletteSelect={(paletteId) => handlePaletteSelect(paletteId)}
@@ -2088,49 +2121,63 @@ function PreferenceQuestionsStep({
                 selectedStyle={selectedStyle}
                 onStyleSelect={(styleId) => handleStyleSelect(styleId)}
                 onComplete={(results) => {
-                  setLocalPrefs((prev) => {
-                    const prevCm = prev.colorsAndMaterials || {};
-                    const tex = results.texture?.trim();
-                    const prevMats = (prevCm.topMaterials ?? []).filter(Boolean);
-                    const topMats =
-                      prevMats.length > 0 ? prevMats : tex ? [tex] : [];
-                    return {
-                      ...prev,
-                      sensoryPreferences: {
-                        music: results.music,
-                        texture: results.texture,
-                        light: results.light,
-                      },
-                      colorsAndMaterials: {
-                        ...prevCm,
-                        ...(results.style && { selectedStyle: results.style }),
-                        topMaterials: topMats,
-                      },
-                    };
+                  const palette = (results as { palette?: string }).palette;
+                  const mergedRef = { current: null as RoomPreferencePayload | null };
+                  flushSync(() => {
+                    setLocalPrefs((prev) => {
+                      const prevCm = prev.colorsAndMaterials || {};
+                      const tex = results.texture?.trim();
+                      const prevMats = (prevCm.topMaterials ?? []).filter(Boolean);
+                      const topMats =
+                        prevMats.length > 0 ? prevMats : tex ? [tex] : [];
+                      const next: RoomPreferencePayload = {
+                        ...prev,
+                        sensoryPreferences: {
+                          music: results.music,
+                          texture: results.texture,
+                          light: results.light,
+                        },
+                        colorsAndMaterials: {
+                          ...prevCm,
+                          ...(palette && { selectedPalette: palette }),
+                          ...(results.style && { selectedStyle: results.style }),
+                          topMaterials: topMats,
+                        },
+                      };
+                      mergedRef.current = next;
+                      return next;
+                    });
+                    setNatureMetaphor(results.natureMetaphor);
+                    setBiophiliaScore(results.biophiliaScore);
+                    if (results.style) {
+                      setSelectedStyle(results.style);
+                    }
                   });
-                  setNatureMetaphor(results.natureMetaphor);
-                  setBiophiliaScore(results.biophiliaScore);
-                  if (results.style) {
-                    setSelectedStyle(results.style);
+                  const snapshot = mergedRef.current;
+                  if (snapshot) {
+                    onSubmit({
+                      ...snapshot,
+                      natureMetaphor: results.natureMetaphor,
+                      biophiliaScore: results.biophiliaScore,
+                    });
                   }
                 }}
               />
             </motion.div>
           )}
           </AnimatePresence>
-        </div>
 
-        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-8">
+          <div className="mt-auto flex shrink-0 flex-col gap-3 border-t border-white/10 pt-6 sm:flex-row sm:justify-between sm:gap-4">
           <GlassButton 
             onClick={() => {
-              if (currentVisualQuestion > 0 && currentVisualQuestion < visualQuestions.length) {
-                // Go back to previous visual question
-                setCurrentVisualQuestion(currentVisualQuestion - 1);
-              } else if (currentVisualQuestion >= visualQuestions.length) {
-                // Go back to visual questions from sensory tests
-                setCurrentVisualQuestion(visualQuestions.length - 1);
+              if (visualQuestionIndex > 0 && visualQuestionIndex < visualQuestions.length) {
+                onVisualQuestionIndexChange(visualQuestionIndex - 1);
+              } else if (visualQuestionIndex >= visualQuestions.length) {
+                if (sensorySuiteRef.current?.tryGoBackSubStep()) {
+                  return;
+                }
+                onVisualQuestionIndexChange(visualQuestions.length - 1);
               } else {
-                // Go back to previous step in flow
                 onBack();
               }
             }} 
@@ -2138,9 +2185,9 @@ function PreferenceQuestionsStep({
             className="w-full sm:w-auto"
           >
             <ArrowLeft size={18} />
-            {language === 'pl' ? 'Wstecz' : 'Back'}
+            {tp("Wstecz", "Back")}
           </GlassButton>
-          {currentVisualQuestion >= visualQuestions.length && (
+          {visualQuestionIndex >= visualQuestions.length && (
             <GlassButton
               onClick={() => {
                 onSubmit({
@@ -2152,10 +2199,11 @@ function PreferenceQuestionsStep({
               disabled={!canSubmitComplete}
               className="w-full sm:w-auto"
             >
-              {language === 'pl' ? 'Zapisz preferencje' : 'Apply preferences'}
+              {tp("Zapisz preferencje", "Apply preferences")}
               <ArrowRight size={18} />
             </GlassButton>
           )}
+          </div>
         </div>
       </GlassCard>
     </motion.div>
@@ -2163,12 +2211,12 @@ function PreferenceQuestionsStep({
 }
 
 const MATERIAL_OPTIONS = [
-  { id: 'smooth_wood', label: { pl: 'Gładkie drewno', en: 'Smooth wood' } },
-  { id: 'warm_leather', label: { pl: 'Ciepła skóra', en: 'Warm leather' } },
-  { id: 'rough_stone', label: { pl: 'Szorstki kamień', en: 'Rough stone' } },
-  { id: 'soft_fabric', label: { pl: 'Miękka tkanina', en: 'Soft fabric' } },
+  { id: 'smooth_wood', label: { pl: 'Drewno', en: 'Wood' } },
+  { id: 'warm_leather', label: { pl: 'Skóra', en: 'Leather' } },
+  { id: 'rough_stone', label: { pl: 'Kamień', en: 'Stone' } },
+  { id: 'soft_fabric', label: { pl: 'Tkanina', en: 'Fabric' } },
   { id: 'glass', label: { pl: 'Szkło', en: 'Glass' } },
-  { id: 'polished_metal', label: { pl: 'Polerowany metal', en: 'Polished metal' } }
+  { id: 'polished_metal', label: { pl: 'Metal', en: 'Metal' } }
 ];
 
 const FREQUENCY_OPTIONS = [
@@ -2207,7 +2255,7 @@ const SATISFACTION_OPTIONS = [
 ];
 
 function PainPointsStep({ selected, onUpdate, onNext, onBack }: any) {
-  const { t, language } = useLanguage();
+  const { t, language, tp } = useLanguage();
 
   const togglePainPoint = (id: string) => {
     const updated = selected.includes(id)
@@ -2223,20 +2271,13 @@ function PainPointsStep({ selected, onUpdate, onNext, onBack }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className="p-6 lg:p-8 min-h-[400px] sm:min-h-[500px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <AlertCircle size={24} className="text-white" />
-          </div>
-          <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
-            {language === 'pl' ? 'Co Cię Irytuje?' : 'What Bothers You?'}
-          </h1>
-        </div>
+      <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+        <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
+          {tp("Co w tym pomieszczeniu Ci przeszkadza?", "What’s getting in your way in this space?")}
+        </h1>
 
-        <p className="text-graphite font-modern mb-6">
-          {language === 'pl'
-            ? 'Wybierz wszystkie problemy które chciałbyś rozwiązać'
-            : 'Select all problems you\'d like to solve'}
+        <p className="mx-auto mb-6 max-w-2xl text-center font-modern leading-relaxed text-graphite">
+          {tp("Zaznacz wszystko, co chciałbyś poprawić właśnie tutaj — chodzi o realne utrudnienia w tej przestrzeni.", "Select everything you’d like to fix in this room—real friction you feel in this space.")}
         </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
@@ -2249,7 +2290,7 @@ function PainPointsStep({ selected, onUpdate, onNext, onBack }: any) {
                 className={`rounded-xl p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
                   isSelected
                     ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
-                    : 'bg-white/10 border border-white/30 text-graphite hover:bg-gold/10 hover:border-gold/50 hover:text-gold-700'
+                    : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                 }`}
               >
                 <p className="text-center leading-tight">{t(point.label)}</p>
@@ -2261,10 +2302,10 @@ function PainPointsStep({ selected, onUpdate, onNext, onBack }: any) {
         <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4">
           <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
             <ArrowLeft size={18} />
-            {language === 'pl' ? 'Wstecz' : 'Back'}
+            {tp("Wstecz", "Back")}
           </GlassButton>
           <GlassButton onClick={onNext} className="w-full sm:w-auto">
-            {language === 'pl' ? 'Dalej' : 'Next'}
+            {tp("Dalej", "Next")}
             <ArrowRight size={18} />
           </GlassButton>
         </div>
@@ -2286,8 +2327,9 @@ function ActivitiesStep({
   onNext: () => void;
   onBack: () => void;
 }) {
-  const { t, language } = useLanguage();
-  const activityDefinitions = ACTIVITY_QUESTIONS[roomType as keyof typeof ACTIVITY_QUESTIONS] || ACTIVITY_QUESTIONS.default;
+  const { t, language, tp } = useLanguage();
+  /** Same normalization as research helpers — empty_room/other map to a full list, not 4-item default. */
+  const activityDefinitions = getQuestionsForRoom(roomType, 'solo');
 
   const buildActivityMap = (list?: RoomActivity[]) =>
     (list || []).reduce<Record<string, RoomActivity>>((acc, activity) => {
@@ -2354,22 +2396,14 @@ function ActivitiesStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard variant="flatOnMobile" className="p-6 lg:p-8 min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-            <Activity size={24} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-nasalization text-graphite">
-              {language === 'pl' ? 'Co tu robisz?' : 'What happens here?'}
-            </h1>
-            <p className="text-sm text-silver-dark font-modern">
-              {language === 'pl'
-                ? 'Zaznacz rytuały w tym pokoju i powiedz, jak wspiera je obecna przestrzeń.'
-                : 'Select every ritual you run in this room and describe how the space supports it.'}
-            </p>
-          </div>
-        </div>
+      <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+        <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
+          {tp("Co robisz w tym pomieszczeniu?", "What do you do in this space?")}
+        </h1>
+
+        <p className="mx-auto mb-6 max-w-2xl text-center font-modern leading-relaxed text-graphite">
+          {tp("Zaznacz, co robisz w tym pomieszczeniu na co dzień, i opisz, jak obecna przestrzeń wspiera (albo utrudnia) te czynności.", "Select what you actually do in this space day to day, and note how the room helps or gets in the way.")}
+        </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
           {activityDefinitions.map((activity) => {
@@ -2377,30 +2411,34 @@ function ActivitiesStep({
             return (
               <button
                 key={activity.id}
+                type="button"
                 onClick={() => toggleActivity(activity.id)}
-                className={`glass-panel rounded-xl p-4 transition-all duration-300 ${
-                  isSelected ? 'border-2 border-gold bg-gold/10 scale-105' : 'border border-white/30 hover:border-gold/30'
+                aria-pressed={isSelected}
+                className={`rounded-xl p-4 text-sm font-modern font-semibold transition-all duration-300 cursor-pointer group ${
+                  isSelected
+                    ? 'bg-gold/30 border-2 border-gold text-graphite shadow-lg'
+                    : 'bg-white/10 border border-white/30 text-graphite transition-all duration-200 ease-out hover:scale-[1.03] hover:bg-gold-400/22 hover:border-gold-400/50 hover:shadow-[0_0_30px_-8px_rgba(255,229,92,0.45)]'
                 }`}
               >
-                <div className="w-8 h-8 mx-auto mb-3 rounded-full bg-gradient-to-br from-gold/20 to-champagne/20 flex items-center justify-center">
-                  <div className="w-4 h-4 bg-gradient-to-br from-gold to-champagne rounded-full"></div>
-                </div>
-                <p className="text-xs font-modern text-graphite text-center leading-tight">{t(activity.label)}</p>
+                <p className="text-center leading-tight">{t(activity.label)}</p>
               </button>
             );
           })}
         </div>
 
         {hasSelectedActivities ? (
-          <div className="space-y-4 mb-6">
+          <div className="space-y-4 mb-8">
             {selectedActivities.map((activity) => {
               const definition = activityDefinitions.find((item: any) => item.id === activity.type);
               return (
-                <div key={activity.type} className="md:glass-panel rounded-2xl p-5 border border-white/10">
+                <div
+                  key={activity.type}
+                  className="rounded-xl border border-white/20 bg-white/5 p-5 shadow-sm"
+                >
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <p className="text-sm uppercase tracking-[0.2em] text-silver-dark">
-                        {language === 'pl' ? 'Aktywność' : 'Activity'}
+                        {tp("Aktywność", "Activity")}
                       </p>
                       <p className="text-lg font-nasalization text-graphite">
                         {definition ? t(definition.label) : activity.type}
@@ -2411,14 +2449,14 @@ function ActivitiesStep({
                       onClick={() => toggleActivity(activity.type)}
                       className="text-sm text-silver-dark hover:text-gold transition-colors"
                     >
-                      {language === 'pl' ? 'Usuń' : 'Remove'}
+                      {tp("Usuń", "Remove")}
                     </button>
                   </div>
 
                   <div className="space-y-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.2em] text-silver-dark">
-                        {language === 'pl' ? 'Częstotliwość' : 'Frequency'}
+                        {tp("Częstotliwość", "Frequency")}
                       </p>
                       <div className="flex flex-wrap gap-2 mt-2">
                         {FREQUENCY_OPTIONS.map((option) => {
@@ -2442,7 +2480,7 @@ function ActivitiesStep({
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-[0.2em] text-silver-dark">
-                        {language === 'pl' ? 'Jak to miejsce się sprawdza?' : 'How does the space feel?'}
+                        {tp("Jak to pomieszczenie sprawdza się przy tej czynności?", "How well does this space work for that activity?")}
                       </p>
                       <div className="grid sm:grid-cols-3 gap-2 mt-2">
                         {SATISFACTION_OPTIONS.map((option) => {
@@ -2471,20 +2509,18 @@ function ActivitiesStep({
             })}
           </div>
         ) : (
-          <div className="md:glass-panel rounded-2xl p-6 border border-dashed border-white/15 text-center text-silver-dark font-modern mb-6">
-            {language === 'pl'
-              ? 'Zaznacz przynajmniej jedną aktywność, aby przejść dalej.'
-              : 'Select at least one activity to continue.'}
+          <div className="rounded-xl border border-dashed border-white/25 bg-white/5 p-6 text-center text-graphite font-modern mb-8">
+            {tp("Zaznacz co najmniej jedną czynność, którą wykonujesz w tym pomieszczeniu, aby przejść dalej.", "Select at least one thing you do in this space to continue.")}
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-6">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4">
           <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
             <ArrowLeft size={18} />
-            {language === 'pl' ? 'Wstecz' : 'Back'}
+            {tp("Wstecz", "Back")}
           </GlassButton>
           <GlassButton onClick={handleNextStep} disabled={!hasSelectedActivities} className="w-full sm:w-auto">
-            {language === 'pl' ? 'Dalej' : 'Next'}
+            {tp("Dalej", "Next")}
             <ArrowRight size={18} />
           </GlassButton>
         </div>
@@ -2494,7 +2530,19 @@ function ActivitiesStep({
 }
 
 function RoomSummaryStep({ data, onComplete, onBack, isSaving }: any) {
-  const { language } = useLanguage();
+  const { tp } = useLanguage();
+  const roomLabel =
+    typeof data?.name === 'string' && data.name.trim().length > 0 ? data.name.trim() : '';
+
+  const summaryLead = roomLabel
+    ? tp(
+        `Świetnie — „${roomLabel}” ma już komplet danych. IDA może projektować to wnętrze tak, by naprawdę pasowało do Ciebie i do tego pomieszczenia.`,
+        `Great—“${roomLabel}” is fully set up. IDA can design this interior so it truly fits you and this specific space.`,
+      )
+    : tp(
+        'Świetnie — to pomieszczenie ma już komplet danych. IDA może projektować to wnętrze tak, by naprawdę pasowało do Ciebie i do tego pomieszczenia.',
+        'Great—this space is fully set up. IDA can design this interior so it truly fits you and this specific space.',
+      );
 
   return (
     <motion.div
@@ -2503,30 +2551,24 @@ function RoomSummaryStep({ data, onComplete, onBack, isSaving }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard variant="flatOnMobile" className="p-8 text-center min-h-[600px] max-h-[min(85vh,800px)] overflow-auto scrollbar-hide">
-        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
-          <Target size={40} className="text-white" />
-        </div>
-
-        <h1 className="text-3xl lg:text-4xl font-nasalization bg-gradient-to-r from-gold to-champagne bg-clip-text text-transparent mb-4">
-          {language === 'pl' ? 'Pomieszczenie Gotowe!' : 'Space Ready!'}
+      <GlassCard className={`flex min-h-0 flex-col items-center p-6 text-center lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+        <h1 className="mb-6 text-2xl font-nasalization text-graphite lg:text-3xl">
+          {tp("To pomieszczenie jest gotowe!", "This space is ready!")}
         </h1>
 
-        <p className="text-graphite font-modern mb-8 max-w-xl mx-auto">
-          {language === 'pl'
-            ? `Świetnie! "${data.name}" jest gotowe do projektowania. IDA ma wszystko czego potrzebuje aby stworzyć wnętrze które naprawdę pasuje do Ciebie.`
-            : `Great! "${data.name}" is ready to design. IDA has everything needed to create an interior that truly fits you.`}
+        <p className="mx-auto mb-8 max-w-xl text-graphite font-modern">
+          {summaryLead}
         </p>
 
         <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4">
           <GlassButton onClick={onBack} variant="secondary" className="w-full sm:w-auto">
             <ArrowLeft size={18} />
-            {language === 'pl' ? 'Wstecz' : 'Back'}
+            {tp("Wstecz", "Back")}
           </GlassButton>
           <GlassButton onClick={onComplete} className="w-full sm:w-auto sm:px-8" disabled={isSaving}>
             {isSaving
-              ? (language === 'pl' ? 'Zapisuję...' : 'Saving...')
-              : (language === 'pl' ? 'Zacznij Projektowanie' : 'Start Designing')
+              ? (tp("Zapisuję...", "Saving..."))
+              : (tp("Zacznij Projektowanie", "Start Designing"))
             }
             <ArrowRight size={18} />
           </GlassButton>

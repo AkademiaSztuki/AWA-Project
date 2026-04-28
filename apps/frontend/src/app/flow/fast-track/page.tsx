@@ -56,8 +56,9 @@ export default function FastTrackPage() {
     router.push('/flow/style-selection');
   };
 
+  /** Previous step in fast track is onboarding (consent / demographics), not path selection. */
   const handleBack = () => {
-    router.push('/flow/path-selection');
+    router.push('/flow/onboarding');
   };
 
   return (

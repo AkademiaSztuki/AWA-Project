@@ -1,5 +1,5 @@
 /**
- * Client data layer for AWA: Cloud Run API → Cloud SQL / GCS (Google Cloud).
+ * Client data layer for IDA: Cloud Run API → Cloud SQL / GCS (Google Cloud).
  * All persistence goes through `gcpApi`; there is no Supabase runtime dependency.
  */
 

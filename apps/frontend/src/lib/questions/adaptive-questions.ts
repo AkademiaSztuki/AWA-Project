@@ -535,15 +535,18 @@ export function normalizeDetectedRoomType(detectedType: string | null | undefine
  */
 export function normalizeRoomTypeForQuestions(roomType: string | null | undefined): string {
   if (!roomType) return 'default';
-  
-  // First normalize if needed
+
   const normalized = normalizeDetectedRoomType(roomType);
-  
-  // Check if we have questions for this type
+
+  // empty_room / other: no dedicated activity set — use living_room breadth so users still see ~8 options
+  if (normalized === 'empty_room' || normalized === 'other') {
+    return 'living_room';
+  }
+
   if (ACTIVITY_QUESTIONS[normalized]) {
     return normalized;
   }
-  
+
   return 'default';
 }
 
