@@ -55,19 +55,40 @@ const getStoredLanguage = (): Language | null => {
 interface LanguageProviderProps {
   children: React.ReactNode;
   initialLanguage?: Language;
+  initialLanguageSource?: 'country' | 'accept-language' | 'cookie' | 'default';
 }
 
-export function LanguageProvider({ children, initialLanguage = 'pl' }: LanguageProviderProps) {
+const getBrowserRegionLanguage = (): Language | null => {
+  if (typeof window === 'undefined') return null;
+
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (timeZone === 'Europe/Warsaw') return 'pl';
+
+  return null;
+};
+
+export function LanguageProvider({
+  children,
+  initialLanguage = 'pl',
+  initialLanguageSource = 'default',
+}: LanguageProviderProps) {
   const [language, setLanguageState] = useState<Language>(initialLanguage);
   const initialLanguageRef = useRef<Language>(initialLanguage);
+  const initialLanguageSourceRef = useRef(initialLanguageSource);
 
   useEffect(() => {
     const storedLang = getStoredLanguage();
-    // Prefer server-detected language (initialLanguageRef) over stored when they differ
+    const browserRegionLang =
+      initialLanguageSourceRef.current === 'country'
+        ? null
+        : getBrowserRegionLanguage();
+
+    // Prefer geo/browser region detection over stored values when available.
     const effectiveLang =
-      storedLang && storedLang === initialLanguageRef.current
+      browserRegionLang ??
+      (storedLang && storedLang === initialLanguageRef.current
         ? storedLang
-        : initialLanguageRef.current;
+        : initialLanguageRef.current);
 
     setLanguageState(effectiveLang);
     persistLanguage(effectiveLang);
