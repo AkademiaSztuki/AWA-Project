@@ -1,5 +1,5 @@
-import LandingScreen from '@/components/screens/LandingScreen';
+import MarketingEntryScreen from '@/components/screens/MarketingEntryScreen';
 
 export default function HomePage() {
-  return <LandingScreen />;
+  return <MarketingEntryScreen />;
 }

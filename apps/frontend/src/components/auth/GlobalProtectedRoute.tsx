@@ -6,6 +6,7 @@ import { ProtectedRoute } from './ProtectedRoute';
 // Lista publicznych ścieżek (dostępne bez logowania)
 const PUBLIC_PATHS = [
   '/', // Landing page
+  '/start', // Existing IDA intro and path selection
   '/auth/callback', // Auth callback
   '/auth/google', // Google OAuth PKCE return (/auth/google/callback)
   '/auth/verify', // Magic link verification

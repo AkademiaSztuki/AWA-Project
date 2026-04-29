@@ -19,13 +19,13 @@ export function GlassHeader() {
   const { isHeaderVisible } = useLayout();
   const { isComplete, isResolved } = useDashboardAccess();
 
-  const showPathSelection = pathname !== '/flow/path-selection' && pathname !== '/';
+  const showPathSelection = pathname !== '/flow/path-selection' && pathname !== '/' && pathname !== '/start';
   const showDashboard = isResolved && isComplete && pathname !== '/dashboard';
 
   // Header is visible if:
-  // 1. We are NOT on the home page ('/')
+  // 1. We are NOT on the public entry pages
   // 2. OR isHeaderVisible is true (controlled by LandingScreen)
-  const shouldShow = pathname !== '/' || isHeaderVisible;
+  const shouldShow = (pathname !== '/' && pathname !== '/start') || isHeaderVisible;
 
   return (
     <AnimatePresence>
