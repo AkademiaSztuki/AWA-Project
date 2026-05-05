@@ -1,22 +1,28 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { Environment, OrbitControls } from '@react-three/drei';
-import { motion, useMotionValueEvent, useScroll, useTransform } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  animate,
+  LayoutGroup,
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+  type MotionValue,
+} from 'framer-motion';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   ArrowRight,
   Brain,
   CheckCircle2,
   Clock,
-  FileText,
   Heart,
   Home,
   Layers,
-  Mail,
   PlayCircle,
-  Shield,
   SlidersHorizontal,
   Sparkles,
   Upload,
@@ -24,10 +30,18 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { GlassButton, GlassCard } from '@/components/ui';
-import { AwaModel } from '@/components/awa/AwaModel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useLayout } from '@/contexts/LayoutContext';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
+import {
+  buildLivingRoomMarketingCards,
+  type LivingRoomMarketingCard,
+} from '@/lib/tinder-livingroom-marketing-strip';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useSessionData } from '@/hooks/useSessionData';
+import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
+import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 
 const copy = {
   pl: {
@@ -42,9 +56,7 @@ const copy = {
     after: 'Wersja IDA',
     visualTitle: 'Porównaj obecny pokój z wariantami IDA',
     visualSubtitle: 'Wariant IDA zmienia się automatycznie. Przeciągnij suwak, żeby porównać projekt z punktem wyjścia.',
-    slideHint: 'Przeciągnij',
     profileTitle: 'Twój profil wnętrza',
-    profileTags: ['Spokój', 'Kreatywność', 'Ciepło', 'Minimalizm'],
     assistant:
       'Pokaż mi swoją przestrzeń, a pomogę Ci odkryć styl, który pasuje do Ciebie - nie tylko do trendów.',
     meetAwaTitle: 'Poznaj IDA - przewodniczkę po Twoim stylu',
@@ -52,9 +64,9 @@ const copy = {
       'Najpierw pokazujemy efekt. Potem IDA pomaga zrozumieć, dlaczego dana przestrzeń pasuje właśnie do Ciebie: analizuje pokój, inspiracje, osobowość i potrzeby.',
     meetAwaBadge: 'IDA pojawia się po scrollu',
     meetAwaCards: ['analiza pokoju', 'profil osobowości', 'inspiracje', 'generowanie wariantów'],
-    stylesTitle: 'Jedno zdjęcie pokoju. Kilka kierunków dopasowania.',
+    stylesTitle: 'Jedno zdjęcie pokoju. Wiele kierunków dopasowania.',
     stylesSubtitle:
-      'Użytkownik nie musi od razu wiedzieć, czego chce. IDA pomaga zobaczyć różne wersje tej samej przestrzeni i wybrać tę, która naprawdę pasuje.',
+      'Nie musisz od razu wiedzieć, czego chcesz. IDA z jednego zdjęcia pokazuje wiele wersji tej samej przestrzeni — wybierasz tę, która naprawdę do Ciebie pasuje.',
     variants: [
       {
         name: 'Calm Focus',
@@ -73,6 +85,8 @@ const copy = {
       },
     ],
     stepsTitle: 'Od zdjęcia pokoju do wnętrza, które pasuje do Ciebie',
+    stepsSubtitle:
+      'Twój pokój jest punktem wyjścia. Dalej IDA układa flow — krótko albo dokładnie, zależnie od Ciebie.',
     steps: [
       {
         title: 'Pokaż swoją przestrzeń',
@@ -87,10 +101,11 @@ const copy = {
         description: 'AI generuje propozycje, które możesz dopracowywać, porównywać i zapisywać.',
       },
     ],
-    pathsTitle: 'Wybierz, jak głęboko IDA ma Cię poznać',
+    pathsTitle: 'Wybierz stopień spersonalizowania',
     fast: {
       title: 'Szybki start',
-      label: '3-5 min',
+      label: 'Szybki podgląd',
+      duration: '3-5 min',
       description: 'Dla osób, które chcą szybko zobaczyć pierwszy kierunek zmiany.',
       cta: 'Chcę szybko zobaczyć efekt',
       points: ['zdjęcie pokoju', 'podstawowy styl', 'pierwsze generacje'],
@@ -124,12 +139,13 @@ const copy = {
     finalTitle: 'Zobacz, jak mogłoby wyglądać Twoje wnętrze',
     finalSubtitle: 'Zacznij od szybkiej ścieżki albo przejdź pełną personalizację.',
     footer: {
-      product: 'IDA',
-      description: 'AI interior design assistant tworzony z myślą o personalizacji, badaniu preferencji i lepszej współpracy człowieka z AI.',
+      tagline:
+        'AI interior design assistant — personalizacja, badanie preferencji i współpraca człowieka z AI.',
       contact: 'Kontakt',
       privacy: 'Prywatność',
       terms: 'Regulamin',
-      start: 'Start',
+      pricing: 'Cennik',
+      rights: 'Wszelkie prawa zastrzeżone.',
     },
   },
   en: {
@@ -144,9 +160,7 @@ const copy = {
     after: 'IDA version',
     visualTitle: 'Compare your current room with IDA variants',
     visualSubtitle: 'The IDA version changes automatically. Drag the slider to compare the concept with the starting point.',
-    slideHint: 'Drag',
     profileTitle: 'Your interior profile',
-    profileTags: ['Calm', 'Creativity', 'Warmth', 'Minimalism'],
     assistant:
       'Show me your space and I will help you discover a style that fits you - not just the trends.',
     meetAwaTitle: 'Meet IDA - your guide to personal style',
@@ -154,9 +168,9 @@ const copy = {
       'First we show the result. Then IDA helps explain why a space fits you: it reads the room, inspirations, personality, and needs.',
     meetAwaBadge: 'IDA appears after scroll',
     meetAwaCards: ['room analysis', 'personality profile', 'inspirations', 'variant generation'],
-    stylesTitle: 'One room photo. Several personalized directions.',
+    stylesTitle: 'One room photo. Many directions to match you.',
     stylesSubtitle:
-      'Users do not need to know exactly what they want. IDA helps them see different versions of the same space and choose the one that truly fits.',
+      'You do not need to know exactly what you want. From one photo, IDA shows many versions of the same space so you can pick the one that truly fits.',
     variants: [
       {
         name: 'Calm Focus',
@@ -175,6 +189,8 @@ const copy = {
       },
     ],
     stepsTitle: 'From room photo to an interior that fits you',
+    stepsSubtitle:
+      'Your room is the starting point. IDA lays out the flow — quick or thorough, you decide.',
     steps: [
       {
         title: 'Show your space',
@@ -192,7 +208,8 @@ const copy = {
     pathsTitle: 'Choose how deeply IDA should get to know you',
     fast: {
       title: 'Quick start',
-      label: '3-5 min',
+      label: 'Quick preview',
+      duration: '3-5 min',
       description: 'For people who want to see the first design direction quickly.',
       cta: 'I want a quick result',
       points: ['room photo', 'basic style', 'first generations'],
@@ -226,17 +243,200 @@ const copy = {
     finalTitle: 'See what your interior could become',
     finalSubtitle: 'Start with the quick path or go into full personalization.',
     footer: {
-      product: 'IDA',
-      description: 'An AI interior design assistant built for personalization, preference research, and better human-AI collaboration.',
+      tagline:
+        'An AI interior design assistant for personalization, preference research, and better human–AI collaboration.',
       contact: 'Contact',
       privacy: 'Privacy',
       terms: 'Terms',
-      start: 'Start',
+      pricing: 'Pricing',
+      rights: 'All rights reserved.',
     },
   },
 };
 
-const profileScores = [82, 74, 68, 61];
+type MarketingProfileTag = {
+  id: string;
+  label: string;
+  value: number;
+};
+
+/** Four rows — interior feel + Big Five (OCEAN) labels mixed; stable ids for layout animation. */
+const EMOTION_PROFILE_CYCLES_PL: MarketingProfileTag[][] = [
+  [
+    { id: 'calm', label: 'Spokój', value: 82 },
+    { id: 'creative', label: 'Kreatywność', value: 74 },
+    { id: 'warmth', label: 'Ciepło', value: 68 },
+    { id: 'minimal', label: 'Minimalizm', value: 61 },
+  ],
+  [
+    { id: 'O', label: 'Otwartość', value: 71 },
+    { id: 'C', label: 'Sumienność', value: 66 },
+    { id: 'E', label: 'Ekstrawersja', value: 74 },
+    { id: 'N', label: 'Neurotyczność', value: 52 },
+  ],
+  [
+    { id: 'warmth', label: 'Ciepło', value: 88 },
+    { id: 'N', label: 'Neurotyczność', value: 55 },
+    { id: 'creative', label: 'Kreatywność', value: 73 },
+    { id: 'A', label: 'Ugodowość', value: 69 },
+  ],
+  [
+    { id: 'calm', label: 'Spokój', value: 76 },
+    { id: 'O', label: 'Otwartość', value: 68 },
+    { id: 'minimal', label: 'Minimalizm', value: 72 },
+    { id: 'C', label: 'Sumienność', value: 64 },
+  ],
+];
+
+const EMOTION_PROFILE_CYCLES_EN: MarketingProfileTag[][] = [
+  [
+    { id: 'calm', label: 'Calm', value: 82 },
+    { id: 'creative', label: 'Creativity', value: 74 },
+    { id: 'warmth', label: 'Warmth', value: 68 },
+    { id: 'minimal', label: 'Minimalism', value: 61 },
+  ],
+  [
+    { id: 'O', label: 'Openness', value: 71 },
+    { id: 'C', label: 'Conscientiousness', value: 66 },
+    { id: 'E', label: 'Extraversion', value: 74 },
+    { id: 'N', label: 'Neuroticism', value: 52 },
+  ],
+  [
+    { id: 'warmth', label: 'Warmth', value: 88 },
+    { id: 'N', label: 'Neuroticism', value: 55 },
+    { id: 'creative', label: 'Creativity', value: 73 },
+    { id: 'A', label: 'Agreeableness', value: 69 },
+  ],
+  [
+    { id: 'calm', label: 'Calm', value: 76 },
+    { id: 'O', label: 'Openness', value: 68 },
+    { id: 'minimal', label: 'Minimalism', value: 72 },
+    { id: 'C', label: 'Conscientiousness', value: 64 },
+  ],
+];
+
+const EMOTION_PROFILE_CYCLE_MS = 8200;
+const EMOTION_LAYOUT_DURATION_S = 1.45;
+const EMOTION_NUMBER_DURATION_S = 1.85;
+const EMOTION_LABEL_DURATION_S = 1.15;
+
+function useMarketingShowcaseFrame(cycleCount: number): number {
+  const preferReducedMotion = useReducedMotion();
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    if (preferReducedMotion || cycleCount <= 1) return;
+    const id = window.setInterval(() => {
+      setFrame((f) => (f + 1) % cycleCount);
+    }, EMOTION_PROFILE_CYCLE_MS);
+    return () => clearInterval(id);
+  }, [cycleCount, preferReducedMotion]);
+
+  return preferReducedMotion ? 0 : frame;
+}
+
+const MarketingProfileAnimatedPercent: React.FC<{ value: number }> = ({ value }) => {
+  const [display, setDisplay] = useState(value);
+  const fromRef = useRef(value);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    fromRef.current = value;
+    const controls = animate(from, value, {
+      duration: EMOTION_NUMBER_DURATION_S,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    });
+    return () => controls.stop();
+  }, [value]);
+
+  return <span>{display}</span>;
+};
+
+const ProfileTagRows: React.FC<{
+  items: MarketingProfileTag[];
+  layoutGroupId: string;
+  compact?: boolean;
+}> = ({ items, layoutGroupId, compact }) => {
+  const preferReducedMotion = useReducedMotion();
+  const layoutEase = [0.22, 1, 0.36, 1] as const;
+
+  return (
+    <LayoutGroup id={layoutGroupId}>
+      <motion.div
+        className={cn('relative grid', compact ? 'gap-2' : 'gap-3')}
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-48px' }}
+        transition={{ duration: 0.65, ease: 'easeOut' }}
+      >
+        {items.map((item) => (
+          <motion.div
+            key={item.id}
+            layout={!preferReducedMotion}
+            transition={{
+              layout: {
+                duration: preferReducedMotion ? 0 : EMOTION_LAYOUT_DURATION_S,
+                ease: layoutEase,
+              },
+            }}
+            className={cn(
+              'relative overflow-hidden rounded-2xl border border-white/30 bg-[rgba(14,12,10,0.16)] font-modern text-graphite shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-md',
+              compact ? 'text-xs sm:text-sm' : 'text-sm'
+            )}
+          >
+            <motion.div
+              aria-hidden
+              className="absolute inset-y-0 left-0 z-0 rounded-l-2xl bg-[linear-gradient(90deg,rgba(195,193,190,0.34)_0%,rgba(247,231,206,0.24)_32%,rgba(247,231,206,0.36)_58%,rgba(255,229,92,0.5)_100%)] shadow-[inset_-1px_0_6px_rgba(255,255,255,0.14)]"
+              initial={false}
+              animate={{ width: `${item.value}%` }}
+              transition={
+                preferReducedMotion
+                  ? { duration: 0 }
+                  : { duration: EMOTION_NUMBER_DURATION_S, ease: layoutEase }
+              }
+            />
+            <div
+              className={cn(
+                'relative z-[1] flex min-h-[2.75rem] items-center justify-between sm:min-h-[2.85rem]',
+                compact ? 'px-4 py-2.5 sm:py-3' : 'px-5 py-4'
+              )}
+            >
+              <motion.span
+                key={item.label}
+                initial={preferReducedMotion ? false : { opacity: 0.35, filter: 'blur(6px)', y: 3 }}
+                animate={{ opacity: 1, filter: 'blur(0px)', y: 0 }}
+                transition={{
+                  duration: preferReducedMotion ? 0 : EMOTION_LABEL_DURATION_S,
+                  ease: layoutEase,
+                }}
+                className="min-w-0 flex-1 pr-2 leading-snug text-graphite"
+              >
+                {item.label}
+              </motion.span>
+              <span className="shrink-0 tabular-nums text-graphite">
+                <MarketingProfileAnimatedPercent value={item.value} />%
+              </span>
+            </div>
+          </motion.div>
+        ))}
+      </motion.div>
+    </LayoutGroup>
+  );
+};
+
+/**
+ * Hero shrink / radius / shadow finish by this fraction of section scroll (lower = snappier, higher = slower).
+ */
+const HERO_SETTLE_SCROLL_END = 0.52;
+
+/** Fraction of hero settle (0–1) — keep low so the header appears as soon as shrink starts (small scrollYProgress). */
+const MARKETING_HEADER_SETTLE_REVEAL = 0.004;
+/** Fallback: raw section progress so we reveal even if settle is edge-rounded */
+const MARKETING_HEADER_SCROLL_PROGRESS_REVEAL = 0.003;
+const MARKETING_HERO_PROGRESS_END = 1 - 0.002;
+/** Mouse within this band from the top of the viewport re-opens the header after the hero (fine pointer / hover only). */
+const MARKETING_HEADER_TOP_PEEK_PX = 104;
 
 const fadeUp = {
   initial: { opacity: 0, y: 32 },
@@ -304,9 +504,11 @@ type RoomPlaceholderProps = {
   theme: RoomTheme;
   mode: 'before' | 'after';
   label?: string;
+  /** Cancels parent `scaleY` on the in-room label pill (marketing hero settle). */
+  labelScaleY?: MotionValue<number>;
 };
 
-const RoomPlaceholder = ({ theme, mode, label }: RoomPlaceholderProps) => (
+const RoomPlaceholder = ({ theme, mode, label, labelScaleY }: RoomPlaceholderProps) => (
   <div
     className={cn(
       'absolute inset-0 overflow-hidden bg-gradient-to-br',
@@ -336,23 +538,44 @@ const RoomPlaceholder = ({ theme, mode, label }: RoomPlaceholderProps) => (
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.35),transparent_36%)]" />
       </>
     )}
-    {label && (
-      <div className="absolute bottom-5 left-5 rounded-full border border-white/35 bg-black/35 px-4 py-2 font-modern text-xs text-white backdrop-blur">
-        {label}
-      </div>
-    )}
+    {label &&
+      (labelScaleY ? (
+        <motion.div
+          className="absolute bottom-5 left-5 rounded-full border border-white/35 bg-black/35 px-4 py-2 font-modern text-xs text-white backdrop-blur"
+          style={{
+            scaleY: labelScaleY,
+            transformOrigin: '50% 100%',
+          }}
+        >
+          {label}
+        </motion.div>
+      ) : (
+        <div className="absolute bottom-5 left-5 rounded-full border border-white/35 bg-black/35 px-4 py-2 font-modern text-xs text-white backdrop-blur">
+          {label}
+        </div>
+      ))}
   </div>
 );
 
 const MarketingEntryScreen: React.FC = () => {
   const router = useRouter();
+  const { updateSessionData } = useSessionData();
+  const pathname = usePathname();
+  const isMobile = useIsMobile();
+  const useMarqueePortal = pathname === '/' && !isMobile;
   const { language } = useLanguage();
   const { setHeaderVisible } = useLayout();
   const [sliderPosition, setSliderPosition] = useState(56);
   const [activeVariant, setActiveVariant] = useState(0);
   const comparisonRef = useRef<HTMLDivElement | null>(null);
+  const heroStickyFrameRef = useRef<HTMLDivElement | null>(null);
+  const heroFrameHeightMv = useMotionValue(0);
   const heroRef = useRef<HTMLElement | null>(null);
+  const marketingRootRef = useRef<HTMLDivElement | null>(null);
   const heroBleedMeasureRef = useRef<HTMLDivElement | null>(null);
+  const marqueeAnchorRef = useRef<HTMLDivElement | null>(null);
+  const marqueePortalLayerRef = useRef<HTMLDivElement | null>(null);
+  const [marqueePortalHost, setMarqueePortalHost] = useState<HTMLElement | null>(null);
   /** Column box inside AppContentFrame — used for viewport breakout without relying on symmetric “max bleed”. */
   const [columnBox, setColumnBox] = useState({ left: 0, width: 0 });
   const { scrollYProgress } = useScroll({
@@ -360,51 +583,328 @@ const MarketingEntryScreen: React.FC = () => {
     offset: ['start start', 'end start'],
   });
   const [viewportWidth, setViewportWidth] = useState(0);
-  const [heroScrollProgress, setHeroScrollProgress] = useState(0);
-  const heroSettleProgress = Math.min(1, Math.max(0, heroScrollProgress));
-  const heroBreakoutProgress = 1 - heroSettleProgress;
-  const measuredHeroWidth =
-    columnBox.width && viewportWidth
-      ? columnBox.width + (viewportWidth - columnBox.width) * heroBreakoutProgress
-      : 0;
-  const measuredHeroMarginLeft = -columnBox.left * heroBreakoutProgress;
-  const heroWidth = measuredHeroWidth > 0 ? `${measuredHeroWidth}px` : '100vw';
-  const heroMarginLeft =
-    measuredHeroWidth > 0 ? `${measuredHeroMarginLeft}px` : 'calc(50% - 50vw)';
-  const heroBorderRadius = useTransform(scrollYProgress, [0, 1], ['0px', '36px']);
-  const heroShadow = useTransform(
-    scrollYProgress,
-    [0, 1],
-    ['0 0 0 rgba(31, 38, 135, 0)', '0 34px 90px rgba(31, 38, 135, 0.32)']
+  /** One shared 0→1 curve for the hero “settle” window — all layout styles read the same `s` each frame (stays in sync). */
+  const heroSettle = useTransform(scrollYProgress, (p) =>
+    Math.min(1, Math.max(0, p / HERO_SETTLE_SCROLL_END))
   );
-  const modelX = useTransform(scrollYProgress, [0.12, 0.58], [-360, 0]);
-  const modelOpacity = useTransform(scrollYProgress, [0.08, 0.38], [0, 1]);
-  const modelScale = useTransform(scrollYProgress, [0.12, 0.58], [0.88, 1]);
-  const t = copy[language];
+  const heroWidthMotion = useTransform(heroSettle, (s) => {
+    const breakout = 1 - s;
+    if (!columnBox.width || !viewportWidth) return '100vw';
+    const measured = columnBox.width + (viewportWidth - columnBox.width) * breakout;
+    if (measured <= 0) return '100vw';
+    return `${Math.round(measured)}px`;
+  });
+  const heroMarginLeftMotion = useTransform(heroSettle, (s) => {
+    const breakout = 1 - s;
+    if (!columnBox.width || !viewportWidth) return 'calc(50% - 50vw)';
+    const measured = columnBox.width + (viewportWidth - columnBox.width) * breakout;
+    if (measured <= 0) return 'calc(50% - 50vw)';
+    return `${(-columnBox.left * breakout).toFixed(2)}px`;
+  });
+  /** Outer clip: keep a minimum radius at full-bleed (s=0) so room/photos read with rounded top corners; grows to 36px when settled. */
+  const heroBorderRadius = useTransform(heroSettle, (s) => {
+    const t = Math.min(1, Math.max(0, s));
+    return `${Math.round(16 + 20 * t)}px`;
+  });
+  /** Same ratio as old `calc(100dvh * measured/vw)` but via transform — no per-frame layout height changes. */
+  const heroVisualScaleY = useTransform(heroSettle, (s) => {
+    if (isMobile || !columnBox.width || !viewportWidth) return 1;
+    const breakout = 1 - s;
+    const measured = columnBox.width + (viewportWidth - columnBox.width) * breakout;
+    if (measured <= 0) return 1;
+    return measured / viewportWidth;
+  });
+  /** Undo vertical squash on in-room labels while the room layer uses `scaleY` (desktop hero only). */
+  const heroRoomLabelScaleY = useTransform(heroVisualScaleY, (s) => {
+    if (s >= 0.9999) return 1;
+    return Math.min(1 / s, 2);
+  });
+  /**
+   * With scaleY from top, empty band sits at the bottom of the frame; translate down by (1-sy)*frameHeight
+   * so the visual bottom aligns with the sticky box. Must use the same height as `h-[100dvh]` (not innerHeight).
+   */
+  const heroVisualTranslateY = useTransform([heroVisualScaleY, heroFrameHeightMv], ([sy, h]) => {
+    const scaleY = typeof sy === 'number' ? sy : 1;
+    const height = typeof h === 'number' ? h : 0;
+    if (!height || scaleY >= 0.9999) return 0;
+    return (1 - scaleY) * height;
+  });
 
-  useMotionValueEvent(scrollYProgress, 'change', (latest) => {
-    setHeroScrollProgress(latest);
+  /**
+   * Keep hero copy’s right edge aligned to the content column while the sticky frame bleeds to full viewport width.
+   * Analytic `translateX` (same breakout as width/margin-left) — avoids getBoundingClientRect per scroll frame jitter.
+   */
+  const columnLeftMv = useMotionValue(0);
+  const columnWidthMv = useMotionValue(0);
+  const viewportWidthMv = useMotionValue(0);
+  const heroPanelDesktopMv = useMotionValue(0);
+
+  useLayoutEffect(() => {
+    columnLeftMv.set(columnBox.left);
+    columnWidthMv.set(columnBox.width);
+    viewportWidthMv.set(viewportWidth);
+    heroPanelDesktopMv.set(isMobile ? 0 : 1);
+  }, [
+    columnBox.left,
+    columnBox.width,
+    viewportWidth,
+    isMobile,
+    columnLeftMv,
+    columnWidthMv,
+    viewportWidthMv,
+    heroPanelDesktopMv,
+  ]);
+
+  const heroPanelAnchorX = useTransform(
+    [heroSettle, columnLeftMv, columnWidthMv, viewportWidthMv, heroPanelDesktopMv],
+    ([s, left, cw, vw, desktop]) => {
+      if (typeof desktop === 'number' && desktop < 0.5) return 0;
+      const settle = typeof s === 'number' ? s : 0;
+      const L = typeof left === 'number' ? left : 0;
+      const W = typeof cw === 'number' ? cw : 0;
+      const V = typeof vw === 'number' ? vw : 0;
+      if (W <= 0 || V <= 0) return 0;
+      const breakout = 1 - settle;
+      return breakout * (L + W - V);
+    }
+  );
+
+  /** Raised bottom only while hero is unsettled (s→0); ends at original bottom-2.5 / sm:bottom-4 when s→1. */
+  const heroCopyBottomMotion = useTransform(
+    [heroSettle, heroPanelDesktopMv],
+    ([s, desktop]) => {
+      const t = Math.min(1, Math.max(0, typeof s === 'number' ? s : 0));
+      const isDesktop = typeof desktop === 'number' && desktop > 0.5;
+      const basePx = isDesktop ? 16 : 10;
+      const extraPx = (1 - t) * 64;
+      return `${(basePx + extraPx).toFixed(1)}px`;
+    }
+  );
+
+  useLayoutEffect(() => {
+    const el = heroStickyFrameRef.current;
+    if (!el) return;
+
+    const sync = () => {
+      const next = Math.round(el.getBoundingClientRect().height);
+      if (next > 0) heroFrameHeightMv.set(next);
+    };
+
+    sync();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(sync) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', sync);
+
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', sync);
+    };
+  }, [heroFrameHeightMv]);
+  const t = copy[language];
+  const emotionProfileCycles = useMemo(
+    () => (language === 'pl' ? EMOTION_PROFILE_CYCLES_PL : EMOTION_PROFILE_CYCLES_EN),
+    [language]
+  );
+  const marketingShowcaseFrame = useMarketingShowcaseFrame(emotionProfileCycles.length);
+
+  const prefersPeekChromeRef = useRef(
+    typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+  );
+  const peekChromeHoverRef = useRef(false);
+
+  const syncMarketingHeaderVisibilityRef = useRef<(() => void) | null>(null);
+
+  /** Must read the same MotionValues as the hero shrink (`heroSettle`); manual DOM progress can stay at 0 while Framer still animates (sticky layout). */
+  const syncMarketingHeaderVisibility = useCallback(() => {
+    const settle = heroSettle.get();
+    const p = scrollYProgress.get();
+    const pastHero = p >= MARKETING_HERO_PROGRESS_END;
+    if (!pastHero && peekChromeHoverRef.current) {
+      peekChromeHoverRef.current = false;
+    }
+
+    let visible: boolean;
+    if (pastHero && !prefersPeekChromeRef.current) {
+      visible = true;
+    } else if (pastHero && prefersPeekChromeRef.current) {
+      visible = peekChromeHoverRef.current;
+    } else {
+      const showDuringHero =
+        settle > MARKETING_HEADER_SETTLE_REVEAL || p > MARKETING_HEADER_SCROLL_PROGRESS_REVEAL;
+      visible = showDuringHero;
+    }
+    setHeaderVisible(visible);
+  }, [heroSettle, scrollYProgress, setHeaderVisible]);
+
+  syncMarketingHeaderVisibilityRef.current = syncMarketingHeaderVisibility;
+
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const syncMq = () => {
+      prefersPeekChromeRef.current = mq.matches;
+      syncMarketingHeaderVisibilityRef.current?.();
+    };
+    syncMq();
+    mq.addEventListener('change', syncMq);
+    return () => mq.removeEventListener('change', syncMq);
+  }, []);
+
+  useMotionValueEvent(scrollYProgress, 'change', () => {
+    syncMarketingHeaderVisibility();
+  });
+
+  useMotionValueEvent(heroSettle, 'change', () => {
+    syncMarketingHeaderVisibility();
   });
 
   useEffect(() => {
-    setHeaderVisible(false);
-  }, [setHeaderVisible]);
+    const onScroll = () => syncMarketingHeaderVisibility();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [syncMarketingHeaderVisibility]);
 
   useEffect(() => {
+    const onResize = () => syncMarketingHeaderVisibility();
+    window.addEventListener('resize', onResize, { passive: true });
+    return () => window.removeEventListener('resize', onResize);
+  }, [syncMarketingHeaderVisibility]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!prefersPeekChromeRef.current) return;
+      const p = scrollYProgress.get();
+      const pastHero = p >= MARKETING_HERO_PROGRESS_END;
+      if (!pastHero) {
+        if (peekChromeHoverRef.current) {
+          peekChromeHoverRef.current = false;
+          syncMarketingHeaderVisibility();
+        }
+        return;
+      }
+      const next = e.clientY < MARKETING_HEADER_TOP_PEEK_PX;
+      if (next !== peekChromeHoverRef.current) {
+        peekChromeHoverRef.current = next;
+        syncMarketingHeaderVisibility();
+      }
+    };
+    window.addEventListener('mousemove', onMove, { passive: true });
+    return () => window.removeEventListener('mousemove', onMove);
+  }, [scrollYProgress, syncMarketingHeaderVisibility]);
+
+  useEffect(() => {
+    syncMarketingHeaderVisibility();
+  }, [syncMarketingHeaderVisibility]);
+
+  useEffect(() => {
+    return () => setHeaderVisible(false);
+  }, [setHeaderVisible]);
+
+  /** Reduce horizontal scrollbar flicker while the marketing hero animates width toward 100vw (desktop home only). */
+  useEffect(() => {
+    if (!useMarqueePortal) return;
+    const root = document.documentElement;
+    const prevOx = root.style.overflowX;
+    const prevSg = root.style.scrollbarGutter;
+    root.style.overflowX = 'clip';
+    root.style.scrollbarGutter = 'stable';
+    return () => {
+      root.style.overflowX = prevOx;
+      root.style.scrollbarGutter = prevSg;
+    };
+  }, [useMarqueePortal]);
+
+  useLayoutEffect(() => {
     const measureBleed = () => {
       const node = heroBleedMeasureRef.current;
       if (!node) return;
 
       const rect = node.getBoundingClientRect();
-      setColumnBox({ left: rect.left, width: rect.width });
-      setViewportWidth(window.innerWidth);
+      const left = Math.round(rect.left);
+      const width = Math.round(rect.width);
+      const vw = window.innerWidth;
+      setColumnBox((prev) => {
+        if (Math.abs(prev.left - left) < 1 && Math.abs(prev.width - width) < 1) return prev;
+        return { left, width };
+      });
+      setViewportWidth((prev) => (prev === vw ? prev : vw));
     };
 
     measureBleed();
+    const raf = requestAnimationFrame(measureBleed);
     window.addEventListener('resize', measureBleed);
 
-    return () => window.removeEventListener('resize', measureBleed);
+    /** No ResizeObserver: probe size can flutter sub-pixel while hero animates, re-firing measure in a loop. */
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', measureBleed);
+    };
   }, []);
+
+  useLayoutEffect(() => {
+    if (!useMarqueePortal) {
+      setMarqueePortalHost(null);
+      return;
+    }
+    setMarqueePortalHost(document.getElementById('living-room-marquee-layer'));
+  }, [useMarqueePortal]);
+
+  const applyMarqueePortalGeometry = useCallback((force = false) => {
+    const anchor = marqueeAnchorRef.current;
+    const layer = marqueePortalLayerRef.current;
+    if (!anchor || !layer) return;
+    const r = anchor.getBoundingClientRect();
+    const vh = window.innerHeight;
+    /** Skip while the strip is far off-screen — avoids fixed-layer layout writes during hero-only scroll (common jitter source). */
+    if (!force && (r.top > vh + 280 || r.bottom < -160)) return;
+    const top = Math.round(r.top);
+    const left = Math.round(r.left);
+    const w = Math.round(r.width);
+    const h = Math.max(1, Math.round(r.height));
+    const key = `${top}|${left}|${w}|${h}`;
+    const prev = layer.dataset.marqueeGeomKey;
+    if (prev === key) return;
+    layer.dataset.marqueeGeomKey = key;
+    layer.style.setProperty('top', `${top}px`);
+    layer.style.setProperty('left', `${left}px`);
+    layer.style.setProperty('width', `${w}px`);
+    layer.style.setProperty('height', `${h}px`);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!useMarqueePortal || !marqueePortalHost) return;
+
+    let rafId = 0;
+    const scheduleSync = () => {
+      if (rafId !== 0) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        applyMarqueePortalGeometry(false);
+      });
+    };
+
+    const handleResize = () => {
+      applyMarqueePortalGeometry(true);
+    };
+
+    applyMarqueePortalGeometry(true);
+    window.addEventListener('scroll', scheduleSync, { passive: true });
+    window.addEventListener('resize', handleResize);
+
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => applyMarqueePortalGeometry(true))
+        : null;
+    const anchor = marqueeAnchorRef.current;
+    if (anchor) ro?.observe(anchor);
+
+    return () => {
+      if (rafId !== 0) window.cancelAnimationFrame(rafId);
+      window.removeEventListener('scroll', scheduleSync);
+      window.removeEventListener('resize', handleResize);
+      ro?.disconnect();
+    };
+  }, [useMarqueePortal, marqueePortalHost, applyMarqueePortalGeometry]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -416,13 +916,77 @@ const MarketingEntryScreen: React.FC = () => {
 
   const activeTheme = AFTER_ROOM_THEMES[activeVariant];
   const activeVariantCopy = t.variants[activeVariant];
-  const styleCards = useMemo(
-    () => t.variants.map((variant, index) => ({ ...variant, theme: AFTER_ROOM_THEMES[index] })),
-    [t.variants]
+  const marketingCarouselCards = useMemo(
+    () => buildLivingRoomMarketingCards(language === 'pl' ? 'pl' : 'en'),
+    [language]
+  );
+  const carouselLoop = useMemo(
+    () => [...marketingCarouselCards, ...marketingCarouselCards],
+    [marketingCarouselCards]
+  );
+  /** Marquee — slow drift; one full loop takes longer on more cards. */
+  const carouselDurationSec = Math.max(120, marketingCarouselCards.length * 4.2);
+
+  const goToFastPath = useCallback(async () => {
+    stopAllDialogueAudio();
+    void initAnonSessionAfterConsent();
+    await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
+    router.push('/flow/onboarding');
+  }, [router, updateSessionData]);
+
+  const goToFullPath = useCallback(async () => {
+    stopAllDialogueAudio();
+    void initAnonSessionAfterConsent();
+    await updateSessionData({ pathType: 'full' });
+    router.push('/setup/profile');
+  }, [router, updateSessionData]);
+
+  const goToPathSelection = useCallback(() => {
+    stopAllDialogueAudio();
+    void initAnonSessionAfterConsent();
+    router.push('/flow/path-selection');
+  }, [router]);
+
+  const scrollToHowItWorks = () => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+
+  const livingRoomMarqueeInner = (
+    <div className="relative pb-3 sm:pb-4">
+      {/*
+        Mask only on this wrapper — do not combine filter (e.g. drop-shadow) on the same node as
+        mask-image: browsers may composite the whole strip too dark. Card box-shadow is clipped in
+        faded edge bands only; center cards keep normal glass shadow.
+      */}
+      <div
+        className="relative pb-10 pt-0 sm:pb-12"
+        style={
+          {
+            WebkitMaskImage:
+              'linear-gradient(90deg, transparent 0%, #000 54%, #000 93%, transparent 100%)',
+            maskImage: 'linear-gradient(90deg, transparent 0%, #000 54%, #000 93%, transparent 100%)',
+            WebkitMaskSize: '100% 100%',
+            maskSize: '100% 100%',
+            WebkitMaskRepeat: 'no-repeat',
+            maskRepeat: 'no-repeat',
+          } as React.CSSProperties
+        }
+      >
+        <motion.div
+          className="relative flex w-max items-stretch gap-3 px-2 pb-1 pt-3 sm:gap-3.5 sm:px-4 sm:pb-2 sm:pt-4 md:px-6 md:pb-2 md:pt-5"
+          animate={{ x: ['0%', '-50%'] }}
+          transition={{ duration: carouselDurationSec, repeat: Infinity, ease: 'linear' }}
+        >
+          {carouselLoop.map((item, index) => (
+            <VisualVariantCard key={`${item.filename}-${index}`} item={item} />
+          ))}
+        </motion.div>
+      </div>
+    </div>
   );
 
-  const goToStart = () => router.push('/start');
-  const scrollToHowItWorks = () => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+  const marqueeBreakoutStyle = {
+    marginLeft: columnBox.left ? `${-columnBox.left}px` : 'calc(50% - 50vw)',
+    width: viewportWidth ? `${viewportWidth}px` : '100vw',
+  } as const;
 
   const updateSliderFromClientX = (clientX: number) => {
     const rect = comparisonRef.current?.getBoundingClientRect();
@@ -433,37 +997,80 @@ const MarketingEntryScreen: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full pb-12">
+    <div ref={marketingRootRef} className={cn('relative w-full pb-0', useMarqueePortal && 'pointer-events-none')}>
       {/* Width probe — must not use overflow-hidden or sticky will not behave reliably */}
       <div ref={heroBleedMeasureRef} className="pointer-events-none h-0 w-full" aria-hidden="true" />
-      <section ref={heroRef} className="relative h-[190dvh]">
+      <div className={cn(useMarqueePortal && 'pointer-events-auto')}>
+      <section ref={heroRef} className="relative min-h-[132dvh] lg:min-h-[128dvh]">
         <motion.div
+          ref={heroStickyFrameRef}
           style={{
-            marginLeft: heroMarginLeft,
-            width: heroWidth,
+            marginLeft: heroMarginLeftMotion,
+            width: heroWidthMotion,
             borderRadius: heroBorderRadius,
-            boxShadow: heroShadow,
           }}
-          className="sticky top-0 z-[40] h-[100dvh] overflow-hidden border border-white/25 bg-pearl-100/30 backdrop-blur-[2px]"
+          className={cn(
+            'sticky top-0 z-[5] h-[100dvh] overflow-hidden bg-pearl-100/28',
+            'will-change-[width,margin-left]'
+          )}
         >
-          <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-graphite/68 via-graphite/22 to-transparent" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-1/2 bg-gradient-to-t from-black/45 via-black/15 to-transparent" />
-
+          {/* Scaled layer: room + slider only. Frame + gradients + copy stay visually aligned (no scaled overlays). */}
+          <motion.div
+            className={cn(
+              'absolute inset-0 z-[1] overflow-hidden',
+              !isMobile && 'will-change-[transform]'
+            )}
+            style={
+              !isMobile
+                ? ({
+                    borderRadius: heroBorderRadius,
+                    scaleY: heroVisualScaleY,
+                    y: heroVisualTranslateY,
+                    transformOrigin: '50% 0%',
+                  } as unknown as React.CSSProperties)
+                : undefined
+            }
+          >
+          {/* Slider = full-bleed interactive layer (absolute so it does not consume flow under overflow-hidden). */}
           <div
             ref={comparisonRef}
-            className="relative z-20 h-full cursor-ew-resize overflow-hidden"
+            tabIndex={0}
+            className="absolute inset-0 z-[1] cursor-ew-resize outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08),inset_0_-48px_90px_-24px_rgba(45,38,28,0.14),0_10px_36px_-14px_rgba(45,38,28,0.18)]"
             onPointerDown={(event) => {
               event.currentTarget.setPointerCapture(event.pointerId);
               updateSliderFromClientX(event.clientX);
             }}
             onPointerMove={(event) => {
-              if (event.buttons !== 1) return;
+              if (event.pointerType === 'touch') {
+                if (event.buttons !== 1) return;
+              }
               updateSliderFromClientX(event.clientX);
             }}
+            onKeyDown={(event) => {
+              const step = 5;
+              if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+                event.preventDefault();
+                setSliderPosition((p) => Math.max(8, p - step));
+              } else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                setSliderPosition((p) => Math.min(92, p + step));
+              } else if (event.key === 'Home') {
+                event.preventDefault();
+                setSliderPosition(8);
+              } else if (event.key === 'End') {
+                event.preventDefault();
+                setSliderPosition(92);
+              }
+            }}
             role="group"
-            aria-label={t.visualTitle}
+            aria-label={`${t.visualTitle}. ${t.visualSubtitle}`}
           >
-            <RoomPlaceholder theme={BEFORE_ROOM_THEME} mode="before" label={t.before} />
+            <RoomPlaceholder
+              theme={BEFORE_ROOM_THEME}
+              mode="before"
+              label={t.before}
+              labelScaleY={!isMobile ? heroRoomLabelScaleY : undefined}
+            />
             <motion.div
               key={activeVariant}
               initial={{ opacity: 0.88 }}
@@ -472,170 +1079,240 @@ const MarketingEntryScreen: React.FC = () => {
               className="absolute inset-0 overflow-hidden"
               style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
             >
-              <RoomPlaceholder theme={activeTheme} mode="after" label={`${t.after}: ${activeVariantCopy.name}`} />
+              <RoomPlaceholder
+                theme={activeTheme}
+                mode="after"
+                label={`${t.after}: ${activeVariantCopy.name}`}
+                labelScaleY={!isMobile ? heroRoomLabelScaleY : undefined}
+              />
             </motion.div>
 
             <div
-              className="absolute inset-y-0 z-[21] w-1 bg-white shadow-2xl"
+              className="absolute inset-y-0 z-[2] w-1 bg-white shadow-2xl"
               style={{ left: `${sliderPosition}%` }}
               aria-hidden="true"
             >
-              <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/90 shadow-2xl sm:h-20 sm:w-20">
-                <SlidersHorizontal size={28} className="text-graphite" aria-hidden="true" />
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                {!isMobile ? (
+                  <motion.div
+                    className="flex h-16 w-16 items-center justify-center rounded-full border border-white/70 bg-white/90 shadow-2xl sm:h-20 sm:w-20"
+                    style={{
+                      scaleY: heroRoomLabelScaleY,
+                      transformOrigin: '50% 50%',
+                    }}
+                  >
+                    <SlidersHorizontal size={28} className="text-gold-500" aria-hidden="true" />
+                  </motion.div>
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/70 bg-white/90 shadow-2xl sm:h-20 sm:w-20">
+                    <SlidersHorizontal size={28} className="text-gold-500" aria-hidden="true" />
+                  </div>
+                )}
               </div>
             </div>
-
-            <input
-              type="range"
-              min="8"
-              max="92"
-              value={sliderPosition}
-              onChange={(event) => setSliderPosition(Number(event.target.value))}
-              className="glass-slider-input absolute inset-0 z-[22] h-full w-full cursor-ew-resize opacity-0"
-              aria-label={t.visualSubtitle}
-            />
           </div>
-
-          <motion.div
-            style={{ x: modelX, opacity: modelOpacity, scale: modelScale }}
-            className="pointer-events-none absolute bottom-0 left-0 z-[15] hidden h-[84dvh] w-[44vw] min-w-[520px] lg:block"
-          >
-            <Canvas camera={{ position: [-1.2, 0.4, 2.2], fov: 70 }} className="h-full w-full bg-transparent">
-              <Environment preset="studio" />
-              <ambientLight intensity={0.55} color="#FFE5B4" />
-              <directionalLight position={[2, 2, 2]} intensity={0.5} color="#FFD700" />
-              <AwaModel currentStep="landing" position={[-0.45, -0.9, 0]} />
-              <OrbitControls enablePan={false} enableZoom={false} enableRotate={false} />
-            </Canvas>
           </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, x: -24 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.75, delay: 0.15, ease: 'easeOut' }}
-            className="relative z-30 flex h-full items-end justify-end p-4 sm:p-8 xl:p-10"
+          <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/68 via-graphite/22 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[42%] bg-gradient-to-t from-black/50 via-black/18 to-transparent" />
+          {/* Pearl veil only from mid-height down — full-height strip read as empty “milky glass” over the room at the top. */}
+          <div
+            className="pointer-events-none absolute bottom-0 right-0 z-[2] w-full max-w-[min(100%,46rem)] bg-gradient-to-l from-pearl-100/72 via-pearl-50/36 to-transparent sm:max-w-[min(100%,52rem)] lg:max-w-[58%] top-[min(28dvh,220px)]"
+            aria-hidden="true"
+          />
+
+          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between pt-[env(safe-area-inset-top,0px)] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 lg:pb-6">
+            {/*
+              Anchor copy to the sticky frame’s right edge (absolute right-*), not ml-auto — otherwise when width
+              grows during hero settle, margin-left:auto absorbs the delta and the glass panel drifts left.
+            */}
+            <div className="pointer-events-none relative min-h-0 flex-1 px-4 pb-2 sm:px-6 sm:pb-3 lg:px-10 lg:pb-4">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.65, delay: 0.08, ease: 'easeOut' }}
+                style={{ x: heroPanelAnchorX, bottom: heroCopyBottomMotion }}
+                className={cn(
+                  'pointer-events-none absolute inset-x-4 w-auto max-w-[min(100%,34rem)]',
+                  'sm:inset-x-auto sm:left-auto sm:right-6 sm:w-[min(100%,38rem)]',
+                  'lg:right-10 lg:w-[min(40rem,min(46vw,100%))]',
+                  'xl:w-[min(42rem,min(44vw,100%))]'
+                )}
+              >
+                <div
+                  lang={language === 'pl' ? 'pl' : 'en'}
+                  className="glass-panel pointer-events-none max-h-[min(56dvh,520px)] overflow-y-auto overscroll-contain rounded-[1.65rem] border border-white/25 bg-gradient-to-br from-pearl-100/82 via-pearl-50/55 to-champagne/35 px-5 py-6 shadow-[0_24px_70px_-20px_rgba(45,38,28,0.28)] backdrop-blur-xl sm:max-h-none sm:overflow-visible sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-8"
+                >
+                  <div className="mb-3">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-gold-500/40 bg-gold-500/12 px-3 py-1.5 text-[10px] font-modern uppercase tracking-[0.2em] text-graphite sm:text-xs">
+                      <Sparkles size={13} className="text-gold-500" aria-hidden="true" />
+                      {t.eyebrow}
+                    </span>
+                  </div>
+                  <h1 className="mb-3 text-balance break-words text-[1.5rem] font-semibold leading-[1.18] tracking-tight text-graphite hyphens-auto sm:mb-4 sm:text-[1.75rem] sm:leading-[1.2] md:text-3xl lg:text-[2rem] lg:leading-snug xl:text-[2.25rem]">
+                    {t.headline}
+                  </h1>
+                  <ul className="mb-4 flex flex-col gap-2 sm:mb-5">
+                    {t.proof.map((line) => (
+                      <li
+                        key={line}
+                        className="flex items-start gap-2.5 font-modern text-[13px] leading-snug text-graphite/90 sm:text-sm"
+                      >
+                        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-gold-500" aria-hidden="true" />
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mb-5 font-modern text-sm leading-relaxed text-silver-dark sm:mb-6 sm:text-base sm:leading-7">
+                    {t.subheadline}
+                  </p>
+                  <div className="pointer-events-auto grid w-full grid-cols-1 gap-2.5 sm:grid-cols-2 sm:items-stretch sm:gap-3">
+                    <GlassButton
+                      size="lg"
+                      onClick={goToPathSelection}
+                      className="group w-full min-w-0 justify-start text-left border-gold-500/55 bg-gold-500/20 hover:border-gold-500/75 hover:bg-gold-500/40"
+                    >
+                      <ArrowRight size={20} className="shrink-0 text-gold-500 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                      {t.primaryCta}
+                    </GlassButton>
+                    <GlassButton
+                      size="lg"
+                      variant="secondary"
+                      onClick={scrollToHowItWorks}
+                      className="w-full min-w-0 justify-start text-left"
+                    >
+                      <PlayCircle size={20} className="shrink-0 text-gold-500" aria-hidden="true" />
+                      {t.secondaryCta}
+                    </GlassButton>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+
+          </div>
+
+          <div
+            className={cn(
+              'pointer-events-none absolute inset-0 z-30 flex flex-col justify-end items-start',
+              'px-4 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-0 sm:px-5 sm:pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] lg:px-6 lg:pb-[calc(8rem+env(safe-area-inset-bottom,0px))]'
+            )}
           >
-            <GlassCard variant="glass" className="mb-6 max-w-2xl p-5 sm:p-7 xl:p-8 lg:mr-4">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-gold-400/45 bg-white/25 px-4 py-2 text-xs font-modern uppercase tracking-[0.22em] text-graphite backdrop-blur-xl">
-                <Sparkles size={14} className="text-gold-600" aria-hidden="true" />
-                {t.eyebrow}
+            <GlassCard
+              variant="glass"
+              className={cn(
+                'pointer-events-auto w-full max-w-[min(340px,calc(100%-2rem))] shrink-0 p-3.5 sm:max-w-[min(340px,calc(100%-2.5rem))] sm:p-4',
+                'lg:max-w-[min(340px,calc(100%-2.5rem))]'
+              )}
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm text-graphite">{activeVariantCopy.name}</p>
+                  <p className="font-modern text-xs text-gold-500">{activeVariantCopy.label}</p>
+                </div>
+                <Sparkles size={20} className="text-gold-500" aria-hidden="true" />
               </div>
-              <h1 className="mb-4 text-4xl leading-tight text-graphite sm:text-5xl xl:text-6xl">
-                {t.headline}
-              </h1>
-              <p className="mb-6 font-modern text-base leading-8 text-silver-dark sm:text-lg">
-                {t.subheadline}
-              </p>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <GlassButton size="lg" onClick={goToStart} className="group">
-                  {t.primaryCta}
-                  <ArrowRight size={20} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
-                </GlassButton>
-                <GlassButton size="lg" variant="secondary" onClick={scrollToHowItWorks}>
-                  <PlayCircle size={20} aria-hidden="true" />
-                  {t.secondaryCta}
-                </GlassButton>
+              <p className="font-modern text-xs leading-5 text-silver-dark">{activeVariantCopy.description}</p>
+              <div className="mt-3 flex gap-1.5">
+                {t.variants.map((variant, index) => (
+                  <button
+                    key={variant.name}
+                    type="button"
+                    onClick={() => setActiveVariant(index)}
+                    className={cn(
+                      'h-2 flex-1 rounded-full transition-colors',
+                      index === activeVariant ? 'bg-gold-500' : 'bg-white/45 hover:bg-white/70'
+                    )}
+                    aria-label={variant.name}
+                  />
+                ))}
               </div>
             </GlassCard>
-          </motion.div>
-
-          <GlassCard variant="glass" className="absolute right-4 top-4 z-30 w-[min(340px,calc(100%-2rem))] p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm text-graphite">{activeVariantCopy.name}</p>
-                <p className="font-modern text-xs text-gold-600">{activeVariantCopy.label}</p>
-              </div>
-              <Sparkles size={20} className="text-gold-600" aria-hidden="true" />
-            </div>
-            <p className="font-modern text-xs leading-5 text-silver-dark">{activeVariantCopy.description}</p>
-            <div className="mt-3 flex gap-1.5">
-              {t.variants.map((variant, index) => (
-                <button
-                  key={variant.name}
-                  type="button"
-                  onClick={() => setActiveVariant(index)}
-                  className={cn(
-                    'h-2 flex-1 rounded-full transition-colors',
-                    index === activeVariant ? 'bg-gold-500' : 'bg-white/45 hover:bg-white/70'
-                  )}
-                  aria-label={variant.name}
-                />
-              ))}
-            </div>
-          </GlassCard>
-
-          <div className="pointer-events-none absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/35 bg-white/65 px-4 py-2 font-modern text-xs text-graphite shadow-xl backdrop-blur-xl">
-            <SlidersHorizontal size={15} aria-hidden="true" />
-            {t.slideHint}
           </div>
         </motion.div>
+        {/*
+          In-flow space after the sticky frame (desktop) so the next section starts lower in the document: copy can
+          stay under the hero (z-4) without riding so far under the frame at the end of this scroll track.
+        */}
+        <div
+          className="pointer-events-none max-lg:hidden w-full shrink-0"
+          style={{ height: 'min(10dvh, 5.25rem)' }}
+          aria-hidden
+        />
       </section>
 
-      <motion.section className="py-10 sm:py-16" {...fadeUp}>
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="max-w-3xl text-3xl leading-tight text-graphite sm:text-5xl">{t.stylesTitle}</h2>
-            <p className="mt-3 max-w-3xl font-modern text-base leading-7 text-silver-dark">{t.stylesSubtitle}</p>
-          </div>
-          <GlassButton variant="secondary" onClick={goToStart}>
-            {t.primaryCta}
-          </GlassButton>
-        </div>
-
-        <div className="relative overflow-hidden py-3">
-          <motion.div
-            className="flex w-max gap-4"
-            animate={{ x: ['0%', '-50%'] }}
-            transition={{ duration: 28, repeat: Infinity, ease: 'linear' }}
-          >
-            {[...styleCards, ...styleCards].map((variant, index) => (
-              <VisualVariantCard key={`${variant.name}-${index}`} variant={variant} index={index} />
-            ))}
-          </motion.div>
-        </div>
-      </motion.section>
-
-      <motion.section id="how-it-works" className="py-10 sm:py-16" {...fadeUp}>
-        <h2 className="mb-6 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.stepsTitle}</h2>
-        <div className="grid gap-4 md:grid-cols-3">
+      {/*
+        Below sticky hero (z-[5]): copy stays under the glass panel and becomes visible only once it clears the frame.
+        No Framer whileInView on this block: scroll-linked hero layout + in-view observers here caused visible jitter.
+      */}
+      <div className="relative z-[4] isolate">
+      <section
+        id="how-it-works"
+        className="scroll-mt-20 pt-3 pb-10 sm:scroll-mt-24 sm:pt-4 sm:pb-16"
+      >
+        <header className="mb-8 max-w-3xl sm:mb-10">
+          <h2 className="text-3xl leading-[1.12] tracking-tight text-graphite sm:text-4xl sm:leading-tight lg:text-5xl">
+            {t.stepsTitle}
+          </h2>
+          <p className="mt-3 font-modern text-sm leading-relaxed text-silver-dark sm:mt-4 sm:text-base sm:leading-7">
+            {t.stepsSubtitle}
+          </p>
+        </header>
+        <div className="grid gap-5 sm:gap-6 md:grid-cols-3 md:gap-x-6 md:gap-y-7 md:[grid-template-rows:auto_auto_auto]">
           {t.steps.map((step, index) => {
             const icons = [Upload, Brain, Wand2];
             const Icon = icons[index];
+            const colStart =
+              index === 0 ? 'md:col-start-1' : index === 1 ? 'md:col-start-2' : 'md:col-start-3';
+            const stepNo = String(index + 1).padStart(2, '0');
             return (
-              <motion.div
-                key={step.title}
-                initial={{ opacity: 0, y: 28 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-80px' }}
-                transition={{ duration: 0.55, delay: index * 0.12 }}
-              >
-                <GlassCard variant="glass" className="group h-full overflow-hidden p-6">
-                  <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-400/20 text-graphite transition-transform group-hover:scale-110">
-                    <Icon size={26} aria-hidden="true" />
+              <div key={step.title} className="md:contents">
+                <GlassCard
+                  variant="glass"
+                  className={cn(
+                    'group flex h-full flex-col gap-3 overflow-hidden p-6 sm:p-7 md:p-8',
+                    'md:row-span-3 md:grid md:min-h-0 md:grid-cols-1 md:gap-0 md:[grid-template-rows:subgrid]',
+                    colStart,
+                    'md:row-start-1'
+                  )}
+                >
+                  <div className="flex gap-4 sm:gap-5">
+                    <div className="flex shrink-0 flex-col items-center gap-2">
+                      <span className="font-modern text-xs font-semibold uppercase tracking-[0.2em] text-gold-500 drop-shadow-[0_1px_1px_rgba(45,38,28,0.35)]">
+                        {stepNo}
+                      </span>
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-gold-500/40 bg-graphite/30 text-gold-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-6px_rgba(255,215,0,0.35)] transition-transform duration-300 ease-out group-hover:scale-[1.04] group-hover:border-gold-500/55">
+                        <Icon size={26} aria-hidden="true" />
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1 border-l border-white/25 pl-4 sm:pl-5">
+                      <h3 className="text-balance text-lg font-semibold leading-snug text-graphite sm:text-xl sm:leading-snug">
+                        {step.title}
+                      </h3>
+                    </div>
                   </div>
-                  <h3 className="mb-2 text-xl text-graphite">{step.title}</h3>
                   <p className="font-modern text-sm leading-6 text-silver-dark">{step.description}</p>
-                  <div className="relative mt-6 h-28 overflow-hidden rounded-2xl border border-white/30">
+                  <div className="relative h-[8.5rem] shrink-0 overflow-hidden rounded-[1.25rem] border border-white/30 sm:h-36 md:mt-0">
                     <RoomPlaceholder theme={index === 0 ? BEFORE_ROOM_THEME : AFTER_ROOM_THEMES[index - 1]} mode={index === 0 ? 'before' : 'after'} />
                   </div>
                 </GlassCard>
-              </motion.div>
+              </div>
             );
           })}
         </div>
-      </motion.section>
+      </section>
 
       <motion.section className="py-8 sm:py-14" {...fadeUp}>
         <h2 className="mb-6 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.pathsTitle}</h2>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2 lg:gap-x-4 lg:gap-y-6 lg:[grid-template-rows:auto_auto_auto_1fr_auto]">
           <PathCard
             icon={Clock}
             title={t.fast.title}
             badge={t.fast.label}
+            meta={t.fast.duration}
             description={t.fast.description}
             points={t.fast.points}
             cta={t.fast.cta}
-            onClick={goToStart}
+            onClick={goToFastPath}
           />
           <PathCard
             highlighted
@@ -646,7 +1323,7 @@ const MarketingEntryScreen: React.FC = () => {
             description={t.full.description}
             points={t.full.points}
             cta={t.full.cta}
-            onClick={goToStart}
+            onClick={goToFullPath}
           />
         </div>
       </motion.section>
@@ -659,13 +1336,15 @@ const MarketingEntryScreen: React.FC = () => {
             const Icon = icons[index];
             return (
               <GlassCard key={item.title} variant="glass" className="group min-h-[260px] overflow-hidden p-6">
-                <Icon size={28} className="mb-5 text-gold-600 transition-transform group-hover:scale-110" aria-hidden="true" />
+                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-gold-500/40 bg-graphite/30 text-gold-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-6px_rgba(255,215,0,0.35)] transition-transform group-hover:scale-110">
+                  <Icon size={28} aria-hidden="true" />
+                </div>
                 <h3 className="mb-3 text-xl text-graphite">{item.title}</h3>
                 <p className="font-modern text-sm leading-6 text-silver-dark">{item.description}</p>
                 <motion.div
                   whileInView={{ x: index % 2 === 0 ? 18 : -18 }}
                   transition={{ duration: 1.2, ease: 'easeOut' }}
-                  className="mt-7 h-24 rounded-2xl border border-white/30 bg-gradient-to-br from-white/40 via-champagne/40 to-gold-400/25"
+                  className="mt-7 h-24 rounded-2xl border border-white/30 bg-gradient-to-br from-white/40 via-champagne/40 to-gold-500/25"
                 />
               </GlassCard>
             );
@@ -680,26 +1359,18 @@ const MarketingEntryScreen: React.FC = () => {
               <h2 className="mb-4 text-3xl leading-tight text-graphite sm:text-5xl">{t.emotionTitle}</h2>
               <p className="font-modern text-base leading-8 text-silver-dark">{t.emotion}</p>
             </div>
-            <div className="relative min-h-[320px] overflow-hidden rounded-[32px] border border-white/35 bg-gradient-to-br from-white/35 via-champagne/45 to-gold-400/30 p-5">
+            <div className="relative flex min-h-[320px] flex-col overflow-hidden rounded-[32px] border border-white/30 bg-gradient-to-br from-white/12 via-pearl-100/18 to-gold-500/10 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-glass">
               <motion.div
                 animate={{ y: [0, -16, 0], rotate: [0, 1.5, 0] }}
                 transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
-                className="absolute right-8 top-6 h-28 w-28 rounded-full bg-gold-400/35 blur-2xl"
+                className="pointer-events-none absolute right-8 top-6 h-28 w-28 rounded-full bg-gold-500/35 blur-2xl"
+                aria-hidden
               />
-              <div className="relative grid gap-3">
-                {t.profileTags.map((tag, index) => (
-                  <motion.div
-                    key={tag}
-                    initial={{ opacity: 0, x: 24 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                    className="flex items-center justify-between rounded-2xl bg-white/35 px-5 py-4 font-modern text-sm text-graphite backdrop-blur"
-                  >
-                    <span>{tag}</span>
-                    <span className="text-gold-600">{profileScores[index]}%</span>
-                  </motion.div>
-                ))}
+              <div className="relative z-[1] flex min-h-0 flex-1 flex-col justify-center">
+                <ProfileTagRows
+                  items={emotionProfileCycles[marketingShowcaseFrame] ?? []}
+                  layoutGroupId={`emotion-profile-tags-${language}`}
+                />
               </div>
             </div>
           </div>
@@ -710,61 +1381,132 @@ const MarketingEntryScreen: React.FC = () => {
         <GlassCard variant="glass" className="p-8 sm:p-12">
           <h2 className="mx-auto mb-3 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.finalTitle}</h2>
           <p className="mx-auto mb-7 max-w-2xl font-modern text-base text-silver-dark">{t.finalSubtitle}</p>
-          <GlassButton size="lg" onClick={goToStart} className="mx-auto group">
+          <GlassButton size="lg" onClick={goToPathSelection} className="mx-auto group border-gold-500/55 bg-gold-500/20 hover:border-gold-500/75 hover:bg-gold-500/40">
             {t.primaryCta}
-            <ArrowRight size={20} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            <ArrowRight size={20} className="text-gold-500 transition-transform group-hover:translate-x-1" aria-hidden="true" />
           </GlassButton>
         </GlassCard>
       </motion.section>
+      </div>
+      </div>
 
-      <footer className="pb-6 pt-4">
-        <GlassCard variant="glass" className="p-5 sm:p-6">
-          <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr] md:items-center">
-            <div>
-              <p className="mb-2 text-lg text-graphite">{t.footer.product}</p>
-              <p className="max-w-2xl font-modern text-sm leading-6 text-silver-dark">{t.footer.description}</p>
-            </div>
-            <div className="flex flex-wrap gap-2 md:justify-end">
-              <FooterLink icon={Mail} label={t.footer.contact} href="mailto:contact@idainteriors.ai" />
-              <FooterLink icon={Shield} label={t.footer.privacy} href="/privacy" />
-              <FooterLink icon={FileText} label={t.footer.terms} href="/terms" />
-            </div>
+      <motion.section
+        className={cn(
+          'relative z-[4] pt-6 pb-6 sm:pt-9 sm:pb-7',
+          useMarqueePortal && 'pointer-events-none'
+        )}
+        {...fadeUp}
+        aria-label={t.stylesTitle}
+      >
+        <div
+          className={cn(
+            'mb-5 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between',
+            useMarqueePortal && 'pointer-events-auto'
+          )}
+        >
+          <div>
+            <h2 className="max-w-3xl text-2xl leading-tight text-graphite sm:text-4xl lg:text-5xl">{t.stylesTitle}</h2>
+            <p className="mt-2 max-w-3xl font-modern text-sm leading-6 text-silver-dark sm:text-base sm:leading-7">
+              {t.stylesSubtitle}
+            </p>
           </div>
-        </GlassCard>
-      </footer>
+          <GlassButton variant="secondary" size="md" onClick={goToPathSelection} className="shrink-0 self-start sm:self-auto">
+            {t.primaryCta}
+          </GlassButton>
+        </div>
+
+        {useMarqueePortal ? (
+          <>
+            <div
+              ref={marqueeAnchorRef}
+              className="relative mt-7 min-h-[340px] pb-14 sm:mt-9 sm:min-h-[380px] sm:pb-16 md:min-h-[400px] md:pb-20"
+              style={marqueeBreakoutStyle}
+              aria-hidden
+            />
+            {marqueePortalHost
+              ? createPortal(
+                  <div
+                    ref={marqueePortalLayerRef}
+                    className="pointer-events-auto overflow-visible"
+                    style={{ position: 'fixed' }}
+                  >
+                    <div className="relative box-border min-h-0 w-full min-w-0 overflow-x-clip overflow-y-visible px-5 pt-4 pb-20 sm:px-8 sm:pt-5 sm:pb-24 md:px-10">
+                      {livingRoomMarqueeInner}
+                    </div>
+                  </div>,
+                  marqueePortalHost
+                )
+              : null}
+          </>
+        ) : (
+          <div
+            className="relative mt-7 w-full overflow-x-clip overflow-y-visible px-5 pt-4 pb-20 sm:mt-9 sm:px-8 sm:pt-5 sm:pb-24 md:px-10"
+            style={marqueeBreakoutStyle}
+          >
+            {livingRoomMarqueeInner}
+          </div>
+        )}
+      </motion.section>
+
+      <div className={cn(useMarqueePortal && 'pointer-events-auto')}>
+      <SiteFooter
+        tagline={t.footer.tagline}
+        contactLabel={t.footer.contact}
+        privacyLabel={t.footer.privacy}
+        termsLabel={t.footer.terms}
+        pricingLabel={t.footer.pricing}
+        rightsLabel={t.footer.rights}
+        breakoutLeft={columnBox.left}
+        breakoutWidth={viewportWidth}
+      />
+      </div>
     </div>
   );
 };
 
 type VisualVariantCardProps = {
-  variant: {
-    name: string;
-    label: string;
-    description: string;
-    theme: RoomTheme;
-  };
-  index: number;
+  item: LivingRoomMarketingCard;
 };
 
-const VisualVariantCard = ({ variant, index }: VisualVariantCardProps) => (
-  <motion.div
-    whileHover={{ y: -8, scale: 1.02 }}
-    className="w-[320px] shrink-0 sm:w-[420px] xl:w-[520px]"
-  >
-    <GlassCard variant="glass" className="overflow-hidden p-3">
-      <div className="relative h-56 overflow-hidden rounded-[26px] border border-white/35 sm:h-72">
-        <RoomPlaceholder theme={variant.theme} mode="after" />
-      </div>
-      <div className="p-3">
-        <div className="mb-1 flex items-center justify-between gap-3">
-          <h3 className="text-lg text-graphite">{variant.name}</h3>
-          <span className="rounded-full bg-gold-400/20 px-3 py-1 font-modern text-xs text-graphite">0{(index % 3) + 1}</span>
+const VisualVariantCard = ({ item }: VisualVariantCardProps) => (
+  <div className="group/card relative w-[min(82vw,276px)] shrink-0 sm:w-[312px] xl:w-[340px]">
+    <GlassCard
+      variant="glass"
+      className="relative z-0 flex min-h-0 cursor-pointer flex-col overflow-hidden p-2.5 transition-[transform,box-shadow] duration-300 ease-out will-change-transform group-hover/card:-translate-y-1.5 group-hover/card:scale-[1.02] group-hover/card:shadow-2xl sm:p-3"
+    >
+      <div className="relative h-[10.75rem] overflow-hidden rounded-[1.05rem] ring-1 ring-inset ring-black/[0.06] sm:h-[12.5rem] xl:h-[13.25rem]">
+        <Image
+          src={item.url}
+          alt={item.title}
+          fill
+          className="pointer-events-none object-cover object-center"
+          sizes="(max-width: 640px) 82vw, (max-width: 1280px) 312px, 340px"
+        />
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-[42%] bg-[linear-gradient(to_top,rgba(12,14,18,0.34)_0%,rgba(12,14,18,0.1)_48%,rgba(12,14,18,0)_100%)]"
+          aria-hidden="true"
+        />
+        <div className="absolute inset-x-0 bottom-0 z-[2] flex max-h-12 flex-wrap items-end justify-center gap-1 overflow-hidden px-2 pb-2 pt-1">
+          {item.chips.filter((chip) => chip !== item.title).slice(0, 4).map((chip, chipIndex) => (
+            <span
+              key={`${item.filename}-tag-${chipIndex}`}
+              className="rounded-full border border-white/30 bg-black/40 px-1.5 py-0.5 font-modern text-[8px] font-semibold uppercase tracking-wide text-white shadow-sm backdrop-blur-[2px] sm:text-[9px]"
+            >
+              {chip}
+            </span>
+          ))}
         </div>
-        <p className="font-modern text-xs uppercase tracking-[0.18em] text-gold-600">{variant.label}</p>
-        <p className="mt-2 font-modern text-sm leading-6 text-silver-dark">{variant.description}</p>
+      </div>
+      <div className="grid gap-1 border-t border-white/20 px-3 py-2.5 text-center sm:py-3">
+        <h3 className="line-clamp-1 text-[0.95rem] font-semibold leading-tight tracking-tight text-graphite sm:text-base">
+          {item.title}
+        </h3>
+        <p className="line-clamp-2 font-modern text-[11px] leading-relaxed text-graphite/65 sm:text-xs">
+          {item.label}
+        </p>
       </div>
     </GlassCard>
-  </motion.div>
+  </div>
 );
 
 type PathCardProps = {
@@ -790,53 +1532,130 @@ const PathCard = ({
   highlighted = false,
   onClick,
 }: PathCardProps) => (
-  <GlassCard variant={highlighted ? 'highlighted' : 'interactive'} className="flex h-full flex-col overflow-hidden p-6 sm:p-7">
-    <div className="mb-5 flex items-start justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <div className={cn('flex h-14 w-14 items-center justify-center rounded-2xl', highlighted ? 'bg-gold-400/30' : 'bg-white/25')}>
-          <Icon size={26} className="text-graphite" aria-hidden />
+  <GlassCard
+    variant={highlighted ? 'highlighted' : 'interactive'}
+    className={cn(
+      'flex h-full flex-col overflow-hidden p-6 sm:p-7',
+      // Desktop: share row heights with sibling so headers, copy, lists, art, and CTAs line up (CSS subgrid).
+      'lg:row-span-5 lg:grid lg:min-h-0 lg:grid-cols-1 lg:[grid-template-rows:subgrid]',
+      highlighted ? 'lg:col-start-2 lg:row-start-1' : 'lg:col-start-1 lg:row-start-1'
+    )}
+  >
+    <div className="mb-5 flex items-start justify-between gap-4 lg:mb-0">
+      <div className="flex min-w-0 items-center gap-3">
+        <div
+          className={cn(
+            'flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-gold-500/40 text-gold-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-6px_rgba(255,215,0,0.35)]',
+            highlighted ? 'bg-graphite/28' : 'bg-graphite/32'
+          )}
+        >
+          <Icon size={26} aria-hidden />
         </div>
-        <div>
-          <h3 className="text-2xl text-graphite">{title}</h3>
-          {meta && <p className="font-modern text-xs text-silver-dark">{meta}</p>}
+        <div className="min-w-0">
+          <h3 className="text-balance text-2xl leading-snug text-graphite">{title}</h3>
+          {meta ? <p className="mt-1 font-modern text-xs text-silver-dark">{meta}</p> : null}
         </div>
       </div>
-      <span className="rounded-full border border-gold-400/45 bg-gold-400/15 px-3 py-1 font-modern text-xs text-graphite">
+      <span className="shrink-0 self-start rounded-full border border-gold-500/45 bg-gold-500/15 px-3 py-1 font-modern text-xs text-graphite">
         {badge}
       </span>
     </div>
-    <p className="mb-5 font-modern text-sm leading-6 text-silver-dark">{description}</p>
-    <ul className="mb-7 grid gap-2 font-modern text-sm text-graphite">
+    <p className="mb-5 font-modern text-sm leading-6 text-silver-dark lg:mb-0">{description}</p>
+    <ul className="mb-7 grid gap-2 font-modern text-sm text-graphite lg:mb-0">
       {points.map((point) => (
         <li key={point} className="flex items-center gap-2">
-          <CheckCircle2 size={16} className="shrink-0 text-gold-600" aria-hidden="true" />
+          <CheckCircle2 size={16} className="shrink-0 text-gold-500" aria-hidden="true" />
           {point}
         </li>
       ))}
     </ul>
-    <div className="relative mb-6 h-44 overflow-hidden rounded-2xl border border-white/30">
+    <div className="relative mb-6 h-44 overflow-hidden rounded-2xl border border-white/30 lg:mb-0 lg:h-full lg:min-h-0">
       <RoomPlaceholder theme={highlighted ? AFTER_ROOM_THEMES[1] : AFTER_ROOM_THEMES[0]} mode="after" />
     </div>
-    <GlassButton variant={highlighted ? 'primary' : 'secondary'} onClick={onClick} className="mt-auto w-full">
+    <GlassButton
+      variant={highlighted ? 'primary' : 'secondary'}
+      onClick={onClick}
+      className={cn(
+        'mt-auto w-full lg:mt-0',
+        highlighted && 'border-gold-500/55 bg-gold-500/20 hover:border-gold-500/75 hover:bg-gold-500/40'
+      )}
+    >
       {cta}
     </GlassButton>
   </GlassCard>
 );
 
-type FooterLinkProps = {
-  icon: LucideIcon;
-  label: string;
-  href: string;
+type SiteFooterProps = {
+  tagline: string;
+  contactLabel: string;
+  privacyLabel: string;
+  termsLabel: string;
+  pricingLabel: string;
+  rightsLabel: string;
+  breakoutLeft: number;
+  breakoutWidth: number;
 };
 
-const FooterLink = ({ icon: Icon, label, href }: FooterLinkProps) => (
-  <a
-    href={href}
-    className="flex min-h-[44px] items-center gap-2 rounded-full border border-white/25 bg-white/20 px-4 py-2 font-modern text-sm text-graphite transition-colors hover:bg-white/35"
-  >
-    <Icon size={16} aria-hidden="true" />
-    {label}
-  </a>
-);
+const SiteFooter = ({
+  tagline,
+  contactLabel,
+  privacyLabel,
+  termsLabel,
+  pricingLabel,
+  rightsLabel,
+  breakoutLeft,
+  breakoutWidth,
+}: SiteFooterProps) => {
+  const year = new Date().getFullYear();
+
+  return (
+    <footer
+      className="mt-0 border-t border-graphite/[0.08] bg-gradient-to-b from-transparent to-pearl-200/35 pb-[max(1.75rem,env(safe-area-inset-bottom,0px))] pt-7"
+      style={{
+        marginLeft: breakoutLeft ? `${-breakoutLeft}px` : 'calc(50% - 50vw)',
+        width: breakoutWidth ? `${breakoutWidth}px` : '100vw',
+      }}
+    >
+      <div className="mx-auto max-w-3xl px-5 text-center sm:px-8">
+        <p className="font-modern text-[11px] leading-relaxed tracking-wide text-silver-dark/90 sm:text-xs">
+          {tagline}
+        </p>
+        <div
+          className="mt-6 flex flex-col items-center gap-3 font-modern text-[11px] text-silver-dark sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-1 sm:gap-y-2 sm:text-xs"
+          aria-label="Legal and site links"
+        >
+          <span className="text-silver-dark/80">
+            © {year} IDA. {rightsLabel}
+          </span>
+          <span className="hidden text-graphite/20 sm:inline" aria-hidden="true">
+            ·
+          </span>
+          <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2 sm:gap-x-0">
+            {[
+              { href: 'mailto:contact@idainteriors.ai', label: contactLabel },
+              { href: '/privacy', label: privacyLabel },
+              { href: '/terms', label: termsLabel },
+              { href: '/subscription/plans', label: pricingLabel },
+            ].map((item, index) => (
+              <React.Fragment key={item.href}>
+                {index > 0 && (
+                  <span className="hidden px-2 text-graphite/25 sm:inline" aria-hidden="true">
+                    |
+                  </span>
+                )}
+                <a
+                  href={item.href}
+                  className="min-h-[44px] min-w-[44px] px-1 py-2 text-graphite/75 underline-offset-4 transition-colors hover:text-graphite hover:underline sm:min-h-0 sm:min-w-0 sm:px-0"
+                >
+                  {item.label}
+                </a>
+              </React.Fragment>
+            ))}
+          </nav>
+        </div>
+      </div>
+    </footer>
+  );
+};
 
 export default MarketingEntryScreen;

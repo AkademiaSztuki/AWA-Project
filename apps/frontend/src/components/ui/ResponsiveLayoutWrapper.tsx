@@ -15,29 +15,24 @@ export function ResponsiveLayoutWrapper({ children }: { children: React.ReactNod
   const isCompactLayout = useIsMobile(1280);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
-  const isLandingPage = pathname === '/';
+  const isMarketingPage = pathname === '/' || pathname === '/start';
   const { hideModel3D } = useColorAdjustment();
-  const shouldHideModel = hideModel3D || isCompactLayout;
-  
-  // Keep background alive on mobile until exit animation finishes
+
   const [showMobileAwa, setShowMobileAwa] = useState(false);
 
-  // Avoid hydration mismatch
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Update showMobileAwa based on landing page status
   useEffect(() => {
-    if ((isMobile || isCompactLayout) && isLandingPage) {
+    if ((isMobile || isCompactLayout) && isMarketingPage) {
       setShowMobileAwa(true);
     }
-  }, [isMobile, isCompactLayout, isLandingPage]);
+  }, [isMobile, isCompactLayout, isMarketingPage]);
 
-  // Listen for exit complete to finally remove it
   useEffect(() => {
     if (!(isMobile || isCompactLayout)) return;
-    
+
     const handleExitComplete = () => {
       console.log('[ResponsiveLayoutWrapper] Exit animation complete, removing AwaBackground');
       setShowMobileAwa(false);
@@ -47,33 +42,34 @@ export function ResponsiveLayoutWrapper({ children }: { children: React.ReactNod
     return () => window.removeEventListener('awa-wyjsciewlewo-complete', handleExitComplete);
   }, [isMobile, isCompactLayout]);
 
-  // Don't render backgrounds until mounted to avoid SSR mismatch
+  const showAwaDesktop =
+    !hideModel3D && (!isCompactLayout || (isMarketingPage && showMobileAwa));
+  const showAwaMobile = !hideModel3D && showMobileAwa && isMarketingPage;
+
   if (!mounted) {
     return <>{children}</>;
   }
 
   return (
     <>
-      {/* Backgrounds - Conditional rendering for proper layering */}
       {!isMobile ? (
         <>
           <DesktopBackground />
           <AuroraBubbles variant="reduced" />
-          {!hideModel3D && (!isCompactLayout || (isLandingPage && showMobileAwa)) && (
-            <AwaBackground />
+          {pathname === '/' && (
+            <div id="living-room-marquee-layer" className="pointer-events-none fixed inset-0 z-[2] isolate" />
           )}
+          {showAwaDesktop && <AwaBackground />}
           <ParticlesBackground />
         </>
       ) : (
         <>
           <MobileBackground />
-          {/* Render 3D model on mobile until it explicitly finishes its exit */}
-          {!hideModel3D && showMobileAwa && <AwaBackground />}
+          {showAwaMobile && <AwaBackground />}
         </>
       )}
-      
+
       {children}
     </>
   );
 }
-

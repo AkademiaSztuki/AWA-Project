@@ -161,7 +161,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
   /** W przestrzeni lokalnej grupy — poza sylwetką, żeby wyłączyć odpychanie po puszczeniu palca (mobile). */
   const particleMouseResetLocalRef = useRef(new THREE.Vector3(800, 800, 800));
 
-  const { scene: threeScene, camera } = useThree();
+  const { scene: threeScene, camera, gl } = useThree();
   const { currentAnimation, onAnimationEnd, playAnimation } = useAnimation();
   const { reducedMotion: wcagReducedMotion } = useWcagSettings();
   
@@ -493,8 +493,12 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
 
   useEffect(() => {
     const updatePointerFromClient = (clientX: number, clientY: number) => {
-      const x = (clientX / window.innerWidth) * 2 - 1;
-      const y = -(clientY / window.innerHeight) * 2 + 1;
+      const canvas = gl.domElement;
+      const rect = canvas.getBoundingClientRect();
+      const rw = rect.width > 1 ? rect.width : window.innerWidth;
+      const rh = rect.height > 1 ? rect.height : window.innerHeight;
+      const x = ((clientX - rect.left) / rw) * 2 - 1;
+      const y = -((clientY - rect.top) / rh) * 2 + 1;
       setMousePosition({ x, y });
       if (!camera) return;
       const pointer = pointerNdcRef.current;
@@ -564,7 +568,7 @@ export const AwaModel: React.FC<AwaModelProps> = ({ currentStep, onLoaded, posit
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
     };
-  }, [camera]);
+  }, [camera, gl]);
 
   const { actions, mixer } = useAnimations(allAnimations, scene);
   
