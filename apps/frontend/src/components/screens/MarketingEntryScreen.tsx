@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  AnimatePresence,
   animate,
   LayoutGroup,
   motion,
@@ -90,7 +91,7 @@ const copy = {
     steps: [
       {
         title: 'Pokaż swoją przestrzeń',
-        description: 'Prześlij zdjęcie pokoju albo zacznij od inspiracji, które lubisz.',
+        description: 'Prześlij zdjęcie swojego pomieszczenia albo zacznij od przykładowego wnętrza.',
       },
       {
         title: 'IDA poznaje Twój styl',
@@ -123,14 +124,56 @@ const copy = {
       {
         title: 'Osobowość',
         description: 'IDA bierze pod uwagę to, jak chcesz się czuć w swojej przestrzeni.',
+        rotatingWords: [
+          'spokój',
+          'ciepło',
+          'porządek',
+          'lekkość',
+          'intymność',
+          'energia',
+          'harmonia',
+          'balans',
+          'estetyka',
+          'uczucia',
+          'otwartość',
+          'bliskość',
+        ],
       },
       {
         title: 'Styl życia',
         description: 'Inaczej projektuje miejsce do odpoczynku, pracy, spotkań czy kreatywności.',
+        rotatingWords: [
+          'odpoczynek',
+          'praca',
+          'spotkania',
+          'kreatywność',
+          'koncentracja',
+          'goście',
+          'rutyna',
+          'regeneracja',
+          'wieczór',
+          'flow',
+          'weekend',
+          'poranek',
+        ],
       },
       {
         title: 'Realna przestrzeń',
         description: 'Twoje wnętrze nie jest pustą kartką - IDA pracuje z tym, co już masz.',
+        rotatingWords: [
+          'układ',
+          'światło',
+          'meble',
+          'ściany',
+          'okna',
+          'zabudowa',
+          'podłoga',
+          'detale',
+          'rozmiar',
+          'funkcja',
+          'kontekst',
+          'kotwica',
+        ],
       },
     ],
     emotionTitle: 'Twoje wnętrze powinno mówić Twoim językiem',
@@ -194,7 +237,7 @@ const copy = {
     steps: [
       {
         title: 'Show your space',
-        description: 'Upload a room photo or start with inspirations you already like.',
+        description: 'Upload a photo of your space or start from an example interior.',
       },
       {
         title: 'IDA learns your style',
@@ -227,14 +270,56 @@ const copy = {
       {
         title: 'Personality',
         description: 'IDA considers how you want to feel in your space.',
+        rotatingWords: [
+          'calm',
+          'warmth',
+          'order',
+          'ease',
+          'intimacy',
+          'energy',
+          'harmony',
+          'balance',
+          'aesthetics',
+          'feeling',
+          'openness',
+          'closeness',
+        ],
       },
       {
         title: 'Lifestyle',
         description: 'It designs differently for rest, work, social life, or creativity.',
+        rotatingWords: [
+          'rest',
+          'work',
+          'hosting',
+          'creativity',
+          'focus',
+          'routine',
+          'recovery',
+          'evenings',
+          'flow',
+          'weekends',
+          'mornings',
+          'rhythm',
+        ],
       },
       {
         title: 'Real space',
         description: 'Your room is not a blank canvas - IDA works with what you already have.',
+        rotatingWords: [
+          'layout',
+          'light',
+          'furniture',
+          'walls',
+          'windows',
+          'built-ins',
+          'flooring',
+          'details',
+          'size',
+          'function',
+          'context',
+          'anchor',
+        ],
       },
     ],
     emotionTitle: 'Your interior should speak your language',
@@ -425,18 +510,167 @@ const ProfileTagRows: React.FC<{
   );
 };
 
+/** Longer dwell time per word; stagger `startStaggerMs` so the three cards rarely tick together. */
+const WHY_WORD_CYCLE_MS = 5600;
+const WHY_WORD_STAGGER_STEP_MS = Math.round(WHY_WORD_CYCLE_MS / 3);
+
+type WhyMarketingItem = (typeof copy.pl.why)[number];
+
+const WhyRotatingWordMorph: React.FC<{
+  words: string[];
+  activeIndex: number;
+  className?: string;
+}> = ({ words, activeIndex, className }) => {
+  const preferReducedMotion = useReducedMotion();
+  const n = words.length;
+  const label = n > 0 ? words[activeIndex % n] : '';
+  const easeOut = [0.22, 1, 0.36, 1] as const;
+  const easeIn = [0.4, 0, 1, 1] as const;
+
+  return (
+    <div
+      className={cn(
+        'mt-auto flex min-h-[4.25rem] shrink-0 items-center justify-center rounded-2xl border border-white/25',
+        'bg-gradient-to-br from-white/40 via-champagne/30 to-gold-500/15 px-3 py-2.5',
+        'shadow-[inset_0_1px_0_rgba(255,255,255,0.32),0_8px_24px_-16px_rgba(45,38,28,0.22)] backdrop-blur-[3px]',
+        className
+      )}
+      aria-hidden
+    >
+      <div className="relative flex min-h-[2.5rem] w-full items-center justify-center">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={`${activeIndex}-${label}`}
+            initial={
+              preferReducedMotion
+                ? false
+                : {
+                    opacity: 0,
+                    y: 12,
+                    filter: 'blur(8px)',
+                    scale: 0.97,
+                  }
+            }
+            animate={{
+              opacity: 1,
+              y: 0,
+              filter: 'blur(0px)',
+              scale: 1,
+            }}
+            exit={
+              preferReducedMotion
+                ? undefined
+                : {
+                    opacity: 0,
+                    y: -10,
+                    filter: 'blur(8px)',
+                    scale: 0.96,
+                  }
+            }
+            transition={
+              preferReducedMotion
+                ? { duration: 0 }
+                : {
+                    opacity: { duration: 0.48, ease: easeOut },
+                    y: { type: 'spring', stiffness: 280, damping: 32, mass: 0.85 },
+                    filter: { duration: 0.44, ease: easeIn },
+                    scale: { type: 'spring', stiffness: 360, damping: 34 },
+                  }
+            }
+            className={cn(
+              'inline-block max-w-full text-center font-modern text-sm font-medium normal-case tracking-wide text-graphite/75',
+              'sm:text-[0.95rem] sm:leading-snug sm:tracking-[0.06em]',
+              'will-change-[transform,opacity,filter]'
+            )}
+          >
+            {label}
+          </motion.span>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
+
+const WhyMarketingGalleryCard: React.FC<{
+  item: WhyMarketingItem;
+  index: number;
+  Icon: LucideIcon;
+}> = ({ item, index, Icon }) => {
+  const preferReducedMotion = useReducedMotion();
+  const words = item.rotatingWords;
+  const n = Math.max(1, words.length);
+  const [i, setI] = useState(() => (index * 5) % n);
+  const hoverBumpArmedRef = useRef(true);
+
+  useEffect(() => {
+    if (preferReducedMotion || n <= 1) return;
+    let intervalId: number | undefined;
+    const timeoutId = window.setTimeout(() => {
+      setI((j) => (j + 1) % n);
+      intervalId = window.setInterval(() => {
+        setI((j) => (j + 1) % n);
+      }, WHY_WORD_CYCLE_MS);
+    }, index * WHY_WORD_STAGGER_STEP_MS);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (intervalId !== undefined) window.clearInterval(intervalId);
+    };
+  }, [n, preferReducedMotion, index]);
+
+  const bump = useCallback(() => {
+    if (n <= 1) return;
+    setI((j) => (j + 1) % n);
+  }, [n]);
+
+  return (
+    <div
+      className="h-full min-h-[300px]"
+      onPointerEnter={() => {
+        if (!hoverBumpArmedRef.current) return;
+        hoverBumpArmedRef.current = false;
+        bump();
+      }}
+      onPointerLeave={() => {
+        hoverBumpArmedRef.current = true;
+      }}
+    >
+      <GlassCard
+        variant="glass"
+        className="group flex h-full min-h-0 flex-col overflow-hidden p-6 transition-[box-shadow,transform] duration-300 ease-out hover:shadow-[0_12px_40px_-16px_rgba(45,38,28,0.28)]"
+      >
+        <div className="mb-5 flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-gold-500/40 bg-graphite/30 text-gold-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-6px_rgba(255,215,0,0.35)] transition-transform group-hover:scale-110">
+          <Icon size={28} aria-hidden="true" />
+        </div>
+        <h3 className="mb-3 shrink-0 text-xl text-graphite">{item.title}</h3>
+        <p className="min-h-0 flex-1 text-pretty font-modern text-sm leading-6 text-silver-dark">{item.description}</p>
+        <WhyRotatingWordMorph words={words} activeIndex={i} />
+      </GlassCard>
+    </div>
+  );
+};
+
 /**
  * Hero shrink / radius / shadow finish by this fraction of section scroll (lower = snappier, higher = slower).
  */
 const HERO_SETTLE_SCROLL_END = 0.52;
 
-/** Fraction of hero settle (0–1) — keep low so the header appears as soon as shrink starts (small scrollYProgress). */
+/**
+ * Before this settle fraction, keep room layer at scaleY 1. Wide viewports map a tiny scroll advance to a large
+ * width delta (column vs vw), which otherwise reads as a vertically “squashed” placeholder immediately.
+ */
+const HERO_VISUAL_SCALEY_DEAD_ZONE = 0.08;
+
+/** Slack so the squashed room layer stays slightly taller than the measured glass copy stack (wide layouts). */
+const HERO_VISUAL_SCALEY_PANEL_PAD = 0.012;
+
+/** Fraction of hero settle (0–1) — keep low so the header appears as soon as the hero begins to shrink. */
 const MARKETING_HEADER_SETTLE_REVEAL = 0.004;
 /** Fallback: raw section progress so we reveal even if settle is edge-rounded */
 const MARKETING_HEADER_SCROLL_PROGRESS_REVEAL = 0.003;
-const MARKETING_HERO_PROGRESS_END = 1 - 0.002;
-/** Mouse within this band from the top of the viewport re-opens the header after the hero (fine pointer / hover only). */
-const MARKETING_HEADER_TOP_PEEK_PX = 104;
+/** Mid-page load / refresh: if document is already scrolled, show header without waiting for hero motion. */
+const MARKETING_HEADER_WINDOW_SCROLL_REVEAL = 12;
+/** `heroSettle` must increase vs last frame — avoids revealing on scroll-up when the curve moves backward through the same thresholds. */
+const MARKETING_HEADER_SETTLE_ADVANCE_EPS = 0.00006;
 
 const fadeUp = {
   initial: { opacity: 0, y: 32 },
@@ -569,8 +803,14 @@ const MarketingEntryScreen: React.FC = () => {
   const [activeVariant, setActiveVariant] = useState(0);
   const comparisonRef = useRef<HTMLDivElement | null>(null);
   const heroStickyFrameRef = useRef<HTMLDivElement | null>(null);
+  const heroCopyGlassPanelRef = useRef<HTMLDivElement | null>(null);
   const heroFrameHeightMv = useMotionValue(0);
+  /** Minimum scaleY so room layer height ≥ glass headline panel height (desktop marketing hero). */
+  const minHeroVisualScaleYMv = useMotionValue(0.72);
   const heroRef = useRef<HTMLElement | null>(null);
+  /** After the first scroll that shrinks the hero, keep the glass header visible (including scroll back to top). */
+  const marketingHeaderRevealedRef = useRef(false);
+  const prevHeroSettleForHeaderRef = useRef(0);
   const marketingRootRef = useRef<HTMLDivElement | null>(null);
   const heroBleedMeasureRef = useRef<HTMLDivElement | null>(null);
   const marqueeAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -583,18 +823,27 @@ const MarketingEntryScreen: React.FC = () => {
     offset: ['start start', 'end start'],
   });
   const [viewportWidth, setViewportWidth] = useState(0);
-  /** One shared 0→1 curve for the hero “settle” window — all layout styles read the same `s` each frame (stays in sync). */
+  /** One shared 0→1 curve for the hero “settle” window — header timing still reads this raw value. */
   const heroSettle = useTransform(scrollYProgress, (p) =>
     Math.min(1, Math.max(0, p / HERO_SETTLE_SCROLL_END))
   );
-  const heroWidthMotion = useTransform(heroSettle, (s) => {
+  /**
+   * Width, radius, and room squash use this delayed curve so the first stretch of scroll keeps full-bleed layout.
+   * Raw `heroSettle` still drives header reveal thresholds.
+   */
+  const effectiveHeroSettle = useTransform(heroSettle, (s) => {
+    const span = 1 - HERO_VISUAL_SCALEY_DEAD_ZONE;
+    if (span <= 0) return s;
+    return Math.min(1, Math.max(0, (s - HERO_VISUAL_SCALEY_DEAD_ZONE) / span));
+  });
+  const heroWidthMotion = useTransform(effectiveHeroSettle, (s) => {
     const breakout = 1 - s;
     if (!columnBox.width || !viewportWidth) return '100vw';
     const measured = columnBox.width + (viewportWidth - columnBox.width) * breakout;
     if (measured <= 0) return '100vw';
     return `${Math.round(measured)}px`;
   });
-  const heroMarginLeftMotion = useTransform(heroSettle, (s) => {
+  const heroMarginLeftMotion = useTransform(effectiveHeroSettle, (s) => {
     const breakout = 1 - s;
     if (!columnBox.width || !viewportWidth) return 'calc(50% - 50vw)';
     const measured = columnBox.width + (viewportWidth - columnBox.width) * breakout;
@@ -602,18 +851,24 @@ const MarketingEntryScreen: React.FC = () => {
     return `${(-columnBox.left * breakout).toFixed(2)}px`;
   });
   /** Outer clip: keep a minimum radius at full-bleed (s=0) so room/photos read with rounded top corners; grows to 36px when settled. */
-  const heroBorderRadius = useTransform(heroSettle, (s) => {
+  const heroBorderRadius = useTransform(effectiveHeroSettle, (s) => {
     const t = Math.min(1, Math.max(0, s));
     return `${Math.round(16 + 20 * t)}px`;
   });
   /** Same ratio as old `calc(100dvh * measured/vw)` but via transform — no per-frame layout height changes. */
-  const heroVisualScaleY = useTransform(heroSettle, (s) => {
-    if (isMobile || !columnBox.width || !viewportWidth) return 1;
-    const breakout = 1 - s;
-    const measured = columnBox.width + (viewportWidth - columnBox.width) * breakout;
-    if (measured <= 0) return 1;
-    return measured / viewportWidth;
-  });
+  const heroVisualScaleY = useTransform(
+    [effectiveHeroSettle, minHeroVisualScaleYMv],
+    ([s, minSy]) => {
+      if (isMobile || !columnBox.width || !viewportWidth) return 1;
+      const breakout = 1 - (typeof s === 'number' ? s : 0);
+      const measured = columnBox.width + (viewportWidth - columnBox.width) * breakout;
+      if (measured <= 0) return 1;
+      const ratio = measured / viewportWidth;
+      const floor =
+        typeof minSy === 'number' && minSy > 0.02 ? Math.min(1, minSy) : 0.72;
+      return Math.max(ratio, floor);
+    }
+  );
   /** Undo vertical squash on in-room labels while the room layer uses `scaleY` (desktop hero only). */
   const heroRoomLabelScaleY = useTransform(heroVisualScaleY, (s) => {
     if (s >= 0.9999) return 1;
@@ -656,7 +911,7 @@ const MarketingEntryScreen: React.FC = () => {
   ]);
 
   const heroPanelAnchorX = useTransform(
-    [heroSettle, columnLeftMv, columnWidthMv, viewportWidthMv, heroPanelDesktopMv],
+    [effectiveHeroSettle, columnLeftMv, columnWidthMv, viewportWidthMv, heroPanelDesktopMv],
     ([s, left, cw, vw, desktop]) => {
       if (typeof desktop === 'number' && desktop < 0.5) return 0;
       const settle = typeof s === 'number' ? s : 0;
@@ -671,7 +926,7 @@ const MarketingEntryScreen: React.FC = () => {
 
   /** Raised bottom only while hero is unsettled (s→0); ends at original bottom-2.5 / sm:bottom-4 when s→1. */
   const heroCopyBottomMotion = useTransform(
-    [heroSettle, heroPanelDesktopMv],
+    [effectiveHeroSettle, heroPanelDesktopMv],
     ([s, desktop]) => {
       const t = Math.min(1, Math.max(0, typeof s === 'number' ? s : 0));
       const isDesktop = typeof desktop === 'number' && desktop > 0.5;
@@ -681,16 +936,58 @@ const MarketingEntryScreen: React.FC = () => {
     }
   );
 
+  const assignHeroCopyGlassPanelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      heroCopyGlassPanelRef.current = node;
+      if (!node || isMobile) return;
+      const frame = heroStickyFrameRef.current;
+      if (!frame) return;
+      const fh = frame.getBoundingClientRect().height;
+      const ph = node.getBoundingClientRect().height;
+      if (fh > 1 && ph > 1) {
+        minHeroVisualScaleYMv.set(Math.min(1, ph / fh + HERO_VISUAL_SCALEY_PANEL_PAD));
+      }
+    },
+    [isMobile, minHeroVisualScaleYMv]
+  );
+
   useLayoutEffect(() => {
     const el = heroStickyFrameRef.current;
     if (!el) return;
 
+    if (isMobile) {
+      minHeroVisualScaleYMv.set(0);
+      const syncMobile = () => {
+        const next = Math.round(el.getBoundingClientRect().height);
+        if (next > 0) heroFrameHeightMv.set(next);
+      };
+      syncMobile();
+      const ro =
+        typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncMobile) : null;
+      ro?.observe(el);
+      window.addEventListener('resize', syncMobile);
+      return () => {
+        ro?.disconnect();
+        window.removeEventListener('resize', syncMobile);
+      };
+    }
+
     const sync = () => {
-      const next = Math.round(el.getBoundingClientRect().height);
-      if (next > 0) heroFrameHeightMv.set(next);
+      const frame = heroStickyFrameRef.current;
+      const panelEl = heroCopyGlassPanelRef.current;
+      if (!frame) return;
+      const fh = frame.getBoundingClientRect().height;
+      if (fh > 0) heroFrameHeightMv.set(Math.round(fh));
+      const ph = panelEl?.getBoundingClientRect().height ?? 0;
+      if (fh > 1 && ph > 1) {
+        minHeroVisualScaleYMv.set(Math.min(1, ph / fh + HERO_VISUAL_SCALEY_PANEL_PAD));
+      }
     };
 
     sync();
+    requestAnimationFrame(() => {
+      sync();
+    });
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(sync) : null;
     ro?.observe(el);
     window.addEventListener('resize', sync);
@@ -699,7 +996,30 @@ const MarketingEntryScreen: React.FC = () => {
       ro?.disconnect();
       window.removeEventListener('resize', sync);
     };
-  }, [heroFrameHeightMv]);
+  }, [isMobile, language, minHeroVisualScaleYMv]);
+
+  /** Panel height can change without the sticky frame resizing (copy wrap, fonts). */
+  useLayoutEffect(() => {
+    if (isMobile) return;
+    const panelEl = heroCopyGlassPanelRef.current;
+    if (!panelEl) return;
+
+    const syncPanel = () => {
+      const frame = heroStickyFrameRef.current;
+      if (!frame) return;
+      const fh = frame.getBoundingClientRect().height;
+      const ph = panelEl.getBoundingClientRect().height;
+      if (fh > 1 && ph > 1) {
+        minHeroVisualScaleYMv.set(Math.min(1, ph / fh + HERO_VISUAL_SCALEY_PANEL_PAD));
+      }
+    };
+
+    syncPanel();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncPanel) : null;
+    ro?.observe(panelEl);
+    return () => ro?.disconnect();
+  }, [isMobile, language, minHeroVisualScaleYMv]);
+
   const t = copy[language];
   const emotionProfileCycles = useMemo(
     () => (language === 'pl' ? EMOTION_PROFILE_CYCLES_PL : EMOTION_PROFILE_CYCLES_EN),
@@ -707,47 +1027,38 @@ const MarketingEntryScreen: React.FC = () => {
   );
   const marketingShowcaseFrame = useMarketingShowcaseFrame(emotionProfileCycles.length);
 
-  const prefersPeekChromeRef = useRef(
-    typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
-  );
-  const peekChromeHoverRef = useRef(false);
-
-  const syncMarketingHeaderVisibilityRef = useRef<(() => void) | null>(null);
-
   /** Must read the same MotionValues as the hero shrink (`heroSettle`); manual DOM progress can stay at 0 while Framer still animates (sticky layout). */
   const syncMarketingHeaderVisibility = useCallback(() => {
+    if (marketingHeaderRevealedRef.current) {
+      setHeaderVisible(true);
+      return;
+    }
+
     const settle = heroSettle.get();
     const p = scrollYProgress.get();
-    const pastHero = p >= MARKETING_HERO_PROGRESS_END;
-    if (!pastHero && peekChromeHoverRef.current) {
-      peekChromeHoverRef.current = false;
-    }
+    const prevSettle = prevHeroSettleForHeaderRef.current;
+    const heroShrinkAdvancing = settle > prevSettle + MARKETING_HEADER_SETTLE_ADVANCE_EPS;
+    prevHeroSettleForHeaderRef.current = settle;
 
-    let visible: boolean;
-    if (pastHero && !prefersPeekChromeRef.current) {
-      visible = true;
-    } else if (pastHero && prefersPeekChromeRef.current) {
-      visible = peekChromeHoverRef.current;
+    const pastRevealThreshold =
+      settle > MARKETING_HEADER_SETTLE_REVEAL || p > MARKETING_HEADER_SCROLL_PROGRESS_REVEAL;
+
+    const reveal = pastRevealThreshold && heroShrinkAdvancing;
+
+    if (reveal) {
+      marketingHeaderRevealedRef.current = true;
+      setHeaderVisible(true);
     } else {
-      const showDuringHero =
-        settle > MARKETING_HEADER_SETTLE_REVEAL || p > MARKETING_HEADER_SCROLL_PROGRESS_REVEAL;
-      visible = showDuringHero;
+      setHeaderVisible(false);
     }
-    setHeaderVisible(visible);
   }, [heroSettle, scrollYProgress, setHeaderVisible]);
 
-  syncMarketingHeaderVisibilityRef.current = syncMarketingHeaderVisibility;
-
-  useEffect(() => {
-    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
-    const syncMq = () => {
-      prefersPeekChromeRef.current = mq.matches;
-      syncMarketingHeaderVisibilityRef.current?.();
-    };
-    syncMq();
-    mq.addEventListener('change', syncMq);
-    return () => mq.removeEventListener('change', syncMq);
-  }, []);
+  useLayoutEffect(() => {
+    if (typeof window !== 'undefined' && window.scrollY >= MARKETING_HEADER_WINDOW_SCROLL_REVEAL) {
+      marketingHeaderRevealedRef.current = true;
+    }
+    syncMarketingHeaderVisibility();
+  }, [syncMarketingHeaderVisibility]);
 
   useMotionValueEvent(scrollYProgress, 'change', () => {
     syncMarketingHeaderVisibility();
@@ -767,32 +1078,6 @@ const MarketingEntryScreen: React.FC = () => {
     const onResize = () => syncMarketingHeaderVisibility();
     window.addEventListener('resize', onResize, { passive: true });
     return () => window.removeEventListener('resize', onResize);
-  }, [syncMarketingHeaderVisibility]);
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!prefersPeekChromeRef.current) return;
-      const p = scrollYProgress.get();
-      const pastHero = p >= MARKETING_HERO_PROGRESS_END;
-      if (!pastHero) {
-        if (peekChromeHoverRef.current) {
-          peekChromeHoverRef.current = false;
-          syncMarketingHeaderVisibility();
-        }
-        return;
-      }
-      const next = e.clientY < MARKETING_HEADER_TOP_PEEK_PX;
-      if (next !== peekChromeHoverRef.current) {
-        peekChromeHoverRef.current = next;
-        syncMarketingHeaderVisibility();
-      }
-    };
-    window.addEventListener('mousemove', onMove, { passive: true });
-    return () => window.removeEventListener('mousemove', onMove);
-  }, [scrollYProgress, syncMarketingHeaderVisibility]);
-
-  useEffect(() => {
-    syncMarketingHeaderVisibility();
   }, [syncMarketingHeaderVisibility]);
 
   useEffect(() => {
@@ -1035,7 +1320,7 @@ const MarketingEntryScreen: React.FC = () => {
           <div
             ref={comparisonRef}
             tabIndex={0}
-            className="absolute inset-0 z-[1] cursor-ew-resize outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08),inset_0_-48px_90px_-24px_rgba(45,38,28,0.14),0_10px_36px_-14px_rgba(45,38,28,0.18)]"
+            className="absolute inset-0 z-[1] cursor-ew-resize outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent shadow-[inset_0_-48px_90px_-24px_rgba(45,38,28,0.12),0_10px_36px_-14px_rgba(45,38,28,0.16)]"
             onPointerDown={(event) => {
               event.currentTarget.setPointerCapture(event.pointerId);
               updateSliderFromClientX(event.clientX);
@@ -1113,8 +1398,13 @@ const MarketingEntryScreen: React.FC = () => {
           </div>
           </motion.div>
 
-          <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/68 via-graphite/22 to-transparent" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[42%] bg-gradient-to-t from-black/50 via-black/18 to-transparent" />
+          <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/52 via-graphite/16 to-transparent lg:from-graphite/46 lg:via-graphite/12 xl:from-graphite/38 xl:via-graphite/8" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[40%] bg-gradient-to-t from-black/44 via-black/14 to-transparent lg:h-[36%] lg:from-black/36 xl:from-black/28" />
+          {/* Blend hero top into page bg — avoids a harsh seam / “shadow” above the rounded glass block on wide layouts */}
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-[min(5.5rem,14dvh)] bg-gradient-to-b from-[rgb(254_252_247)]/75 via-[rgb(254_252_247)]/25 to-transparent sm:from-[rgb(254_252_247)]/55 dark:hidden"
+            aria-hidden="true"
+          />
           {/* Pearl veil only from mid-height down — full-height strip read as empty “milky glass” over the room at the top. */}
           <div
             className="pointer-events-none absolute bottom-0 right-0 z-[2] w-full max-w-[min(100%,46rem)] bg-gradient-to-l from-pearl-100/72 via-pearl-50/36 to-transparent sm:max-w-[min(100%,52rem)] lg:max-w-[58%] top-[min(28dvh,220px)]"
@@ -1140,8 +1430,9 @@ const MarketingEntryScreen: React.FC = () => {
                 )}
               >
                 <div
+                  ref={assignHeroCopyGlassPanelRef}
                   lang={language === 'pl' ? 'pl' : 'en'}
-                  className="glass-panel pointer-events-none max-h-[min(56dvh,520px)] overflow-y-auto overscroll-contain rounded-[1.65rem] border border-white/25 bg-gradient-to-br from-pearl-100/82 via-pearl-50/55 to-champagne/35 px-5 py-6 shadow-[0_24px_70px_-20px_rgba(45,38,28,0.28)] backdrop-blur-xl sm:max-h-none sm:overflow-visible sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-8"
+                  className="glass-panel pointer-events-none max-h-[min(56dvh,520px)] overflow-y-auto overscroll-contain rounded-[1.65rem] border border-white/25 bg-gradient-to-br from-pearl-100/82 via-pearl-50/55 to-champagne/35 px-5 py-6 shadow-[0_24px_70px_-20px_rgba(45,38,28,0.28)] backdrop-blur-xl sm:max-h-none sm:overflow-visible sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-8 xl:max-h-[min(72dvh,680px)] xl:overflow-y-auto xl:overscroll-contain"
                 >
                   <div className="mb-3">
                     <span className="inline-flex items-center gap-2 rounded-full border border-gold-500/40 bg-gold-500/12 px-3 py-1.5 text-[10px] font-modern uppercase tracking-[0.2em] text-graphite sm:text-xs">
@@ -1235,7 +1526,7 @@ const MarketingEntryScreen: React.FC = () => {
         */}
         <div
           className="pointer-events-none max-lg:hidden w-full shrink-0"
-          style={{ height: 'min(10dvh, 5.25rem)' }}
+          style={{ height: 'min(12dvh, 6.25rem)' }}
           aria-hidden
         />
       </section>
@@ -1247,17 +1538,18 @@ const MarketingEntryScreen: React.FC = () => {
       <div className="relative z-[4] isolate">
       <section
         id="how-it-works"
-        className="scroll-mt-20 pt-3 pb-10 sm:scroll-mt-24 sm:pt-4 sm:pb-16"
+        lang={language === 'pl' ? 'pl' : 'en'}
+        className="scroll-mt-20 pt-10 pb-10 sm:scroll-mt-24 sm:pt-12 sm:pb-16 lg:pt-14"
       >
         <header className="mb-8 max-w-3xl sm:mb-10">
-          <h2 className="text-3xl leading-[1.12] tracking-tight text-graphite sm:text-4xl sm:leading-tight lg:text-5xl">
+          <h2 className="text-balance break-words text-3xl leading-[1.12] tracking-tight text-graphite sm:text-4xl sm:leading-tight lg:text-5xl">
             {t.stepsTitle}
           </h2>
           <p className="mt-3 font-modern text-sm leading-relaxed text-silver-dark sm:mt-4 sm:text-base sm:leading-7">
             {t.stepsSubtitle}
           </p>
         </header>
-        <div className="grid gap-5 sm:gap-6 md:grid-cols-3 md:gap-x-6 md:gap-y-7 md:[grid-template-rows:auto_auto_auto]">
+        <div className="grid gap-5 sm:gap-6 md:grid-cols-3 md:gap-x-6 md:gap-y-7 md:[grid-template-rows:minmax(min-content,auto)_minmax(min-content,auto)_minmax(min-content,auto)]">
           {t.steps.map((step, index) => {
             const icons = [Upload, Brain, Wand2];
             const Icon = icons[index];
@@ -1269,28 +1561,30 @@ const MarketingEntryScreen: React.FC = () => {
                 <GlassCard
                   variant="glass"
                   className={cn(
-                    'group flex h-full flex-col gap-3 overflow-hidden p-6 sm:p-7 md:p-8',
-                    'md:row-span-3 md:grid md:min-h-0 md:grid-cols-1 md:gap-0 md:[grid-template-rows:subgrid]',
+                    // No overflow-hidden on card: it clipped titles at large text / zoom (WCAG 1.4.4). Illustration keeps its own clip + radius.
+                    'group flex h-full flex-col gap-3 p-6 sm:p-7 md:p-8',
+                    'md:row-span-3 md:grid md:grid-cols-1 md:gap-0 md:[grid-template-rows:subgrid]',
+                    'md:min-h-min',
                     colStart,
                     'md:row-start-1'
                   )}
                 >
-                  <div className="flex gap-4 sm:gap-5">
+                  <div className="flex min-h-min gap-4 sm:gap-5">
                     <div className="flex shrink-0 flex-col items-center gap-2">
                       <span className="font-modern text-xs font-semibold uppercase tracking-[0.2em] text-gold-500 drop-shadow-[0_1px_1px_rgba(45,38,28,0.35)]">
                         {stepNo}
                       </span>
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-gold-500/40 bg-graphite/30 text-gold-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-6px_rgba(255,215,0,0.35)] transition-transform duration-300 ease-out group-hover:scale-[1.04] group-hover:border-gold-500/55">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-gold-500/40 bg-graphite/30 text-gold-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-6px_rgba(255,215,0,0.35)] transition-transform duration-300 ease-out group-hover:scale-[1.04] group-hover:border-gold-500/55">
                         <Icon size={26} aria-hidden="true" />
                       </div>
                     </div>
-                    <div className="min-w-0 flex-1 border-l border-white/25 pl-4 sm:pl-5">
-                      <h3 className="text-balance text-lg font-semibold leading-snug text-graphite sm:text-xl sm:leading-snug">
+                    <div className="min-w-0 flex-1 self-start border-l border-white/25 pl-4 sm:pl-5">
+                      <h3 className="text-balance break-words hyphens-auto text-lg font-semibold leading-snug text-graphite sm:text-xl sm:leading-snug">
                         {step.title}
                       </h3>
                     </div>
                   </div>
-                  <p className="font-modern text-sm leading-6 text-silver-dark">{step.description}</p>
+                  <p className="min-h-min break-words font-modern text-sm leading-6 text-silver-dark">{step.description}</p>
                   <div className="relative h-[8.5rem] shrink-0 overflow-hidden rounded-[1.25rem] border border-white/30 sm:h-36 md:mt-0">
                     <RoomPlaceholder theme={index === 0 ? BEFORE_ROOM_THEME : AFTER_ROOM_THEMES[index - 1]} mode={index === 0 ? 'before' : 'after'} />
                   </div>
@@ -1330,26 +1624,75 @@ const MarketingEntryScreen: React.FC = () => {
 
       <motion.section className="py-8 sm:py-14" {...fadeUp}>
         <h2 className="mb-6 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.whyTitle}</h2>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3 md:items-stretch">
           {t.why.map((item, index) => {
-            const icons = [Brain, Layers, Home];
+            const icons = [Brain, Layers, Home] as const;
             const Icon = icons[index];
-            return (
-              <GlassCard key={item.title} variant="glass" className="group min-h-[260px] overflow-hidden p-6">
-                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-gold-500/40 bg-graphite/30 text-gold-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-6px_rgba(255,215,0,0.35)] transition-transform group-hover:scale-110">
-                  <Icon size={28} aria-hidden="true" />
-                </div>
-                <h3 className="mb-3 text-xl text-graphite">{item.title}</h3>
-                <p className="font-modern text-sm leading-6 text-silver-dark">{item.description}</p>
-                <motion.div
-                  whileInView={{ x: index % 2 === 0 ? 18 : -18 }}
-                  transition={{ duration: 1.2, ease: 'easeOut' }}
-                  className="mt-7 h-24 rounded-2xl border border-white/30 bg-gradient-to-br from-white/40 via-champagne/40 to-gold-500/25"
-                />
-              </GlassCard>
-            );
+            return <WhyMarketingGalleryCard key={item.title} item={item} index={index} Icon={Icon} />;
           })}
         </div>
+      </motion.section>
+
+      <motion.section
+        className={cn(
+          'relative z-[4] pt-6 pb-6 sm:pt-9 sm:pb-7',
+          useMarqueePortal && 'pointer-events-none'
+        )}
+        {...fadeUp}
+        aria-label={t.stylesTitle}
+      >
+        <div
+          className={cn(
+            'mb-5 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between',
+            useMarqueePortal && 'pointer-events-auto'
+          )}
+        >
+          <div>
+            <h2 className="max-w-3xl text-2xl leading-tight text-graphite sm:text-4xl lg:text-5xl">{t.stylesTitle}</h2>
+            <p className="mt-2 max-w-3xl font-modern text-sm leading-6 text-silver-dark sm:text-base sm:leading-7">
+              {t.stylesSubtitle}
+            </p>
+          </div>
+          <GlassButton
+            size="md"
+            onClick={goToPathSelection}
+            className="shrink-0 self-start sm:self-auto border-gold-500/55 bg-gold-500/20 hover:border-gold-500/75 hover:bg-gold-500/40"
+          >
+            {t.primaryCta}
+          </GlassButton>
+        </div>
+
+        {useMarqueePortal ? (
+          <>
+            <div
+              ref={marqueeAnchorRef}
+              className="relative mt-7 min-h-[340px] pb-14 sm:mt-9 sm:min-h-[380px] sm:pb-16 md:min-h-[400px] md:pb-20"
+              style={marqueeBreakoutStyle}
+              aria-hidden
+            />
+            {marqueePortalHost
+              ? createPortal(
+                  <div
+                    ref={marqueePortalLayerRef}
+                    className="pointer-events-auto overflow-visible"
+                    style={{ position: 'fixed' }}
+                  >
+                    <div className="relative box-border min-h-0 w-full min-w-0 overflow-x-clip overflow-y-visible px-5 pt-4 pb-20 sm:px-8 sm:pt-5 sm:pb-24 md:px-10">
+                      {livingRoomMarqueeInner}
+                    </div>
+                  </div>,
+                  marqueePortalHost
+                )
+              : null}
+          </>
+        ) : (
+          <div
+            className="relative mt-7 w-full overflow-x-clip overflow-y-visible px-5 pt-4 pb-20 sm:mt-9 sm:px-8 sm:pt-5 sm:pb-24 md:px-10"
+            style={marqueeBreakoutStyle}
+          >
+            {livingRoomMarqueeInner}
+          </div>
+        )}
       </motion.section>
 
       <motion.section className="py-8 sm:py-14" {...fadeUp}>
@@ -1389,64 +1732,6 @@ const MarketingEntryScreen: React.FC = () => {
       </motion.section>
       </div>
       </div>
-
-      <motion.section
-        className={cn(
-          'relative z-[4] pt-6 pb-6 sm:pt-9 sm:pb-7',
-          useMarqueePortal && 'pointer-events-none'
-        )}
-        {...fadeUp}
-        aria-label={t.stylesTitle}
-      >
-        <div
-          className={cn(
-            'mb-5 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between',
-            useMarqueePortal && 'pointer-events-auto'
-          )}
-        >
-          <div>
-            <h2 className="max-w-3xl text-2xl leading-tight text-graphite sm:text-4xl lg:text-5xl">{t.stylesTitle}</h2>
-            <p className="mt-2 max-w-3xl font-modern text-sm leading-6 text-silver-dark sm:text-base sm:leading-7">
-              {t.stylesSubtitle}
-            </p>
-          </div>
-          <GlassButton variant="secondary" size="md" onClick={goToPathSelection} className="shrink-0 self-start sm:self-auto">
-            {t.primaryCta}
-          </GlassButton>
-        </div>
-
-        {useMarqueePortal ? (
-          <>
-            <div
-              ref={marqueeAnchorRef}
-              className="relative mt-7 min-h-[340px] pb-14 sm:mt-9 sm:min-h-[380px] sm:pb-16 md:min-h-[400px] md:pb-20"
-              style={marqueeBreakoutStyle}
-              aria-hidden
-            />
-            {marqueePortalHost
-              ? createPortal(
-                  <div
-                    ref={marqueePortalLayerRef}
-                    className="pointer-events-auto overflow-visible"
-                    style={{ position: 'fixed' }}
-                  >
-                    <div className="relative box-border min-h-0 w-full min-w-0 overflow-x-clip overflow-y-visible px-5 pt-4 pb-20 sm:px-8 sm:pt-5 sm:pb-24 md:px-10">
-                      {livingRoomMarqueeInner}
-                    </div>
-                  </div>,
-                  marqueePortalHost
-                )
-              : null}
-          </>
-        ) : (
-          <div
-            className="relative mt-7 w-full overflow-x-clip overflow-y-visible px-5 pt-4 pb-20 sm:mt-9 sm:px-8 sm:pt-5 sm:pb-24 md:px-10"
-            style={marqueeBreakoutStyle}
-          >
-            {livingRoomMarqueeInner}
-          </div>
-        )}
-      </motion.section>
 
       <div className={cn(useMarqueePortal && 'pointer-events-auto')}>
       <SiteFooter
