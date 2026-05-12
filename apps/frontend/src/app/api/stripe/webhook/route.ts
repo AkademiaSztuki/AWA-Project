@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
-import { getPlanConfig } from '@/lib/stripe';
+import { getPlanCredits } from '@/lib/stripe';
 import { gcpApi } from '@/lib/gcp-api-client';
 import Stripe from 'stripe';
 
@@ -72,7 +72,7 @@ async function handleWebhookEvent(event: Stripe.Event) {
       const billingPeriod = session.metadata?.billing_period as
         | 'monthly'
         | 'yearly';
-      const planConfig = getPlanConfig(planId, billingPeriod);
+      const credits = getPlanCredits(planId, billingPeriod);
 
       const result = await gcpApi.billing.checkoutCompleted({
         eventId: event.id,
@@ -81,7 +81,7 @@ async function handleWebhookEvent(event: Stripe.Event) {
         customerId: subscription.customer as string,
         planId,
         billingPeriod,
-        credits: planConfig.credits,
+        credits,
         status:
           subscription.status === 'active' ? 'active' : 'unpaid',
         currentPeriodStart: new Date(
@@ -148,7 +148,7 @@ async function handleWebhookEvent(event: Stripe.Event) {
       const billingPeriod = subscription.metadata?.billing_period as
         | 'monthly'
         | 'yearly';
-      const planConfig = getPlanConfig(planId, billingPeriod);
+      const credits = getPlanCredits(planId, billingPeriod);
 
       const result = await gcpApi.billing.invoicePaymentSucceeded({
         eventId: event.id,
@@ -161,7 +161,7 @@ async function handleWebhookEvent(event: Stripe.Event) {
         ).toISOString(),
         cancelAtPeriodEnd:
           subscription.cancel_at_period_end || false,
-        credits: planConfig.credits,
+        credits,
       });
       if (!result.ok)
         throw new Error(result.error || 'GCP invoice success sync failed');

@@ -6,6 +6,7 @@ import { AwaContainer } from '../awa/AwaContainer';
 import { AwaDialogue } from '../awa/AwaDialogue';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useGoogleAI } from '@/hooks/useGoogleAI';
+import { prepareGenerationDimensionsFromRoomBase64 } from '@/lib/image-aspect';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 
 export function GenerationScreen() {
@@ -22,16 +23,44 @@ export function GenerationScreen() {
       const coreNeed = sessionData?.ladderResults?.coreNeed;
       if (sessionData?.visualDNA && coreNeed && sessionData.roomImage) {
         const prompt = buildPrompt(sessionData.visualDNA, coreNeed);
+        let roomRaw = sessionData.roomImage as string;
+        if (roomRaw.includes(',')) {
+          roomRaw = roomRaw.split(',')[1];
+        }
+        let parameters: {
+          strength: number;
+          steps: number;
+          guidance: number;
+          image_size: number;
+          width: number;
+          height: number;
+          num_images: number;
+          aspect_ratio?: string;
+        } = {
+          strength: 0.65,
+          steps: 30,
+          guidance: 2.5,
+          image_size: 512,
+          width: 512,
+          height: 512,
+          num_images: 1,
+        };
+        try {
+          const prepared = await prepareGenerationDimensionsFromRoomBase64(roomRaw, { maxLongEdge: 512 });
+          parameters = {
+            ...parameters,
+            width: prepared.normalizedWidth,
+            height: prepared.normalizedHeight,
+            aspect_ratio: prepared.aspectRatio,
+          };
+        } catch (e) {
+          console.warn('[GenerationScreen] dimension prep failed', e);
+        }
         const response = await generateSixImagesParallelWithGoogle({
           prompts: [{ source: 'implicit' as any, prompt }],
           base_image: sessionData.roomImage,
           style: sessionData.visualDNA.dominantStyle || 'modern',
-          parameters: {
-            strength: 0.65,
-            steps: 30,
-            guidance: 2.5,
-            image_size: 512,
-          },
+          parameters,
         });
         
         if (response?.results) {

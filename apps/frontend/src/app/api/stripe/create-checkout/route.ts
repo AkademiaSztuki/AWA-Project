@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createCheckoutSession, PlanId, BillingPeriod } from '@/lib/stripe';
+import { createCheckoutSession, PlanId, BillingPeriod, PricingCurrency } from '@/lib/stripe';
 
 export async function POST(request: NextRequest) {
   let planId: string | undefined;
@@ -7,9 +7,10 @@ export async function POST(request: NextRequest) {
   
   try {
     const body = await request.json();
-    const { userHash, planId: bodyPlanId, billingPeriod: bodyBillingPeriod, successUrl, cancelUrl } = body;
+    const { userHash, planId: bodyPlanId, billingPeriod: bodyBillingPeriod, currency: bodyCurrency, successUrl, cancelUrl } = body;
     planId = bodyPlanId;
     billingPeriod = bodyBillingPeriod;
+    const currency = bodyCurrency === 'usd' ? 'usd' : 'pln';
 
     if (!userHash || !planId || !billingPeriod) {
       return NextResponse.json(
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
       userHash,
       planId: planId as PlanId,
       billingPeriod: billingPeriod as BillingPeriod,
+      currency: currency as PricingCurrency,
       successUrl: successUrl || `${request.nextUrl.origin}/subscription/success`,
       cancelUrl: cancelUrl || `${request.nextUrl.origin}/subscription/cancel`,
     });

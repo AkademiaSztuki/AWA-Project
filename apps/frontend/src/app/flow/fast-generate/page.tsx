@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
@@ -31,23 +31,127 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
 } from 'lucide-react';
-import Image from 'next/image';
+import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { addGeneratedImageToSpace } from '@/lib/spaces';
 import {
   getOrCreateSpaceId,
   uploadSpaceImage,
-  saveSpaceImagesMetadata
+  saveParticipantImages,
+  saveSpaceImagesMetadata,
 } from '@/lib/remote-spaces';
 import {
   appendModificationPromptLog,
   buildModificationPromptLogEntry,
 } from '@/lib/modification-prompt-log';
+import {
+  prepareGenerationDimensionsFromRoomBase64,
+  parseGoogleAspectRatioLabel,
+  type GoogleAspectRatio,
+  type PreparedGenerationDimensions,
+} from '@/lib/image-aspect';
+import {
+  MACRO_STYLE_MODIFICATIONS,
+  buildFastMacroModificationPrompt,
+} from '@/lib/modifications/macro-style-modifications';
 
 const IDA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY = 'awa_fast_track_require_fresh_gen';
 /** Session-only: do not re-show soft “save profile” nudge after dismiss or refresh. */
 const IDA_FAST_TRACK_SAVE_PROFILE_NUDGE_DISMISSED_KEY = 'awa_fast_track_save_profile_nudge_dismissed';
+
+/** Serializable snapshot for session restore (same shape as PreparedGenerationDimensions). */
+type FastTrackSourceGenerationDimensionsSnapshot = {
+  sourceWidth: number;
+  sourceHeight: number;
+  normalizedWidth: number;
+  normalizedHeight: number;
+  aspectRatio: GoogleAspectRatio;
+};
+
+function parseFastTrackSourceGenerationDimensionsSnapshot(
+  raw: unknown,
+): PreparedGenerationDimensions | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const aspectRatio = parseGoogleAspectRatioLabel(String(o.aspectRatio ?? ''));
+  const nw = Number(o.normalizedWidth);
+  const nh = Number(o.normalizedHeight);
+  const sw = Number(o.sourceWidth);
+  const sh = Number(o.sourceHeight);
+  if (!aspectRatio || !Number.isFinite(nw) || !Number.isFinite(nh) || nw < 1 || nh < 1) {
+    return null;
+  }
+  return {
+    sourceWidth: Number.isFinite(sw) && sw > 0 ? sw : nw,
+    sourceHeight: Number.isFinite(sh) && sh > 0 ? sh : nh,
+    normalizedWidth: nw,
+    normalizedHeight: nh,
+    aspectRatio,
+  };
+}
+
+function modernFurnishChecklist(roomTypeRaw: string): string {
+  const t = String(roomTypeRaw || 'living room').toLowerCase();
+  if (t.includes('kitchen')) {
+    return 'Cabinetry or base units, countertop workspace, sink, refrigerator zone, cooktop and oven wall, optional island or peninsula, dining stools or compact table, pendant or under-cabinet lighting.';
+  }
+  if (t.includes('bath')) {
+    return 'Vanity with storage, mirror, towel storage, shower or tub zone, quality wall and floor finishes, layered ambient and task lighting.';
+  }
+  if (t.includes('bed')) {
+    return 'Bed with headboard, nightstands, dresser or wardrobe, layered lighting (bedside + ceiling), seating or bench, textiles layered on bed.';
+  }
+  if (t.includes('office') || t.includes('study') || t.includes('desk')) {
+    return 'Desk, ergonomic chair, shelving or storage, task lamp, cable-aware layout, minimal wall decor.';
+  }
+  if (t.includes('dining')) {
+    return 'Dining table sized to room, chairs, statement or linear lighting above table, sideboard or console if space allows.';
+  }
+  return 'Sectional or sofa plus armchairs, coffee table, media or storage unit, floor and table lighting, area rug where the style benefits from it, large wall art or mirror to balance wide walls, plants or sculptural decor for scale.';
+}
+
+function buildFastTrackPrompt(
+  session: any,
+  opts: {
+    aspectRatio: GoogleAspectRatio;
+    sourceWidth: number;
+    sourceHeight: number;
+    emptyRoomInput: boolean;
+  },
+): string {
+  const style = session?.visualDNA?.dominantStyle || 'modern';
+  const roomType = session?.roomType || 'living room';
+  const wide = opts.aspectRatio === '21:9' || opts.aspectRatio === '16:9';
+  const layout_requirements = wide
+    ? 'Panorama / ultrawide frame: arrange seating, tables, lighting, and decor across LEFT, CENTER, and RIGHT thirds. Avoid a huge empty center band of wall and floor; use foreground and midground pieces with clear focal points readable at a glance.'
+    : 'Complete, believable furniture layout appropriate to the camera angle and room type.';
+
+  const modern_furniture_checklist =
+    style === 'modern' ? modernFurnishChecklist(roomType) : undefined;
+
+  return JSON.stringify({
+    generation_mode: 'furnish_empty_or_uploaded_room',
+    must_furnish: true,
+    furniture_density: 'high',
+    layout_requirements,
+    google_aspect_ratio_hint: opts.aspectRatio,
+    source_dimensions: `${opts.sourceWidth}x${opts.sourceHeight}`,
+    empty_room_input: opts.emptyRoomInput,
+    style,
+    room_type: roomType,
+    description: `A fully furnished ${style} style ${roomType} interior — high furniture coverage, not an empty shell.`,
+    elements: [
+      `Primary furniture set in ${style} style`,
+      'Layered lighting (ambient + task + accent)',
+      'Cohesive materials and finishes',
+      'Decor, textiles, and wall treatment depth',
+    ],
+    ...(modern_furniture_checklist ? { modern_furniture_checklist } : {}),
+    quality: 'high quality, realistic, detailed, magazine editorial photography',
+  });
+}
 
 interface GeneratedImage {
   id: string;
@@ -91,18 +195,8 @@ const MICRO_MODIFICATIONS: ModificationOption[] = [
   { id: 'change_flooring', label: { pl: 'Zmień podłogę', en: 'Change flooring' }, icon: null, category: 'micro' },
 ];
 
-const MACRO_MODIFICATIONS: ModificationOption[] = [
-  { id: 'scandinavian', label: { pl: 'Skandynawski', en: 'Scandinavian' }, icon: null, category: 'macro' },
-  { id: 'minimalist', label: { pl: 'Minimalistyczny', en: 'Minimalist' }, icon: null, category: 'macro' },
-  { id: 'classic', label: { pl: 'Klasyczny', en: 'Classic' }, icon: null, category: 'macro' },
-  { id: 'industrial', label: { pl: 'Industrialny', en: 'Industrial' }, icon: null, category: 'macro' },
-  { id: 'eclectic', label: { pl: 'Eklektyczny', en: 'Eclectic' }, icon: null, category: 'macro' },
-  { id: 'glamour', label: { pl: 'Glamour', en: 'Glamour' }, icon: null, category: 'macro' },
-  { id: 'bohemian', label: { pl: 'Boho', en: 'Bohemian' }, icon: null, category: 'macro' },
-  { id: 'rustic', label: { pl: 'Rustykalny', en: 'Rustic' }, icon: null, category: 'macro' },
-  { id: 'provencal', label: { pl: 'Prowansalski', en: 'Provençal' }, icon: null, category: 'macro' },
-  { id: 'shabby_chic', label: { pl: 'Shabby Chic', en: 'Shabby Chic' }, icon: null, category: 'macro' },
-];
+/** Same style list as /flow/style-selection (STYLE_OPTIONS). */
+const MACRO_MODIFICATIONS: ModificationOption[] = MACRO_STYLE_MODIFICATIONS;
 
 const buildFastMicroModificationPrompt = (modification: ModificationOption, currentStyle: string) => {
   const microPrompts: Record<string, string> = {
@@ -119,34 +213,6 @@ const buildFastMicroModificationPrompt = (modification: ModificationOption, curr
   };
 
   return microPrompts[modification.id] || `SYSTEM INSTRUCTION: Image-to-image micro modification. KEEP: walls, windows, doors, furniture positions, layout, camera angle - IDENTICAL. CHANGE ONLY: ${modification.label.en} in this ${currentStyle} interior.`;
-};
-
-const buildFastMacroModificationPrompt = (modification: ModificationOption) => {
-  const stylePrompts: Record<string, string> = {
-    scandinavian: 'Transform the interior into Scandinavian style: light oak, airy neutrals, simple functional furniture, soft textiles, hygge atmosphere, clean lines, natural light, and a calm palette of whites, creams, and warm grays',
-    minimalist: 'Transform the interior into minimalist style: uncluttered surfaces, geometric furniture, neutral whites and grays, hidden storage, strong negative space, refined simplicity, and serene balance',
-    classic: 'Transform the interior into classic style: elegant traditional furniture, refined symmetry, rich wood, luxurious upholstery, subtle decorative molding, warm ambient lighting, and timeless European details',
-    industrial: 'Transform the interior into industrial style: raw concrete, metal accents, weathered leather, exposed structure, reclaimed wood, Edison-style lighting, muted grays and browns, and urban loft character',
-    eclectic: 'Transform the interior into eclectic style: curated mix of vintage and modern pieces, layered textures, expressive art, confident color accents, varied patterns, and collected objects from different eras',
-    glamour: 'Transform the interior into glamour style: velvet upholstery, metallic accents, marble or mirrored surfaces, crystal-like lighting, jewel tones, glossy finishes, and sophisticated drama',
-    bohemian: 'Transform the interior into bohemian style: layered rugs and textiles, woven textures, plants, warm earth tones, global patterns, relaxed vintage furniture, and cozy collected details',
-    rustic: 'Transform the interior into rustic style: reclaimed wood, stone textures, linen, wrought iron, earth tones, handmade ceramics, baskets, and a warm farmhouse atmosphere',
-    provencal: 'Transform the interior into Provencal French countryside style: whitewashed wood, lavender and sage accents, natural stone, toile or floral textiles, lace, fresh flowers, and soft romantic daylight',
-    shabby_chic: 'Transform the interior into shabby chic style: distressed white furniture, pastel accents, vintage floral textiles, lace details, weathered wood, delicate porcelain, and soft nostalgic atmosphere',
-  };
-
-  const styleChange = stylePrompts[modification.id] || `Transform the interior into ${modification.label.en} style`;
-  return `SYSTEM INSTRUCTION: Image-to-image style transformation. KEEP: walls, windows, doors, ceiling, camera angle, and architectural structure - IDENTICAL. CHANGE: ${styleChange}. Update furniture, colors, decorations, flooring, lighting fixtures, and accessories to match the style while preserving the room perspective and architectural layout.`;
-};
-
-// Helper to get image dimensions
-const getImageDimensions = (base64: string): Promise<{ width: number; height: number }> => {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    img.onload = () => resolve({ width: img.width, height: img.height });
-    img.onerror = reject;
-    img.src = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
-  });
 };
 
 /**
@@ -170,6 +236,33 @@ function isFastTrackStyleStale(session: any): boolean {
   } catch {
     return false;
   }
+}
+
+/** Data URL for room upload thumbnail / preview — same sources as `handleShowOriginal`. */
+function buildRoomUploadDataUrlFromSession(session: any): string | null {
+  if (!session) return null;
+  let roomImage = session.roomImageEmpty || session.roomImage;
+  if (!roomImage && typeof window !== 'undefined') {
+    try {
+      roomImage = safeSessionStorage.getItem('aura_session_room_image') || undefined;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!roomImage || typeof roomImage !== 'string') return null;
+  if (roomImage.startsWith('data:')) return roomImage;
+  const base64 = roomImage.includes(',') ? roomImage.split(',')[1] : roomImage;
+  if (!base64?.trim()) return null;
+  return `data:image/jpeg;base64,${base64}`;
+}
+
+function extractBase64FromGenerated(img: GeneratedImage): string | null {
+  if (img.base64) return img.base64;
+  if (img.url?.startsWith('data:')) {
+    const parts = img.url.split(',');
+    return parts.length > 1 ? parts[1] : null;
+  }
+  return null;
 }
 
 export default function FastGeneratePage() {
@@ -200,7 +293,12 @@ export default function FastGeneratePage() {
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   /** Keeps the latest controller for unmount cleanup (avoid Strict Mode abort via [abortController] effect). */
   const abortControllerRef = useRef<AbortController | null>(null);
+  /** Sizing from the user's room upload — reused for every modification (not derived from last AI output). */
+  const fastTrackSourceGenerationDimsRef = useRef<PreparedGenerationDimensions | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  /** Compare with user upload — same pattern as full-flow generate page */
+  const [originalRoomPhotoUrl, setOriginalRoomPhotoUrl] = useState<string | null>(null);
+  const [showOriginalRoomPhoto, setShowOriginalRoomPhoto] = useState(false);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [upscaledImage, setUpscaledImage] = useState<GeneratedImage | null>(null);
   const [generationHistory, setGenerationHistory] = useState<Array<{
@@ -211,27 +309,40 @@ export default function FastGeneratePage() {
     imageUrl: string;
   }>>([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
+  const [customModificationText, setCustomModificationText] = useState('');
 
-  // Build prompt for fast track - simple style-based prompt
-  const buildFastTrackPrompt = (): string => {
-    const typedSessionData = getSessionStoreSnapshot() as any;
-    const style = typedSessionData?.visualDNA?.dominantStyle || 'modern';
-    const roomType = typedSessionData?.roomType || 'living room';
-    
-    // Simple JSON prompt for fast track
-    return JSON.stringify({
-      style: style,
-      room_type: roomType,
-      description: `A ${style} style ${roomType} interior design`,
-      elements: [
-        `Furniture in ${style} style`,
-        'High quality materials',
-        'Good lighting',
-        'Cozy atmosphere'
-      ],
-      quality: 'high quality, realistic, detailed'
-    });
-  };
+  const roomUploadPreviewUrl = useMemo(
+    () => buildRoomUploadDataUrlFromSession(sessionData),
+    [sessionData],
+  );
+
+  const historyForDisplay = useMemo(() => {
+    const uploadUrl = roomUploadPreviewUrl;
+    if (!uploadUrl) return generationHistory;
+    return [
+      {
+        id: 'fast-track-upload-original',
+        type: 'upload' as const,
+        label:
+          language === 'pl' ? 'Zdjęcie z uploadu' : 'Uploaded photo',
+        timestamp: 0,
+        imageUrl: uploadUrl,
+      },
+      ...generationHistory,
+    ];
+  }, [generationHistory, roomUploadPreviewUrl, language]);
+
+  /** Thumbnail selection in history: base image for all modifications (micro, macro, custom). */
+  const resolveSelectedGeneratedImageForModification = useCallback((): GeneratedImage | null => {
+    const uploadFirst = !!roomUploadPreviewUrl;
+    const idx = currentHistoryIndex;
+    if (uploadFirst && idx === 0) return null;
+    const ghIndex = uploadFirst ? idx - 1 : idx;
+    if (ghIndex < 0 || ghIndex >= generationHistory.length) return null;
+    const item = generationHistory[ghIndex];
+    if (!item?.id) return null;
+    return generatedImages.find((img) => img.id === item.id) ?? null;
+  }, [roomUploadPreviewUrl, currentHistoryIndex, generationHistory, generatedImages]);
 
   type CreditAction = 'generate' | 'regenerate' | 'upscale' | 'save' | 'matrix';
 
@@ -380,51 +491,71 @@ export default function FastGeneratePage() {
         setPageViewId(viewId);
       }
 
+      let prepared: PreparedGenerationDimensions;
+      try {
+        prepared = await prepareGenerationDimensionsFromRoomBase64(processedRoomImage);
+      } catch (e) {
+        console.warn('[Fast Generate] prepareGenerationDimensionsFromRoomBase64 failed, using 1:1', e);
+        prepared = {
+          sourceWidth: 1024,
+          sourceHeight: 1024,
+          normalizedWidth: 1024,
+          normalizedHeight: 1024,
+          aspectRatio: '1:1',
+        };
+      }
+
+      const emptyRoomInput = String(typedSessionData?.roomType || '') === 'empty_room';
+
+      console.log('[Fast Generate] Generation sizing:', {
+        baseImage: roomImageEmpty ? 'roomImageEmpty' : 'roomImage',
+        source: `${prepared.sourceWidth}x${prepared.sourceHeight}`,
+        normalized: `${prepared.normalizedWidth}x${prepared.normalizedHeight}`,
+        aspectRatio: prepared.aspectRatio,
+        emptyRoomInput,
+      });
+
+      fastTrackSourceGenerationDimsRef.current = prepared;
+
+      const prompt = buildFastTrackPrompt(typedSessionData, {
+        aspectRatio: prepared.aspectRatio,
+        sourceWidth: prepared.sourceWidth,
+        sourceHeight: prepared.sourceHeight,
+        emptyRoomInput,
+      });
+
       // Start generation job to participant_generations
       const userHash = typedSessionData.userHash;
       let jobId: string | null = null;
       if (userHash) {
-        const prompt = buildFastTrackPrompt();
         const baseParams = getGenerationParameters('initial', generationCount);
         jobId = await startParticipantGeneration(userHash, {
           type: 'initial',
           prompt: prompt,
           parameters: {
             ...baseParams,
-            path_type: 'fast' // Mark as fast track
+            path_type: 'fast', // Mark as fast track
+            width: prepared.normalizedWidth,
+            height: prepared.normalizedHeight,
+            aspect_ratio: prepared.aspectRatio,
           },
           has_base_image: true
         });
       }
 
-      // Build prompt
-      const prompt = buildFastTrackPrompt();
       setLoadingProgress(30);
       setStatusMessage("Generuję obrazek...");
       setEstimatedTime(90);
 
-      // Get image dimensions for proportional sizing
-      let finalWidth = 1024;
-      let finalHeight = 1024;
-      try {
-        const dims = await getImageDimensions(processedRoomImage);
-        const ratio = dims.width / dims.height;
-        if (dims.width >= dims.height) {
-          finalWidth = 1024;
-          finalHeight = Math.round(1024 / ratio);
-        } else {
-          finalHeight = 1024;
-          finalWidth = Math.round(1024 * ratio);
-        }
-      } catch (e) {
-        console.warn("Failed to calculate image dimensions, using 1024x1024", e);
-      }
+      const style = typedSessionData?.visualDNA?.dominantStyle || 'modern';
 
       const parameters = {
         ...getGenerationParameters('initial', generationCount),
-        width: finalWidth,
-        height: finalHeight,
-        image_size: 1024
+        width: prepared.normalizedWidth,
+        height: prepared.normalizedHeight,
+        image_size: 1024,
+        aspect_ratio: prepared.aspectRatio,
+        style,
       };
 
       // Extract base64 from data URL if needed
@@ -438,8 +569,6 @@ export default function FastGeneratePage() {
       setStatusMessage("Generuję obrazek z AI...");
       setEstimatedTime(60);
 
-      const style = typedSessionData?.visualDNA?.dominantStyle || 'modern';
-      
       const response = await generateSixImagesParallelWithGoogle({
         prompts: [{ source: GenerationSource.Explicit, prompt }],
         base_image: baseImage,
@@ -481,6 +610,7 @@ export default function FastGeneratePage() {
 
       setGeneratedImage(newImage);
       setGeneratedImages([newImage]); // Store in array
+      setShowOriginalRoomPhoto(false);
       setGenerationCount(prev => prev + 1);
       setLoadingProgress(100);
       setStatusMessage("Gotowe!");
@@ -491,6 +621,14 @@ export default function FastGeneratePage() {
       const prevGens = Array.isArray(typedSessionData?.generations) ? typedSessionData.generations : [];
       const imagesWithoutFast = prevImgs.filter((img: any) => !(img?.id && String(img.id).startsWith('fast-')));
       const gensWithoutFast = prevGens.filter((g: any) => !(g?.id && String(g.id).startsWith('fast-gen')));
+      const sourceGenDimsSnapshot: FastTrackSourceGenerationDimensionsSnapshot = {
+        sourceWidth: prepared.sourceWidth,
+        sourceHeight: prepared.sourceHeight,
+        normalizedWidth: prepared.normalizedWidth,
+        normalizedHeight: prepared.normalizedHeight,
+        aspectRatio: prepared.aspectRatio,
+      };
+
       await updateSessionData({
         generatedImages: [...imagesWithoutFast, { id: newImage.id, url: newImage.url }],
         generations: [
@@ -504,6 +642,7 @@ export default function FastGeneratePage() {
           },
         ],
         fastTrackLastGeneratedStyle: typedSessionData?.visualDNA?.dominantStyle,
+        fastTrackSourceGenerationDimensions: sourceGenDimsSnapshot,
       } as any);
 
       // Save to spaces (używamy już zdefiniowanego userHash z linii 183)
@@ -538,7 +677,12 @@ export default function FastGeneratePage() {
         imageUrl: newImage.url,
       };
       setGenerationHistory([historyNode]);
-      setCurrentHistoryIndex(0);
+      {
+        const uploadUrl = buildRoomUploadDataUrlFromSession(
+          getSessionStoreSnapshot() as any,
+        );
+        setCurrentHistoryIndex(uploadUrl ? 1 : 0);
+      }
 
       // Persist to Supabase
       try {
@@ -593,8 +737,28 @@ export default function FastGeneratePage() {
   // Auto-generate on mount if no image exists
   useEffect(() => {
     if (!isSessionInitialized || !sessionData) return;
-    
+
     const typedSessionData = sessionData as any;
+
+    const restoredDims = parseFastTrackSourceGenerationDimensionsSnapshot(
+      typedSessionData?.fastTrackSourceGenerationDimensions,
+    );
+    if (restoredDims) {
+      fastTrackSourceGenerationDimsRef.current = restoredDims;
+    } else {
+      const roomRaw = typedSessionData?.roomImageEmpty || typedSessionData?.roomImage;
+      if (roomRaw) {
+        void (async () => {
+          try {
+            const clean = String(roomRaw).includes(',') ? String(roomRaw).split(',')[1] : String(roomRaw);
+            fastTrackSourceGenerationDimsRef.current = await prepareGenerationDimensionsFromRoomBase64(clean);
+          } catch (e) {
+            console.warn('[Fast Generate] Could not hydrate generation dimensions from room image', e);
+          }
+        })();
+      }
+    }
+
     const savedGeneratedImages = typedSessionData?.generatedImages || [];
     const fastSavedOnly = savedGeneratedImages.filter(
       (img: any) => img?.id && String(img.id).startsWith('fast-'),
@@ -719,7 +883,10 @@ export default function FastGeneratePage() {
             };
           });
           setGenerationHistory(history);
-          setCurrentHistoryIndex(history.length - 1);
+          const uploadUrl = buildRoomUploadDataUrlFromSession(typedSessionData);
+          setCurrentHistoryIndex(
+            uploadUrl ? history.length : Math.max(0, history.length - 1),
+          );
         }
       }
     }
@@ -739,9 +906,58 @@ export default function FastGeneratePage() {
     };
   }, []);
 
+  const handleCustomModification = async () => {
+    const trimmed = customModificationText.trim();
+    if (!trimmed || !generatedImage || isGenerating) return;
+
+    const customMod: ModificationOption = {
+      id: 'custom_text',
+      label: { pl: trimmed, en: trimmed },
+      icon: null,
+      category: 'micro',
+    };
+    const currentStyle =
+      (sessionData as any)?.visualDNA?.dominantStyle || 'modern';
+    const modificationPrompt = `SYSTEM INSTRUCTION: Image-to-image modification. KEEP: walls, windows, doors, furniture layout, camera angle - IDENTICAL. CHANGE: ${trimmed}. Apply this change while maintaining exact furniture positions and room structure where possible. Make sure the change looks natural in ${currentStyle} style.`;
+
+    await handleModification(customMod, modificationPrompt, trimmed);
+    setCustomModificationText('');
+  };
+
   // Handle modification
-  const handleModification = async (modification: ModificationOption) => {
-    if (!generatedImage || isGenerating) return;
+  const handleModification = async (
+    modification: ModificationOption,
+    customPrompt?: string,
+    userInstructionForLog?: string,
+  ) => {
+    if (isGenerating) return;
+
+    const isMacro = modification.category === 'macro';
+    const isCustomModification =
+      Boolean(customPrompt) || modification.id === 'custom_text';
+
+    let baseForModification: GeneratedImage | null = null;
+    const resolved = resolveSelectedGeneratedImageForModification();
+    if (resolved) {
+      baseForModification = resolved;
+    } else if (roomUploadPreviewUrl && currentHistoryIndex === 0) {
+      setError(
+        language === 'pl'
+          ? 'Wybierz w historii wygenerowany obraz (nie zdjęcie z uploadu), aby go zmodyfikować.'
+          : 'Pick a generated thumbnail in history (not the uploaded photo) to modify it.',
+      );
+      return;
+    } else {
+      baseForModification = generatedImage;
+      if (!baseForModification) {
+        setError(
+          language === 'pl'
+            ? 'Brak obrazu do modyfikacji.'
+            : 'No image available to modify.',
+        );
+        return;
+      }
+    }
 
     const uh = (sessionData as { userHash?: string } | null)?.userHash;
     if (uh) {
@@ -776,26 +992,59 @@ export default function FastGeneratePage() {
     );
     setEstimatedTime(60);
 
-    const isMacro = modification.category === 'macro';
-    const parameters = getGenerationParameters(isMacro ? 'macro' : 'micro', generationCount);
+    const baseParams = getGenerationParameters(isMacro ? 'macro' : 'micro', generationCount);
+    const srcDims = fastTrackSourceGenerationDimsRef.current;
+    const prev = baseForModification.parameters as {
+      width?: number;
+      height?: number;
+      aspect_ratio?: string;
+      style?: string;
+    };
+    const dimPack =
+      srcDims != null
+        ? {
+            width: srcDims.normalizedWidth,
+            height: srcDims.normalizedHeight,
+            aspect_ratio: srcDims.aspectRatio,
+          }
+        : typeof prev?.width === 'number' && typeof prev?.height === 'number'
+          ? {
+              width: prev.width,
+              height: prev.height,
+              ...(prev.aspect_ratio ? { aspect_ratio: prev.aspect_ratio } : {}),
+            }
+          : {};
+
+    const currentStyle = (sessionData as any)?.visualDNA?.dominantStyle || 'modern';
+    const parameters = {
+      ...baseParams,
+      ...dimPack,
+      strength: baseParams.strength ?? (isMacro ? 0.75 : 0.25),
+      style: isMacro ? modification.id : (prev?.style || currentStyle),
+    };
 
     try {
-      const currentStyle = (sessionData as any)?.visualDNA?.dominantStyle || 'modern';
-      
-      const modificationPrompt = isMacro
-        ? buildFastMacroModificationPrompt(modification)
-        : buildFastMicroModificationPrompt(modification, currentStyle);
+      const modificationPrompt = customPrompt
+        ? customPrompt
+        : isMacro
+          ? buildFastMacroModificationPrompt(modification)
+          : buildFastMicroModificationPrompt(modification, currentStyle);
 
-      const baseImageSource = generatedImage.base64;
+      const baseImageSource = extractBase64FromGenerated(baseForModification);
+      if (!baseImageSource) {
+        setError(
+          language === 'pl'
+            ? 'Brak danych obrazu. Wybierz ponownie miniaturę w historii.'
+            : 'Missing image data. Select a thumbnail in history again.',
+        );
+        return;
+      }
 
       const response = await generateSixImagesParallelWithGoogle({
         prompts: [{ source: 'implicit' as GenerationSource, prompt: modificationPrompt }],
         base_image: baseImageSource,
-        style: isMacro ? modification.id : (generatedImage.parameters?.style || currentStyle),
-        parameters: {
-          ...parameters,
-          strength: parameters.strength ?? (isMacro ? 0.75 : 0.25),
-        },
+        style: isMacro ? modification.id : (baseForModification.parameters?.style || currentStyle),
+        parameters,
       });
 
       if (!response || !response.results || response.results.length === 0) {
@@ -826,6 +1075,7 @@ export default function FastGeneratePage() {
         base64: result.image,
         prompt: modificationPrompt,
         parameters: {
+          ...parameters,
           modificationType: isMacro ? 'macro' : 'micro',
           modifications: [language === 'pl' ? modification.label.pl : modification.label.en],
           iterationCount: generationCount,
@@ -838,6 +1088,7 @@ export default function FastGeneratePage() {
 
       setGeneratedImage(newImage);
       setGeneratedImages((prev) => [...prev, newImage]); // Add to array
+      setShowOriginalRoomPhoto(false);
       setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
       // Don't reset ratings after modification - user already answered
@@ -857,18 +1108,66 @@ export default function FastGeneratePage() {
         timestamp: Date.now(),
         imageUrl: newImage.url,
       };
-      setGenerationHistory(prev => [...prev, historyNode]);
-      setCurrentHistoryIndex(generationHistory.length);
+      setGenerationHistory((prev) => {
+        const next = [...prev, historyNode];
+        const uploadUrl = buildRoomUploadDataUrlFromSession(
+          getSessionStoreSnapshot() as any,
+        );
+        const slot = uploadUrl ? 1 : 0;
+        setCurrentHistoryIndex(slot + next.length - 1);
+        return next;
+      });
 
       const fastModLog = buildModificationPromptLogEntry({
         modification,
         modificationPrompt,
-        source: 'preset',
+        source: isCustomModification ? 'custom' : 'preset',
+        userInstruction: userInstructionForLog?.trim() || undefined,
       });
       const snap = getSessionStoreSnapshot();
-      await updateSessionData({
+      const typedSessionData = sessionData as any;
+      const persistUserHash = typedSessionData?.userHash as string | undefined;
+
+      let sessionPatch: Record<string, unknown> = {
         modificationPromptLog: appendModificationPromptLog(snap.modificationPromptLog, fastModLog),
-      } as any);
+      };
+
+      if (persistUserHash) {
+        try {
+          const modSpaceId = await getOrCreateSpaceId(persistUserHash, {
+            spaceId: typedSessionData?.currentSpaceId,
+            name: typedSessionData?.roomName || 'Moja Przestrzeń',
+          });
+          if (modSpaceId) {
+            const saveModResult = await saveParticipantImages(persistUserHash, [
+              {
+                url: newImage.url,
+                type: 'generated',
+                is_favorite: false,
+                space_id: modSpaceId,
+              },
+            ]);
+            const persistedUrl =
+              saveModResult.details[0]?.publicUrl || newImage.url;
+            sessionPatch = {
+              ...sessionPatch,
+              spaces: addGeneratedImageToSpace(
+                typedSessionData?.spaces || [],
+                modSpaceId,
+                persistedUrl,
+              ),
+              currentSpaceId: modSpaceId,
+            };
+          }
+        } catch (persistErr) {
+          console.warn(
+            '[Fast Generate] Failed to persist modification to participant spaces:',
+            persistErr,
+          );
+        }
+      }
+
+      await updateSessionData(sessionPatch as any);
 
       void saveSessionToGcp(getSessionStoreSnapshot());
 
@@ -886,6 +1185,7 @@ export default function FastGeneratePage() {
             modification: language === 'pl' ? modification.label.pl : modification.label.en,
             parameters,
             path_type: 'fast',
+            ...(isCustomModification ? { source: 'custom' as const } : {}),
           });
         }
       } catch (e) {
@@ -895,6 +1195,361 @@ export default function FastGeneratePage() {
     } catch (err) {
       console.error('Modification failed:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas modyfikacji.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRemoveFurniture = async () => {
+    if (isGenerating) return;
+
+    if (!hasAnsweredInteriorQuestion) {
+      setError(
+        language === 'pl'
+          ? "Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed usunięciem mebli."
+          : "Please answer the question 'Is this my interior?' before removing furniture.",
+      );
+      return;
+    }
+
+    let baseForRemoval: GeneratedImage | null =
+      resolveSelectedGeneratedImageForModification();
+    if (!baseForRemoval) {
+      if (roomUploadPreviewUrl && currentHistoryIndex === 0) {
+        setError(
+          language === 'pl'
+            ? 'Wybierz w historii wygenerowany obraz (nie zdjęcie z uploadu).'
+            : 'Pick a generated thumbnail in history (not the uploaded photo).',
+        );
+        return;
+      }
+      baseForRemoval = generatedImage;
+    }
+    if (!baseForRemoval) {
+      setError(
+        language === 'pl'
+          ? 'Brak obrazu do przetworzenia.'
+          : 'No image to process.',
+      );
+      return;
+    }
+
+    const baseImageForRemoval = extractBase64FromGenerated(baseForRemoval);
+    if (!baseImageForRemoval) {
+      setError(
+        language === 'pl'
+          ? 'Brak danych obrazu. Wybierz ponownie miniaturę w historii.'
+          : 'No image data. Select a thumbnail in history again.',
+      );
+      return;
+    }
+
+    const uh = (sessionData as { userHash?: string } | null)?.userHash;
+    if (uh) {
+      try {
+        const credit = await checkCreditsWithAction(uh, 10, 'regenerate');
+        if (!credit.allowed) {
+          if (credit.code === 429) {
+            setLoginGateMode('hard');
+            setLoginWallOpen(true);
+          } else {
+            setError(
+              isAuthenticated
+                ? 'Nie masz wystarczającej liczby kredytów na tę operację.'
+                : 'Zaloguj się, aby kontynuować (wymagane konto).',
+            );
+          }
+          return;
+        }
+      } catch (e) {
+        console.warn('[Fast Generate] credit check (remove furniture):', e);
+      }
+    }
+
+    const removeFurniturePrompt = JSON.stringify({
+      instruction:
+        'EMPTY ARCHITECTURAL SHELL: Remove ALL furniture, rugs, curtains, and decorations. Keep only the structural elements of the room.',
+      preserve: [
+        'walls - EXACTLY the same',
+        'windows - EXACTLY the same',
+        'doors - EXACTLY the same',
+        'ceiling - EXACTLY the same',
+        'floor - EXACTLY the same',
+        'camera perspective and framing - DO NOT CHANGE',
+      ],
+      remove: [
+        'ALL furniture and seating',
+        'ALL rugs and carpets',
+        'ALL curtains and window treatments',
+        'ALL decorations and accessories',
+        'ALL lighting fixtures',
+      ],
+      style: 'Clean empty room',
+      redesign_process:
+        'STEP 1: Keep room structure 100% unchanged. STEP 2: Erase everything else to create an empty space.',
+    });
+
+    setIsGenerating(true);
+    setError(null);
+    setLoadingStage(2);
+    setLoadingProgress(30);
+    setStatusMessage(
+      language === 'pl' ? 'Usuwam meble (AI)...' : 'Removing furniture (AI)...',
+    );
+    setEstimatedTime(25);
+    setShowModifications(false);
+
+    try {
+      const baseMicro = getGenerationParameters('micro', generationCount);
+      let removeParams = {
+        ...baseMicro,
+        strength: 0.3,
+      };
+      const srcDims = fastTrackSourceGenerationDimsRef.current;
+      if (srcDims) {
+        removeParams = {
+          ...baseMicro,
+          width: srcDims.normalizedWidth,
+          height: srcDims.normalizedHeight,
+          aspect_ratio: srcDims.aspectRatio,
+          strength: 0.3,
+        };
+      } else {
+        try {
+          const cleanRm =
+            typeof baseImageForRemoval === 'string' &&
+            baseImageForRemoval.includes(',')
+              ? baseImageForRemoval.split(',')[1]
+              : baseImageForRemoval;
+          const prepared = await prepareGenerationDimensionsFromRoomBase64(cleanRm);
+          removeParams = {
+            ...baseMicro,
+            width: prepared.normalizedWidth,
+            height: prepared.normalizedHeight,
+            aspect_ratio: prepared.aspectRatio,
+            strength: 0.3,
+          };
+        } catch (e) {
+          console.warn('[Fast Generate/remove] dimension prep failed', e);
+        }
+      }
+
+      const removeRunId = `remove-fast-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+      const response = await generateSixImagesParallelWithGoogle({
+        prompts: [
+          { source: 'implicit' as GenerationSource, prompt: removeFurniturePrompt },
+        ],
+        base_image: baseImageForRemoval,
+        style: 'empty',
+        parameters: removeParams,
+        generation_run_id: removeRunId,
+      });
+
+      if (
+        !response ||
+        !response.results ||
+        response.results.length === 0 ||
+        !response.results[0]?.image
+      ) {
+        const errorMessage = response?.results?.[0]?.error || '';
+        const isRateLimit =
+          errorMessage.includes('429') ||
+          errorMessage.includes('RESOURCE_EXHAUSTED') ||
+          errorMessage.includes('rate limit');
+        if (isRateLimit) {
+          setError(
+            language === 'pl'
+              ? 'Osiągnięto limit API. Poczekaj 1–2 minuty i spróbuj ponownie.'
+              : 'API rate limit reached. Wait 1–2 minutes and try again.',
+          );
+        } else {
+          setError(
+            language === 'pl'
+              ? 'Nie udało się usunąć mebli. Spróbuj ponownie.'
+              : 'Failed to remove furniture. Please try again.',
+          );
+        }
+        return;
+      }
+
+      const result = response.results[0];
+      const newId = `remove-fast-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const newImage: GeneratedImage = {
+        id: newId,
+        url: `data:image/png;base64,${result.image}`,
+        base64: result.image,
+        prompt: removeFurniturePrompt,
+        provider: 'google',
+        parameters: {
+          modificationType: 'remove_furniture',
+          modifications: ['remove_furniture'],
+          iterationCount: generationCount,
+          usedOriginal: false,
+        },
+        ratings: {
+          aesthetic_match: 0,
+          character: 0,
+          harmony: 0,
+          is_my_interior: 0,
+        },
+        isFavorite: false,
+        createdAt: Date.now(),
+      };
+
+      setGeneratedImage(newImage);
+      setGeneratedImages((prev) => [...prev, newImage]);
+      setGenerationCount((prev) => prev + 1);
+      setShowOriginalRoomPhoto(false);
+
+      setHasAnsweredInteriorQuestion(false);
+      setHasCompletedRatings(false);
+
+      setLoadingProgress(100);
+      setStatusMessage(
+        language === 'pl' ? 'Meble zostały usunięte!' : 'Furniture has been removed!',
+      );
+      setEstimatedTime(0);
+
+      const historyNode = {
+        id: newImage.id,
+        type: 'micro' as const,
+        label:
+          language === 'pl' ? 'Usunięto meble' : 'Furniture removed',
+        timestamp: Date.now(),
+        imageUrl: newImage.url,
+      };
+      setGenerationHistory((prev) => {
+        const next = [...prev, historyNode];
+        const uploadUrl = buildRoomUploadDataUrlFromSession(
+          getSessionStoreSnapshot() as any,
+        );
+        const slot = uploadUrl ? 1 : 0;
+        setCurrentHistoryIndex(slot + next.length - 1);
+        return next;
+      });
+
+      const removeModOption: ModificationOption = {
+        id: 'remove_furniture',
+        label: {
+          pl: 'Usunięto meble',
+          en: 'Furniture removed',
+        },
+        icon: null,
+        category: 'micro',
+      };
+      const snap = getSessionStoreSnapshot();
+      const typedSessionData = sessionData as any;
+      const persistUserHash = typedSessionData?.userHash as string | undefined;
+
+      const prevImgs = Array.isArray(snap.generatedImages)
+        ? snap.generatedImages
+        : [];
+      const prevGens = Array.isArray(snap.generations)
+        ? snap.generations
+        : [];
+
+      let sessionPatch: Record<string, unknown> = {
+        modificationPromptLog: appendModificationPromptLog(
+          snap.modificationPromptLog,
+          buildModificationPromptLogEntry({
+            modification: removeModOption,
+            modificationPrompt: removeFurniturePrompt,
+            source: 'preset',
+          }),
+        ),
+        generatedImages: [
+          ...prevImgs,
+          { id: newImage.id, url: newImage.url },
+        ],
+        generations: [
+          ...prevGens,
+          {
+            id: newImage.id,
+            prompt: removeFurniturePrompt,
+            images: 1,
+            timestamp: Date.now(),
+            type: 'remove_furniture',
+            modification:
+              language === 'pl' ? 'Usunięto meble' : 'Furniture removed',
+          },
+        ],
+      };
+
+      if (persistUserHash) {
+        try {
+          const modSpaceId = await getOrCreateSpaceId(persistUserHash, {
+            spaceId: typedSessionData?.currentSpaceId,
+            name: typedSessionData?.roomName || 'Moja Przestrzeń',
+          });
+          if (modSpaceId) {
+            const saveModResult = await saveParticipantImages(persistUserHash, [
+              {
+                url: newImage.url,
+                type: 'generated',
+                is_favorite: false,
+                space_id: modSpaceId,
+              },
+            ]);
+            const persistedUrl =
+              saveModResult.details[0]?.publicUrl || newImage.url;
+            sessionPatch = {
+              ...sessionPatch,
+              spaces: addGeneratedImageToSpace(
+                typedSessionData?.spaces || [],
+                modSpaceId,
+                persistedUrl,
+              ),
+              currentSpaceId: modSpaceId,
+            };
+          }
+        } catch (persistErr) {
+          console.warn(
+            '[Fast Generate] Failed to persist remove-furniture image:',
+            persistErr,
+          );
+        }
+      }
+
+      await updateSessionData(sessionPatch as any);
+      void saveSessionToGcp(getSessionStoreSnapshot());
+
+      try {
+        const projectId = await getOrCreateProjectId(
+          (sessionData as any).userHash,
+        );
+        if (projectId) {
+          await logBehavioralEvent(projectId, 'generation_modification', {
+            type: 'remove_furniture',
+            modification:
+              language === 'pl' ? 'Usunięto meble' : 'Furniture removed',
+            parameters: removeParams,
+            path_type: 'fast',
+          });
+        }
+      } catch (e) {
+        console.warn('Supabase persist failed:', e);
+      }
+    } catch (err: unknown) {
+      console.error('Remove furniture failed:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      const isRateLimit =
+        msg.includes('429') ||
+        msg.includes('RESOURCE_EXHAUSTED') ||
+        msg.includes('rate limit');
+      if (isRateLimit) {
+        setError(
+          language === 'pl'
+            ? 'Osiągnięto limit API. Poczekaj 1–2 minuty i spróbuj ponownie.'
+            : 'API rate limit reached. Wait 1–2 minutes and try again.',
+        );
+      } else {
+        setError(
+          language === 'pl'
+            ? 'Wystąpił błąd podczas usuwania mebli.'
+            : 'An error occurred while removing furniture.',
+        );
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -955,6 +1610,41 @@ export default function FastGeneratePage() {
     setGeneratedImage(updatedImage);
   };
 
+  const handleShowOriginal = () => {
+    let roomImage = (sessionData as { roomImage?: string })?.roomImage;
+
+    if (!roomImage && typeof window !== 'undefined') {
+      try {
+        const sessionRoomImage = safeSessionStorage.getItem('aura_session_room_image');
+        if (sessionRoomImage) {
+          roomImage = sessionRoomImage;
+        }
+      } catch (e) {
+        console.warn('[Fast Generate][Show Original] sessionStorage read failed', e);
+      }
+    }
+
+    if (!roomImage) {
+      setError(
+        language === 'pl'
+          ? 'Nie znaleziono oryginalnego zdjęcia z uploadu. Wróć do kroku ze zdjęciem pokoju.'
+          : 'Original photo from room setup not found. Please return to the photo upload step.',
+      );
+      return;
+    }
+
+    let base64Image = roomImage;
+    if (roomImage.includes(',')) {
+      base64Image = roomImage.split(',')[1];
+    }
+
+    const dataUrl = `data:image/jpeg;base64,${base64Image}`;
+    setOriginalRoomPhotoUrl(dataUrl);
+    setShowOriginalRoomPhoto(true);
+    setShowModifications(false);
+    setError(null);
+  };
+
   // Handle continue to next step - redirect to path selection with message about full experience
   const handleContinue = () => {
     stopAllDialogueAudio();
@@ -1004,13 +1694,22 @@ export default function FastGeneratePage() {
               >
                 <GlassCard variant="flatOnMobile" className="p-6">
                   <div className="space-y-4">
-                    <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
-                      <Image
-                        src={generatedImage.url}
-                        alt="Generated interior"
-                        fill
-                        sizes="100vw"
-                        className="object-cover"
+                    <div className="relative w-full rounded-lg overflow-hidden bg-graphite/10">
+                      <IntrinsicContainImage
+                        src={
+                          showOriginalRoomPhoto && originalRoomPhotoUrl
+                            ? originalRoomPhotoUrl
+                            : generatedImage.url
+                        }
+                        alt={
+                          showOriginalRoomPhoto && originalRoomPhotoUrl
+                            ? language === 'pl'
+                              ? 'Oryginalne zdjęcie pokoju'
+                              : 'Original room photo'
+                            : language === 'pl'
+                              ? 'Wygenerowane wnętrze'
+                              : 'Generated interior'
+                        }
                       />
                       <button
                         onClick={() => handleFavorite(generatedImage.id)}
@@ -1118,15 +1817,66 @@ export default function FastGeneratePage() {
                       )}
                     </AnimatePresence>
 
-                    {/* Modification Button */}
+                    {/* Modification + remove furniture + original photo — parity with full flow */}
                     {hasCompletedRatings && (
-                      <GlassButton
-                        onClick={() => setShowModifications(!showModifications)}
-                        className="w-full"
-                      >
-                        <Settings size={20} className="mr-2" />
-                        {showModifications ? 'Ukryj modyfikacje' : 'Modyfikuj obrazek'}
-                      </GlassButton>
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                        <GlassButton
+                          type="button"
+                          onClick={() => setShowModifications(!showModifications)}
+                          variant="secondary"
+                          className="w-full sm:flex-1 h-12 text-xs sm:text-sm"
+                          disabled={isGenerating}
+                        >
+                          <Settings size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
+                          <span className="truncate">
+                            {showModifications
+                              ? language === 'pl'
+                                ? 'Ukryj modyfikacje'
+                                : 'Hide modifications'
+                              : language === 'pl'
+                                ? 'Modyfikuj obrazek'
+                                : 'Modify image'}
+                          </span>
+                        </GlassButton>
+
+                        <GlassButton
+                          type="button"
+                          variant="secondary"
+                          className="w-full sm:flex-1 h-12 text-xs sm:text-sm"
+                          disabled={isGenerating}
+                          onClick={() => void handleRemoveFurniture()}
+                        >
+                          <Home size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
+                          <span className="truncate">
+                            {language === 'pl' ? 'Usuń meble' : 'Remove furniture'}
+                          </span>
+                        </GlassButton>
+
+                        <GlassButton
+                          type="button"
+                          variant="secondary"
+                          className="w-full sm:flex-1 h-12 text-xs sm:text-sm"
+                          disabled={isGenerating}
+                          onClick={() => {
+                            if (showOriginalRoomPhoto) {
+                              setShowOriginalRoomPhoto(false);
+                            } else {
+                              handleShowOriginal();
+                            }
+                          }}
+                        >
+                          <Eye size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
+                          <span className="truncate">
+                            {showOriginalRoomPhoto
+                              ? language === 'pl'
+                                ? 'Pokaż wygenerowane'
+                                : 'Show generated'
+                              : language === 'pl'
+                                ? 'Pokaż oryginalne'
+                                : 'Show original'}
+                          </span>
+                        </GlassButton>
+                      </div>
                     )}
 
                     {/* Modifications Panel */}
@@ -1164,7 +1914,7 @@ export default function FastGeneratePage() {
                                   <RefreshCw size={20} className="mr-3" />
                                   {language === 'pl' ? 'Zupełnie inny kierunek' : 'Completely new direction'}
                                 </h4>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-[min(60vh,560px)] overflow-y-auto overscroll-contain pr-1">
                                   {MACRO_MODIFICATIONS.map((mod) => (
                                     <GlassButton
                                       key={mod.id}
@@ -1178,6 +1928,58 @@ export default function FastGeneratePage() {
                                   ))}
                                 </div>
                               </div>
+
+                              <div className="mt-8 pt-8 border-t border-white/20">
+                                <h4 className="font-semibold text-graphite mb-4 flex items-center text-lg">
+                                  <MessageSquare
+                                    size={20}
+                                    className="mr-3 text-gold flex-shrink-0"
+                                    aria-hidden="true"
+                                  />
+                                  {language === 'pl'
+                                    ? 'Własna modyfikacja'
+                                    : 'Custom modification'}
+                                </h4>
+                                <p className="text-sm text-silver-dark mb-4 font-modern">
+                                  {language === 'pl'
+                                    ? 'Opisz, co dokładnie chcesz zmienić na obrazie'
+                                    : 'Describe exactly what you want to change in the image'}
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-3">
+                                  <input
+                                    type="text"
+                                    value={customModificationText}
+                                    onChange={(e) =>
+                                      setCustomModificationText(e.target.value)
+                                    }
+                                    placeholder={
+                                      language === 'pl'
+                                        ? 'np. dodaj rośliny doniczkowe, zmień kolor zasłon na granatowy...'
+                                        : 'e.g. add potted plants, change curtain color to navy blue...'
+                                    }
+                                    className="flex-1 bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gold/40 placeholder:text-silver-dark/50 text-graphite transition-all hover:bg-white/50 font-modern"
+                                    onKeyDown={(e) => {
+                                      if (
+                                        e.key === 'Enter' &&
+                                        customModificationText.trim()
+                                      ) {
+                                        void handleCustomModification();
+                                      }
+                                    }}
+                                    disabled={isGenerating}
+                                  />
+                                  <GlassButton
+                                    type="button"
+                                    onClick={() => void handleCustomModification()}
+                                    disabled={
+                                      isGenerating || !customModificationText.trim()
+                                    }
+                                    className="px-8 shrink-0"
+                                  >
+                                    {language === 'pl' ? 'Zmień' : 'Change'}
+                                  </GlassButton>
+                                </div>
+                              </div>
                             </div>
                           </GlassCard>
                         </motion.div>
@@ -1187,16 +1989,25 @@ export default function FastGeneratePage() {
                     {/* Generation History */}
                     {generationHistory.length > 0 && (
                       <GenerationHistory
-                        history={generationHistory}
+                        history={historyForDisplay}
                         currentIndex={currentHistoryIndex}
                         onNodeClick={(index) => {
-                          const historyItem = generationHistory[index];
+                          const uploadFirst = !!roomUploadPreviewUrl;
+                          if (uploadFirst && index === 0) {
+                            handleShowOriginal();
+                            setCurrentHistoryIndex(0);
+                            return;
+                          }
+                          const ghIndex = uploadFirst ? index - 1 : index;
+                          const historyItem = generationHistory[ghIndex];
                           if (historyItem) {
-                            // Find the corresponding image from generatedImages array
-                            const image = generatedImages.find(img => img.id === historyItem.id);
+                            const image = generatedImages.find(
+                              (img) => img.id === historyItem.id,
+                            );
                             if (image) {
                               setGeneratedImage(image);
                               setCurrentHistoryIndex(index);
+                              setShowOriginalRoomPhoto(false);
                             }
                           }
                         }}

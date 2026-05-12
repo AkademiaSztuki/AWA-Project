@@ -1,10 +1,12 @@
 "use client";
 
 import React from 'react';
-import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaScrollArea } from '@/components/ui/AwaScrollArea';
 import { 
   Brain, 
@@ -12,12 +14,15 @@ import {
   Heart, 
   Home as HomeIcon,
   Image as ImageIcon,
+  ChevronLeft,
   ChevronRight,
+  Download,
   Sparkles,
   Leaf,
   Plus,
   Trash2,
-  Eye
+  Eye,
+  X
 } from 'lucide-react';
 import Image from 'next/image';
 import { getPaletteLabel } from '@/components/setup/paletteOptions';
@@ -813,26 +818,116 @@ export function InspirationsPreviewSection({
 }
 
 // Generation Stats Section with expandable images
-export function GenerationStatsSection({ generations, generatedImages, onToggleFavorite }: { generations: any[]; generatedImages?: any[]; onToggleFavorite?: (imageId?: string, imageUrl?: string) => void }) {
+export function GenerationStatsSection({
+  generations,
+  generatedImages,
+  onToggleFavorite,
+  onDeleteGeneratedImage,
+}: {
+  generations: any[];
+  generatedImages?: any[];
+  onToggleFavorite?: (imageId?: string, imageUrl?: string) => void;
+  onDeleteGeneratedImage?: (imageId: string) => void | Promise<void>;
+}) {
   const { language } = useLanguage();
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [imageErrors, setImageErrors] = React.useState<Set<number>>(new Set());
+  /** Index into normalizedImages (not `_idx`). */
+  const [zoomedIndex, setZoomedIndex] = React.useState<number | null>(null);
+  const [portalReady, setPortalReady] = React.useState(false);
 
   const totalGenerations = generations?.length || 0;
-  
+
   // Handle both string[] and object[] formats for generatedImages
-  const normalizedImages = (generatedImages || []).map((img, idx) => {
-    if (typeof img === 'string') {
-      return { _idx: idx, _imageUrl: img.startsWith('data:') ? img : `data:image/png;base64,${img}`, _isFavorite: false, _id: undefined };
-    }
-    return { _idx: idx, _imageUrl: getImageUrl(img), _isFavorite: !!(img as any)?.isFavorite, _id: (img as any)?.id };
-  }).filter(img => img._imageUrl !== null);
-  
+  const normalizedImages = React.useMemo(
+    () =>
+      (generatedImages || [])
+        .map((img, idx) => {
+          if (typeof img === 'string') {
+            return {
+              _idx: idx,
+              _imageUrl: img.startsWith('data:') ? img : `data:image/png;base64,${img}`,
+              _isFavorite: false,
+              _id: undefined as string | undefined,
+            };
+          }
+          return {
+            _idx: idx,
+            _imageUrl: getImageUrl(img),
+            _isFavorite: !!(img as any)?.isFavorite,
+            _id: (img as any)?.id as string | undefined,
+          };
+        })
+        .filter((img) => img._imageUrl !== null),
+    [generatedImages],
+  );
+
   const totalImages = normalizedImages.length;
 
-  if (totalGenerations === 0 && totalImages === 0) return null;
-
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
+
+  const zoomedSlide = zoomedIndex !== null ? normalizedImages[zoomedIndex] : null;
+
+  React.useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (zoomedIndex !== null && zoomedIndex >= normalizedImages.length) {
+      setZoomedIndex(null);
+    }
+  }, [zoomedIndex, normalizedImages.length]);
+
+  React.useEffect(() => {
+    if (zoomedIndex === null) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [zoomedIndex]);
+
+  React.useEffect(() => {
+    if (zoomedIndex === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setZoomedIndex(null);
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        setZoomedIndex((i) => (i !== null && i > 0 ? i - 1 : i));
+      } else if (e.key === 'ArrowRight') {
+        setZoomedIndex((i) =>
+          i !== null && i < normalizedImages.length - 1 ? i + 1 : i,
+        );
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [zoomedIndex, normalizedImages.length]);
+
+  const isUuid = (id: string | undefined): boolean =>
+    !!id &&
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
+      id,
+    );
+
+  const handleDownloadImage = (url: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `image-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDeleteZoomed = async () => {
+    if (!zoomedSlide?._id || !onDeleteGeneratedImage || !isUuid(zoomedSlide._id)) return;
+    await onDeleteGeneratedImage(zoomedSlide._id);
+    setZoomedIndex(null);
+  };
+
+  if (totalGenerations === 0 && totalImages === 0) return null;
   
   const displayImages = isExpanded ? normalizedImages : normalizedImages.slice(0, 4);
   const remainingCount = isExpanded ? 0 : Math.max(0, totalImages - 4);
@@ -895,19 +990,28 @@ export function GenerationStatsSection({ generations, generatedImages, onToggleF
               }
               
               return (
-                <div key={img._idx} className="relative aspect-square rounded-lg overflow-hidden bg-white/5">
+                <div key={img._idx} className="group relative aspect-square rounded-lg overflow-hidden bg-white/5">
                   <Image
                     src={img._imageUrl!}
                     alt={`Generated ${img._idx + 1}`}
                     fill
-                    className="object-cover"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
                     sizes="(max-width: 768px) 25vw, 20vw"
                     onError={() => handleImageError(img._idx)}
                     unoptimized={img._imageUrl?.startsWith('data:')}
                   />
+                  <button
+                    type="button"
+                    className="absolute inset-0 z-10 cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-transparent"
+                    onClick={() => {
+                      const listIndex = normalizedImages.findIndex((x) => x._idx === img._idx);
+                      setZoomedIndex(listIndex >= 0 ? listIndex : null);
+                    }}
+                    aria-label={t('Powiększ obraz', 'Zoom image')}
+                  />
                   {onToggleFavorite && (
                     <button
-                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/35 hover:bg-black/50 border border-white/20 flex items-center justify-center transition-colors"
+                      className="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-black/35 hover:bg-black/50 border border-white/20 flex items-center justify-center transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         onToggleFavorite(img._id, img._imageUrl!);
@@ -945,6 +1049,119 @@ export function GenerationStatsSection({ generations, generatedImages, onToggleF
           </div>
         )}
       </GlassCard>
+
+      {portalReady &&
+        createPortal(
+          <AnimatePresence>
+            {zoomedIndex !== null && zoomedSlide ? (
+              <motion.div
+                key="dashboard-generated-lightbox"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-black/80 px-1.5 py-4 sm:px-4 md:px-8 md:py-8"
+                onClick={() => setZoomedIndex(null)}
+                role="dialog"
+                aria-modal="true"
+                aria-label={t('Powiększone zdjęcie', 'Zoomed image')}
+              >
+                <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1 flex-col xl:grid xl:grid-cols-[minmax(320px,0.3fr)_minmax(400px,0.7fr)] xl:items-start xl:gap-10">
+                  <div className="hidden xl:block" aria-hidden="true" />
+                  <div className="flex min-h-0 w-full flex-col items-center justify-center">
+                    <motion.div
+                      initial={{ scale: 0.9 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0.9 }}
+                      transition={{ duration: 0.2 }}
+                      className="relative flex w-full max-h-[calc(100vh-8rem)] flex-col items-center justify-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
+                        <div
+                          className="relative flex h-[calc(100vh-14rem)] w-full items-center justify-center overflow-hidden rounded-3xl"
+                          style={{ borderRadius: '1.5rem' }}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setZoomedIndex(null);
+                            }}
+                            className="absolute right-3 top-3 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm transition-colors hover:bg-black/60 sm:right-4 sm:top-4"
+                            aria-label={t('Zamknij', 'Close')}
+                          >
+                            <X size={22} className="text-white" aria-hidden="true" />
+                          </button>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={zoomedSlide._imageUrl!}
+                            alt={t('Powiększone wygenerowane wnętrze', 'Zoomed generated interior')}
+                            className="max-h-full max-w-full h-auto w-auto object-contain object-center"
+                            style={{ borderRadius: 'inherit' }}
+                          />
+                        </div>
+
+                        {totalImages > 1 && zoomedIndex > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setZoomedIndex((i) => (i !== null && i > 0 ? i - 1 : i));
+                            }}
+                            className="absolute left-2 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/40"
+                            aria-label={t('Poprzednie zdjęcie', 'Previous image')}
+                          >
+                            <ChevronLeft size={28} className="text-white" aria-hidden="true" />
+                          </button>
+                        )}
+                        {totalImages > 1 && zoomedIndex < totalImages - 1 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setZoomedIndex((i) =>
+                                i !== null && i < totalImages - 1 ? i + 1 : i,
+                              );
+                            }}
+                            className="absolute right-14 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/40 sm:right-16"
+                            aria-label={t('Następne zdjęcie', 'Next image')}
+                          >
+                            <ChevronRight size={28} className="text-white" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="-mt-2 flex flex-shrink-0 justify-center gap-2 sm:-mt-3">
+                        <GlassButton
+                          type="button"
+                          onClick={() => handleDownloadImage(zoomedSlide._imageUrl!)}
+                          variant="secondary"
+                          className="text-white hover:text-white"
+                        >
+                          <Download size={20} className="mr-2" />
+                          {t('Pobierz', 'Download')}
+                        </GlassButton>
+                        {onDeleteGeneratedImage && isUuid(zoomedSlide._id) && (
+                          <GlassButton
+                            type="button"
+                            onClick={() => void handleDeleteZoomed()}
+                            variant="secondary"
+                            className="bg-red-500/25 text-white hover:bg-red-500/45 hover:text-white"
+                          >
+                            <Trash2 size={20} className="mr-2" />
+                            {t('Usuń', 'Delete')}
+                          </GlassButton>
+                        )}
+                      </div>
+                    </motion.div>
+                  </div>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>,
+          document.body,
+        )}
     </motion.div>
   );
 }

@@ -19,6 +19,8 @@ import {
   ArrowRight,
   Brain,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Heart,
   Home,
@@ -43,20 +45,35 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { useSessionData } from '@/hooks/useSessionData';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
+import { MarketingHowItWorksIllustration } from '@/components/marketing/MarketingHowItWorksIllustration';
+import {
+  HERO_EMPTY_ROOM_FILE,
+  HERO_INTERIOR_SLIDES,
+  heroInteriorImageSrc,
+  type HeroInteriorSlide,
+} from '@/lib/marketing/hero-interior-slides';
 
 const copy = {
   pl: {
     eyebrow: 'IDA Interior Design Assistant',
     headline: 'Zobacz swoje wnętrze zaprojektowane pod Twoją osobowość',
     subheadline:
-      'Stały punkt wyjścia to Twój obecny pokój. IDA pokazuje kilka możliwych wersji przyszłego wnętrza, dopasowanych do stylu życia, nastroju i tego, jak chcesz się czuć w przestrzeni.',
+      'Punkt wyjścia to jasna, pusta przestrzeń — jak pokój zanim zagości styl. IDA pokazuje wiele możliwych wersji przyszłego wnętrza, dopasowanych do stylu życia, nastroju i tego, jak chcesz się czuć w przestrzeni.',
     primaryCta: 'Stwórz moje wnętrze',
     secondaryCta: 'Zobacz jak działa',
-    proof: ['Pierwsze propozycje w kilka minut', 'Możesz zacząć za darmo', 'Dopasowanie do Twojego profilu'],
-    before: 'Obecny pokój',
+    proof: [
+      'Pierwsze propozycje w kilka minut',
+      'Możesz zacząć za darmo',
+      'Dopasowanie do Twojego profilu',
+      'Przejmij kontrolę: modyfikuj kolory, światło i detale',
+    ],
+    before: 'Twój pokój przed stylem',
     after: 'Wersja IDA',
-    visualTitle: 'Porównaj obecny pokój z wariantami IDA',
-    visualSubtitle: 'Wariant IDA zmienia się automatycznie. Przeciągnij suwak, żeby porównać projekt z punktem wyjścia.',
+    visualTitle: 'Porównaj pustą przestrzeń z wariantami IDA',
+    visualSubtitle:
+      'Wariant po lewej zmienia się automatycznie. Przeciągnij suwak, żeby zestawić go z jasnym punktem wyjścia.',
+    heroPrevVariantAria: 'Poprzedni wariant wnętrza',
+    heroNextVariantAria: 'Następny wariant wnętrza',
     profileTitle: 'Twój profil wnętrza',
     assistant:
       'Pokaż mi swoją przestrzeń, a pomogę Ci odkryć styl, który pasuje do Ciebie - nie tylko do trendów.',
@@ -68,23 +85,6 @@ const copy = {
     stylesTitle: 'Jedno zdjęcie pokoju. Wiele kierunków dopasowania.',
     stylesSubtitle:
       'Nie musisz od razu wiedzieć, czego chcesz. IDA z jednego zdjęcia pokazuje wiele wersji tej samej przestrzeni — wybierasz tę, która naprawdę do Ciebie pasuje.',
-    variants: [
-      {
-        name: 'Calm Focus',
-        label: 'spokój + koncentracja',
-        description: 'jasne światło, miękkie materiały, mniej bodźców',
-      },
-      {
-        name: 'Warm Social',
-        label: 'ciepło + spotkania',
-        description: 'cieplejsza paleta, wygodne strefy, bardziej zapraszający klimat',
-      },
-      {
-        name: 'Creative Flow',
-        label: 'energia + kreatywność',
-        description: 'mocniejsze akcenty, rytm, ekspresja i przestrzeń do tworzenia',
-      },
-    ],
     stepsTitle: 'Od zdjęcia pokoju do wnętrza, które pasuje do Ciebie',
     stepsSubtitle:
       'Twój pokój jest punktem wyjścia. Dalej IDA układa flow — krótko albo dokładnie, zależnie od Ciebie.',
@@ -99,7 +99,8 @@ const copy = {
       },
       {
         title: 'Otrzymujesz nowe wnętrze',
-        description: 'AI generuje propozycje, które możesz dopracowywać, porównywać i zapisywać.',
+        description:
+          'AI generuje propozycje, które możesz dalej modyfikować, porównywać i dopasowywać do swoich potrzeb.',
       },
     ],
     pathsTitle: 'Wybierz stopień spersonalizowania',
@@ -158,21 +159,22 @@ const copy = {
         ],
       },
       {
-        title: 'Realna przestrzeń',
-        description: 'Twoje wnętrze nie jest pustą kartką - IDA pracuje z tym, co już masz.',
+        title: 'Dopasowanie',
+        description:
+          'Każdą propozycję wnętrza możesz dopracować tak, żeby jeszcze lepiej pasowała do Ciebie.',
         rotatingWords: [
-          'układ',
-          'światło',
-          'meble',
-          'ściany',
-          'okna',
-          'zabudowa',
-          'podłoga',
+          'zmiana stylu',
+          'nowe kolory',
+          'inny układ',
+          'więcej światła',
+          'mniej dekoracji',
+          'cieplejszy klimat',
+          'więcej roślin',
+          'nowe warianty',
+          'dopracowanie',
+          'poprawki',
           'detale',
-          'rozmiar',
-          'funkcja',
-          'kontekst',
-          'kotwica',
+          'personalizacja',
         ],
       },
     ],
@@ -195,14 +197,22 @@ const copy = {
     eyebrow: 'IDA Interior Design Assistant',
     headline: 'See your interior designed around your personality',
     subheadline:
-      'Your current room stays as the starting point. IDA shows several possible future versions shaped around your lifestyle, mood, and how you want the space to feel.',
+      'The starting point is a bright, empty room — like your space before the style arrives. IDA shows many possible futures shaped around your lifestyle, mood, and how you want the space to feel.',
     primaryCta: 'Create my interior',
     secondaryCta: 'See how it works',
-    proof: ['First ideas in minutes', 'Start for free', 'Matched to your profile'],
-    before: 'Current room',
+    proof: [
+      'First ideas in minutes',
+      'Start for free',
+      'Matched to your profile',
+      'Take control: tweak colors, lighting, and details',
+    ],
+    before: 'Your room before the style',
     after: 'IDA version',
-    visualTitle: 'Compare your current room with IDA variants',
-    visualSubtitle: 'The IDA version changes automatically. Drag the slider to compare the concept with the starting point.',
+    visualTitle: 'Compare a blank room with IDA variants',
+    visualSubtitle:
+      'The left-hand variant cycles automatically. Drag the slider to compare it with the bright starting space.',
+    heroPrevVariantAria: 'Previous interior variant',
+    heroNextVariantAria: 'Next interior variant',
     profileTitle: 'Your interior profile',
     assistant:
       'Show me your space and I will help you discover a style that fits you - not just the trends.',
@@ -214,23 +224,6 @@ const copy = {
     stylesTitle: 'One room photo. Many directions to match you.',
     stylesSubtitle:
       'You do not need to know exactly what you want. From one photo, IDA shows many versions of the same space so you can pick the one that truly fits.',
-    variants: [
-      {
-        name: 'Calm Focus',
-        label: 'calm + focus',
-        description: 'soft light, calmer materials, fewer distractions',
-      },
-      {
-        name: 'Warm Social',
-        label: 'warmth + hosting',
-        description: 'warmer palette, comfortable zones, a more inviting atmosphere',
-      },
-      {
-        name: 'Creative Flow',
-        label: 'energy + creativity',
-        description: 'stronger accents, rhythm, expression, and room to create',
-      },
-    ],
     stepsTitle: 'From room photo to an interior that fits you',
     stepsSubtitle:
       'Your room is the starting point. IDA lays out the flow — quick or thorough, you decide.',
@@ -245,7 +238,8 @@ const copy = {
       },
       {
         title: 'Get a new interior',
-        description: 'AI generates proposals you can refine, compare, and save.',
+        description:
+          'AI generates proposals you can edit, compare, and tune to what you actually need.',
       },
     ],
     pathsTitle: 'Choose how deeply IDA should get to know you',
@@ -304,21 +298,22 @@ const copy = {
         ],
       },
       {
-        title: 'Real space',
-        description: 'Your room is not a blank canvas - IDA works with what you already have.',
+        title: 'Personal fit',
+        description:
+          'You can refine every interior proposal so it fits you even better.',
         rotatingWords: [
-          'layout',
-          'light',
-          'furniture',
-          'walls',
-          'windows',
-          'built-ins',
-          'flooring',
+          'style change',
+          'new colors',
+          'new layout',
+          'more light',
+          'fewer decor pieces',
+          'warmer mood',
+          'more plants',
+          'new variants',
+          'refinement',
+          'adjustments',
           'details',
-          'size',
-          'function',
-          'context',
-          'anchor',
+          'personalization',
         ],
       },
     ],
@@ -672,6 +667,15 @@ const MARKETING_HEADER_WINDOW_SCROLL_REVEAL = 12;
 /** `heroSettle` must increase vs last frame — avoids revealing on scroll-up when the curve moves backward through the same thresholds. */
 const MARKETING_HEADER_SETTLE_ADVANCE_EPS = 0.00006;
 
+/** Auto-advance interval for hero interior slides (ms). */
+const HERO_INTERIOR_AUTO_ADVANCE_MS = 11_000;
+
+/** Crossfade duration when swapping hero slides (seconds; exit + enter overlap in `sync` mode). */
+const HERO_INTERIOR_CROSSFADE_SEC = 2.55;
+
+/** Smooth ease-in-out for hero crossfade (symmetric cubic bezier). */
+const HERO_INTERIOR_CROSSFADE_EASE: [number, number, number, number] = [0.45, 0, 0.55, 1];
+
 const fadeUp = {
   initial: { opacity: 0, y: 32 },
   whileInView: { opacity: 1, y: 0 },
@@ -791,6 +795,69 @@ const RoomPlaceholder = ({ theme, mode, label, labelScaleY }: RoomPlaceholderPro
   </div>
 );
 
+type HeroPhotoLayerProps = {
+  src: string;
+  label?: string;
+  labelScaleY?: MotionValue<number>;
+  /** Cancels parent hero `scaleY` squash on photo stack (desktop marketing hero). */
+  photoUnsquashScaleY?: MotionValue<number>;
+  priority?: boolean;
+  afterGlow?: boolean;
+};
+
+const HeroPhotoLayer = ({
+  src,
+  label,
+  labelScaleY,
+  photoUnsquashScaleY,
+  priority,
+  afterGlow,
+}: HeroPhotoLayerProps) => (
+  <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+    <motion.div
+      className="absolute inset-0"
+      style={
+        photoUnsquashScaleY
+          ? ({
+              scaleY: photoUnsquashScaleY,
+              transformOrigin: '50% 0%',
+            } as React.CSSProperties)
+          : undefined
+      }
+    >
+      <Image src={src} alt="" fill priority={priority} sizes="100vw" className="object-cover" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-black/5 to-black/15" />
+      {afterGlow ? (
+        <motion.div
+          animate={{ opacity: [0.35, 0.62, 0.35] }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.28),transparent_38%)]"
+        />
+      ) : null}
+    </motion.div>
+    {label &&
+      (labelScaleY ? (
+        <motion.div
+          className="absolute bottom-5 left-5 max-w-[min(90%,20rem)] rounded-full border border-white/35 bg-black/40 px-4 py-2 text-pretty font-modern text-xs text-white backdrop-blur"
+          style={{
+            scaleY: labelScaleY,
+            transformOrigin: '50% 100%',
+          }}
+        >
+          {label}
+        </motion.div>
+      ) : (
+        <div className="absolute bottom-5 left-5 max-w-[min(90%,20rem)] rounded-full border border-white/35 bg-black/40 px-4 py-2 text-pretty font-modern text-xs text-white backdrop-blur">
+          {label}
+        </div>
+      ))}
+  </div>
+);
+
+function localizedHeroSlide(slide: HeroInteriorSlide, lang: 'pl' | 'en') {
+  return lang === 'pl' ? slide.pl : slide.en;
+}
+
 const MarketingEntryScreen: React.FC = () => {
   const router = useRouter();
   const { updateSessionData } = useSessionData();
@@ -799,6 +866,7 @@ const MarketingEntryScreen: React.FC = () => {
   const useMarqueePortal = pathname === '/' && !isMobile;
   const { language } = useLanguage();
   const { setHeaderVisible } = useLayout();
+  const reduceHeroCarousel = useReducedMotion();
   const [sliderPosition, setSliderPosition] = useState(56);
   const [activeVariant, setActiveVariant] = useState(0);
   const comparisonRef = useRef<HTMLDivElement | null>(null);
@@ -936,6 +1004,19 @@ const MarketingEntryScreen: React.FC = () => {
     }
   );
 
+  /** Match hero copy stack bottom inset (z-20 outer pad + same `bottom` as headline motion) so the style rail GlassCard lines up with the main glass panel. */
+  const heroStyleRailBottomPad = useTransform(
+    [effectiveHeroSettle, heroPanelDesktopMv],
+    ([s, desktop]) => {
+      const t = Math.min(1, Math.max(0, typeof s === 'number' ? s : 0));
+      const isWideHeroPanel = typeof desktop === 'number' && desktop > 0.5;
+      const basePx = isWideHeroPanel ? 16 : 10;
+      const copyBottomPx = basePx + (1 - t) * 64;
+      const z20OuterBottomPx = isWideHeroPanel ? 24 : 16;
+      return `calc(${z20OuterBottomPx + copyBottomPx}px + env(safe-area-inset-bottom, 0px))`;
+    }
+  );
+
   const assignHeroCopyGlassPanelRef = useCallback(
     (node: HTMLDivElement | null) => {
       heroCopyGlassPanelRef.current = node;
@@ -1021,6 +1102,14 @@ const MarketingEntryScreen: React.FC = () => {
   }, [isMobile, language, minHeroVisualScaleYMv]);
 
   const t = copy[language];
+  const heroSlideCount = HERO_INTERIOR_SLIDES.length;
+  const activeHeroSlide =
+    HERO_INTERIOR_SLIDES[heroSlideCount > 0 ? Math.min(activeVariant, heroSlideCount - 1) : 0] ??
+    HERO_INTERIOR_SLIDES[0];
+  const activeHeroSlideCopy = localizedHeroSlide(activeHeroSlide, language === 'pl' ? 'pl' : 'en');
+  const emptyRoomImageSrc = heroInteriorImageSrc(HERO_EMPTY_ROOM_FILE);
+  const activeAfterImageSrc = heroInteriorImageSrc(activeHeroSlide.file);
+
   const emotionProfileCycles = useMemo(
     () => (language === 'pl' ? EMOTION_PROFILE_CYCLES_PL : EMOTION_PROFILE_CYCLES_EN),
     [language]
@@ -1192,15 +1281,14 @@ const MarketingEntryScreen: React.FC = () => {
   }, [useMarqueePortal, marqueePortalHost, applyMarqueePortalGeometry]);
 
   useEffect(() => {
+    if (reduceHeroCarousel || heroSlideCount === 0) return;
     const interval = window.setInterval(() => {
-      setActiveVariant((current) => (current + 1) % AFTER_ROOM_THEMES.length);
-    }, 3600);
+      setActiveVariant((current) => (current + 1) % heroSlideCount);
+    }, HERO_INTERIOR_AUTO_ADVANCE_MS);
 
     return () => window.clearInterval(interval);
-  }, []);
+  }, [heroSlideCount, reduceHeroCarousel]);
 
-  const activeTheme = AFTER_ROOM_THEMES[activeVariant];
-  const activeVariantCopy = t.variants[activeVariant];
   const marketingCarouselCards = useMemo(
     () => buildLivingRoomMarketingCards(language === 'pl' ? 'pl' : 'en'),
     [language]
@@ -1348,29 +1436,40 @@ const MarketingEntryScreen: React.FC = () => {
               }
             }}
             role="group"
-            aria-label={`${t.visualTitle}. ${t.visualSubtitle}`}
+            aria-label={`${t.visualTitle}. ${t.visualSubtitle} ${activeHeroSlideCopy.title}.`}
           >
-            <RoomPlaceholder
-              theme={BEFORE_ROOM_THEME}
-              mode="before"
+            <HeroPhotoLayer
+              src={emptyRoomImageSrc}
               label={t.before}
               labelScaleY={!isMobile ? heroRoomLabelScaleY : undefined}
+              photoUnsquashScaleY={!isMobile ? heroRoomLabelScaleY : undefined}
+              priority
             />
-            <motion.div
-              key={activeVariant}
-              initial={{ opacity: 0.88 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.55 }}
+            <div
               className="absolute inset-0 overflow-hidden"
               style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
             >
-              <RoomPlaceholder
-                theme={activeTheme}
-                mode="after"
-                label={`${t.after}: ${activeVariantCopy.name}`}
-                labelScaleY={!isMobile ? heroRoomLabelScaleY : undefined}
-              />
-            </motion.div>
+              <AnimatePresence initial={false} mode="sync">
+                <motion.div
+                  key={activeVariant}
+                  className="absolute inset-0"
+                  initial={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
+                  transition={{
+                    duration: reduceHeroCarousel ? 0 : HERO_INTERIOR_CROSSFADE_SEC,
+                    ease: HERO_INTERIOR_CROSSFADE_EASE,
+                  }}
+                >
+                  <HeroPhotoLayer
+                    src={activeAfterImageSrc}
+                    afterGlow
+                    photoUnsquashScaleY={!isMobile ? heroRoomLabelScaleY : undefined}
+                    priority={activeVariant === 0}
+                  />
+                </motion.div>
+              </AnimatePresence>
+            </div>
 
             <div
               className="absolute inset-y-0 z-[2] w-1 bg-white shadow-2xl"
@@ -1482,43 +1581,64 @@ const MarketingEntryScreen: React.FC = () => {
 
           </div>
 
-          <div
+          <motion.div
             className={cn(
               'pointer-events-none absolute inset-0 z-30 flex flex-col justify-end items-start',
-              'px-4 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-0 sm:px-5 sm:pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] lg:px-6 lg:pb-[calc(8rem+env(safe-area-inset-bottom,0px))]'
+              'px-4 pt-0 sm:px-5 lg:px-6'
             )}
+            style={{ paddingBottom: heroStyleRailBottomPad }}
           >
             <GlassCard
               variant="glass"
               className={cn(
-                'pointer-events-auto w-full max-w-[min(340px,calc(100%-2rem))] shrink-0 p-3.5 sm:max-w-[min(340px,calc(100%-2.5rem))] sm:p-4',
+                // Let pointer events reach the before/after slider underneath; only nav pills capture input.
+                'pointer-events-none w-full max-w-[min(340px,calc(100%-2rem))] shrink-0 p-3.5 sm:max-w-[min(340px,calc(100%-2.5rem))] sm:p-4',
                 'lg:max-w-[min(340px,calc(100%-2.5rem))]'
               )}
             >
               <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm text-graphite">{activeVariantCopy.name}</p>
-                  <p className="font-modern text-xs text-gold-500">{activeVariantCopy.label}</p>
+                <div className="min-w-0">
+                  <p className="text-sm text-graphite">{activeHeroSlideCopy.title}</p>
+                  <p className="font-modern text-xs text-gold-500">{activeHeroSlideCopy.tagline}</p>
                 </div>
-                <Sparkles size={20} className="text-gold-500" aria-hidden="true" />
+                <Sparkles size={20} className="shrink-0 text-gold-500" aria-hidden="true" />
               </div>
-              <p className="font-modern text-xs leading-5 text-silver-dark">{activeVariantCopy.description}</p>
-              <div className="mt-3 flex gap-1.5">
-                {t.variants.map((variant, index) => (
-                  <button
-                    key={variant.name}
-                    type="button"
-                    onClick={() => setActiveVariant(index)}
-                    className={cn(
-                      'h-2 flex-1 rounded-full transition-colors',
-                      index === activeVariant ? 'bg-gold-500' : 'bg-white/45 hover:bg-white/70'
-                    )}
-                    aria-label={variant.name}
-                  />
-                ))}
+              <p className="font-modern text-xs leading-5 text-silver-dark">{activeHeroSlideCopy.description}</p>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveVariant((i) => (i - 1 + heroSlideCount) % heroSlideCount)
+                  }
+                  className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/45 bg-white/70 text-graphite shadow-sm transition hover:bg-white"
+                  aria-label={t.heroPrevVariantAria}
+                >
+                  <ChevronLeft size={18} aria-hidden="true" />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 text-center font-modern text-[10px] font-semibold uppercase tracking-[0.14em] text-graphite/65">
+                    {activeVariant + 1} / {heroSlideCount}
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-white/35">
+                    <div
+                      className="h-full rounded-full bg-gold-500 transition-[width] duration-300 ease-out"
+                      style={{
+                        width: `${((activeVariant + 1) / Math.max(1, heroSlideCount)) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveVariant((i) => (i + 1) % heroSlideCount)}
+                  className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/45 bg-white/70 text-graphite shadow-sm transition hover:bg-white"
+                  aria-label={t.heroNextVariantAria}
+                >
+                  <ChevronRight size={18} aria-hidden="true" />
+                </button>
               </div>
             </GlassCard>
-          </div>
+          </motion.div>
         </motion.div>
         {/*
           In-flow space after the sticky frame (desktop) so the next section starts lower in the document: copy can
@@ -1586,7 +1706,7 @@ const MarketingEntryScreen: React.FC = () => {
                   </div>
                   <p className="min-h-min break-words font-modern text-sm leading-6 text-silver-dark">{step.description}</p>
                   <div className="relative h-[8.5rem] shrink-0 overflow-hidden rounded-[1.25rem] border border-white/30 sm:h-36 md:mt-0">
-                    <RoomPlaceholder theme={index === 0 ? BEFORE_ROOM_THEME : AFTER_ROOM_THEMES[index - 1]} mode={index === 0 ? 'before' : 'after'} />
+                    <MarketingHowItWorksIllustration stepIndex={index} />
                   </div>
                 </GlassCard>
               </div>

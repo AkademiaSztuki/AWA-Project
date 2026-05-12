@@ -313,6 +313,22 @@ export function UserDashboard() {
       await toggleParticipantImageFavorite(userHash, imageId, !!updatedSpaces.flatMap(s => s.images).find(i => i.id === imageId)?.isFavorite);
     }
   }, [spaces, sessionData, updateSessionData]);
+
+  const handleDeleteGeneratedImage = async (imageId: string) => {
+    const userHash = getUserHash();
+    const isUuid = (str: string | undefined): boolean =>
+      !!str &&
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(str);
+
+    if (!userHash || !isUuid(imageId)) return;
+
+    try {
+      await deleteParticipantImage(userHash, imageId);
+      await loadUserData();
+    } catch (error) {
+      console.error('[Dashboard] Failed to delete generated image:', error);
+    }
+  };
   
 
   useEffect(() => {
@@ -924,6 +940,7 @@ export function UserDashboard() {
               generations={(sessionData as any)?.generations || []}
               generatedImages={allGeneratedImages}
               onToggleFavorite={(imageId, imageUrl) => handleToggleFavorite(imageId, imageUrl)}
+              onDeleteGeneratedImage={handleDeleteGeneratedImage}
             />
           </section>
 

@@ -11,12 +11,21 @@ STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 
 # Stripe Price IDs (utworzone w Stripe Dashboard)
-STRIPE_PRICE_BASIC_MONTHLY=price_...
-STRIPE_PRICE_BASIC_YEARLY=price_...
-STRIPE_PRICE_PRO_MONTHLY=price_...
-STRIPE_PRICE_PRO_YEARLY=price_...
-STRIPE_PRICE_STUDIO_MONTHLY=price_...
-STRIPE_PRICE_STUDIO_YEARLY=price_...
+# PLN – pokazywane dla języka polskiego
+STRIPE_PRICE_BASIC_MONTHLY_PLN=price_...
+STRIPE_PRICE_BASIC_YEARLY_PLN=price_...
+STRIPE_PRICE_PRO_MONTHLY_PLN=price_...
+STRIPE_PRICE_PRO_YEARLY_PLN=price_...
+STRIPE_PRICE_STUDIO_MONTHLY_PLN=price_...
+STRIPE_PRICE_STUDIO_YEARLY_PLN=price_...
+
+# USD – pokazywane dla języka angielskiego
+STRIPE_PRICE_BASIC_MONTHLY_USD=price_...
+STRIPE_PRICE_BASIC_YEARLY_USD=price_...
+STRIPE_PRICE_PRO_MONTHLY_USD=price_...
+STRIPE_PRICE_PRO_YEARLY_USD=price_...
+STRIPE_PRICE_STUDIO_MONTHLY_USD=price_...
+STRIPE_PRICE_STUDIO_YEARLY_USD=price_...
 
 # Cron Secret (opcjonalne, dla /api/credits/expire)
 CRON_SECRET=your-secret-key-here
@@ -25,14 +34,23 @@ CRON_SECRET=your-secret-key-here
 ## Konfiguracja Stripe Dashboard
 
 1. **Utwórz produkty i ceny:**
-   - Basic Monthly: $20
-   - Basic Yearly: $200
-   - Pro Monthly: $45
-   - Pro Yearly: $450
-   - Studio Monthly: $69
-   - Studio Yearly: $690
+   - Starter Monthly: 29 PLN / $9
+   - Starter Yearly: 290 PLN / $90
+   - Creator Monthly: 59 PLN / $19
+   - Creator Yearly: 590 PLN / $190
+   - Pro Monthly: 119 PLN / $39
+   - Pro Yearly: 1190 PLN / $390
 
-2. **Skonfiguruj webhook:**
+   Techniczne `planId` zostają bez zmian:
+   - Starter = `basic`
+   - Creator = `pro`
+   - Pro = `studio`
+
+   **Limity po stronie aplikacji (metadata `credits` w checkoutie):** przy `CREDITS_PER_IMAGE = 10` to odpowiednio **60 / 160 / 320 obrazów AI miesięcznie** oraz **600 / 1600 / 3200** kredytów miesięcznie w backendzie; rocznie **10× cena, 12×** te miesięczne kredyty.
+
+2. **Pakiet powitalny (60 obrazów AI)** dla nowego konta jest **poza Stripe** (jednorazowy bonus w aplikacji). Nie tworzysz do tego Price ID.
+
+3. **Skonfiguruj webhook:**
    - URL: `https://project-ida.com/api/stripe/webhook` ✅ (już skonfigurowane)
    - Events do nasłuchiwania:
      - `checkout.session.completed`
@@ -41,7 +59,7 @@ CRON_SECRET=your-secret-key-here
      - `invoice.payment_succeeded`
      - `invoice.payment_failed`
 
-3. **Skonfiguruj Customer Portal:**
+4. **Skonfiguruj Customer Portal:**
    - Włącz w Stripe Dashboard → Settings → Billing → Customer portal
    - Włącz anulowanie subskrypcji
    - Włącz zmianę planu

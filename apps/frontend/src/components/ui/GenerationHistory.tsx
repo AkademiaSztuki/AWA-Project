@@ -2,11 +2,11 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Wand2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowRight, Wand2, RefreshCw, ChevronLeft, ChevronRight, Home } from 'lucide-react';
 
 interface GenerationNode {
   id: string;
-  type: 'initial' | 'micro' | 'macro';
+  type: 'initial' | 'micro' | 'macro' | 'upload';
   label: string;
   timestamp: number;
   imageUrl: string;
@@ -65,6 +65,8 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
 
   const getTypeIcon = (type: string) => {
     switch (type) {
+      case 'upload':
+        return <Home size={14} />;
       case 'initial':
         return <Wand2 size={14} />;
       case 'micro':
@@ -78,6 +80,8 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
 
   const getTypeColor = (type: string) => {
     switch (type) {
+      case 'upload':
+        return 'from-stone-400 to-stone-600';
       case 'initial':
         return 'from-silver-400 to-platinum-100';
       case 'micro':
@@ -138,7 +142,7 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
                   <img
                     src={node.imageUrl}
                     alt={node.label}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain bg-graphite/10"
                     onError={(e) => {
                       console.error('Failed to load image:', node.imageUrl);
                       (e.target as HTMLImageElement).style.display = 'none';

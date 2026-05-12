@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       inspiration_images,
       width,
       height,
+      aspect_ratio,
     } = body;
 
     if (!prompt) {
@@ -120,6 +121,9 @@ export async function POST(request: NextRequest) {
         : undefined,
       width: width || 1024,
       height: height || 1024,
+      ...(typeof aspect_ratio === 'string' && aspect_ratio.trim().length > 0
+        ? { aspect_ratio: aspect_ratio.trim() }
+        : {}),
     };
 
     // Server-side retry with exponential backoff and jitter for rate limit errors

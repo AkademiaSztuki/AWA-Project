@@ -43,6 +43,27 @@ const sortImagesDescending = (images: SpaceImage[]): SpaceImage[] =>
     return tb - ta;
   });
 
+const extensionFromMime = (mime: string): string => {
+  const m = mime.toLowerCase();
+  if (m.includes('jpeg') || m.includes('jpg')) return 'jpg';
+  if (m.includes('webp')) return 'webp';
+  if (m.includes('gif')) return 'gif';
+  if (m.includes('avif')) return 'avif';
+  if (m.includes('png')) return 'png';
+  return 'png';
+};
+
+const extensionFromImageUrl = (url: string): string | null => {
+  try {
+    const path = new URL(url).pathname;
+    const m = path.match(/\.(png|jpe?g|webp|gif|avif)(?:\?|$)/i);
+    if (!m) return null;
+    return m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].toLowerCase();
+  } catch {
+    return null;
+  }
+};
+
 type SpaceNavMeta = {
   id: string;
   name: string;
@@ -424,14 +445,45 @@ export default function SpaceDetailPage() {
     })();
   };
 
-  const handleDownloadImage = (url: string) => {
-    // Create a temporary link and trigger download
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `image-${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadImage = async (url: string) => {
+    // Cross-origin URLs ignore <a download>; fetch → blob forces a file save when CORS allows.
+    const stamp = Date.now();
+    const triggerAnchorDownload = (href: string, filename: string) => {
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = filename;
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    try {
+      if (url.startsWith('data:')) {
+        const semi = url.indexOf(';');
+        const mimePart = semi > 5 ? url.slice(5, semi) : 'image/png';
+        triggerAnchorDownload(url, `image-${stamp}.${extensionFromMime(mimePart)}`);
+        return;
+      }
+
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const ct = res.headers.get('content-type') || blob.type;
+      const ext = extensionFromMime(ct || '') || extensionFromImageUrl(url) || 'png';
+      triggerAnchorDownload(objectUrl, `image-${stamp}.${ext}`);
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+    } catch (e) {
+      console.error('[SpacePage] download image failed', e);
+      alert(
+        language === 'pl'
+          ? 'Nie udało się pobrać obrazu (np. polityka CORS lub sieć). Spróbuj ponownie za chwilę.'
+          : 'Could not download the image (network or CORS). Please try again in a moment.',
+      );
+    }
   };
 
   if (!space) {

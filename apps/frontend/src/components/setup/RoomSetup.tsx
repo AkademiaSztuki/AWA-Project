@@ -20,7 +20,8 @@ import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
 import { saveRoom } from '@/lib/gcp-participant-profile';
 import { useSession, useSessionData } from '@/hooks';
 import { saveParticipantImages } from '@/lib/remote-spaces';
-import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
+import { useGoogleAI, getGenerationParameters, type GoogleGenerationParameters } from '@/hooks/useGoogleAI';
+import { prepareGenerationDimensionsFromRoomBase64 } from '@/lib/image-aspect';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { SessionData } from '@/types';
 import { RoomPreferencePayload, RoomActivity } from '@/types/deep-personalization';
@@ -1215,19 +1216,25 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       
 
       const baseParams = getGenerationParameters('micro', 0);
+      let removalParameters: GoogleGenerationParameters = { ...baseParams };
+      try {
+        const prepared = await prepareGenerationDimensionsFromRoomBase64(cleanBase64);
+        removalParameters = {
+          ...baseParams,
+          width: prepared.normalizedWidth,
+          height: prepared.normalizedHeight,
+          aspect_ratio: prepared.aspectRatio,
+        };
+      } catch (dimErr) {
+        console.warn('[PhotoUploadStep] Dimension prep failed, using defaults:', dimErr);
+      }
+
       const response = await generateSixImagesParallelWithGoogle({
         prompts: [{ source: 'implicit' as GenerationSource, prompt: removeFurniturePrompt }],
         base_image: cleanBase64,
         style: 'empty',
         modifications: ['remove furniture'],
-        parameters: {
-          strength: baseParams.strength || 0.5, // Not used by Google, kept for type compatibility
-          steps: baseParams.steps || 25, // Not used by Google, kept for type compatibility
-          guidance: baseParams.guidance || 2.5, // Not used by Google, kept for type compatibility
-          image_size: baseParams.image_size,
-          width: baseParams.width,
-          height: baseParams.height
-        }
+        parameters: removalParameters,
       });
 
       if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {

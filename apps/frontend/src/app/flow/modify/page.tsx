@@ -8,6 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { LocalizedText } from '@/lib/questions/validated-scales';
 import { getOrCreateProjectId, startParticipantGeneration, endParticipantGeneration, safeSessionStorage } from '@/lib/gcp-data';
 import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
+import { prepareGenerationDimensionsFromRoomBase64, type PreparedGenerationDimensions } from '@/lib/image-aspect';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassScalePicker } from '@/components/ui/GlassScalePicker';
@@ -30,7 +31,11 @@ import {
   MessageSquare,
   X,
 } from 'lucide-react';
-import Image from 'next/image';
+import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
+import {
+  MACRO_STYLE_MODIFICATIONS,
+  buildFullFlowMacroModificationPrompt,
+} from '@/lib/modifications/macro-style-modifications';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { addGeneratedImageToSpace } from '@/lib/spaces';
 import {
@@ -78,18 +83,7 @@ const MICRO_MODIFICATIONS: ModificationOption[] = [
   { id: 'change_flooring', label: { pl: 'Zmień podłogę', en: 'Change flooring' }, icon: null, category: 'micro' },
 ];
 
-const MACRO_MODIFICATIONS: ModificationOption[] = [
-  { id: 'scandinavian', label: { pl: 'Skandynawski', en: 'Scandinavian' }, icon: null, category: 'macro' },
-  { id: 'minimalist', label: { pl: 'Minimalistyczny', en: 'Minimalist' }, icon: null, category: 'macro' },
-  { id: 'classic', label: { pl: 'Klasyczny', en: 'Classic' }, icon: null, category: 'macro' },
-  { id: 'industrial', label: { pl: 'Industrialny', en: 'Industrial' }, icon: null, category: 'macro' },
-  { id: 'eclectic', label: { pl: 'Eklektyczny', en: 'Eclectic' }, icon: null, category: 'macro' },
-  { id: 'glamour', label: { pl: 'Glamour', en: 'Glamour' }, icon: null, category: 'macro' },
-  { id: 'bohemian', label: { pl: 'Boho', en: 'Bohemian' }, icon: null, category: 'macro' },
-  { id: 'rustic', label: { pl: 'Rustykalny', en: 'Rustic' }, icon: null, category: 'macro' },
-  { id: 'provencal', label: { pl: 'Prowansalski', en: 'Provençal' }, icon: null, category: 'macro' },
-  { id: 'shabby_chic', label: { pl: 'Shabby Chic', en: 'Shabby Chic' }, icon: null, category: 'macro' },
-];
+const MACRO_MODIFICATIONS: ModificationOption[] = MACRO_STYLE_MODIFICATIONS;
 
 export default function ModifyPage() {
   const router = useRouter();
@@ -196,6 +190,8 @@ export default function ModifyPage() {
   const interiorAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ratingsAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasInitializedFromSession = useRef(false);
+  /** Vertex sizing from session room upload — not recomputed from last AI PNG (avoids aspect drift). */
+  const modifyFlowRoomGenerationDimsRef = useRef<PreparedGenerationDimensions | null>(null);
 
   useEffect(() => {
     return () => {
@@ -370,6 +366,18 @@ export default function ModifyPage() {
       // Restore generation count
       setGenerationCount(savedGenerations.length);
     }
+
+    const roomRaw = typedSessionData?.roomImageEmpty || typedSessionData?.roomImage;
+    if (roomRaw) {
+      void (async () => {
+        try {
+          const clean = String(roomRaw).includes(',') ? String(roomRaw).split(',')[1] : String(roomRaw);
+          modifyFlowRoomGenerationDimsRef.current = await prepareGenerationDimensionsFromRoomBase64(clean);
+        } catch (e) {
+          console.warn('[Modify] Could not load generation dimensions from original room photo', e);
+        }
+      })();
+    }
   }, [isSessionInitialized, sessionData, router]);
 
   // Poll for new images in matrixHistory (from background generation)
@@ -529,6 +537,38 @@ export default function ModifyPage() {
 
     const parameters = getGenerationParameters(isMacro ? 'macro' : 'micro', generationCount);
 
+    let googleModificationParameters = {
+      ...parameters,
+      strength: parameters.strength ?? (isMacro ? 0.75 : 0.25),
+    };
+    const roomDims = modifyFlowRoomGenerationDimsRef.current;
+    if (roomDims) {
+      googleModificationParameters = {
+        ...parameters,
+        width: roomDims.normalizedWidth,
+        height: roomDims.normalizedHeight,
+        aspect_ratio: roomDims.aspectRatio,
+        strength: parameters.strength ?? (isMacro ? 0.75 : 0.25),
+      };
+    } else {
+      try {
+        const cleanMod =
+          typeof baseImageSource === 'string' && baseImageSource.includes(',')
+            ? baseImageSource.split(',')[1]
+            : baseImageSource;
+        const prepared = await prepareGenerationDimensionsFromRoomBase64(cleanMod);
+        googleModificationParameters = {
+          ...parameters,
+          width: prepared.normalizedWidth,
+          height: prepared.normalizedHeight,
+          aspect_ratio: prepared.aspectRatio,
+          strength: parameters.strength ?? (isMacro ? 0.75 : 0.25),
+        };
+      } catch (e) {
+        console.warn('[modify] Dimension prep failed', e);
+      }
+    }
+
     setIsModifying(true);
     setLoadingStage(2);
     setLoadingProgress(40);
@@ -542,7 +582,7 @@ export default function ModifyPage() {
         jobId = await startParticipantGeneration(userHash, {
           type: isMacro ? 'macro' : 'micro',
           prompt: modificationPrompt,
-          parameters,
+          parameters: googleModificationParameters,
           has_base_image: true,
           modification_label: t(modification.label),
         });
@@ -558,10 +598,7 @@ export default function ModifyPage() {
         prompts: [{ source: 'implicit' as GenerationSource, prompt: modificationPrompt }],
         base_image: baseImageSource,
         style: isMacro ? modification.id : (selectedImage.parameters?.style || 'modern'),
-        parameters: {
-          ...parameters,
-          strength: parameters.strength ?? (isMacro ? 0.75 : 0.25)
-        },
+        parameters: googleModificationParameters,
         generation_run_id: modificationRunId
       });
       
@@ -771,6 +808,39 @@ export default function ModifyPage() {
     setIsModifying(true);
 
     try {
+      const baseMicro = getGenerationParameters('micro', generationCount);
+      let removeParams = {
+        ...baseMicro,
+        strength: 0.3,
+      };
+      const roomDimsRm = modifyFlowRoomGenerationDimsRef.current;
+      if (roomDimsRm) {
+        removeParams = {
+          ...baseMicro,
+          width: roomDimsRm.normalizedWidth,
+          height: roomDimsRm.normalizedHeight,
+          aspect_ratio: roomDimsRm.aspectRatio,
+          strength: 0.3,
+        };
+      } else {
+        try {
+          const cleanRm =
+            typeof baseImageForRemoval === 'string' && baseImageForRemoval.includes(',')
+              ? baseImageForRemoval.split(',')[1]
+              : baseImageForRemoval;
+          const prepared = await prepareGenerationDimensionsFromRoomBase64(cleanRm);
+          removeParams = {
+            ...baseMicro,
+            width: prepared.normalizedWidth,
+            height: prepared.normalizedHeight,
+            aspect_ratio: prepared.aspectRatio,
+            strength: 0.3,
+          };
+        } catch (e) {
+          console.warn('[modify/remove] dimension prep failed', e);
+        }
+      }
+
       // Generate unique run ID to avoid deduplication blocking
       const removeRunId = `remove-${Date.now()}-${Math.random().toString(36).substring(7)}`;
       
@@ -778,10 +848,7 @@ export default function ModifyPage() {
         prompts: [{ source: 'implicit' as GenerationSource, prompt: removeFurniturePrompt }],
         base_image: baseImageForRemoval,
         style: 'empty',
-        parameters: {
-          ...getGenerationParameters('micro', generationCount),
-          strength: 0.3
-        },
+        parameters: removeParams,
         generation_run_id: removeRunId
       });
 
@@ -926,24 +993,8 @@ export default function ModifyPage() {
     setCustomModificationText('');
   };
 
-  const buildMacroPrompt = (modification: ModificationOption) => {
-    const stylePrompts: Record<string, string> = {
-      scandinavian: "Replace ALL furniture and accessories with Scandinavian style: white walls, light oak wooden floors, cozy beige sofa with cream throw pillows, minimalist coffee table, large windows with natural light, hygge atmosphere, neutral color palette of whites and warm grays, simple geometric patterns, potted green plants, clean lines, functional furniture, peaceful and bright space",
-      minimalist: "Replace ALL furniture and accessories with minimalist style: clean white walls, polished concrete floors, sleek modern furniture with geometric shapes, neutral color scheme of white, gray and beige, empty space with perfect symmetry, hidden storage solutions, single statement piece of art, floor-to-ceiling windows, natural light flooding the space, uncluttered surfaces, zen-like atmosphere",
-      classic: "Replace ALL furniture and accessories with classical style: elegant living room with ornate moldings, rich mahogany furniture, luxurious velvet upholstery in deep burgundy, crystal chandelier, marble fireplace with decorative mantle, Persian rug with intricate patterns, gold accents, symmetrical layout, heavy drapes with tassels, antique decorative objects, warm ambient lighting, traditional European elegance",
-      industrial: "Replace ALL furniture and accessories with industrial loft style: exposed brick walls, raw concrete floors, high ceilings with visible steel beams, large factory windows, weathered leather furniture, metal pipe shelving, vintage Edison bulb lighting fixtures, distressed wood dining table, iron staircase, urban atmosphere, muted color palette of grays and browns, raw materials",
-      eclectic: "Replace ALL furniture and accessories with eclectic style: mix of vintage and modern furniture, colorful Persian rug over hardwood floors, mid-century modern chair next to baroque mirror, gallery wall with diverse artwork, vibrant throw pillows in various patterns, antique wooden chest, contemporary lighting, bold color combinations, layered textures, curated collection of objects from different eras and cultures",
-      glamour: "Replace ALL furniture and accessories with glamorous style: luxurious velvet sofa in deep emerald green, crystal chandelier with sparkling reflections, mirrored coffee table, gold accent details, marble surfaces, plush fur throw, metallic wallpaper with geometric patterns, dramatic lighting, rich jewel tones, glossy finishes, opulent textures, Hollywood regency style, sophisticated and dramatic atmosphere",
-      bohemian: "Replace ALL furniture and accessories with bohemian style: colorful tapestries hanging on walls, layered Persian and Moroccan rugs, floor cushions and poufs, macrame wall hangings, hanging plants in woven baskets, vintage wooden furniture, warm earth tones mixed with vibrant jewel colors, ethnic patterns, natural textures, eclectic mix of global artifacts, cozy reading nook with lots of textiles",
-      rustic: "Replace ALL furniture and accessories with rustic country style: exposed wooden ceiling beams, stone fireplace, reclaimed wood furniture, checkered upholstery, vintage mason jars, wrought iron fixtures, natural linen curtains, earth tone color palette, handcrafted pottery, woven baskets, dried flowers, cozy farmhouse atmosphere, warm and inviting, natural materials throughout",
-      provencal: "Replace ALL furniture and accessories with Provencal French countryside style: whitewashed wooden furniture, lavender and sage green color palette, toile fabric patterns, vintage ceramic dishes, dried lavender bundles, lace curtains, weathered shutters, natural stone floors, rustic wooden dining table, fresh flowers in ceramic vases, soft natural lighting, romantic and pastoral atmosphere",
-      shabby_chic: "Replace ALL furniture and accessories with shabby chic style: distressed white painted furniture, vintage floral patterns, pastel pink and mint green accents, lace doilies, antique china display, weathered wood surfaces, soft romantic lighting, ruffled curtains, vintage roses wallpaper, delicate porcelain accessories, feminine and nostalgic atmosphere, deliberately aged and worn textures"
-    };
-
-    const styleChange = stylePrompts[modification.id];
-    
-    return `${styleChange}. Keep walls, doors, windows, ceiling, stairs exactly in same positions. Transform colors, furniture, decorations, flooring, and accessories to match the style completely.`;
-  };
+  const buildMacroPrompt = (modification: ModificationOption) =>
+    buildFullFlowMacroModificationPrompt(modification);
 
   const buildMicroPrompt = (modification: ModificationOption) => {
     const currentStyle = selectedImage?.parameters?.style || 'modern';
@@ -1060,14 +1111,16 @@ export default function ModifyPage() {
                     if (!isModifying) setIsLightboxOpen(true);
                   }
                 }}
-                className="relative aspect-[4/3] rounded-lg overflow-hidden cursor-zoom-in"
+                className="relative w-full rounded-lg overflow-hidden cursor-zoom-in bg-graphite/10"
                 title={t({ pl: "Kliknij, aby powiększyć", en: "Click to zoom" })}
               >
-                <Image 
-                  src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url} 
-                  alt={showOriginalRoomPhoto ? t({ pl: "Oryginalne zdjęcie pokoju", en: "Original room photo" }) : t({ pl: "Wybrane wnętrze", en: "Selected interior" })} 
-                  fill 
-                  className="object-cover" 
+                <IntrinsicContainImage
+                  src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url}
+                  alt={
+                    showOriginalRoomPhoto
+                      ? t({ pl: "Oryginalne zdjęcie pokoju", en: "Original room photo" })
+                      : t({ pl: "Wybrane wnętrze", en: "Selected interior" })
+                  }
                 />
                 {/* Loading Overlay for Modifications */}
                 <AnimatePresence>
@@ -1388,7 +1441,7 @@ export default function ModifyPage() {
                           <p className="text-sm text-silver-dark mb-4">
                             {t({ pl: 'Zmiana całego stylu mebli i aranżacji', en: 'Change the entire style of furniture and arrangement' })}
                           </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[min(50vh,480px)] overflow-y-auto overscroll-contain pr-1">
                             {MACRO_MODIFICATIONS.map((mod) => (
                               <GlassButton
                                 key={mod.id}

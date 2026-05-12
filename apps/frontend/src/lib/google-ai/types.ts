@@ -16,6 +16,8 @@ export interface ImageGenerationRequest {
   inspiration_images?: string[]; // Base64 images for multi-reference (InspirationReference source)
   width?: number;
   height?: number;
+  /** When set, overrides ratio inferred from width/height for Vertex image_config.aspect_ratio */
+  aspect_ratio?: string;
 }
 
 export interface ImageGenerationResponse {

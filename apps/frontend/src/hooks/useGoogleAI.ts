@@ -17,6 +17,21 @@ interface GenerationResponse {
   generation_info: any;
 }
 
+/** Params merged into MultiSourceGenerationRequest; callers may add aspect_ratio from room photo. */
+export type GoogleGenerationParameters = {
+  steps: number;
+  guidance: number;
+  strength?: number;
+  image_size: number;
+  width: number;
+  height: number;
+  num_images: number;
+  aspect_ratio?: string;
+  /** Optional echo for UI / modification flows */
+  style?: string;
+  path_type?: string;
+};
+
 interface MultiSourceGenerationRequest {
   prompts: Array<{
     source: GenerationSource;
@@ -27,14 +42,7 @@ interface MultiSourceGenerationRequest {
   modifications?: string[];
   inspiration_images?: string[]; // Base64 images for multi-reference (InspirationReference source)
   generation_run_id?: string;
-  parameters: {
-    strength: number;
-    steps: number;
-    guidance: number;
-    image_size?: number;
-    width?: number;
-    height?: number;
-  };
+  parameters: GoogleGenerationParameters;
 }
 
 interface SourceGenerationResult {
@@ -97,7 +105,7 @@ const cleanupOldProcessedPrompts = () => {
 export const getGenerationParameters = (
   mode: 'preview' | 'full' | 'upscale' | 'initial' | 'micro' | 'macro',
   iterationCount: number = 0
-) => {
+): GoogleGenerationParameters => {
   if (mode === 'preview') {
     return {
       steps: 25,
@@ -322,6 +330,9 @@ export const useGoogleAI = () => {
             inspiration_images: inspirationImages,
             width: request.parameters.width || request.parameters.image_size || 1024,
             height: request.parameters.height || request.parameters.image_size || 1024,
+            ...(request.parameters.aspect_ratio?.trim()
+              ? { aspect_ratio: request.parameters.aspect_ratio.trim() }
+              : {}),
           };
           console.log('[Google AI] Generation request details:', {
             source,
@@ -331,7 +342,8 @@ export const useGoogleAI = () => {
             hasInspirationImages: !!inspirationImages?.length,
             inspirationImagesCount: inspirationImages?.length || 0,
             width: generationRequest.width,
-            height: generationRequest.height
+            height: generationRequest.height,
+            aspect_ratio: request.parameters.aspect_ratio,
           });
 
           const clientTimeoutMs = 10 * 60 * 1000; // 10 minutes

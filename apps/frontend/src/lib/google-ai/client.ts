@@ -13,6 +13,7 @@ import {
   ImageUpscaleRequest,
   ImageUpscaleResponse,
 } from './types';
+import { mapNumericRatioToGoogleAspectRatio, parseGoogleAspectRatioLabel } from '@/lib/image-aspect';
 import { GoogleAuth } from 'google-auth-library';
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY;
@@ -96,7 +97,7 @@ export class GoogleAIClient {
       const accessToken = await this.getAccessToken();
       
       // Use Gemini 2.5 Flash Lite - cheaper and faster for text analysis
-      // This is different from Nano Banana (gemini-2.5-flash-image) which is for image generation
+      // This is different from the image generation model (gemini-3.1-flash-image-preview)
       const MODEL_ID = 'gemini-2.5-flash-lite';
       const url = `${VERTEX_AI_API_BASE}/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${MODEL_ID}:generateContent`;
       
@@ -195,7 +196,7 @@ EXAMPLE:
       const accessToken = await this.getAccessToken();
       
       // Use Gemini 2.5 Flash Lite - cheaper and faster for text analysis
-      // This is different from Nano Banana (gemini-2.5-flash-image) which is for image generation
+      // This is different from the image generation model (gemini-3.1-flash-image-preview)
       const MODEL_ID = 'gemini-2.5-flash-lite';
       const url = `${VERTEX_AI_API_BASE}/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${MODEL_ID}:generateContent`;
       
@@ -327,7 +328,7 @@ EXAMPLE:
   }
 
   /**
-   * Generate image using Gemini 2.5 Flash Image via Vertex AI
+   * Generate image using Gemini 3.1 Flash Image (preview) via Vertex AI
    * Requires OAuth 2.0/ADC (Application Default Credentials)
    * See: https://cloud.google.com/vertex-ai/generative-ai/docs/image/generate-images
    */
@@ -341,6 +342,8 @@ EXAMPLE:
         baseImageLength: request.base_image?.length || 0,
         width: request.width,
         height: request.height,
+        aspect_ratio: request.aspect_ratio,
+        style: request.style,
         hasProjectId: !!this.projectId,
       });
 
@@ -352,8 +355,7 @@ EXAMPLE:
       const accessToken = await this.getAccessToken();
       
       // Vertex AI endpoint for image generation
-      // Nano Banana (gemini-2.5-flash-image) - cheaper option
-      const MODEL_ID = 'gemini-2.5-flash-image';
+      const MODEL_ID = 'gemini-3.1-flash-image-preview';
       const url = `${VERTEX_AI_API_BASE}/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${MODEL_ID}:generateContent`;
       console.log('[GoogleAI] Vertex AI URL:', url);
 
@@ -378,7 +380,7 @@ EXAMPLE:
       }
 
          // Add inspiration images if provided (for multi-reference style transfer)
-         // Google's Gemini 2.5 Flash Image supports multiple reference images
+         // Gemini image generation supports multiple reference images
          if (request.inspiration_images && request.inspiration_images.length > 0) {
            console.log(`[GoogleAI] Adding ${request.inspiration_images.length} inspiration images for multi-reference`);
            console.log(`[GoogleAI] Inspiration images details:`, request.inspiration_images.map((img, i) => ({
@@ -410,11 +412,18 @@ EXAMPLE:
         text: request.prompt,
       });
 
-      // Detect if this is furniture removal mode (empty room generation)
-      const isFurnitureRemoval = request.prompt.includes('EMPTY ARCHITECTURAL SHELL') || 
-                                  request.prompt.includes('Remove EVERYTHING') ||
-                                  request.prompt.includes('empty room') ||
-                                  request.prompt.includes('bare room');
+      // Furniture removal mode: explicit style/modifications or dedicated prompt markers only.
+      // Do NOT match generic phrases like "empty room" in furnishing prompts (false positives).
+      const modificationRemoval =
+        Array.isArray(request.modifications) &&
+        request.modifications.some(
+          (m) => typeof m === 'string' && m.toLowerCase().includes('remove furniture'),
+        );
+      const isFurnitureRemoval =
+        request.style === 'empty' ||
+        modificationRemoval ||
+        request.prompt.includes('EMPTY ARCHITECTURAL SHELL') ||
+        request.prompt.includes('Remove EVERYTHING');
 
       // Vertex AI payload format with response_modalities for image output
       // Add system instruction - different for furniture removal vs normal generation
@@ -472,29 +481,16 @@ OUTPUT: Publication-ready interior photography suitable for a prestigious archit
       // Low temperature for removal to ensure strict adherence to removal instructions
       const temperature = isFurnitureRemoval ? 0.3 : 0.7;
 
-      // Calculate aspect ratio from width/height if provided
-      // Supported ratios: 21:9, 16:9, 4:3, 3:2, 1:1, 9:16, 3:4, 2:3, 5:4, 4:5
       let aspectRatio: string | undefined;
-      if (request.width && request.height) {
-        const ratio = request.width / request.height;
-        // Map to closest supported aspect ratio
-        if (Math.abs(ratio - 21/9) < 0.1) aspectRatio = '21:9';
-        else if (Math.abs(ratio - 16/9) < 0.1) aspectRatio = '16:9';
-        else if (Math.abs(ratio - 4/3) < 0.1) aspectRatio = '4:3';
-        else if (Math.abs(ratio - 3/2) < 0.1) aspectRatio = '3:2';
-        else if (Math.abs(ratio - 1) < 0.1) aspectRatio = '1:1';
-        else if (Math.abs(ratio - 9/16) < 0.1) aspectRatio = '9:16';
-        else if (Math.abs(ratio - 3/4) < 0.1) aspectRatio = '3:4';
-        else if (Math.abs(ratio - 2/3) < 0.1) aspectRatio = '2:3';
-        else if (Math.abs(ratio - 5/4) < 0.1) aspectRatio = '5:4';
-        else if (Math.abs(ratio - 4/5) < 0.1) aspectRatio = '4:5';
-        else {
-          // Default to closest match
-          if (ratio > 1.5) aspectRatio = '16:9'; // Landscape
-          else if (ratio < 0.7) aspectRatio = '9:16'; // Portrait
-          else aspectRatio = '1:1'; // Square
-        }
-        console.log(`[GoogleAI] Calculated aspect ratio: ${aspectRatio} from ${request.width}x${request.height} (ratio: ${ratio.toFixed(2)})`);
+      const overrideAspect = parseGoogleAspectRatioLabel(request.aspect_ratio);
+      if (overrideAspect) {
+        aspectRatio = overrideAspect;
+        console.log(`[GoogleAI] Using explicit aspect_ratio override: ${aspectRatio}`);
+      } else if (request.width && request.height) {
+        aspectRatio = mapNumericRatioToGoogleAspectRatio(request.width / request.height);
+        console.log(
+          `[GoogleAI] Mapped aspect ratio: ${aspectRatio} from ${request.width}x${request.height} (ratio: ${(request.width / request.height).toFixed(3)})`,
+        );
       }
 
       const payload: any = {

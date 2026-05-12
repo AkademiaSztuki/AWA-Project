@@ -70,33 +70,69 @@ export const stripe = {
 
 export type PlanId = 'basic' | 'pro' | 'studio';
 export type BillingPeriod = 'monthly' | 'yearly';
+export type PricingCurrency = 'pln' | 'usd';
 
 export interface PlanConfig {
   planId: PlanId;
   billingPeriod: BillingPeriod;
+  currency: PricingCurrency;
   credits: number;
   priceId: string; // Stripe Price ID
 }
 
+export const CREDITS_PER_IMAGE = 10;
+export const FREE_PLAN_CREDITS = 600;
+
 // Mapowanie planów do kredytów (dostępne po stronie klienta)
 export const PLAN_CREDITS: Record<PlanId, Record<BillingPeriod, number>> = {
   basic: {
-    monthly: 2000,
-    yearly: 24000,
+    monthly: 600,
+    yearly: 6000,
   },
   pro: {
-    monthly: 5000,
-    yearly: 60000,
+    monthly: 1600,
+    yearly: 19200,
   },
   studio: {
-    monthly: 8000,
-    yearly: 96000,
+    monthly: 3200,
+    yearly: 38400,
+  },
+};
+
+export const PLAN_PRICES: Record<PricingCurrency, Record<PlanId, Record<BillingPeriod, number>>> = {
+  pln: {
+    basic: {
+      monthly: 29,
+      yearly: 290,
+    },
+    pro: {
+      monthly: 59,
+      yearly: 590,
+    },
+    studio: {
+      monthly: 119,
+      yearly: 1190,
+    },
+  },
+  usd: {
+    basic: {
+      monthly: 9,
+      yearly: 90,
+    },
+    pro: {
+      monthly: 19,
+      yearly: 190,
+    },
+    studio: {
+      monthly: 39,
+      yearly: 390,
+    },
   },
 };
 
 // Mapowanie planów do Stripe Price IDs (tylko po stronie serwera)
 // Te wartości muszą być ustawione w zmiennych środowiskowych
-function getPlanConfigs(): Record<PlanId, Record<BillingPeriod, Omit<PlanConfig, 'planId' | 'billingPeriod'>>> {
+function getPlanConfigs(currency: PricingCurrency): Record<PlanId, Record<BillingPeriod, Omit<PlanConfig, 'planId' | 'billingPeriod' | 'currency'>>> {
   // Helper function to clean Price ID (remove '=' prefix if present)
   const cleanPriceId = (priceId: string | undefined): string => {
     if (!priceId) return '';
@@ -104,59 +140,65 @@ function getPlanConfigs(): Record<PlanId, Record<BillingPeriod, Omit<PlanConfig,
     return priceId.startsWith('=') ? priceId.substring(1) : priceId;
   };
 
+  const getPriceId = (planId: PlanId, billingPeriod: BillingPeriod): string => {
+    const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}_${currency.toUpperCase()}`;
+    return cleanPriceId(process.env[envVarName]);
+  };
+
   return {
     basic: {
       monthly: {
-        credits: 2000,
-        priceId: cleanPriceId(process.env.STRIPE_PRICE_BASIC_MONTHLY),
+        credits: PLAN_CREDITS.basic.monthly,
+        priceId: getPriceId('basic', 'monthly'),
       },
       yearly: {
-        credits: 24000,
-        priceId: cleanPriceId(process.env.STRIPE_PRICE_BASIC_YEARLY),
+        credits: PLAN_CREDITS.basic.yearly,
+        priceId: getPriceId('basic', 'yearly'),
       },
     },
     pro: {
       monthly: {
-        credits: 5000,
-        priceId: cleanPriceId(process.env.STRIPE_PRICE_PRO_MONTHLY),
+        credits: PLAN_CREDITS.pro.monthly,
+        priceId: getPriceId('pro', 'monthly'),
       },
       yearly: {
-        credits: 60000,
-        priceId: cleanPriceId(process.env.STRIPE_PRICE_PRO_YEARLY),
+        credits: PLAN_CREDITS.pro.yearly,
+        priceId: getPriceId('pro', 'yearly'),
       },
     },
     studio: {
       monthly: {
-        credits: 8000,
-        priceId: cleanPriceId(process.env.STRIPE_PRICE_STUDIO_MONTHLY),
+        credits: PLAN_CREDITS.studio.monthly,
+        priceId: getPriceId('studio', 'monthly'),
       },
       yearly: {
-        credits: 96000,
-        priceId: cleanPriceId(process.env.STRIPE_PRICE_STUDIO_YEARLY),
+        credits: PLAN_CREDITS.studio.yearly,
+        priceId: getPriceId('studio', 'yearly'),
       },
     },
   };
 }
 
 // Funkcja do pobierania konfiguracji planu (tylko po stronie serwera - używa Price IDs)
-export function getPlanConfig(planId: PlanId, billingPeriod: BillingPeriod): PlanConfig {
+export function getPlanConfig(planId: PlanId, billingPeriod: BillingPeriod, currency: PricingCurrency = 'pln'): PlanConfig {
   // Sprawdź czy jesteśmy po stronie serwera
   if (typeof window !== 'undefined') {
     // Po stronie klienta - zwróć tylko kredyty (bez Price ID)
     return {
       planId,
       billingPeriod,
+      currency,
       credits: PLAN_CREDITS[planId][billingPeriod],
       priceId: '', // Price ID nie jest dostępne po stronie klienta
     };
   }
   
   // Po stronie serwera - zwróć pełną konfigurację z Price ID
-  const configs = getPlanConfigs();
+  const configs = getPlanConfigs(currency);
   const config = configs[planId][billingPeriod];
   
   if (!config.priceId || config.priceId === '') {
-    const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}`;
+    const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}_${currency.toUpperCase()}`;
     const isProduction = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
     const envLocation = isProduction ? 'Vercel environment variables' : '.env.local';
     
@@ -173,6 +215,7 @@ export function getPlanConfig(planId: PlanId, billingPeriod: BillingPeriod): Pla
   return {
     planId,
     billingPeriod,
+    currency,
     ...config,
   };
 }
@@ -186,16 +229,17 @@ export interface CreateCheckoutSessionParams {
   userHash: string;
   planId: PlanId;
   billingPeriod: BillingPeriod;
+  currency: PricingCurrency;
   successUrl: string;
   cancelUrl: string;
 }
 
 export async function createCheckoutSession(params: CreateCheckoutSessionParams): Promise<string> {
-  const { userHash, planId, billingPeriod, successUrl, cancelUrl } = params;
+  const { userHash, planId, billingPeriod, currency, successUrl, cancelUrl } = params;
   
   try {
     // Ta funkcja jest wywoływana tylko po stronie serwera (API route)
-    console.log('[Stripe] Creating checkout session:', { planId, billingPeriod, userHash: userHash.substring(0, 8) + '...' });
+    console.log('[Stripe] Creating checkout session:', { planId, billingPeriod, currency, userHash: userHash.substring(0, 8) + '...' });
     console.log('[Stripe] Environment check:', {
       NODE_ENV: process.env.NODE_ENV,
       VERCEL_ENV: process.env.VERCEL_ENV,
@@ -203,7 +247,7 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
     });
     
     // Debug: sprawdź czy zmienne są dostępne
-    const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}`;
+    const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}_${currency.toUpperCase()}`;
     let envValue = process.env[envVarName];
     
     // Usuń znak '=' z początku jeśli istnieje (częsty błąd w Vercel)
@@ -215,7 +259,7 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
     console.log(`[Stripe] Checking ${envVarName}:`, envValue ? `${envValue.substring(0, 20)}...` : 'NOT SET');
     console.log('[Stripe] All STRIPE_* env vars:', Object.keys(process.env).filter(k => k.startsWith('STRIPE_')).sort());
     
-    const configs = getPlanConfigs();
+    const configs = getPlanConfigs(currency);
     const planConfig = configs[planId][billingPeriod];
     
     // Napraw Price ID jeśli zaczyna się od '='
@@ -227,13 +271,14 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
     console.log('[Stripe] Plan config:', { 
       planId, 
       billingPeriod, 
+      currency,
       credits: planConfig.credits,
       priceId: planConfig.priceId ? planConfig.priceId.substring(0, 20) + '...' : 'MISSING',
       priceIdLength: planConfig.priceId?.length || 0
     });
     
     if (!planConfig.priceId || planConfig.priceId === '') {
-      const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}`;
+      const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}_${currency.toUpperCase()}`;
       console.error(`[Stripe] Missing environment variable: ${envVarName}`);
       console.error(`[Stripe] Available env vars:`, Object.keys(process.env).filter(k => k.startsWith('STRIPE_')));
       throw new Error(
@@ -276,6 +321,7 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
           user_hash: userHash,
           plan_id: planId,
           billing_period: billingPeriod,
+          currency,
           credits: PLAN_CREDITS[planId][billingPeriod].toString(),
         },
         subscription_data: {
@@ -283,6 +329,7 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
             user_hash: userHash,
             plan_id: planId,
             billing_period: billingPeriod,
+            currency,
             credits: PLAN_CREDITS[planId][billingPeriod].toString(),
           },
         },

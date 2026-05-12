@@ -14,7 +14,12 @@ import { calculateImplicitQuality } from '@/lib/prompt-synthesis/implicit-qualit
 import { analyzeSourceConflict } from '@/lib/prompt-synthesis/conflict-analysis';
 import { countExplicitAnswers, getRegenerationInterpretation, type GenerationFeedback, type RegenerationEvent } from '@/lib/feedback/generation-feedback';
 import { useModalAPI } from '@/hooks/useModalAPI';
-import { useGoogleAI, getGenerationParameters } from '@/hooks/useGoogleAI';
+import { useGoogleAI, getGenerationParameters, type GoogleGenerationParameters } from '@/hooks/useGoogleAI';
+import { prepareGenerationDimensionsFromRoomBase64 } from '@/lib/image-aspect';
+import {
+  MACRO_STYLE_MODIFICATIONS,
+  buildFullFlowMacroModificationPrompt,
+} from '@/lib/modifications/macro-style-modifications';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { AwaScrollArea } from '@/components/ui/AwaScrollArea';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -47,6 +52,7 @@ import {
   Lock,
 } from 'lucide-react';
 import Image from 'next/image';
+import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
 import { buildOptimizedFluxPrompt } from '@/lib/dna';
 import { 
   synthesizeSixPrompts,
@@ -107,18 +113,8 @@ const MICRO_MODIFICATIONS: ModificationOption[] = [
   { id: 'change_flooring', label: { pl: 'Zmień podłogę', en: 'Change flooring' }, icon: null, category: 'micro' },
 ];
 
-const MACRO_MODIFICATIONS: ModificationOption[] = [
-  { id: 'scandinavian', label: { pl: 'Skandynawski', en: 'Scandinavian' }, icon: null, category: 'macro' },
-  { id: 'minimalist', label: { pl: 'Minimalistyczny', en: 'Minimalist' }, icon: null, category: 'macro' },
-  { id: 'classic', label: { pl: 'Klasyczny', en: 'Classic' }, icon: null, category: 'macro' },
-  { id: 'industrial', label: { pl: 'Industrialny', en: 'Industrial' }, icon: null, category: 'macro' },
-  { id: 'eclectic', label: { pl: 'Eklektyczny', en: 'Eclectic' }, icon: null, category: 'macro' },
-  { id: 'glamour', label: { pl: 'Glamour', en: 'Glamour' }, icon: null, category: 'macro' },
-  { id: 'bohemian', label: { pl: 'Boho', en: 'Bohemian' }, icon: null, category: 'macro' },
-  { id: 'rustic', label: { pl: 'Rustykalny', en: 'Rustic' }, icon: null, category: 'macro' },
-  { id: 'provencal', label: { pl: 'Prowansalski', en: 'Provençal' }, icon: null, category: 'macro' },
-  { id: 'shabby_chic', label: { pl: 'Shabby Chic', en: 'Shabby Chic' }, icon: null, category: 'macro' },
-];
+/** Macro styles: same list as /flow/style-selection (STYLE_OPTIONS). */
+const MACRO_MODIFICATIONS = MACRO_STYLE_MODIFICATIONS;
 
 export default function GeneratePage() {
   const router = useRouter();
@@ -842,18 +838,24 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // The prompt and system instruction control the behavior, not strength/steps/guidance
       // These parameters are kept for type compatibility but not actually used by Google API
       const baseParams = getGenerationParameters('micro', generationCount);
+      let removalParameters: GoogleGenerationParameters = { ...baseParams };
+      try {
+        const prepared = await prepareGenerationDimensionsFromRoomBase64(cleanBase64);
+        removalParameters = {
+          ...baseParams,
+          width: prepared.normalizedWidth,
+          height: prepared.normalizedHeight,
+          aspect_ratio: prepared.aspectRatio,
+        };
+      } catch (dimErr) {
+        console.warn('[Furniture Removal] Dimension prep failed, using defaults:', dimErr);
+      }
+
       const response = await generateSixImagesParallelWithGoogle({
         prompts: [{ source: 'implicit' as GenerationSource, prompt: removeFurniturePrompt }],
         base_image: cleanBase64,
         style: 'empty',
-        parameters: {
-          strength: baseParams.strength || 0.5, // Not used by Google, kept for type compatibility
-          steps: baseParams.steps || 25, // Not used by Google, kept for type compatibility
-          guidance: baseParams.guidance || 2.5, // Not used by Google, kept for type compatibility
-          image_size: baseParams.image_size,
-          width: baseParams.width,
-          height: baseParams.height
-        }
+        parameters: removalParameters,
       });
 
       if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
@@ -876,21 +878,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
    * Generates 6 images using different data sources for blind comparison.
    * This is the new 6-image matrix generation flow with multi-reference support.
    */
-  // Helper to get image dimensions from base64
-  const getImageDimensions = (base64: string): Promise<{ width: number; height: number }> => {
-    return new Promise((resolve) => {
-      const img = new globalThis.Image();
-      img.onload = () => {
-        resolve({ width: img.width, height: img.height });
-      };
-      img.onerror = () => {
-        console.warn("[6-Image Matrix] Failed to load image for dimensions, using fallback 1024x1024");
-        resolve({ width: 1024, height: 1024 });
-      };
-      img.src = base64.startsWith('data:') ? base64 : `data:image/jpeg;base64,${base64}`;
-    });
-  };
-
   const handleMatrixGeneration = async () => {
     // Generate unique run ID immediately
     const generationRunId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -1317,33 +1304,30 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         }))
       });
       
-      // Use preview mode for faster initial generation (now upgraded to 1024px proportional)
+      // Use preview mode for faster initial generation (1024px long edge; aspect from source pixels)
       const baseParams = getGenerationParameters('preview', generationCount);
-      
-      // Calculate proportional dimensions based on processed (empty) input image
-      let finalWidth = 1024;
-      let finalHeight = 1024;
-      try {
-        const dims = await getImageDimensions(processedRoomImage);
-        const ratio = dims.width / dims.height;
-        if (dims.width >= dims.height) {
-          finalWidth = 1024;
-          finalHeight = Math.round(1024 / ratio);
-        } else {
-          finalHeight = 1024;
-          finalWidth = Math.round(1024 * ratio);
-        }
-        console.log(`[6-Image Matrix] Calculated proportional dimensions: ${finalWidth}x${finalHeight} (Ratio: ${ratio.toFixed(2)})`);
-      } catch (e) {
-        console.warn("[6-Image Matrix] Failed to calculate image dimensions, using 1024x1024 fallback", e);
-      }
 
-      const parameters = {
+      let parameters = {
         ...baseParams,
         image_size: 1024,
-        width: finalWidth,
-        height: finalHeight
+        width: 1024,
+        height: 1024,
       };
+      try {
+        const prepared = await prepareGenerationDimensionsFromRoomBase64(processedRoomImage);
+        parameters = {
+          ...baseParams,
+          image_size: 1024,
+          width: prepared.normalizedWidth,
+          height: prepared.normalizedHeight,
+          aspect_ratio: prepared.aspectRatio,
+        };
+        console.log(
+          `[6-Image Matrix] Prepared dimensions: ${prepared.normalizedWidth}x${prepared.normalizedHeight}, aspect_ratio=${prepared.aspectRatio} (source ${prepared.sourceWidth}x${prepared.sourceHeight})`,
+        );
+      } catch (e) {
+        console.warn('[6-Image Matrix] prepareGenerationDimensionsFromRoomBase64 failed, using 1024 square', e);
+      }
 
       console.log('[6-Image Matrix] Initial generation parameters:', { 
         width: parameters.width,
@@ -2489,24 +2473,25 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         let processedRoomImage = roomEmpty || roomImage;
         processedRoomImage = processedRoomImage.includes(',') ? processedRoomImage.split(',')[1] : processedRoomImage;
 
-        const dims = await getImageDimensions(processedRoomImage);
-        const ratio = dims.width / dims.height;
-        let finalWidth = 1024;
-        let finalHeight = 1024;
-        if (dims.width >= dims.height) {
-          finalWidth = 1024;
-          finalHeight = Math.round(1024 / ratio);
-        } else {
-          finalHeight = 1024;
-          finalWidth = Math.round(1024 * ratio);
-        }
         const baseParams = getGenerationParameters('preview', generationCount);
-        const parameters = {
+        let parameters = {
           ...baseParams,
           image_size: 1024,
-          width: finalWidth,
-          height: finalHeight,
+          width: 1024,
+          height: 1024,
         };
+        try {
+          const prepared = await prepareGenerationDimensionsFromRoomBase64(processedRoomImage);
+          parameters = {
+            ...baseParams,
+            image_size: 1024,
+            width: prepared.normalizedWidth,
+            height: prepared.normalizedHeight,
+            aspect_ratio: prepared.aspectRatio,
+          };
+        } catch (e) {
+          console.warn('[Matrix resume] dimension prep failed', e);
+        }
         const runId =
           typeof crypto !== 'undefined' && 'randomUUID' in crypto
             ? crypto.randomUUID()
@@ -2704,12 +2689,33 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     setEstimatedTime(60);
     
     const prompt = buildInitialPrompt();
-    const parameters = {
+
+    let cleanForDims = processedRoomImage;
+    if (typeof cleanForDims === 'string' && cleanForDims.includes(',')) {
+      cleanForDims = cleanForDims.split(',')[1];
+    }
+    let parameters = {
       ...getOptimalParameters('initial', generationCount),
-      image_size: 512,  // First 6 images should be generated at 512 instead of 1024
+      image_size: 512,
       width: 512,
       height: 512,
     };
+    try {
+      const prepared = await prepareGenerationDimensionsFromRoomBase64(cleanForDims, { maxLongEdge: 512 });
+      parameters = {
+        ...getOptimalParameters('initial', generationCount),
+        image_size: 512,
+        width: prepared.normalizedWidth,
+        height: prepared.normalizedHeight,
+        aspect_ratio: prepared.aspectRatio,
+      };
+      console.log('[Legacy Generation] Prepared dimensions from room:', {
+        aspect_ratio: prepared.aspectRatio,
+        normalized: `${prepared.normalizedWidth}x${prepared.normalizedHeight}`,
+      });
+    } catch (e) {
+      console.warn('[Legacy Generation] Dimension prep failed, using 512 square', e);
+    }
     
     console.log("Google Structured Prompt:", prompt);
     console.log("Google Parameters:", parameters);
@@ -2961,7 +2967,26 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
     const parameters = getOptimalParameters(isMacro ? 'macro' : 'micro', generationCount);
 
-    // Update loading state for modifications
+    let googleModificationParameters = {
+      ...parameters,
+      strength: parameters.strength ?? (isMacro ? 0.75 : 0.25),
+    };
+    try {
+      const cleanMod =
+        typeof baseImageSource === 'string' && baseImageSource.includes(',')
+          ? baseImageSource.split(',')[1]
+          : baseImageSource;
+      const prepared = await prepareGenerationDimensionsFromRoomBase64(cleanMod);
+      googleModificationParameters = {
+        ...parameters,
+        width: prepared.normalizedWidth,
+        height: prepared.normalizedHeight,
+        aspect_ratio: prepared.aspectRatio,
+        strength: parameters.strength ?? (isMacro ? 0.75 : 0.25),
+      };
+    } catch (e) {
+      console.warn('[Modification] Dimension prep failed, using default square params', e);
+    }
     setIsGenerating(true);
     setIsModifying(true);
     setLoadingStage(2);
@@ -2977,7 +3002,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         jobId = await startParticipantGeneration(userHash, {
           type: isMacro ? 'macro' : 'micro',
           prompt: modificationPrompt,
-          parameters,
+          parameters: googleModificationParameters,
           has_base_image: true,
           modification_label: t(modification.label),
         });
@@ -2992,10 +3017,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         prompts: [{ source: 'implicit' as GenerationSource, prompt: modificationPrompt }],
         base_image: baseImageSource,
         style: isMacro ? modification.id : (selectedImage.parameters?.style || 'modern'),
-        parameters: {
-          ...parameters,
-          strength: parameters.strength ?? (isMacro ? 0.75 : 0.25)
-        }
+        parameters: googleModificationParameters,
       });
       
       // Update progress after API response
@@ -3274,15 +3296,31 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     setIsModifying(true);
 
     try {
-      // Use Google API for furniture removal
+      const baseMicro = getOptimalParameters('micro', generationCount);
+      let removeParams = {
+        ...baseMicro,
+        strength: 0.3,
+      };
+      try {
+        const raw = selectedImage.base64;
+        const cleanRm = typeof raw === 'string' && raw.includes(',') ? raw.split(',')[1] : raw;
+        const prepared = await prepareGenerationDimensionsFromRoomBase64(cleanRm);
+        removeParams = {
+          ...baseMicro,
+          width: prepared.normalizedWidth,
+          height: prepared.normalizedHeight,
+          aspect_ratio: prepared.aspectRatio,
+          strength: 0.3,
+        };
+      } catch (e) {
+        console.warn('[Remove furniture UI] dimension prep failed', e);
+      }
+
       const response = await generateSixImagesParallelWithGoogle({
         prompts: [{ source: 'implicit' as GenerationSource, prompt: removeFurniturePrompt }],
         base_image: selectedImage.base64,
         style: 'empty',
-        parameters: {
-          ...getOptimalParameters('micro', generationCount),
-          strength: 0.3 // Slightly higher strength for better removal
-        }
+        parameters: removeParams,
       });
 
       if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
@@ -3424,24 +3462,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     setCustomModificationText('');
   };
 
-  const buildMacroPrompt = (modification: ModificationOption) => {
-    const stylePrompts = {
-      scandinavian: "Replace ALL furniture and accessories with Scandinavian style: white walls, light oak wooden floors, cozy beige sofa with cream throw pillows, minimalist coffee table, large windows with natural light, hygge atmosphere, neutral color palette of whites and warm grays, simple geometric patterns, potted green plants, clean lines, functional furniture, peaceful and bright space",
-      minimalist: "Replace ALL furniture and accessories with minimalist style: clean white walls, polished concrete floors, sleek modern furniture with geometric shapes, neutral color scheme of white, gray and beige, empty space with perfect symmetry, hidden storage solutions, single statement piece of art, floor-to-ceiling windows, natural light flooding the space, uncluttered surfaces, zen-like atmosphere",
-      classic: "Replace ALL furniture and accessories with classical style: elegant living room with ornate moldings, rich mahogany furniture, luxurious velvet upholstery in deep burgundy, crystal chandelier, marble fireplace with decorative mantle, Persian rug with intricate patterns, gold accents, symmetrical layout, heavy drapes with tassels, antique decorative objects, warm ambient lighting, traditional European elegance",
-      industrial: "Replace ALL furniture and accessories with industrial loft style: exposed brick walls, raw concrete floors, high ceilings with visible steel beams, large factory windows, weathered leather furniture, metal pipe shelving, vintage Edison bulb lighting fixtures, distressed wood dining table, iron staircase, urban atmosphere, muted color palette of grays and browns, raw materials",
-      eclectic: "Replace ALL furniture and accessories with eclectic style: mix of vintage and modern furniture, colorful Persian rug over hardwood floors, mid-century modern chair next to baroque mirror, gallery wall with diverse artwork, vibrant throw pillows in various patterns, antique wooden chest, contemporary lighting, bold color combinations, layered textures, curated collection of objects from different eras and cultures",
-      glamour: "Replace ALL furniture and accessories with glamorous style: luxurious velvet sofa in deep emerald green, crystal chandelier with sparkling reflections, mirrored coffee table, gold accent details, marble surfaces, plush fur throw, metallic wallpaper with geometric patterns, dramatic lighting, rich jewel tones, glossy finishes, opulent textures, Hollywood regency style, sophisticated and dramatic atmosphere",
-      bohemian: "Replace ALL furniture and accessories with bohemian style: colorful tapestries hanging on walls, layered Persian and Moroccan rugs, floor cushions and poufs, macrame wall hangings, hanging plants in woven baskets, vintage wooden furniture, warm earth tones mixed with vibrant jewel colors, ethnic patterns, natural textures, eclectic mix of global artifacts, cozy reading nook with lots of textiles",
-      rustic: "Replace ALL furniture and accessories with rustic country style: exposed wooden ceiling beams, stone fireplace, reclaimed wood furniture, checkered upholstery, vintage mason jars, wrought iron fixtures, natural linen curtains, earth tone color palette, handcrafted pottery, woven baskets, dried flowers, cozy farmhouse atmosphere, warm and inviting, natural materials throughout",
-      provencal: "Replace ALL furniture and accessories with Provencal French countryside style: whitewashed wooden furniture, lavender and sage green color palette, toile fabric patterns, vintage ceramic dishes, dried lavender bundles, lace curtains, weathered shutters, natural stone floors, rustic wooden dining table, fresh flowers in ceramic vases, soft natural lighting, romantic and pastoral atmosphere",
-      shabby_chic: "Replace ALL furniture and accessories with shabby chic style: distressed white painted furniture, vintage floral patterns, pastel pink and mint green accents, lace doilies, antique china display, weathered wood surfaces, soft romantic lighting, ruffled curtains, vintage roses wallpaper, delicate porcelain accessories, feminine and nostalgic atmosphere, deliberately aged and worn textures"
-    };
-
-    const styleChange = stylePrompts[modification.id as keyof typeof stylePrompts];
-    
-    return `${styleChange}. Keep walls, doors, windows, ceiling, stairs exactly in same positions. Transform colors, furniture, decorations, flooring, and accessories to match the style completely.`;
-  };
+  const buildMacroPrompt = (modification: ModificationOption) =>
+    buildFullFlowMacroModificationPrompt(modification);
 
   const buildMicroPrompt = (modification: ModificationOption) => {
     const currentStyle = selectedImage?.parameters?.style || 'modern';
@@ -4013,7 +4035,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.5 }}
-                            className={`relative aspect-square w-full rounded-lg overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform ${
+                            className={`relative aspect-square w-full rounded-lg overflow-hidden bg-graphite/10 cursor-pointer hover:scale-[1.02] transition-transform ${
                               selectedImage?.id === image.id 
                                 ? 'ring-2 ring-gold ring-offset-2 ring-offset-transparent shadow-xl' 
                                 : ''
@@ -4024,7 +4046,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               src={image.url}
                               alt={sourceLabel}
                               fill
-                              className="object-cover"
+                              className="object-contain"
                               priority={index < 2}
                             />
                             
@@ -4210,14 +4232,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         if (!isModifying) setIsLightboxOpen(true);
                       }
                     }}
-                    className="relative aspect-[4/3] rounded-lg overflow-hidden cursor-zoom-in"
+                    className="relative w-full rounded-lg overflow-hidden cursor-zoom-in bg-graphite/10"
                     title={t({ pl: "Kliknij, aby powiększyć", en: "Click to zoom" })}
                   >
-                    <Image 
-                      src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url} 
-                      alt={showOriginalRoomPhoto ? t({ pl: "Oryginalne zdjęcie pokoju", en: "Original room photo" }) : t({ pl: "Wybrane wnętrze", en: "Selected interior" })} 
-                      fill 
-                      className="object-cover" 
+                    <IntrinsicContainImage
+                      src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url}
+                      alt={
+                        showOriginalRoomPhoto
+                          ? t({ pl: "Oryginalne zdjęcie pokoju", en: "Original room photo" })
+                          : t({ pl: "Wybrane wnętrze", en: "Selected interior" })
+                      }
                     />
                     {/* Loading Overlay for Modifications */}
                     <AnimatePresence>
@@ -4562,7 +4586,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               <p className="text-sm text-silver-dark mb-4">
                                 {t({ pl: 'Zmiana całego stylu mebli i aranżacji', en: 'Change the entire style of furniture and arrangement' })}
                               </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[min(50vh,480px)] overflow-y-auto overscroll-contain pr-1">
                                 {MACRO_MODIFICATIONS.map((mod) => (
                                   <GlassButton
                                     key={mod.id}
@@ -4698,13 +4722,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 <GlassCard variant="flatOnMobile" className="p-4">
                   {selectedImage && (
                     <div className="space-y-4">
-                      <div className="relative aspect-[4/3] rounded-lg overflow-hidden">
-                        <Image
+                      <div className="relative w-full rounded-lg overflow-hidden bg-graphite/10">
+                        <IntrinsicContainImage
                           src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url}
                           alt="Generated interior"
-                          fill
-                          sizes="100vw"
-                          className="object-cover"
                         />
 
                         <button
@@ -4946,7 +4967,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                           <p className="text-sm text-silver-dark mb-4">
                             Zmiana całego stylu mebli i aranżacji
                           </p>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[min(50vh,480px)] overflow-y-auto overscroll-contain pr-1">
                             {MACRO_MODIFICATIONS.map((mod) => (
                               <GlassButton
                                 key={mod.id}

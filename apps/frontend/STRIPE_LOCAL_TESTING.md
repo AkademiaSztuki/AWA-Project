@@ -17,12 +17,19 @@ STRIPE_WEBHOOK_SECRET=whsec_...  # Webhook secret z Stripe Dashboard
 Musisz utworzyć produkty w Stripe Dashboard i dodać Price IDs:
 
 ```env
-STRIPE_PRICE_BASIC_MONTHLY=price_xxxxx
-STRIPE_PRICE_BASIC_YEARLY=price_xxxxx
-STRIPE_PRICE_PRO_MONTHLY=price_xxxxx
-STRIPE_PRICE_PRO_YEARLY=price_xxxxx
-STRIPE_PRICE_STUDIO_MONTHLY=price_xxxxx
-STRIPE_PRICE_STUDIO_YEARLY=price_xxxxx
+STRIPE_PRICE_BASIC_MONTHLY_PLN=price_xxxxx
+STRIPE_PRICE_BASIC_YEARLY_PLN=price_xxxxx
+STRIPE_PRICE_PRO_MONTHLY_PLN=price_xxxxx
+STRIPE_PRICE_PRO_YEARLY_PLN=price_xxxxx
+STRIPE_PRICE_STUDIO_MONTHLY_PLN=price_xxxxx
+STRIPE_PRICE_STUDIO_YEARLY_PLN=price_xxxxx
+
+STRIPE_PRICE_BASIC_MONTHLY_USD=price_xxxxx
+STRIPE_PRICE_BASIC_YEARLY_USD=price_xxxxx
+STRIPE_PRICE_PRO_MONTHLY_USD=price_xxxxx
+STRIPE_PRICE_PRO_YEARLY_USD=price_xxxxx
+STRIPE_PRICE_STUDIO_MONTHLY_USD=price_xxxxx
+STRIPE_PRICE_STUDIO_YEARLY_USD=price_xxxxx
 ```
 
 **Jak uzyskać Price IDs:**

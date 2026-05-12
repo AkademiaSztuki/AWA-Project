@@ -1377,6 +1377,20 @@ export function buildGoogleNanoBananaPrompt(jsonPrompt: string): string {
     const texture = promptData.texture || '';
     const mood = promptData.mood || '';
     const plants = typeof promptData.plants === 'number' ? promptData.plants : 0;
+
+    const mustFurnish = promptData.must_furnish === true;
+    const furnishMode = promptData.generation_mode === 'furnish_empty_or_uploaded_room';
+    const emptyRoomInput = promptData.empty_room_input === true;
+    const layoutRequirementsExtra =
+      typeof promptData.layout_requirements === 'string' ? promptData.layout_requirements.trim() : '';
+    const furnitureDensity =
+      typeof promptData.furniture_density === 'string' ? promptData.furniture_density.trim() : 'high';
+    const modernFurnitureChecklist =
+      typeof promptData.modern_furniture_checklist === 'string'
+        ? promptData.modern_furniture_checklist.trim()
+        : '';
+
+    const isFurnishStrong = mustFurnish || furnishMode;
     
     // Extract functional requirements (for MixedFunctional)
     const functionalRequirements = promptData.functional_requirements || null;
@@ -1410,14 +1424,47 @@ export function buildGoogleNanoBananaPrompt(jsonPrompt: string): string {
       ? ` with subtle ${secondaryStyles.join(' and ')} influences`
       : '';
 
-    const finalPrompt = `Publication-quality interior design photography for a prestigious architectural magazine (editorial standards like Architectural Digest, Dwell, or Elle Decoration).
+    const furnishLayoutBlock = layoutRequirementsExtra
+      ? `\nLAYOUT / COVERAGE (mandatory): ${layoutRequirementsExtra}`
+      : '';
 
-ARCHITECTURAL LOCK: Keep walls, windows, doors 100% IDENTICAL. Keep exact camera perspective.
-CORE TASK: Remove all existing furniture/decor. Reconstruct surfaces. Furnish from scratch.
+    const modernChecklistBlock = modernFurnitureChecklist
+      ? `\nSTYLE-SPECIFIC FURNISH CHECKLIST (include visibly): ${modernFurnitureChecklist}`
+      : '';
 
-Professional ${roomType} in ${style}${secondaryStyleText} style.
+    let coreTaskBlock: string;
+    let changeBlock: string;
 
-KEEP: walls, windows, doors, camera angle - IDENTICAL.
+    if (isFurnishStrong) {
+      if (emptyRoomInput) {
+        coreTaskBlock = `ARCHITECTURAL LOCK: Keep walls, windows, doors 100% IDENTICAL. Keep exact camera perspective.
+Also: do not add or remove window/door openings; keep ceiling height and room footprint unchanged.
+CORE TASK: The input may already be an unfurnished or mostly empty shell. ADD a complete, magazine-ready furnished interior in the requested style. Furniture coverage must read as ${furnitureDensity} — clearly inhabited, not a minimalist void.`;
+      } else {
+        coreTaskBlock = `ARCHITECTURAL LOCK: Keep walls, windows, doors 100% IDENTICAL. Keep exact camera perspective.
+Also: do not add or remove window/door openings; keep ceiling height and room footprint unchanged.
+CORE TASK: Replace or refresh furniture and decor to match the requested style. If movable pieces clash with the new design, swap them for new coherent items; inpaint surfaces only where items are replaced. Final result must be fully furnished with ${furnitureDensity} visual occupancy.`;
+      }
+
+      changeBlock = `KEEP: walls, windows, doors, camera angle - IDENTICAL.
+
+CHANGE:
+- Style: ${style}${secondaryStyleText}
+- Mood: ${mood || 'match the style'}
+- Wall colors: ${colorList || 'match the style palette'}
+- Materials: ${materialList || 'match the style'}
+- Texture: ${texture || 'match the style'}
+- Complexity: ${complexity}; Brightness: ${brightness}; Lighting mood: ${lightingMood || 'neutral'}
+- Nature metaphor: ${natureMetaphor || 'none'}
+- Plants: ${plants} plants (Interpret into a realistic botanical arrangement)
+${functionalText ? `- Functional requirements: ${functionalText}\n` : ''}- FURNISH (mandatory): Add or replace furniture, lighting, textiles, and decor so the room is clearly and believably furnished end-to-end. Use varied heights, depths, and focal points; avoid an empty stage look.
+- Rugs: Add ONE cohesive area rug when it suits the style; otherwise keep an attractive, styled floor (not a bare expanse).${furnishLayoutBlock}${modernChecklistBlock}`;
+    } else {
+      coreTaskBlock = `ARCHITECTURAL LOCK: Keep walls, windows, doors 100% IDENTICAL. Keep exact camera perspective.
+Also: do not add or remove window/door openings; keep ceiling height and room footprint unchanged.
+CORE TASK: Remove all existing furniture/decor. Reconstruct surfaces. Furnish from scratch.`;
+
+      changeBlock = `KEEP: walls, windows, doors, camera angle - IDENTICAL.
 
 CHANGE:
 - Style: ${style}${secondaryStyleText}
@@ -1431,6 +1478,15 @@ CHANGE:
 ${functionalText ? `- Functional requirements: ${functionalText}\n` : ''}- REMOVE COMPLETELY: all furniture, rugs/carpets, curtains/blinds, lamps, wall art, shelves, TVs/monitors, plants, clutter, accessories. Inpaint surfaces behind them.
 - NEW INTERIOR: Add entirely NEW furniture + decor (new shapes, new layout) matching the ${style} style${functionalText ? ' and functional requirements' : ''}.
 - Rugs: REMOVE all. Floor must be visible unless the style REQUIRES a new rug.`;
+    }
+
+    const finalPrompt = `Publication-quality interior design photography for a prestigious architectural magazine (editorial standards like Architectural Digest, Dwell, or Elle Decoration).
+
+${coreTaskBlock}
+
+Professional ${roomType} in ${style}${secondaryStyleText} style.
+
+${changeBlock}`;
 
     return finalPrompt;
   } catch (error) {
