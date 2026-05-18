@@ -19,7 +19,8 @@
     "verify:gcp-health": "node scripts/gcp-backend-health.mjs",
     "storage:create-bucket": "node scripts/archive/supabase-legacy/create-storage-bucket.js",
     "storage:create-bucket-api": "node scripts/archive/supabase-legacy/create-bucket-via-api.js",
-    "generate:desktop-bg": "node scripts/generate-desktop-background.js"
+    "generate:desktop-bg": "node scripts/generate-desktop-background.js",
+    "optimize:hero": "node scripts/optimize-hero-images.mjs"
   },
   "dependencies": {
     "@react-spring/web": "^9.7.5",

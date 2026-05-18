@@ -1,7 +1,7 @@
 /**
  * Marketing hero: interior photos under `/public/hero` (excluding `puste.webp`).
- * Raw list follows folder order (`1.webp`, `2.webp`, then lexicographic filenames).
- * `HERO_INTERIOR_SLIDES` is a reordering that avoids the same `styleGroup` back-to-back when possible.
+ * `HERO_INTERIOR_SLIDES_RAW` lists every interior WebP in that folder (same order as sorted filenames).
+ * `HERO_INTERIOR_SLIDES` reorders to avoid the same `styleGroup` back-to-back when possible.
  */
 
 export type HeroInteriorSlideCopy = {
@@ -106,7 +106,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (22).png',
+    file: 'image (22).webp',
     styleGroup: 'japandi',
     pl: {
       title: 'Japandi w obłych kształtach',
@@ -122,7 +122,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (23).png',
+    file: 'image (23).webp',
     styleGroup: 'japandi',
     pl: {
       title: 'Organiczny minimal',
@@ -138,7 +138,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (25).png',
+    file: 'image (25).webp',
     styleGroup: 'industrial',
     pl: {
       title: 'Loft industrialny',
@@ -154,7 +154,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (26).png',
+    file: 'image (26).webp',
     styleGroup: 'industrial',
     pl: {
       title: 'Industrial z ogrodem',
@@ -170,7 +170,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (27).png',
+    file: 'image (27).webp',
     styleGroup: 'boho',
     pl: {
       title: 'Ciepły boho',
@@ -186,7 +186,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (29).png',
+    file: 'image (29).webp',
     styleGroup: 'japandi',
     pl: {
       title: 'Japandi z lampionem',
@@ -202,7 +202,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (30).png',
+    file: 'image (30).webp',
     styleGroup: 'midcentury',
     pl: {
       title: 'Mid-century w oliwkach',
@@ -218,7 +218,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (31).png',
+    file: 'image (31).webp',
     styleGroup: 'midcentury',
     pl: {
       title: 'Mid-century glamour',
@@ -234,7 +234,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (32).png',
+    file: 'image (32).webp',
     styleGroup: 'artdeco',
     pl: {
       title: 'Art déco w granacie',
@@ -250,7 +250,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (34).png',
+    file: 'image (34).webp',
     styleGroup: 'eclectic',
     pl: {
       title: 'Ekletyczna galeria',
@@ -266,7 +266,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (35).png',
+    file: 'image (35).webp',
     styleGroup: 'maximalist',
     pl: {
       title: 'Maksymalizm barwny',
@@ -282,7 +282,7 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image (36).png',
+    file: 'image (36).webp',
     styleGroup: 'rustic',
     pl: {
       title: 'Rustykalna oaza',
@@ -410,22 +410,6 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
     },
   },
   {
-    file: 'image-1778601663201.webp',
-    styleGroup: 'classic',
-    pl: {
-      title: 'Salon jak gabinet',
-      tagline: 'antyki + kryształ',
-      description:
-        'Damask, globusy, lustro w złocie i skórzany chesterfield. Biurko przy oknie i kryształowy żyrandol — klasyczna reprezentacja.',
-    },
-    en: {
-      title: 'Drawing-room classic',
-      tagline: 'antiques + crystal',
-      description:
-        'Damask, globes, gilt mirror, and leather Chesterfield. A writing desk by the window and a crystal chandelier for formal grace.',
-    },
-  },
-  {
     file: 'image-1778601676445.webp',
     styleGroup: 'japandi',
     pl: {
@@ -439,54 +423,6 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
       tagline: 'brick + wishbone',
       description:
         'Grey sofa, wishbone dining chairs, and a brick accent behind the table. Mirrors, oak, and plants — calm utility in one space.',
-    },
-  },
-  {
-    file: 'image-1778601682557.webp',
-    styleGroup: 'contemporary',
-    pl: {
-      title: 'Współczesny luksus',
-      tagline: 'galeria + granat',
-      description:
-        'Modułowa sofa taupe, szmaragdowy fotel i duży obraz w błękicie. Pływająca komoda, łukowe lustro i dywan jak akwarela.',
-    },
-    en: {
-      title: 'Contemporary luxury',
-      tagline: 'gallery + navy art',
-      description:
-        'Taupe modular sofa, emerald chair, and a large navy painting. Floating credenza, arched mirror, and watercolor-like rug.',
-    },
-  },
-  {
-    file: 'image-1778601685465.webp',
-    styleGroup: 'artdeco',
-    pl: {
-      title: 'Art déco jewel box',
-      tagline: 'szafir + szmaragd',
-      description:
-        'Granatowa sofa, zielone fotele i dywan w geometryczny wzór. Galeria nad komodą i pióra w wazonie — teatr koloru.',
-    },
-    en: {
-      title: 'Art Deco jewel box',
-      tagline: 'sapphire + emerald',
-      description:
-        'Navy sectional, emerald chairs, and a bold geometric rug. Gallery wall and sculptural florals — jewel-tone theater.',
-    },
-  },
-  {
-    file: 'image-1778601696400.webp',
-    styleGroup: 'japandi',
-    pl: {
-      title: 'Japandi sage',
-      tagline: 'neutral + zieleń',
-      description:
-        'Szara sofa modułowa, szałwiowy fotel i rattan w komodzie. Teksturowany tryptyk, dyskretna złota lampa i widok na ogród.',
-    },
-    en: {
-      title: 'Japandi sage',
-      tagline: 'neutrals + green',
-      description:
-        'Grey modular sofa, sage velvet chair, and cane credenza doors. Textured triptych, slim brass lighting, and garden views.',
     },
   },
 ];
