@@ -1,7 +1,13 @@
+import { getSessionStoreSnapshot } from '@/hooks/useSession';
+import { hasResearchConsent } from '@/lib/research-consent';
+
 /**
- * Client: establish HttpOnly anonymous session (anti-abuse) after research consent.
+ * HttpOnly anonymous session cookie (anti-abuse). No-op until research consent exists.
  */
 export async function initAnonSessionAfterConsent(): Promise<void> {
+  if (!hasResearchConsent(getSessionStoreSnapshot())) {
+    return;
+  }
   try {
     const res = await fetch('/api/session/init', {
       method: 'POST',

@@ -5,6 +5,7 @@
 
 import type { FlowStep, SessionData } from '@/types';
 import { GOOGLE_AUTH_EMAIL_STORAGE_KEY } from '@/lib/auth-storage-keys';
+import { hasResearchConsent } from '@/lib/research-consent';
 import { gcpApi } from './gcp-api-client';
 import {
   emitPersistenceSaveAudit855,
@@ -473,6 +474,19 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
     if (dbg) console.warn('[session-sync:debug] save skipped: no userHash');
     return false;
   }
+  if (!hasResearchConsent(sessionData as SessionData)) {
+    if (pdb) {
+      emitPersistenceSaveAudit855({
+        outcome: 'skipped',
+        skipReason: 'no_research_consent',
+        userHashShort: shortHashForLog(String(sessionData.userHash)),
+      });
+    }
+    if (dbg) {
+      console.log('[session-sync:debug] save skipped: no research consent yet');
+    }
+    return true;
+  }
   if (!gcpApi.isConfigured()) {
     // #region agent log
     ingestPersistenceTrace855({
@@ -609,10 +623,6 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
         String(mergedRow.email).trim() === '')
     ) {
       mergedRow.email = oauthEmail;
-    }
-
-    if (!mergedRow.consent_timestamp) {
-      mergedRow.consent_timestamp = new Date().toISOString();
     }
 
     // generations_count: mapper + raw DB max, then bump from live session (matrixHistory is not always in mapped row timing).

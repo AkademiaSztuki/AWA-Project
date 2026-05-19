@@ -7,6 +7,9 @@ import { ProtectedRoute } from './ProtectedRoute';
 const PUBLIC_PATHS = [
   '/', // Landing page
   '/start', // Existing IDA intro and path selection
+  '/contact',
+  '/privacy',
+  '/terms',
   '/auth/callback', // Auth callback
   '/auth/google', // Google OAuth PKCE return (/auth/google/callback)
   '/auth/verify', // Magic link verification

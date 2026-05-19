@@ -44,7 +44,6 @@ import {
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useSessionData } from '@/hooks/useSessionData';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
-import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import { MarketingHowItWorksIllustration } from '@/components/marketing/MarketingHowItWorksIllustration';
 import {
   HERO_EMPTY_ROOM_FILE,
@@ -798,9 +797,8 @@ const RoomPlaceholder = ({ theme, mode, label, labelScaleY }: RoomPlaceholderPro
 type HeroPhotoLayerProps = {
   src: string;
   label?: string;
-  labelScaleY?: MotionValue<number>;
-  /** Cancels parent hero `scaleY` squash on photo stack (desktop marketing hero). */
-  photoUnsquashScaleY?: MotionValue<number>;
+  /** Uniform inverse scale for labels while the hero room layer scales down (desktop). */
+  labelScale?: MotionValue<number>;
   priority?: boolean;
   afterGlow?: boolean;
 };
@@ -808,23 +806,12 @@ type HeroPhotoLayerProps = {
 const HeroPhotoLayer = ({
   src,
   label,
-  labelScaleY,
-  photoUnsquashScaleY,
+  labelScale,
   priority,
   afterGlow,
 }: HeroPhotoLayerProps) => (
-  <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-    <motion.div
-      className="absolute inset-0"
-      style={
-        photoUnsquashScaleY
-          ? ({
-              scaleY: photoUnsquashScaleY,
-              transformOrigin: '50% 0%',
-            } as React.CSSProperties)
-          : undefined
-      }
-    >
+  <motion.div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+    <motion.div className="absolute inset-0">
       <Image src={src} alt="" fill priority={priority} sizes="100vw" className="object-cover" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-black/5 to-black/15" />
       {afterGlow ? (
@@ -836,11 +823,11 @@ const HeroPhotoLayer = ({
       ) : null}
     </motion.div>
     {label &&
-      (labelScaleY ? (
+      (labelScale ? (
         <motion.div
           className="absolute bottom-5 left-5 max-w-[min(90%,20rem)] rounded-full border border-white/35 bg-black/40 px-4 py-2 text-pretty font-modern text-xs text-white backdrop-blur"
           style={{
-            scaleY: labelScaleY,
+            scale: labelScale,
             transformOrigin: '50% 100%',
           }}
         >
@@ -851,7 +838,7 @@ const HeroPhotoLayer = ({
           {label}
         </div>
       ))}
-  </div>
+  </motion.div>
 );
 
 function localizedHeroSlide(slide: HeroInteriorSlide, lang: 'pl' | 'en') {
@@ -921,7 +908,7 @@ const MarketingEntryScreen: React.FC = () => {
   /** Outer clip: keep a minimum radius at full-bleed (s=0) so room/photos read with rounded top corners; grows to 36px when settled. */
   const heroBorderRadius = useTransform(effectiveHeroSettle, (s) => {
     const t = Math.min(1, Math.max(0, s));
-    return `${Math.round(16 + 20 * t)}px`;
+    return `${Math.round(20 + 16 * t)}px`;
   });
   /** Same ratio as old `calc(100dvh * measured/vw)` but via transform — no per-frame layout height changes. */
   const heroVisualScaleY = useTransform(
@@ -937,20 +924,20 @@ const MarketingEntryScreen: React.FC = () => {
       return Math.max(ratio, floor);
     }
   );
-  /** Undo vertical squash on in-room labels while the room layer uses `scaleY` (desktop hero only). */
-  const heroRoomLabelScaleY = useTransform(heroVisualScaleY, (s) => {
+  /** Undo uniform room scale on labels / slider handle (desktop hero only). */
+  const heroRoomLabelScale = useTransform(heroVisualScaleY, (s) => {
     if (s >= 0.9999) return 1;
     return Math.min(1 / s, 2);
   });
   /**
-   * With scaleY from top, empty band sits at the bottom of the frame; translate down by (1-sy)*frameHeight
+   * With uniform scale from top, empty band sits at the bottom of the frame; translate down by (1-s)*frameHeight
    * so the visual bottom aligns with the sticky box. Must use the same height as `h-[100dvh]` (not innerHeight).
    */
-  const heroVisualTranslateY = useTransform([heroVisualScaleY, heroFrameHeightMv], ([sy, h]) => {
-    const scaleY = typeof sy === 'number' ? sy : 1;
+  const heroVisualTranslateY = useTransform([heroVisualScaleY, heroFrameHeightMv], ([s, h]) => {
+    const scale = typeof s === 'number' ? s : 1;
     const height = typeof h === 'number' ? h : 0;
-    if (!height || scaleY >= 0.9999) return 0;
-    return (1 - scaleY) * height;
+    if (!height || scale >= 0.9999) return 0;
+    return (1 - scale) * height;
   });
 
   /**
@@ -1302,21 +1289,18 @@ const MarketingEntryScreen: React.FC = () => {
 
   const goToFastPath = useCallback(async () => {
     stopAllDialogueAudio();
-    void initAnonSessionAfterConsent();
     await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
     router.push('/flow/onboarding');
   }, [router, updateSessionData]);
 
   const goToFullPath = useCallback(async () => {
     stopAllDialogueAudio();
-    void initAnonSessionAfterConsent();
     await updateSessionData({ pathType: 'full' });
     router.push('/setup/profile');
   }, [router, updateSessionData]);
 
   const goToPathSelection = useCallback(() => {
     stopAllDialogueAudio();
-    void initAnonSessionAfterConsent();
     router.push('/flow/path-selection');
   }, [router]);
 
@@ -1383,32 +1367,26 @@ const MarketingEntryScreen: React.FC = () => {
             borderRadius: heroBorderRadius,
           }}
           className={cn(
-            'sticky top-0 z-[5] h-[100dvh] overflow-hidden bg-pearl-100/28',
+            'sticky top-0 z-[5] h-[100dvh] overflow-hidden',
             'will-change-[width,margin-left]'
           )}
         >
-          {/* Scaled layer: room + slider only. Frame + gradients + copy stay visually aligned (no scaled overlays). */}
+          {/*
+            Single rounded shell (no transform) — inner layer scales; avoid stacked clip-path + pearl
+            overlays that leave a dark wedge in the top corners.
+          */}
           <motion.div
+            ref={comparisonRef}
+            tabIndex={0}
             className={cn(
-              'absolute inset-0 z-[1] overflow-hidden',
-              !isMobile && 'will-change-[transform]'
+              'absolute inset-0 z-[1] cursor-ew-resize overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent shadow-[inset_0_-48px_90px_-24px_rgba(45,38,28,0.12),0_10px_36px_-14px_rgba(45,38,28,0.16)]',
+              isMobile && 'rounded-[16px] sm:rounded-[20px]'
             )}
             style={
               !isMobile
-                ? ({
-                    borderRadius: heroBorderRadius,
-                    scaleY: heroVisualScaleY,
-                    y: heroVisualTranslateY,
-                    transformOrigin: '50% 0%',
-                  } as unknown as React.CSSProperties)
+                ? ({ borderRadius: heroBorderRadius } as unknown as React.CSSProperties)
                 : undefined
             }
-          >
-          {/* Slider = full-bleed interactive layer (absolute so it does not consume flow under overflow-hidden). */}
-          <div
-            ref={comparisonRef}
-            tabIndex={0}
-            className="absolute inset-0 z-[1] cursor-ew-resize outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent shadow-[inset_0_-48px_90px_-24px_rgba(45,38,28,0.12),0_10px_36px_-14px_rgba(45,38,28,0.16)]"
             onPointerDown={(event) => {
               event.currentTarget.setPointerCapture(event.pointerId);
               updateSliderFromClientX(event.clientX);
@@ -1438,11 +1416,27 @@ const MarketingEntryScreen: React.FC = () => {
             role="group"
             aria-label={`${t.visualTitle}. ${t.visualSubtitle} ${activeHeroSlideCopy.title}.`}
           >
+            <motion.div
+              className={cn(
+                'absolute',
+                isMobile ? 'inset-0' : 'top-0 left-1/2 h-[100dvh] will-change-transform'
+              )}
+              style={
+                !isMobile
+                  ? ({
+                      width: viewportWidth ? `${viewportWidth}px` : '100vw',
+                      x: '-50%',
+                      scale: heroVisualScaleY,
+                      y: heroVisualTranslateY,
+                      transformOrigin: '50% 0%',
+                    } as unknown as React.CSSProperties)
+                  : undefined
+              }
+            >
             <HeroPhotoLayer
               src={emptyRoomImageSrc}
               label={t.before}
-              labelScaleY={!isMobile ? heroRoomLabelScaleY : undefined}
-              photoUnsquashScaleY={!isMobile ? heroRoomLabelScaleY : undefined}
+              labelScale={!isMobile ? heroRoomLabelScale : undefined}
               priority
             />
             <div
@@ -1464,7 +1458,6 @@ const MarketingEntryScreen: React.FC = () => {
                   <HeroPhotoLayer
                     src={activeAfterImageSrc}
                     afterGlow
-                    photoUnsquashScaleY={!isMobile ? heroRoomLabelScaleY : undefined}
                     priority={activeVariant === 0}
                   />
                 </motion.div>
@@ -1481,7 +1474,7 @@ const MarketingEntryScreen: React.FC = () => {
                   <motion.div
                     className="flex h-16 w-16 items-center justify-center rounded-full border border-white/70 bg-white/90 shadow-2xl sm:h-20 sm:w-20"
                     style={{
-                      scaleY: heroRoomLabelScaleY,
+                      scale: heroRoomLabelScale,
                       transformOrigin: '50% 50%',
                     }}
                   >
@@ -1494,23 +1487,17 @@ const MarketingEntryScreen: React.FC = () => {
                 )}
               </div>
             </div>
-          </div>
+            </motion.div>
+
+            <motion.div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/52 via-graphite/16 to-transparent lg:from-graphite/46 lg:via-graphite/12 xl:from-graphite/38 xl:via-graphite/8" />
+            <motion.div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[40%] bg-gradient-to-t from-black/44 via-black/14 to-transparent lg:h-[36%] lg:from-black/36 xl:from-black/28" />
+            <motion.div
+              className="pointer-events-none absolute bottom-0 right-0 z-[2] w-full max-w-[min(100%,46rem)] bg-gradient-to-l from-pearl-100/72 via-pearl-50/36 to-transparent sm:max-w-[min(100%,52rem)] lg:max-w-[58%] top-[min(28dvh,220px)]"
+              aria-hidden="true"
+            />
           </motion.div>
 
-          <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/52 via-graphite/16 to-transparent lg:from-graphite/46 lg:via-graphite/12 xl:from-graphite/38 xl:via-graphite/8" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[40%] bg-gradient-to-t from-black/44 via-black/14 to-transparent lg:h-[36%] lg:from-black/36 xl:from-black/28" />
-          {/* Blend hero top into page bg — avoids a harsh seam / “shadow” above the rounded glass block on wide layouts */}
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-[min(5.5rem,14dvh)] bg-gradient-to-b from-[rgb(254_252_247)]/75 via-[rgb(254_252_247)]/25 to-transparent sm:from-[rgb(254_252_247)]/55 dark:hidden"
-            aria-hidden="true"
-          />
-          {/* Pearl veil only from mid-height down — full-height strip read as empty “milky glass” over the room at the top. */}
-          <div
-            className="pointer-events-none absolute bottom-0 right-0 z-[2] w-full max-w-[min(100%,46rem)] bg-gradient-to-l from-pearl-100/72 via-pearl-50/36 to-transparent sm:max-w-[min(100%,52rem)] lg:max-w-[58%] top-[min(28dvh,220px)]"
-            aria-hidden="true"
-          />
-
-          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between pt-[env(safe-area-inset-top,0px)] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 lg:pb-6">
+          <motion.div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between pt-[env(safe-area-inset-top,0px)] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 lg:pb-6">
             {/*
               Anchor copy to the sticky frame’s right edge (absolute right-*), not ml-auto — otherwise when width
               grows during hero settle, margin-left:auto absorbs the delta and the glass panel drifts left.
@@ -1579,7 +1566,7 @@ const MarketingEntryScreen: React.FC = () => {
               </motion.div>
             </div>
 
-          </div>
+          </motion.div>
 
           <motion.div
             className={cn(
@@ -2037,7 +2024,7 @@ const SiteFooter = ({
           </span>
           <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2 sm:gap-x-0">
             {[
-              { href: 'mailto:contact@idainteriors.ai', label: contactLabel },
+              { href: '/contact', label: contactLabel },
               { href: '/privacy', label: privacyLabel },
               { href: '/terms', label: termsLabel },
               { href: '/subscription/plans', label: pricingLabel },

@@ -12,6 +12,7 @@ import { uploadSpaceImage, saveSpaceImagesMetadata, fetchParticipantImages } fro
 import { gcpApi } from '@/lib/gcp-api-client';
 import { GOOGLE_AUTH_EMAIL_STORAGE_KEY } from '@/lib/auth-storage-keys';
 import { mergeInspirationLists } from '@/lib/inspiration-merge';
+import { hasResearchConsent } from '@/lib/research-consent';
 
 const SESSION_STORAGE_KEY = 'aura_session';
 const USER_HASH_STORAGE_KEY = 'aura_user_hash';
@@ -623,7 +624,13 @@ export const useSession = (): UseSessionReturn => {
         };
       }
 
-      if (localCoreProfileComplete && !remoteCoreProfileComplete && userHash && !DISABLE_SESSION_SYNC) {
+      if (
+        localCoreProfileComplete &&
+        !remoteCoreProfileComplete &&
+        userHash &&
+        !DISABLE_SESSION_SYNC &&
+        hasResearchConsent(mergedSession)
+      ) {
         const completionTimestamp =
           mergedLocalSession?.coreProfileCompletedAt ||
           mergedSession.coreProfileCompletedAt ||
@@ -943,9 +950,10 @@ export const useSession = (): UseSessionReturn => {
 
       if (isMounted) {
         setSessionStoreState({ sessionData: persisted, isInitialized: true });
-        if (!DISABLE_SESSION_SYNC && userHash) {
+        const snapshot = getSessionStoreSnapshot();
+        if (!DISABLE_SESSION_SYNC && userHash && hasResearchConsent(snapshot)) {
           queueMicrotask(() => {
-            void saveSessionToGcp(getSessionStoreSnapshot());
+            void saveSessionToGcp(snapshot);
           });
         }
       }
@@ -1039,10 +1047,12 @@ function ensureGcpSaveFlushListeners(): void {
     if (!gcpSaveDebounceTimer) return;
     clearTimeout(gcpSaveDebounceTimer);
     gcpSaveDebounceTimer = null;
+    const snapshot = getSessionStoreSnapshot();
+    if (!hasResearchConsent(snapshot)) return;
     if (isSessionSyncDebugEnabled()) {
       console.log('[session-sync:debug] flush GCP save (pagehide / hidden tab)');
     }
-    void saveSessionToGcp(getSessionStoreSnapshot());
+    void saveSessionToGcp(snapshot);
   };
   window.addEventListener('pagehide', flushPending);
   document.addEventListener('visibilitychange', () => {
@@ -1052,6 +1062,7 @@ function ensureGcpSaveFlushListeners(): void {
 
 function scheduleDebouncedGcpSave(): void {
   if (typeof window === 'undefined' || DISABLE_SESSION_SYNC) return;
+  if (!hasResearchConsent(getSessionStoreSnapshot())) return;
   ensureGcpSaveFlushListeners();
   if (gcpSaveDebounceTimer) clearTimeout(gcpSaveDebounceTimer);
   if (isSessionSyncDebugEnabled()) {

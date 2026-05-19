@@ -8,7 +8,6 @@ import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { safeSessionStorage } from '@/lib/gcp-data';
-import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { 
   Zap, 
@@ -108,7 +107,6 @@ export default function PathSelectionScreen() {
 
   const handlePathSelection = async (pathType: 'fast' | 'full') => {
     stopAllDialogueAudio();
-    void initAnonSessionAfterConsent();
     safeSessionStorage.setItem('aura_auth_path_type', pathType);
 
     if (pathType === 'fast') {

@@ -11,7 +11,6 @@ import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLayout } from '@/contexts/LayoutContext';
-import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
@@ -104,7 +103,6 @@ const LandingScreen: React.FC = () => {
                     aria-label={language === 'pl' ? 'Wybierz Szybką Ścieżkę (3-5 minut)' : 'Choose Fast Track (3-5 minutes)'}
                     onClick={async () => {
                       stopAllDialogueAudio();
-                      void initAnonSessionAfterConsent();
                       await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
                       router.push('/flow/onboarding');
                     }}
@@ -137,7 +135,6 @@ const LandingScreen: React.FC = () => {
                     aria-label={language === 'pl' ? 'Wybierz Pełne Doświadczenie (20-30 minut, polecane)' : 'Choose Full Experience (20-30 minutes, recommended)'}
                     onClick={async () => {
                       stopAllDialogueAudio();
-                      void initAnonSessionAfterConsent();
                       await updateSessionData({ pathType: 'full' });
                       router.push('/setup/profile');
                     }}
