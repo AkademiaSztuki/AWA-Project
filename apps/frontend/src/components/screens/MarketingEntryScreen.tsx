@@ -35,6 +35,7 @@ import {
 import { GlassButton, GlassCard } from '@/components/ui';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useLayout } from '@/contexts/LayoutContext';
+import { useWcagSettings } from '@/contexts/WcagSettingsContext';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import {
@@ -57,7 +58,7 @@ const copy = {
     eyebrow: 'IDA Interior Design Assistant',
     headline: 'Zobacz swoje wnętrze zaprojektowane pod Twoją osobowość',
     subheadline:
-      'Punkt wyjścia to jasna, pusta przestrzeń — jak pokój zanim zagości styl. IDA pokazuje wiele możliwych wersji przyszłego wnętrza, dopasowanych do stylu życia, nastroju i tego, jak chcesz się czuć w przestrzeni.',
+      'Punkt wyjścia to Twoja jasna przestrzeń. IDA pokazuje wiele możliwych wersji przyszłego wnętrza, dopasowanych do stylu życia, nastroju i tego, jak chcesz się czuć w przestrzeni.',
     primaryCta: 'Stwórz moje wnętrze',
     secondaryCta: 'Zobacz jak działa',
     proof: [
@@ -66,7 +67,6 @@ const copy = {
       'Dopasowanie do Twojego profilu',
       'Przejmij kontrolę: modyfikuj kolory, światło i detale',
     ],
-    before: 'Twój pokój przed stylem',
     after: 'Wersja IDA',
     visualTitle: 'Porównaj pustą przestrzeń z wariantami IDA',
     visualSubtitle:
@@ -196,7 +196,7 @@ const copy = {
     eyebrow: 'IDA Interior Design Assistant',
     headline: 'See your interior designed around your personality',
     subheadline:
-      'The starting point is a bright, empty room — like your space before the style arrives. IDA shows many possible futures shaped around your lifestyle, mood, and how you want the space to feel.',
+      'The starting point is your bright space. IDA shows many possible futures shaped around your lifestyle, mood, and how you want the space to feel.',
     primaryCta: 'Create my interior',
     secondaryCta: 'See how it works',
     proof: [
@@ -205,7 +205,6 @@ const copy = {
       'Matched to your profile',
       'Take control: tweak colors, lighting, and details',
     ],
-    before: 'Your room before the style',
     after: 'IDA version',
     visualTitle: 'Compare a blank room with IDA variants',
     visualSubtitle:
@@ -856,6 +855,80 @@ function localizedHeroSlide(slide: HeroInteriorSlide, lang: 'pl' | 'en') {
   return lang === 'pl' ? slide.pl : slide.en;
 }
 
+const HERO_VARIANT_RAIL_MAX_WIDTH_PX = 340;
+
+function HeroVariantStyleRail({
+  slideCopy,
+  activeIndex,
+  slideCount,
+  onPrev,
+  onNext,
+  prevAria,
+  nextAria,
+  className,
+}: {
+  slideCopy: { title: string; tagline: string; description: string };
+  activeIndex: number;
+  slideCount: number;
+  onPrev: () => void;
+  onNext: () => void;
+  prevAria: string;
+  nextAria: string;
+  className?: string;
+}) {
+  return (
+    <GlassCard
+      variant="glass"
+      className={cn(
+        'pointer-events-none w-full max-w-[min(340px,calc(100%-2rem))] shrink-0 p-3.5 sm:max-w-[min(340px,calc(100%-2.5rem))] sm:p-4 lg:max-w-[min(340px,calc(100%-2.5rem))]',
+        className
+      )}
+    >
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-graphite">{slideCopy.title}</p>
+          <p className="font-modern text-xs text-gold-500">{slideCopy.tagline}</p>
+        </div>
+        <Sparkles size={20} className="shrink-0 text-gold-500" aria-hidden="true" />
+      </div>
+      <p className="font-modern text-xs font-medium leading-5 text-graphite drop-shadow-[0_1px_0_rgba(255,255,255,0.45)]">
+        {slideCopy.description}
+      </p>
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onPrev}
+          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/45 bg-white/70 text-graphite shadow-sm transition hover:bg-white"
+          aria-label={prevAria}
+        >
+          <ChevronLeft size={18} aria-hidden="true" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 text-center font-modern text-[10px] font-semibold uppercase tracking-[0.14em] text-graphite/65">
+            {activeIndex + 1} / {slideCount}
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/35">
+            <div
+              className="h-full rounded-full bg-gold-500 transition-[width] duration-300 ease-out"
+              style={{
+                width: `${((activeIndex + 1) / Math.max(1, slideCount)) * 100}%`,
+              }}
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onNext}
+          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/45 bg-white/70 text-graphite shadow-sm transition hover:bg-white"
+          aria-label={nextAria}
+        >
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>
+      </div>
+    </GlassCard>
+  );
+}
+
 const MarketingEntryScreen: React.FC = () => {
   const router = useRouter();
   const { updateSessionData } = useSessionData();
@@ -864,12 +937,19 @@ const MarketingEntryScreen: React.FC = () => {
   const useMarqueePortal = pathname === '/' && !isMobile;
   const { language } = useLanguage();
   const { setHeaderVisible } = useLayout();
+  const { fontScale, textSpacing } = useWcagSettings();
+  /** At large WCAG text sizes the fixed max-height forces an inner scrollbar — let the panel grow instead. */
+  const heroCopyRelaxedOverflow =
+    fontScale === 'lg' || fontScale === 'xl' || textSpacing;
   const reduceHeroCarousel = useReducedMotion();
   const [sliderPosition, setSliderPosition] = useState(56);
   const [activeVariant, setActiveVariant] = useState(0);
   const comparisonRef = useRef<HTMLDivElement | null>(null);
   const heroStickyFrameRef = useRef<HTMLDivElement | null>(null);
   const heroCopyGlassPanelRef = useRef<HTMLDivElement | null>(null);
+  const heroStyleRailAnchorRef = useRef<HTMLDivElement | null>(null);
+  const heroStyleRailPortalLayerRef = useRef<HTMLDivElement | null>(null);
+  const [heroStyleRailPortalHost, setHeroStyleRailPortalHost] = useState<HTMLElement | null>(null);
   const heroFrameHeightMv = useMotionValue(0);
   /** Minimum scaleY so room layer height ≥ glass headline panel height (desktop marketing hero). */
   const minHeroVisualScaleYMv = useMotionValue(0.72);
@@ -940,11 +1020,6 @@ const MarketingEntryScreen: React.FC = () => {
     const scale = typeof s === 'number' ? s : 1;
     if (scale >= 0.9999) return '100%';
     return `${(scale * 100).toFixed(2)}%`;
-  });
-  /** Undo uniform room scale on photo labels while the hero band shrinks (desktop hero only). */
-  const heroRoomLabelScale = useTransform(heroVisualScaleY, (s) => {
-    if (s >= 0.9999) return 1;
-    return Math.min(1 / s, 2);
   });
   /**
    * Keep hero copy’s right edge aligned to the content column while the sticky frame bleeds to full viewport width.
@@ -1070,7 +1145,7 @@ const MarketingEntryScreen: React.FC = () => {
       ro?.disconnect();
       window.removeEventListener('resize', sync);
     };
-  }, [isMobile, language, minHeroVisualScaleYMv]);
+  }, [isMobile, language, minHeroVisualScaleYMv, fontScale, textSpacing]);
 
   /** Panel height can change without the sticky frame resizing (copy wrap, fonts). */
   useLayoutEffect(() => {
@@ -1092,7 +1167,101 @@ const MarketingEntryScreen: React.FC = () => {
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncPanel) : null;
     ro?.observe(panelEl);
     return () => ro?.disconnect();
-  }, [isMobile, language, minHeroVisualScaleYMv]);
+  }, [isMobile, language, minHeroVisualScaleYMv, fontScale, textSpacing]);
+
+  useLayoutEffect(() => {
+    if (!heroCopyRelaxedOverflow) {
+      setHeroStyleRailPortalHost(null);
+      return;
+    }
+    setHeroStyleRailPortalHost(document.getElementById('hero-style-rail-layer'));
+  }, [heroCopyRelaxedOverflow]);
+
+  const applyHeroStyleRailPortalGeometry = useCallback(
+    (force = false) => {
+      const anchor = heroStyleRailAnchorRef.current;
+      const layer = heroStyleRailPortalLayerRef.current;
+      if (!anchor || !layer) return;
+
+      const ar = anchor.getBoundingClientRect();
+      const vh = window.innerHeight;
+      if (!force && (ar.top > vh + 120 || ar.bottom < -80)) {
+        layer.style.visibility = 'hidden';
+        return;
+      }
+      layer.style.visibility = 'visible';
+
+      const colLeft = columnBox.left;
+      const colWidth = columnBox.width;
+      const vw = viewportWidth || window.innerWidth;
+      const copyFillsWidth = colWidth > 0 && vw > 0 && colWidth >= vw - 64;
+      const cardW = Math.min(
+        HERO_VARIANT_RAIL_MAX_WIDTH_PX,
+        Math.max(260, copyFillsWidth ? vw - 32 : colLeft - 28)
+      );
+
+      if (copyFillsWidth) {
+        const frameTop = heroStickyFrameRef.current?.getBoundingClientRect().top ?? 0;
+        layer.style.top = `${Math.round(frameTop + 72)}px`;
+        layer.style.bottom = 'auto';
+        layer.style.left = '12px';
+      } else {
+        const leftPx = Math.max(12, colLeft - cardW - 20);
+        layer.style.top = 'auto';
+        layer.style.bottom = `${Math.max(12, Math.round(vh - ar.bottom))}px`;
+        layer.style.left = `${leftPx}px`;
+      }
+
+      layer.style.right = 'auto';
+      layer.style.width = `${Math.round(cardW)}px`;
+    },
+    [columnBox.left, columnBox.width, viewportWidth]
+  );
+
+  useLayoutEffect(() => {
+    if (!heroCopyRelaxedOverflow || !heroStyleRailPortalHost) return;
+
+    let rafId = 0;
+    const scheduleSync = () => {
+      if (rafId !== 0) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        applyHeroStyleRailPortalGeometry(false);
+      });
+    };
+
+    const handleResize = () => {
+      applyHeroStyleRailPortalGeometry(true);
+    };
+
+    applyHeroStyleRailPortalGeometry(true);
+    window.addEventListener('scroll', scheduleSync, { passive: true });
+    window.addEventListener('resize', handleResize);
+
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => applyHeroStyleRailPortalGeometry(true))
+        : null;
+    const anchor = heroStyleRailAnchorRef.current;
+    const copyPanel = heroCopyGlassPanelRef.current;
+    if (anchor) ro?.observe(anchor);
+    if (copyPanel) ro?.observe(copyPanel);
+
+    return () => {
+      if (rafId !== 0) window.cancelAnimationFrame(rafId);
+      window.removeEventListener('scroll', scheduleSync);
+      window.removeEventListener('resize', handleResize);
+      ro?.disconnect();
+    };
+  }, [
+    heroCopyRelaxedOverflow,
+    heroStyleRailPortalHost,
+    applyHeroStyleRailPortalGeometry,
+    activeVariant,
+    language,
+    fontScale,
+    textSpacing,
+  ]);
 
   const t = copy[language];
   const heroSlideCount = HERO_INTERIOR_SLIDES.length;
@@ -1431,8 +1600,6 @@ const MarketingEntryScreen: React.FC = () => {
             >
                 <HeroPhotoLayer
                   src={emptyRoomImageSrc}
-                  label={t.before}
-                  labelScale={!isMobile ? heroRoomLabelScale : undefined}
                   photoCornerRadius={heroBorderRadius}
                   priority
                 />
@@ -1500,7 +1667,12 @@ const MarketingEntryScreen: React.FC = () => {
                 <div
                   ref={assignHeroCopyGlassPanelRef}
                   lang={language === 'pl' ? 'pl' : 'en'}
-                  className="glass-panel pointer-events-none max-h-[min(56dvh,520px)] overflow-y-auto overscroll-contain rounded-[1.65rem] border border-white/25 bg-gradient-to-br from-pearl-100/82 via-pearl-50/55 to-champagne/35 px-5 py-6 shadow-[0_24px_70px_-20px_rgba(45,38,28,0.28)] backdrop-blur-xl sm:max-h-none sm:overflow-visible sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-8 xl:max-h-[min(72dvh,680px)] xl:overflow-y-auto xl:overscroll-contain"
+                  className={cn(
+                    'glass-panel pointer-events-none rounded-[1.65rem] border border-white/25 bg-gradient-to-br from-pearl-100/82 via-pearl-50/55 to-champagne/35 px-5 py-6 shadow-[0_24px_70px_-20px_rgba(45,38,28,0.28)] backdrop-blur-xl sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-8',
+                    heroCopyRelaxedOverflow
+                      ? 'max-h-none overflow-visible'
+                      : 'max-h-[min(56dvh,520px)] overflow-y-auto overscroll-contain sm:max-h-none sm:overflow-visible xl:max-h-[min(72dvh,680px)] xl:overflow-y-auto xl:overscroll-contain'
+                  )}
                 >
                   <div className="mb-3">
                     <span className="inline-flex items-center gap-2 rounded-full border border-gold-500/40 bg-gold-500/12 px-3 py-1.5 text-[10px] font-modern uppercase tracking-[0.2em] text-graphite sm:text-xs">
@@ -1522,7 +1694,7 @@ const MarketingEntryScreen: React.FC = () => {
                       </li>
                     ))}
                   </ul>
-                  <p className="mb-5 font-modern text-sm leading-relaxed text-silver-dark sm:mb-6 sm:text-base sm:leading-7">
+                  <p className="mb-5 font-modern text-sm font-medium leading-relaxed text-graphite drop-shadow-[0_1px_0_rgba(255,255,255,0.45)] sm:mb-6 sm:text-base sm:leading-7">
                     {t.subheadline}
                   </p>
                   <div className="pointer-events-auto grid w-full grid-cols-1 gap-2.5 sm:grid-cols-2 sm:items-stretch sm:gap-3">
@@ -1557,58 +1729,46 @@ const MarketingEntryScreen: React.FC = () => {
             )}
             style={{ paddingBottom: heroStyleRailBottomPad }}
           >
-            <GlassCard
-              variant="glass"
-              className={cn(
-                // Let pointer events reach the before/after slider underneath; only nav pills capture input.
-                'pointer-events-none w-full max-w-[min(340px,calc(100%-2rem))] shrink-0 p-3.5 sm:max-w-[min(340px,calc(100%-2.5rem))] sm:p-4',
-                'lg:max-w-[min(340px,calc(100%-2.5rem))]'
-              )}
-            >
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm text-graphite">{activeHeroSlideCopy.title}</p>
-                  <p className="font-modern text-xs text-gold-500">{activeHeroSlideCopy.tagline}</p>
-                </div>
-                <Sparkles size={20} className="shrink-0 text-gold-500" aria-hidden="true" />
-              </div>
-              <p className="font-modern text-xs leading-5 text-silver-dark">{activeHeroSlideCopy.description}</p>
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveVariant((i) => (i - 1 + heroSlideCount) % heroSlideCount)
-                  }
-                  className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/45 bg-white/70 text-graphite shadow-sm transition hover:bg-white"
-                  aria-label={t.heroPrevVariantAria}
-                >
-                  <ChevronLeft size={18} aria-hidden="true" />
-                </button>
-                <div className="min-w-0 flex-1">
-                  <div className="mb-1 text-center font-modern text-[10px] font-semibold uppercase tracking-[0.14em] text-graphite/65">
-                    {activeVariant + 1} / {heroSlideCount}
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-white/35">
-                    <div
-                      className="h-full rounded-full bg-gold-500 transition-[width] duration-300 ease-out"
-                      style={{
-                        width: `${((activeVariant + 1) / Math.max(1, heroSlideCount)) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveVariant((i) => (i + 1) % heroSlideCount)}
-                  className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/45 bg-white/70 text-graphite shadow-sm transition hover:bg-white"
-                  aria-label={t.heroNextVariantAria}
-                >
-                  <ChevronRight size={18} aria-hidden="true" />
-                </button>
-              </div>
-            </GlassCard>
+            {heroCopyRelaxedOverflow ? (
+              <div
+                ref={heroStyleRailAnchorRef}
+                className="h-px w-[min(340px,calc(100%-2rem))] shrink-0 opacity-0 sm:w-[min(340px,calc(100%-2.5rem))]"
+                aria-hidden
+              />
+            ) : (
+              <HeroVariantStyleRail
+                slideCopy={activeHeroSlideCopy}
+                activeIndex={activeVariant}
+                slideCount={heroSlideCount}
+                onPrev={() => setActiveVariant((i) => (i - 1 + heroSlideCount) % heroSlideCount)}
+                onNext={() => setActiveVariant((i) => (i + 1) % heroSlideCount)}
+                prevAria={t.heroPrevVariantAria}
+                nextAria={t.heroNextVariantAria}
+              />
+            )}
           </motion.div>
         </motion.div>
+        {heroCopyRelaxedOverflow && heroStyleRailPortalHost
+          ? createPortal(
+              <div
+                ref={heroStyleRailPortalLayerRef}
+                className="pointer-events-none fixed z-[6]"
+                style={{ visibility: 'hidden' }}
+              >
+                <HeroVariantStyleRail
+                  slideCopy={activeHeroSlideCopy}
+                  activeIndex={activeVariant}
+                  slideCount={heroSlideCount}
+                  onPrev={() => setActiveVariant((i) => (i - 1 + heroSlideCount) % heroSlideCount)}
+                  onNext={() => setActiveVariant((i) => (i + 1) % heroSlideCount)}
+                  prevAria={t.heroPrevVariantAria}
+                  nextAria={t.heroNextVariantAria}
+                  className="max-w-none"
+                />
+              </div>,
+              heroStyleRailPortalHost
+            )
+          : null}
         {/*
           In-flow space after the sticky frame (desktop) so the next section starts lower in the document: copy can
           stay under the hero (z-4) without riding so far under the frame at the end of this scroll track.

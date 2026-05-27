@@ -57,7 +57,10 @@ export function ResponsiveLayoutWrapper({ children }: { children: React.ReactNod
           <DesktopBackground />
           <AuroraBubbles variant="reduced" />
           {pathname === '/' && (
-            <div id="living-room-marquee-layer" className="pointer-events-none fixed inset-0 z-[2] isolate" />
+            <>
+              <div id="living-room-marquee-layer" className="pointer-events-none fixed inset-0 z-[2] isolate" />
+              <div id="hero-style-rail-layer" className="pointer-events-none fixed inset-0 z-[6] isolate" />
+            </>
           )}
           {showAwaDesktop && <AwaBackground />}
           <ParticlesBackground />
@@ -65,6 +68,9 @@ export function ResponsiveLayoutWrapper({ children }: { children: React.ReactNod
       ) : (
         <>
           <MobileBackground />
+          {pathname === '/' && (
+            <div id="hero-style-rail-layer" className="pointer-events-none fixed inset-0 z-[6] isolate" />
+          )}
           {showAwaMobile && <AwaBackground />}
         </>
       )}
