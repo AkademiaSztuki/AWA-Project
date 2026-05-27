@@ -799,6 +799,8 @@ type HeroPhotoLayerProps = {
   label?: string;
   /** Uniform inverse scale for labels while the hero room layer scales down (desktop). */
   labelScale?: MotionValue<number>;
+  /** Rounded corners on the photo stack only (animated with hero settle). */
+  photoCornerRadius?: MotionValue<string>;
   priority?: boolean;
   afterGlow?: boolean;
 };
@@ -807,10 +809,19 @@ const HeroPhotoLayer = ({
   src,
   label,
   labelScale,
+  photoCornerRadius,
   priority,
   afterGlow,
 }: HeroPhotoLayerProps) => (
-  <motion.div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+  <motion.div
+    className="absolute inset-0 overflow-hidden"
+    aria-hidden="true"
+    style={
+      photoCornerRadius
+        ? ({ borderRadius: photoCornerRadius } as unknown as React.CSSProperties)
+        : undefined
+    }
+  >
     <motion.div className="absolute inset-0">
       <Image src={src} alt="" fill priority={priority} sizes="100vw" className="object-cover" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-black/5 to-black/15" />
@@ -905,7 +916,7 @@ const MarketingEntryScreen: React.FC = () => {
     if (measured <= 0) return 'calc(50% - 50vw)';
     return `${(-columnBox.left * breakout).toFixed(2)}px`;
   });
-  /** Outer clip: keep a minimum radius at full-bleed (s=0) so room/photos read with rounded top corners; grows to 36px when settled. */
+  /** Photo-only corner radius (20px → 36px when settled). */
   const heroBorderRadius = useTransform(effectiveHeroSettle, (s) => {
     const t = Math.min(1, Math.max(0, s));
     return `${Math.round(20 + 16 * t)}px`;
@@ -924,22 +935,17 @@ const MarketingEntryScreen: React.FC = () => {
       return Math.max(ratio, floor);
     }
   );
-  /** Undo uniform room scale on labels / slider handle (desktop hero only). */
+  /** Photo band height (bottom-anchored); same ratio as heroVisualScaleY without transform scale. */
+  const heroPhotoBandHeight = useTransform(heroVisualScaleY, (s) => {
+    const scale = typeof s === 'number' ? s : 1;
+    if (scale >= 0.9999) return '100%';
+    return `${(scale * 100).toFixed(2)}%`;
+  });
+  /** Undo uniform room scale on photo labels while the hero band shrinks (desktop hero only). */
   const heroRoomLabelScale = useTransform(heroVisualScaleY, (s) => {
     if (s >= 0.9999) return 1;
     return Math.min(1 / s, 2);
   });
-  /**
-   * With uniform scale from top, empty band sits at the bottom of the frame; translate down by (1-s)*frameHeight
-   * so the visual bottom aligns with the sticky box. Must use the same height as `h-[100dvh]` (not innerHeight).
-   */
-  const heroVisualTranslateY = useTransform([heroVisualScaleY, heroFrameHeightMv], ([s, h]) => {
-    const scale = typeof s === 'number' ? s : 1;
-    const height = typeof h === 'number' ? h : 0;
-    if (!height || scale >= 0.9999) return 0;
-    return (1 - scale) * height;
-  });
-
   /**
    * Keep hero copy’s right edge aligned to the content column while the sticky frame bleeds to full viewport width.
    * Analytic `translateX` (same breakout as width/margin-left) — avoids getBoundingClientRect per scroll frame jitter.
@@ -1358,13 +1364,12 @@ const MarketingEntryScreen: React.FC = () => {
       {/* Width probe — must not use overflow-hidden or sticky will not behave reliably */}
       <div ref={heroBleedMeasureRef} className="pointer-events-none h-0 w-full" aria-hidden="true" />
       <div className={cn(useMarqueePortal && 'pointer-events-auto')}>
-      <section ref={heroRef} className="relative min-h-[132dvh] lg:min-h-[128dvh]">
+      <section ref={heroRef} className="relative min-h-[132dvh] bg-transparent lg:min-h-[128dvh]">
         <motion.div
           ref={heroStickyFrameRef}
           style={{
             marginLeft: heroMarginLeftMotion,
             width: heroWidthMotion,
-            borderRadius: heroBorderRadius,
           }}
           className={cn(
             'sticky top-0 z-[5] h-[100dvh] overflow-hidden',
@@ -1372,21 +1377,13 @@ const MarketingEntryScreen: React.FC = () => {
           )}
         >
           {/*
-            Single rounded shell (no transform) — inner layer scales; avoid stacked clip-path + pearl
-            overlays that leave a dark wedge in the top corners.
+            Photo band fills sticky width (no inner 100vw) so border-radius is not clipped square.
+            Overlays stay siblings with z-[2].
           */}
           <motion.div
             ref={comparisonRef}
             tabIndex={0}
-            className={cn(
-              'absolute inset-0 z-[1] cursor-ew-resize overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent shadow-[inset_0_-48px_90px_-24px_rgba(45,38,28,0.12),0_10px_36px_-14px_rgba(45,38,28,0.16)]',
-              isMobile && 'rounded-[16px] sm:rounded-[20px]'
-            )}
-            style={
-              !isMobile
-                ? ({ borderRadius: heroBorderRadius } as unknown as React.CSSProperties)
-                : undefined
-            }
+            className="absolute inset-0 z-[1] cursor-ew-resize overflow-hidden bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             onPointerDown={(event) => {
               event.currentTarget.setPointerCapture(event.pointerId);
               updateSliderFromClientX(event.clientX);
@@ -1418,83 +1415,68 @@ const MarketingEntryScreen: React.FC = () => {
           >
             <motion.div
               className={cn(
-                'absolute',
-                isMobile ? 'inset-0' : 'top-0 left-1/2 h-[100dvh] will-change-transform'
+                'absolute overflow-hidden rounded-[22px] [transform:translateZ(0)]',
+                isMobile ? 'inset-0' : 'inset-x-0 bottom-0 will-change-[height,border-radius]'
               )}
               style={
-                !isMobile
+                isMobile
                   ? ({
-                      width: viewportWidth ? `${viewportWidth}px` : '100vw',
-                      x: '-50%',
-                      scale: heroVisualScaleY,
-                      y: heroVisualTranslateY,
-                      transformOrigin: '50% 0%',
+                      borderRadius: heroBorderRadius,
                     } as unknown as React.CSSProperties)
-                  : undefined
+                  : ({
+                      height: heroPhotoBandHeight,
+                      borderRadius: heroBorderRadius,
+                    } as unknown as React.CSSProperties)
               }
             >
-            <HeroPhotoLayer
-              src={emptyRoomImageSrc}
-              label={t.before}
-              labelScale={!isMobile ? heroRoomLabelScale : undefined}
-              priority
-            />
-            <div
-              className="absolute inset-0 overflow-hidden"
-              style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
-            >
-              <AnimatePresence initial={false} mode="sync">
-                <motion.div
-                  key={activeVariant}
-                  className="absolute inset-0"
-                  initial={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
-                  transition={{
-                    duration: reduceHeroCarousel ? 0 : HERO_INTERIOR_CROSSFADE_SEC,
-                    ease: HERO_INTERIOR_CROSSFADE_EASE,
-                  }}
-                >
-                  <HeroPhotoLayer
-                    src={activeAfterImageSrc}
-                    afterGlow
-                    priority={activeVariant === 0}
-                  />
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div
-              className="absolute inset-y-0 z-[2] w-1 bg-white shadow-2xl"
-              style={{ left: `${sliderPosition}%` }}
-              aria-hidden="true"
-            >
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                {!isMobile ? (
+                <HeroPhotoLayer
+                  src={emptyRoomImageSrc}
+                  label={t.before}
+                  labelScale={!isMobile ? heroRoomLabelScale : undefined}
+                  photoCornerRadius={heroBorderRadius}
+                  priority
+                />
+              <div
+                className="absolute inset-0 overflow-hidden"
+                style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+              >
+                <AnimatePresence initial={false} mode="sync">
                   <motion.div
-                    className="flex h-16 w-16 items-center justify-center rounded-full border border-white/70 bg-white/90 shadow-2xl sm:h-20 sm:w-20"
-                    style={{
-                      scale: heroRoomLabelScale,
-                      transformOrigin: '50% 50%',
+                    key={activeVariant}
+                    className="absolute inset-0"
+                    initial={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
+                    transition={{
+                      duration: reduceHeroCarousel ? 0 : HERO_INTERIOR_CROSSFADE_SEC,
+                      ease: HERO_INTERIOR_CROSSFADE_EASE,
                     }}
                   >
-                    <SlidersHorizontal size={28} className="text-gold-500" aria-hidden="true" />
+                      <HeroPhotoLayer
+                        src={activeAfterImageSrc}
+                        photoCornerRadius={heroBorderRadius}
+                        afterGlow
+                        priority={activeVariant === 0}
+                      />
                   </motion.div>
-                ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/70 bg-white/90 shadow-2xl sm:h-20 sm:w-20">
+                </AnimatePresence>
+              </div>
+
+                <div
+                  className="absolute inset-y-0 z-[2] w-px bg-white/45"
+                  style={{ left: `${sliderPosition}%` }}
+                  aria-hidden="true"
+                >
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/55 bg-transparent backdrop-blur-[2px] sm:h-20 sm:w-20">
                     <SlidersHorizontal size={28} className="text-gold-500" aria-hidden="true" />
                   </div>
-                )}
+                </div>
               </div>
-            </div>
             </motion.div>
 
             <motion.div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/52 via-graphite/16 to-transparent lg:from-graphite/46 lg:via-graphite/12 xl:from-graphite/38 xl:via-graphite/8" />
             <motion.div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[40%] bg-gradient-to-t from-black/44 via-black/14 to-transparent lg:h-[36%] lg:from-black/36 xl:from-black/28" />
-            <motion.div
-              className="pointer-events-none absolute bottom-0 right-0 z-[2] w-full max-w-[min(100%,46rem)] bg-gradient-to-l from-pearl-100/72 via-pearl-50/36 to-transparent sm:max-w-[min(100%,52rem)] lg:max-w-[58%] top-[min(28dvh,220px)]"
-              aria-hidden="true"
-            />
           </motion.div>
 
           <motion.div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between pt-[env(safe-area-inset-top,0px)] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 lg:pb-6">
@@ -1547,7 +1529,7 @@ const MarketingEntryScreen: React.FC = () => {
                     <GlassButton
                       size="lg"
                       onClick={goToPathSelection}
-                      className="group w-full min-w-0 justify-start text-left border-gold-500/55 bg-gold-500/20 hover:border-gold-500/75 hover:bg-gold-500/40"
+                      className="glass-button-emphasis group w-full min-w-0 justify-start text-left"
                     >
                       <ArrowRight size={20} className="shrink-0 text-gold-500 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                       {t.primaryCta}
@@ -1763,7 +1745,7 @@ const MarketingEntryScreen: React.FC = () => {
           <GlassButton
             size="md"
             onClick={goToPathSelection}
-            className="shrink-0 self-start sm:self-auto border-gold-500/55 bg-gold-500/20 hover:border-gold-500/75 hover:bg-gold-500/40"
+            className="glass-button-emphasis shrink-0 self-start sm:self-auto"
           >
             {t.primaryCta}
           </GlassButton>
@@ -1831,7 +1813,7 @@ const MarketingEntryScreen: React.FC = () => {
         <GlassCard variant="glass" className="p-8 sm:p-12">
           <h2 className="mx-auto mb-3 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.finalTitle}</h2>
           <p className="mx-auto mb-7 max-w-2xl font-modern text-base text-silver-dark">{t.finalSubtitle}</p>
-          <GlassButton size="lg" onClick={goToPathSelection} className="mx-auto group border-gold-500/55 bg-gold-500/20 hover:border-gold-500/75 hover:bg-gold-500/40">
+          <GlassButton size="lg" onClick={goToPathSelection} className="glass-button-emphasis mx-auto group">
             {t.primaryCta}
             <ArrowRight size={20} className="text-gold-500 transition-transform group-hover:translate-x-1" aria-hidden="true" />
           </GlassButton>
@@ -1969,7 +1951,7 @@ const PathCard = ({
       onClick={onClick}
       className={cn(
         'mt-auto w-full lg:mt-0',
-        highlighted && 'border-gold-500/55 bg-gold-500/20 hover:border-gold-500/75 hover:bg-gold-500/40'
+        highlighted && 'glass-button-emphasis'
       )}
     >
       {cta}
