@@ -119,7 +119,7 @@ const copy = {
       cta: 'Stwórz mój profil wnętrza',
       points: ['profil osobowości', 'preferencje sensoryczne', 'styl życia i inspiracje'],
     },
-    whyTitle: 'To nie tylko ładny obrazek. To projekt oparty na Tobie.',
+    whyTitle: 'To nie tylko ładny obrazek. To projekt dopasowany do Ciebie.',
     why: [
       {
         title: 'Osobowość',
@@ -257,7 +257,7 @@ const copy = {
       cta: 'Create my interior profile',
       points: ['personality profile', 'sensory preferences', 'lifestyle and inspirations'],
     },
-    whyTitle: 'This is not just a pretty image. It is a design based on you.',
+    whyTitle: 'This is not just a pretty image. It is a design tailored to you.',
     why: [
       {
         title: 'Personality',
@@ -628,8 +628,11 @@ const WhyMarketingGalleryCard: React.FC<{
       }}
     >
       <GlassCard
-        variant="glass"
-        className="group flex h-full min-h-0 flex-col overflow-hidden p-6 transition-[box-shadow,transform] duration-300 ease-out hover:shadow-[0_12px_40px_-16px_rgba(45,38,28,0.28)]"
+        variant="flatOnMobile"
+        className={cn(
+          'group flex h-full min-h-0 flex-col overflow-hidden p-6 transition-[box-shadow,transform] duration-300 ease-out max-xl:hover:shadow-none xl:hover:shadow-[0_12px_40px_-16px_rgba(45,38,28,0.28)]',
+          MOBILE_FLAT_CARD_FRAME
+        )}
       >
         <div className="mb-5 flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-gold-500/40 bg-graphite/30 text-gold-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_20px_-6px_rgba(255,215,0,0.35)] transition-transform group-hover:scale-110">
           <Icon size={28} aria-hidden="true" />
@@ -822,13 +825,24 @@ const HeroPhotoLayer = ({
     }
   >
     <motion.div className="absolute inset-0">
-      <Image src={src} alt="" fill priority={priority} sizes="100vw" className="object-cover" />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-black/5 to-black/15" />
+      {/*
+        Hero files in /public/hero are already WebP — skip Next re-encode (AVIF @ ~75) which softens detail on mobile.
+      */}
+      <Image
+        src={src}
+        alt=""
+        fill
+        priority={priority}
+        sizes="(max-width: 1280px) 100vw, 1280px"
+        unoptimized
+        className="object-cover"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/22 via-black/4 to-black/12 xl:from-black/30 xl:via-black/5 xl:to-black/15" />
       {afterGlow ? (
         <motion.div
           animate={{ opacity: [0.35, 0.62, 0.35] }}
           transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.28),transparent_38%)]"
+          className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.28),transparent_38%)] xl:block"
         />
       ) : null}
     </motion.div>
@@ -857,6 +871,9 @@ function localizedHeroSlide(slide: HeroInteriorSlide, lang: 'pl' | 'en') {
 
 const HERO_VARIANT_RAIL_MAX_WIDTH_PX = 340;
 
+/** Delicate gold outline on flat cards below xl (aligned with highlighted path card). */
+const MOBILE_FLAT_CARD_FRAME = 'max-xl:border max-xl:border-gold-400/50';
+
 function HeroVariantStyleRail({
   slideCopy,
   activeIndex,
@@ -878,7 +895,7 @@ function HeroVariantStyleRail({
 }) {
   return (
     <GlassCard
-      variant="glass"
+      variant="flatOnMobile"
       className={cn(
         'pointer-events-none w-full max-w-[min(340px,calc(100%-2rem))] shrink-0 p-3.5 sm:max-w-[min(340px,calc(100%-2.5rem))] sm:p-4 lg:max-w-[min(340px,calc(100%-2.5rem))]',
         className
@@ -933,7 +950,8 @@ const MarketingEntryScreen: React.FC = () => {
   const router = useRouter();
   const { updateSessionData } = useSessionData();
   const pathname = usePathname();
-  const isMobile = useIsMobile();
+  /** Align with GlassCard `flatOnMobile` / AppContentFrame compact layout (1280px). */
+  const isMobile = useIsMobile(1280);
   const useMarqueePortal = pathname === '/' && !isMobile;
   const { language } = useLanguage();
   const { setHeaderVisible } = useLayout();
@@ -1170,12 +1188,12 @@ const MarketingEntryScreen: React.FC = () => {
   }, [isMobile, language, minHeroVisualScaleYMv, fontScale, textSpacing]);
 
   useLayoutEffect(() => {
-    if (!heroCopyRelaxedOverflow) {
+    if (!heroCopyRelaxedOverflow || isMobile) {
       setHeroStyleRailPortalHost(null);
       return;
     }
     setHeroStyleRailPortalHost(document.getElementById('hero-style-rail-layer'));
-  }, [heroCopyRelaxedOverflow]);
+  }, [heroCopyRelaxedOverflow, isMobile]);
 
   const applyHeroStyleRailPortalGeometry = useCallback(
     (force = false) => {
@@ -1533,16 +1551,20 @@ const MarketingEntryScreen: React.FC = () => {
       {/* Width probe — must not use overflow-hidden or sticky will not behave reliably */}
       <div ref={heroBleedMeasureRef} className="pointer-events-none h-0 w-full" aria-hidden="true" />
       <div className={cn(useMarqueePortal && 'pointer-events-auto')}>
-      <section ref={heroRef} className="relative min-h-[132dvh] bg-transparent lg:min-h-[128dvh]">
+      <section ref={heroRef} className="relative min-h-[100dvh] bg-transparent xl:min-h-[128dvh]">
         <motion.div
           ref={heroStickyFrameRef}
-          style={{
-            marginLeft: heroMarginLeftMotion,
-            width: heroWidthMotion,
-          }}
+          style={
+            isMobile
+              ? undefined
+              : {
+                  marginLeft: heroMarginLeftMotion,
+                  width: heroWidthMotion,
+                }
+          }
           className={cn(
             'sticky top-0 z-[5] h-[100dvh] overflow-hidden',
-            'will-change-[width,margin-left]'
+            !isMobile && 'will-change-[width,margin-left]'
           )}
         >
           {/*
@@ -1584,7 +1606,7 @@ const MarketingEntryScreen: React.FC = () => {
           >
             <motion.div
               className={cn(
-                'absolute overflow-hidden rounded-[22px] [transform:translateZ(0)]',
+                'absolute overflow-hidden rounded-[22px] max-xl:[transform:none] xl:[transform:translateZ(0)]',
                 isMobile ? 'inset-0' : 'inset-x-0 bottom-0 will-change-[height,border-radius]'
               )}
               style={
@@ -1615,7 +1637,11 @@ const MarketingEntryScreen: React.FC = () => {
                     animate={{ opacity: 1 }}
                     exit={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
                     transition={{
-                      duration: reduceHeroCarousel ? 0 : HERO_INTERIOR_CROSSFADE_SEC,
+                      duration: reduceHeroCarousel
+                        ? 0
+                        : isMobile
+                          ? 1.15
+                          : HERO_INTERIOR_CROSSFADE_SEC,
                       ease: HERO_INTERIOR_CROSSFADE_EASE,
                     }}
                   >
@@ -1642,8 +1668,8 @@ const MarketingEntryScreen: React.FC = () => {
               </div>
             </motion.div>
 
-            <motion.div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/52 via-graphite/16 to-transparent lg:from-graphite/46 lg:via-graphite/12 xl:from-graphite/38 xl:via-graphite/8" />
-            <motion.div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[40%] bg-gradient-to-t from-black/44 via-black/14 to-transparent lg:h-[36%] lg:from-black/36 xl:from-black/28" />
+            <motion.div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/24 via-graphite/6 to-transparent max-xl:from-graphite/20 max-xl:via-transparent lg:from-graphite/46 lg:via-graphite/12 xl:from-graphite/38 xl:via-graphite/8" />
+            <motion.div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[34%] bg-gradient-to-t from-black/22 via-black/6 to-transparent max-xl:from-black/18 xl:h-[40%] xl:from-black/44 xl:via-black/14 xl:from-black/36" />
           </motion.div>
 
           <motion.div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between pt-[env(safe-area-inset-top,0px)] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 lg:pb-6">
@@ -1668,7 +1694,9 @@ const MarketingEntryScreen: React.FC = () => {
                   ref={assignHeroCopyGlassPanelRef}
                   lang={language === 'pl' ? 'pl' : 'en'}
                   className={cn(
-                    'glass-panel pointer-events-none rounded-[1.65rem] border border-white/25 bg-gradient-to-br from-pearl-100/82 via-pearl-50/55 to-champagne/35 px-5 py-6 shadow-[0_24px_70px_-20px_rgba(45,38,28,0.28)] backdrop-blur-xl sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-8',
+                    'pointer-events-none rounded-[1.65rem] px-5 py-6 sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-8',
+                    'max-xl:border-none max-xl:bg-transparent max-xl:shadow-none max-xl:backdrop-blur-none',
+                    'xl:glass-panel xl:border xl:border-white/25 xl:bg-gradient-to-br xl:from-pearl-100/82 xl:via-pearl-50/55 xl:to-champagne/35 xl:shadow-[0_24px_70px_-20px_rgba(45,38,28,0.28)] xl:backdrop-blur-xl',
                     heroCopyRelaxedOverflow
                       ? 'max-h-none overflow-visible'
                       : 'max-h-[min(56dvh,520px)] overflow-y-auto overscroll-contain sm:max-h-none sm:overflow-visible xl:max-h-[min(72dvh,680px)] xl:overflow-y-auto xl:overscroll-contain'
@@ -1724,7 +1752,7 @@ const MarketingEntryScreen: React.FC = () => {
 
           <motion.div
             className={cn(
-              'pointer-events-none absolute inset-0 z-30 flex flex-col justify-end items-start',
+              'pointer-events-none absolute inset-0 z-30 flex flex-col justify-end items-start max-xl:hidden',
               'px-4 pt-0 sm:px-5 lg:px-6'
             )}
             style={{ paddingBottom: heroStyleRailBottomPad }}
@@ -1748,7 +1776,7 @@ const MarketingEntryScreen: React.FC = () => {
             )}
           </motion.div>
         </motion.div>
-        {heroCopyRelaxedOverflow && heroStyleRailPortalHost
+        {heroCopyRelaxedOverflow && !isMobile && heroStyleRailPortalHost
           ? createPortal(
               <div
                 ref={heroStyleRailPortalLayerRef}
@@ -1808,10 +1836,11 @@ const MarketingEntryScreen: React.FC = () => {
             return (
               <div key={step.title} className="md:contents">
                 <GlassCard
-                  variant="glass"
+                  variant="flatOnMobile"
                   className={cn(
                     // No overflow-hidden on card: it clipped titles at large text / zoom (WCAG 1.4.4). Illustration keeps its own clip + radius.
                     'group flex h-full flex-col gap-3 p-6 sm:p-7 md:p-8',
+                    MOBILE_FLAT_CARD_FRAME,
                     'md:row-span-3 md:grid md:grid-cols-1 md:gap-0 md:[grid-template-rows:subgrid]',
                     'md:min-h-min',
                     colStart,
@@ -1945,17 +1974,20 @@ const MarketingEntryScreen: React.FC = () => {
       </motion.section>
 
       <motion.section className="py-8 sm:py-14" {...fadeUp}>
-        <GlassCard variant="highlighted" className="overflow-hidden p-6 sm:p-8">
+        <GlassCard
+          variant="flatOnMobile"
+          className="overflow-hidden border border-gold-400/35 p-6 sm:p-8 xl:border-gold-400/60"
+        >
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
               <h2 className="mb-4 text-3xl leading-tight text-graphite sm:text-5xl">{t.emotionTitle}</h2>
               <p className="font-modern text-base leading-8 text-silver-dark">{t.emotion}</p>
             </div>
-            <div className="relative flex min-h-[320px] flex-col overflow-hidden rounded-[32px] border border-white/30 bg-gradient-to-br from-white/12 via-pearl-100/18 to-gold-500/10 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-glass">
+            <div className="relative flex min-h-[280px] flex-col overflow-hidden rounded-2xl p-4 sm:min-h-[320px] sm:rounded-[32px] sm:p-5 max-xl:border max-xl:border-white/20 xl:border xl:border-white/30 xl:bg-gradient-to-br xl:from-white/12 xl:via-pearl-100/18 xl:to-gold-500/10 xl:shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] xl:backdrop-blur-glass">
               <motion.div
                 animate={{ y: [0, -16, 0], rotate: [0, 1.5, 0] }}
                 transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
-                className="pointer-events-none absolute right-8 top-6 h-28 w-28 rounded-full bg-gold-500/35 blur-2xl"
+                className="pointer-events-none absolute right-8 top-6 hidden h-28 w-28 rounded-full bg-gold-500/35 blur-2xl xl:block"
                 aria-hidden
               />
               <div className="relative z-[1] flex min-h-0 flex-1 flex-col justify-center">
@@ -1970,7 +2002,7 @@ const MarketingEntryScreen: React.FC = () => {
       </motion.section>
 
       <motion.section className="py-10 text-center sm:py-16" {...fadeUp}>
-        <GlassCard variant="glass" className="p-8 sm:p-12">
+        <GlassCard variant="flatOnMobile" className="p-8 sm:p-12">
           <h2 className="mx-auto mb-3 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.finalTitle}</h2>
           <p className="mx-auto mb-7 max-w-2xl font-modern text-base text-silver-dark">{t.finalSubtitle}</p>
           <GlassButton size="lg" onClick={goToPathSelection} className="glass-button-emphasis mx-auto group">
@@ -2005,8 +2037,8 @@ type VisualVariantCardProps = {
 const VisualVariantCard = ({ item }: VisualVariantCardProps) => (
   <div className="group/card relative w-[min(82vw,276px)] shrink-0 sm:w-[312px] xl:w-[340px]">
     <GlassCard
-      variant="glass"
-      className="relative z-0 flex min-h-0 cursor-pointer flex-col overflow-hidden p-2.5 transition-[transform,box-shadow] duration-300 ease-out will-change-transform group-hover/card:-translate-y-1.5 group-hover/card:scale-[1.02] group-hover/card:shadow-2xl sm:p-3"
+      variant="flatOnMobile"
+      className="relative z-0 flex min-h-0 cursor-pointer flex-col overflow-hidden p-2.5 transition-[transform,box-shadow] duration-300 ease-out max-xl:group-hover/card:translate-y-0 max-xl:group-hover/card:scale-100 max-xl:group-hover/card:shadow-none xl:will-change-transform xl:group-hover/card:-translate-y-1.5 xl:group-hover/card:scale-[1.02] xl:group-hover/card:shadow-2xl sm:p-3"
     >
       <div className="relative h-[10.75rem] overflow-hidden rounded-[1.05rem] ring-1 ring-inset ring-black/[0.06] sm:h-[12.5rem] xl:h-[13.25rem]">
         <Image
@@ -2067,9 +2099,11 @@ const PathCard = ({
   onClick,
 }: PathCardProps) => (
   <GlassCard
-    variant={highlighted ? 'highlighted' : 'interactive'}
+    variant="flatOnMobile"
     className={cn(
       'flex h-full flex-col overflow-hidden p-6 sm:p-7',
+      MOBILE_FLAT_CARD_FRAME,
+      highlighted ? 'bg-gold-400/5 xl:border xl:border-gold-400/60' : 'xl:border xl:border-white/20',
       // Desktop: share row heights with sibling so headers, copy, lists, art, and CTAs line up (CSS subgrid).
       'lg:row-span-5 lg:grid lg:min-h-0 lg:grid-cols-1 lg:[grid-template-rows:subgrid]',
       highlighted ? 'lg:col-start-2 lg:row-start-1' : 'lg:col-start-1 lg:row-start-1'
