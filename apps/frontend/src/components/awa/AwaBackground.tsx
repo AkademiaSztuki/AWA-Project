@@ -13,7 +13,7 @@ const AwaBackground: React.FC = () => {
   const pathname = usePathname();
   const hostRef = useRef<HTMLDivElement>(null);
 
-  const isMarketingPage = pathname === '/' || pathname === '/start';
+  const isMarketingPage = pathname === '/';
   const isLandingPage = pathname === '/';
 
   const modelPosition: [number, number, number] =

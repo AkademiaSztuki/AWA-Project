@@ -5,8 +5,8 @@ import { ProtectedRoute } from './ProtectedRoute';
 
 // Lista publicznych ścieżek (dostępne bez logowania)
 const PUBLIC_PATHS = [
-  '/', // Landing page
-  '/start', // Existing IDA intro and path selection
+  '/', // Marketing home
+  '/start', // Legacy redirect to /
   '/contact',
   '/privacy',
   '/terms',

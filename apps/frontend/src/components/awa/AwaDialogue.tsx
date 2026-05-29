@@ -1,16 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { FlowStep } from '@/types';
 import TextType from "@/components/ui/TextType";
 import GlassSurface from 'src/components/ui/GlassSurface';
 import { useAudioManager } from '@/hooks/useAudioManager';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAnimation, AnimationType } from '@/contexts/AnimationContext';
+import { useAnimation, type AnimationType } from '@/contexts/AnimationContext';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import DialogueAudioPlayer, { markDialoguePlaybackUserGesture } from '../ui/DialogueAudioPlayer';
 import { ArrowRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface AwaDialogueProps {
   currentStep: FlowStep | string; // Allow string for new custom steps
@@ -22,6 +23,10 @@ interface AwaDialogueProps {
   onSentenceStart?: (text: string) => void;
   skipBaseDialogues?: boolean;
   disableAudio?: boolean;
+  /** Skip "click anywhere" and start typewriter immediately (marketing home). */
+  autoStart?: boolean;
+  /** When true, do not drive 3D model animations (marketing home only). Default false. */
+  skipModelAnimation?: boolean;
 }
 
 // Dialogues with PL and EN versions
@@ -29,17 +34,31 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   landing: {
     pl: [
       "Cześć, jestem IDA.",
-      "Stwórzmy razem wizualizacje wnętrz dopasowane do Ciebie. ",
-      "Dziękuję za testy — to wczesna wersja aplikacji w ramach doktoratu Jakuba.",
-      "Masz uwagi lub znalazłeś błąd? Daj znać. Każda uwaga jest bardzo cenna!"
+      "Stwórzmy razem wizualizacje wnętrz dopasowane do Ciebie.",
+      "Powstaję w ramach projektu doktorskiego Jakuba Palka na Akademii Sztuki w Szczecinie — to wciąż rozwijana wersja serwisu.",
+      "Masz uwagi lub znalazłeś błąd? Daj znać — każda informacja pomaga w rozwoju projektu.",
     ],
     en: [
-      "Hi, I’m IDA.",
-      "Let’s create interior visualizations tailored to you together.",
-      "Thanks for testing — this is an early version of the app as part of Jakub’s PhD.",
-      "Have feedback or found a bug? Let me know. Every note is truly valuable!"
-    ]
-    
+      "Hi, I'm IDA.",
+      "Let's create interior visualizations tailored to you together.",
+      "I'm being developed as part of Jakub Palka's doctoral project at the Academy of Art in Szczecin — this is still an evolving version of the service.",
+      "Have feedback or found a bug? Let me know — every note helps the project grow.",
+    ],
+  },
+  /** Marketing home — same copy as landing, bottom bar under header (not centered hero). */
+  marketing_intro: {
+    pl: [
+      "Cześć, jestem IDA.",
+      "Stwórzmy razem wizualizacje wnętrz dopasowane do Ciebie.",
+      "Powstaję w ramach projektu doktorskiego Jakuba Palka na Akademii Sztuki w Szczecinie — to wciąż rozwijana wersja serwisu.",
+      "Masz uwagi lub znalazłeś błąd? Daj znać — każda informacja pomaga w rozwoju projektu.",
+    ],
+    en: [
+      "Hi, I'm IDA.",
+      "Let's create interior visualizations tailored to you together.",
+      "I'm being developed as part of Jakub Palka's doctoral project at the Academy of Art in Szczecin — this is still an evolving version of the service.",
+      "Have feedback or found a bug? Let me know — every note helps the project grow.",
+    ],
   },
   path_selection: {
     pl: [
@@ -317,13 +336,14 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
 const getAudioFile = (step: string, lang: 'pl' | 'en'): string => {
   // Mapping for steps that share the same audio file
   const AUDIO_MAPPING: Record<string, string> = {
-    'room_analysis_ready': 'room_analysis'
+    room_analysis_ready: 'room_analysis',
+    marketing_intro: 'landing',
   };
 
   const audioStep = AUDIO_MAPPING[step] || step;
   
   const audioSteps = [
-    'landing', 'path_selection', 'onboarding',
+    'landing', 'marketing_intro', 'path_selection', 'onboarding',
     'wizard_demographics', 'wizard_lifestyle', 'tinder', 'wizard_semantic', 'wizard_sensory',
     'inspirations', 'big_five', 'dashboard',
     'style_selection',
@@ -347,14 +367,25 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   customMessage,
   onSentenceStart,
   skipBaseDialogues = false,
-  disableAudio = false
+  disableAudio = false,
+  autoStart = false,
+  skipModelAnimation = false,
 }) => {
   const { language } = useLanguage();
   const isMobile = useIsMobile();
   const audioManager = useAudioManager();
   const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
-  const { playAnimation } = useAnimation();
-  
+  const { playAnimation, currentAnimation } = useAnimation();
+
+  const playRandomTalk = useCallback(() => {
+    if (skipModelAnimation) return;
+    const talkAnimations: Array<'talk1' | 'talk2' | 'talk3'> = ['talk1', 'talk2', 'talk3'];
+    playAnimation(talkAnimations[Math.floor(Math.random() * talkAnimations.length)]);
+  }, [playAnimation, skipModelAnimation]);
+
+  const isWaveIntroStep =
+    currentStep === 'landing' || currentStep === 'marketing_intro';
+
   // Ustawienia prędkości i pauz - wszystko w jednym miejscu
   const TYPING_SPEED = 14.8; // Prędkość wyświetlania tekstu (ms między znakami)
   const PAUSE_BETWEEN_SENTENCES = 1500; // Pauza między zdaniami (ms) - używane w handleSentenceComplete
@@ -411,7 +442,8 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   const [audioEnded, setAudioEnded] = useState(false);
   const [allSentencesCompleted, setAllSentencesCompleted] = useState(false);
   const lastSentenceStartRef = useRef<number | null>(null);
-  
+  const prevModelAnimationRef = useRef<AnimationType>(currentAnimation);
+
   // Refs to prevent multiple calls
   const onDialogueEndCalledRef = useRef(false);
   const hideScheduledRef = useRef(false);
@@ -474,12 +506,17 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       
       // For landing / room_analysis / room_furniture_suggestion: wait for audio to finish before calling onDialogueEnd
       // For path_selection: if autoHide, hide after audio ends
-      const waitForAudioSteps = ['landing', 'room_analysis', 'room_furniture_suggestion'];
+      const waitForAudioSteps = ['landing', 'marketing_intro', 'room_analysis', 'room_furniture_suggestion'];
       if (waitForAudioSteps.includes(String(currentStep)) && onDialogueEnd && !onDialogueEndCalledRef.current) {
         // Wait for audio to end, or timeout after delay (no audio / voice disabled)
         if (audioEnded || !voiceEnabled || !audioFile) {
           onDialogueEndCalledRef.current = true;
-          const delay = currentStep === 'landing' ? PAUSE_AFTER_LANDING : (currentStep === 'room_analysis' ? PAUSE_AFTER_ROOM_ANALYSIS : PAUSE_AFTER_ALL_SENTENCES);
+          const delay =
+            currentStep === 'landing' || currentStep === 'marketing_intro'
+              ? PAUSE_AFTER_LANDING
+              : currentStep === 'room_analysis'
+                ? PAUSE_AFTER_ROOM_ANALYSIS
+                : PAUSE_AFTER_ALL_SENTENCES;
           setTimeout(() => {
             if (currentStep === 'landing') {
               window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
@@ -524,17 +561,47 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     if (lastSentenceStartRef.current === currentSentenceIndex) return;
     lastSentenceStartRef.current = currentSentenceIndex;
     onSentenceStart?.(dialogues[currentSentenceIndex] ?? '');
-  }, [currentSentenceIndex, dialogues, hasStarted, audioReady, onSentenceStart]);
+
+    if (isWaveIntroStep && currentSentenceIndex > 0) {
+      playRandomTalk();
+    }
+  }, [
+    currentSentenceIndex,
+    dialogues,
+    hasStarted,
+    audioReady,
+    onSentenceStart,
+    isWaveIntroStep,
+    playRandomTalk,
+  ]);
+
+  /** After wave (`loading_anim`), play talk while the intro voice / typewriter continues. */
+  useEffect(() => {
+    if (!isWaveIntroStep || !hasStarted || skipModelAnimation) {
+      prevModelAnimationRef.current = currentAnimation;
+      return;
+    }
+    const prev = prevModelAnimationRef.current;
+    if (prev === 'loading_anim' && currentAnimation === 'idle1') {
+      playRandomTalk();
+    }
+    prevModelAnimationRef.current = currentAnimation;
+  }, [currentAnimation, hasStarted, isWaveIntroStep, skipModelAnimation, playRandomTalk]);
 
   const handleAudioEnded = () => {
     console.log('[AwaDialogue] Audio completed for entire dialogue', { currentStep, allSentencesCompleted, autoHide });
     setAudioEnded(true);
     
     // If all sentences completed and audio ended, call onDialogueEnd for landing / room_analysis / room_furniture_suggestion
-    const waitForAudioSteps = ['landing', 'room_analysis', 'room_furniture_suggestion'];
+    const waitForAudioSteps = ['landing', 'marketing_intro', 'room_analysis', 'room_furniture_suggestion'];
     if (waitForAudioSteps.includes(String(currentStep)) && allSentencesCompleted && onDialogueEnd && !onDialogueEndCalledRef.current) {
       onDialogueEndCalledRef.current = true;
-      const delay = currentStep === 'landing' ? PAUSE_AFTER_LANDING : (currentStep === 'room_analysis' ? PAUSE_AFTER_ROOM_ANALYSIS : PAUSE_AFTER_ALL_SENTENCES);
+      const delay =
+        currentStep === 'landing' || currentStep === 'marketing_intro'
+          ? PAUSE_AFTER_LANDING
+          : currentStep === 'room_analysis'
+            ? PAUSE_AFTER_ROOM_ANALYSIS
+            : PAUSE_AFTER_ALL_SENTENCES;
       setTimeout(() => {
         if (currentStep === 'landing') {
           window.dispatchEvent(new CustomEvent('awa-dialogue-complete'));
@@ -621,19 +688,33 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
                 return;
               }
 
-              // Play random talk animation when dialogue starts on other pages
-              const talkAnimations: Array<'talk1' | 'talk2' | 'talk3'> = ['talk1', 'talk2', 'talk3'];
-              const randomTalk = talkAnimations[Math.floor(Math.random() * talkAnimations.length)];
-              playAnimation(randomTalk);
+              if (!skipModelAnimation) {
+                playRandomTalk();
+              }
+            }
+          });
+        });
+      } else if (
+        (currentStep === 'landing' || currentStep === 'marketing_intro') &&
+        autoStart &&
+        dialogues.length > 0
+      ) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (prevStepRef.current !== currentStep) return;
+            isResettingRef.current = false;
+            setHasStarted(true);
+            setAudioReady(true);
+            if (!skipModelAnimation) {
+              playAnimation('loading_anim');
             }
           });
         });
       } else {
-        // For landing, clear resetting flag immediately
         isResettingRef.current = false;
       }
     }
-  }, [currentStep, language, playAnimation, dialogues, isMobile]);
+  }, [currentStep, language, playAnimation, dialogues, isMobile, autoStart, skipModelAnimation, playRandomTalk]);
   
   // Handle customMessage changes - reset dialogue when customMessage appears
   const prevCustomMessageRef = React.useRef<string | string[] | undefined>(undefined);
@@ -694,13 +775,13 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   }, [customMessage, hasStarted, currentSentenceIndex, currentStep, language, isDone]);
 
   useEffect(() => {
-    if (currentStep === 'landing' && !audioReady) {
+    if (currentStep === 'landing' && !audioReady && !autoStart) {
       const timer = setTimeout(() => {
         setShowClickPrompt(true);
       }, 900);
       return () => clearTimeout(timer);
     }
-  }, [currentStep, audioReady]);
+  }, [currentStep, audioReady, autoStart]);
 
   useEffect(() => {
     return () => {};
@@ -712,8 +793,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     markDialoguePlaybackUserGesture();
     setHasStarted(true);
     setAudioReady(true);
-    // Play loading animation when user clicks on landing page
-    if (currentStep === 'landing') {
+    if ((currentStep === 'landing' || currentStep === 'marketing_intro') && !skipModelAnimation) {
       playAnimation('loading_anim');
     }
   };
@@ -747,15 +827,14 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
           console.log('AwaDialogue: Fallback auto-start for step:', currentStep);
           setHasStarted(true);
           setAudioReady(true);
-          // Play random talk animation
-          const talkAnimations: Array<'talk1' | 'talk2' | 'talk3'> = ['talk1', 'talk2', 'talk3'];
-          const randomTalk = talkAnimations[Math.floor(Math.random() * talkAnimations.length)];
-          playAnimation(randomTalk);
+          if (!skipModelAnimation) {
+            playRandomTalk();
+          }
         }
       }, 300); // Shorter delay - main reset should happen in 100ms
       return () => clearTimeout(timer);
     }
-  }, [currentStep, hasStarted, audioReady, playAnimation, dialogues.length]);
+  }, [currentStep, hasStarted, audioReady, playAnimation, dialogues.length, skipModelAnimation, playRandomTalk]);
 
   const isLanding = currentStep === 'landing';
 
@@ -764,8 +843,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     return null;
   }
   
-  // For landing, show click prompt if not ready
-  if (!audioReady && currentStep === 'landing') {
+  if (!audioReady && currentStep === 'landing' && !autoStart) {
     return (
       <div 
         className={`z-10 flex flex-col items-center justify-start w-full text-center pointer-events-auto ${
@@ -815,10 +893,13 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
         ? 'min-h-[clamp(200px,25vh,380px)] p-4 sm:p-8' 
         : 'min-h-[clamp(80px,10vh,120px)] p-3 sm:p-4 pb-6'
     } pb-[env(safe-area-inset-bottom,10px)]`}>
-      {isLanding && audioReady && hasStarted && (
+      {(isLanding || currentStep === 'marketing_intro') && audioReady && hasStarted && (
         <button
           onClick={handleSkip}
-          className="absolute top-40 right-8 flex flex-col items-end gap-1 pointer-events-auto group transition-opacity duration-300 hover:opacity-80"
+          className={cn(
+            'absolute flex flex-col items-end gap-1 pointer-events-auto group transition-opacity duration-300 hover:opacity-80',
+            currentStep === 'marketing_intro' ? 'top-3 right-4 sm:top-4 sm:right-6' : 'top-40 right-8'
+          )}
           aria-label={language === 'pl' ? 'Pomiń dialog' : 'Skip dialogue'}
         >
           <span className="text-white/40 text-sm font-nasalization font-medium tracking-wide">

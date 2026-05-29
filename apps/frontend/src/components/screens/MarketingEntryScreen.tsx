@@ -36,6 +36,7 @@ import { GlassButton, GlassCard } from '@/components/ui';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useLayout } from '@/contexts/LayoutContext';
 import { useWcagSettings } from '@/contexts/WcagSettingsContext';
+import { getLayoutViewportWidth } from '@/lib/layout-viewport';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import {
@@ -52,13 +53,14 @@ import {
   heroInteriorImageSrc,
   type HeroInteriorSlide,
 } from '@/lib/marketing/hero-interior-slides';
+import { useMarketingIdaIntro } from '@/components/marketing/MarketingIdaIntro';
 
 const copy = {
   pl: {
     eyebrow: 'IDA Interior Design Assistant',
     headline: 'Zobacz swoje wnętrze zaprojektowane pod Twoją osobowość',
     subheadline:
-      'Punkt wyjścia to Twoja jasna przestrzeń. IDA pokazuje wiele możliwych wersji przyszłego wnętrza, dopasowanych do stylu życia, nastroju i tego, jak chcesz się czuć w przestrzeni.',
+      'Punktem wyjścia jest Twoja przestrzeń. IDA pokazuje wiele możliwych wersji przyszłego wnętrza, dopasowanych do stylu życia, nastroju i tego, jak chcesz się czuć w przestrzeni.',
     primaryCta: 'Stwórz moje wnętrze',
     secondaryCta: 'Zobacz jak działa',
     proof: [
@@ -112,7 +114,7 @@ const copy = {
       points: ['zdjęcie pokoju', 'podstawowy styl', 'pierwsze generacje'],
     },
     full: {
-      title: 'Pełna personalizacja',
+      title: 'Pełne Doświadczenie',
       label: 'Najlepszy efekt',
       duration: '20-30 min',
       description: 'Dla osób, które chcą wnętrze naprawdę dopasowane do siebie.',
@@ -182,9 +184,23 @@ const copy = {
       'Nie każdy potrzebuje tego samego stylu. Jedni szukają spokoju, inni energii, struktury, ciepła albo przestrzeni do tworzenia. IDA pomaga odkryć, czego naprawdę potrzebujesz od swojego wnętrza - i zamienia to w obraz.',
     finalTitle: 'Zobacz, jak mogłoby wyglądać Twoje wnętrze',
     finalSubtitle: 'Zacznij od szybkiej ścieżki albo przejdź pełną personalizację.',
+    research: {
+      badge: 'Projekt doktorski',
+      title: 'Projekt badawczy IDA',
+      thesisLabel: 'Temat pracy',
+      thesisTitle:
+        'IDA: projekt eksperymentalnej platformy badawczej do personalizacji koncepcji wnętrz na podstawie preferencji estetycznych wspomaganej sztuczną inteligencją',
+      author: 'Autor: Jakub Palka',
+      institution: 'Akademia Sztuki w Szczecinie',
+      body:
+        'Ta strona jest częścią rozwijanego prototypu platformy IDA. Projekt bada, jak preferencje estetyczne i sztuczna inteligencja mogą wspierać personalizację koncepcji wnętrz.',
+      feedback:
+        'Masz uwagi, pytania badawcze lub znalazłeś błąd? Każda informacja pomaga w rozwoju projektu.',
+      contactCta: 'Skontaktuj się z autorem',
+    },
     footer: {
       tagline:
-        'AI interior design assistant — personalizacja, badanie preferencji i współpraca człowieka z AI.',
+        'IDA · projekt doktorski · Autor: Jakub Palka · Akademia Sztuki w Szczecinie.',
       contact: 'Kontakt',
       privacy: 'Prywatność',
       terms: 'Regulamin',
@@ -196,7 +212,7 @@ const copy = {
     eyebrow: 'IDA Interior Design Assistant',
     headline: 'See your interior designed around your personality',
     subheadline:
-      'The starting point is your bright space. IDA shows many possible futures shaped around your lifestyle, mood, and how you want the space to feel.',
+      'Your space is the starting point. IDA shows many possible futures shaped around your lifestyle, mood, and how you want the space to feel.',
     primaryCta: 'Create my interior',
     secondaryCta: 'See how it works',
     proof: [
@@ -250,7 +266,7 @@ const copy = {
       points: ['room photo', 'basic style', 'first generations'],
     },
     full: {
-      title: 'Full personalization',
+      title: 'Full Experience',
       label: 'Best result',
       duration: '20-30 min',
       description: 'For people who want an interior that is truly adapted to them.',
@@ -320,9 +336,23 @@ const copy = {
       'Not everyone needs the same style. Some people need calm, others need energy, structure, warmth, or room to create. IDA helps reveal what you truly need from your interior - and turns it into an image.',
     finalTitle: 'See what your interior could become',
     finalSubtitle: 'Start with the quick path or go into full personalization.',
+    research: {
+      badge: 'Doctoral research project',
+      title: 'IDA research project',
+      thesisLabel: 'Research topic',
+      thesisTitle:
+        'IDA: an experimental research platform for personalizing interior concepts based on aesthetic preferences, supported by artificial intelligence',
+      author: 'Author: Jakub Palka',
+      institution: 'Academy of Art in Szczecin',
+      body:
+        'This page is part of the evolving IDA platform prototype. The project studies how aesthetic preferences and artificial intelligence can support the personalization of interior concepts.',
+      feedback:
+        'Have feedback, a research question, or found a bug? Every note helps the project grow.',
+      contactCta: 'Contact the author',
+    },
     footer: {
       tagline:
-        'An AI interior design assistant for personalization, preference research, and better human–AI collaboration.',
+        'IDA · doctoral research project · Author: Jakub Palka · Academy of Art in Szczecin.',
       contact: 'Contact',
       privacy: 'Privacy',
       terms: 'Terms',
@@ -986,11 +1016,15 @@ const MarketingEntryScreen: React.FC = () => {
     target: heroRef,
     offset: ['start start', 'end start'],
   });
-  const [viewportWidth, setViewportWidth] = useState(0);
+  const [viewportWidth, setViewportWidth] = useState(() => getLayoutViewportWidth());
   /** One shared 0→1 curve for the hero “settle” window — header timing still reads this raw value. */
   const heroSettle = useTransform(scrollYProgress, (p) =>
     Math.min(1, Math.max(0, p / HERO_SETTLE_SCROLL_END))
   );
+  const { introPortal, scrollToHowItWorksWithIntro } = useMarketingIdaIntro({
+    heroSettle,
+    settleAdvanceEps: MARKETING_HEADER_SETTLE_ADVANCE_EPS,
+  });
   /**
    * Width, radius, and room squash use this delayed curve so the first stretch of scroll keeps full-bleed layout.
    * Raw `heroSettle` still drives header reveal thresholds.
@@ -1002,16 +1036,15 @@ const MarketingEntryScreen: React.FC = () => {
   });
   const heroWidthMotion = useTransform(effectiveHeroSettle, (s) => {
     const breakout = 1 - s;
-    if (!columnBox.width || !viewportWidth) return '100vw';
-    const measured = columnBox.width + (viewportWidth - columnBox.width) * breakout;
-    if (measured <= 0) return '100vw';
+    const vw = viewportWidth || getLayoutViewportWidth();
+    if (!columnBox.width || !vw) return vw ? `${vw}px` : '100%';
+    const measured = columnBox.width + (vw - columnBox.width) * breakout;
+    if (measured <= 0) return `${vw}px`;
     return `${Math.round(measured)}px`;
   });
   const heroMarginLeftMotion = useTransform(effectiveHeroSettle, (s) => {
     const breakout = 1 - s;
-    if (!columnBox.width || !viewportWidth) return 'calc(50% - 50vw)';
-    const measured = columnBox.width + (viewportWidth - columnBox.width) * breakout;
-    if (measured <= 0) return 'calc(50% - 50vw)';
+    if (!columnBox.width) return '0px';
     return `${(-columnBox.left * breakout).toFixed(2)}px`;
   });
   /** Photo-only corner radius (20px → 36px when settled). */
@@ -1211,7 +1244,7 @@ const MarketingEntryScreen: React.FC = () => {
 
       const colLeft = columnBox.left;
       const colWidth = columnBox.width;
-      const vw = viewportWidth || window.innerWidth;
+      const vw = viewportWidth || getLayoutViewportWidth();
       const copyFillsWidth = colWidth > 0 && vw > 0 && colWidth >= vw - 64;
       const cardW = Math.min(
         HERO_VARIANT_RAIL_MAX_WIDTH_PX,
@@ -1353,7 +1386,7 @@ const MarketingEntryScreen: React.FC = () => {
     return () => setHeaderVisible(false);
   }, [setHeaderVisible]);
 
-  /** Reduce horizontal scrollbar flicker while the marketing hero animates width toward 100vw (desktop home only). */
+  /** Reduce horizontal scrollbar flicker while the marketing hero animates width toward full layout viewport (desktop home only). */
   useEffect(() => {
     if (!useMarqueePortal) return;
     const root = document.documentElement;
@@ -1375,12 +1408,13 @@ const MarketingEntryScreen: React.FC = () => {
       const rect = node.getBoundingClientRect();
       const left = Math.round(rect.left);
       const width = Math.round(rect.width);
-      const vw = window.innerWidth;
+      const vw = getLayoutViewportWidth();
       setColumnBox((prev) => {
         if (Math.abs(prev.left - left) < 1 && Math.abs(prev.width - width) < 1) return prev;
         return { left, width };
       });
       setViewportWidth((prev) => (prev === vw ? prev : vw));
+      document.documentElement.style.setProperty('--awa-layout-vw', `${vw}px`);
     };
 
     measureBleed();
@@ -1497,8 +1531,6 @@ const MarketingEntryScreen: React.FC = () => {
     router.push('/flow/path-selection');
   }, [router]);
 
-  const scrollToHowItWorks = () => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
-
   const livingRoomMarqueeInner = (
     <div className="relative pb-3 sm:pb-4">
       {/*
@@ -1533,9 +1565,10 @@ const MarketingEntryScreen: React.FC = () => {
     </div>
   );
 
+  const layoutVw = viewportWidth || getLayoutViewportWidth();
   const marqueeBreakoutStyle = {
-    marginLeft: columnBox.left ? `${-columnBox.left}px` : 'calc(50% - 50vw)',
-    width: viewportWidth ? `${viewportWidth}px` : '100vw',
+    marginLeft: columnBox.left ? `${-columnBox.left}px` : '0px',
+    width: layoutVw ? `${layoutVw}px` : '100%',
   } as const;
 
   const updateSliderFromClientX = (clientX: number) => {
@@ -1547,6 +1580,7 @@ const MarketingEntryScreen: React.FC = () => {
   };
 
   return (
+    <>
     <div ref={marketingRootRef} className={cn('relative w-full pb-0', useMarqueePortal && 'pointer-events-none')}>
       {/* Width probe — must not use overflow-hidden or sticky will not behave reliably */}
       <div ref={heroBleedMeasureRef} className="pointer-events-none h-0 w-full" aria-hidden="true" />
@@ -1737,7 +1771,7 @@ const MarketingEntryScreen: React.FC = () => {
                     <GlassButton
                       size="lg"
                       variant="secondary"
-                      onClick={scrollToHowItWorks}
+                      onClick={scrollToHowItWorksWithIntro}
                       className="w-full min-w-0 justify-start text-left"
                     >
                       <PlayCircle size={20} className="shrink-0 text-gold-500" aria-hidden="true" />
@@ -1873,7 +1907,11 @@ const MarketingEntryScreen: React.FC = () => {
         </div>
       </section>
 
-      <motion.section className="py-8 sm:py-14" {...fadeUp}>
+      <motion.section
+        id="marketing-path-selection"
+        className="py-8 sm:py-14 scroll-mt-24"
+        {...fadeUp}
+      >
         <h2 className="mb-6 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.pathsTitle}</h2>
         <div className="grid gap-4 lg:grid-cols-2 lg:gap-x-4 lg:gap-y-6 lg:[grid-template-rows:auto_auto_auto_1fr_auto]">
           <PathCard
@@ -2001,6 +2039,60 @@ const MarketingEntryScreen: React.FC = () => {
         </GlassCard>
       </motion.section>
 
+      <motion.section
+        id="research-project"
+        className="py-8 sm:py-12 scroll-mt-24"
+        {...fadeUp}
+        aria-labelledby="research-project-heading"
+      >
+        <GlassCard
+          variant="flatOnMobile"
+          className="border border-white/25 p-6 sm:p-8 xl:border-gold-400/35"
+        >
+          <p className="mb-3 font-modern text-[11px] font-semibold uppercase tracking-[0.2em] text-gold-500">
+            {t.research.badge}
+          </p>
+          <h2
+            id="research-project-heading"
+            className="mb-2 max-w-3xl text-2xl leading-tight text-graphite sm:text-3xl"
+          >
+            {t.research.title}
+          </h2>
+          <p className="mb-5 max-w-3xl font-modern text-sm text-graphite/75 sm:text-base">
+            {t.research.author}
+            <span className="mx-2 text-graphite/30" aria-hidden="true">
+              ·
+            </span>
+            {t.research.institution}
+          </p>
+          <p className="mb-5 max-w-3xl font-modern text-sm leading-7 text-silver-dark sm:text-base sm:leading-8">
+            {t.research.body}
+          </p>
+          <dl className="mb-5 max-w-3xl border-t border-graphite/10 pt-5">
+            <dt className="mb-2 font-modern text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-500">
+              {t.research.thesisLabel}
+            </dt>
+            <dd className="font-modern text-sm leading-7 text-graphite sm:text-base sm:leading-8">
+              {t.research.thesisTitle}
+            </dd>
+          </dl>
+          <p className="mb-6 max-w-3xl font-modern text-sm leading-6 text-silver-dark">{t.research.feedback}</p>
+          <GlassButton
+            size="md"
+            variant="secondary"
+            onClick={() => router.push('/contact')}
+            className="group"
+          >
+            {t.research.contactCta}
+            <ArrowRight
+              size={18}
+              className="text-gold-500 transition-transform group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
+          </GlassButton>
+        </GlassCard>
+      </motion.section>
+
       <motion.section className="py-10 text-center sm:py-16" {...fadeUp}>
         <GlassCard variant="flatOnMobile" className="p-8 sm:p-12">
           <h2 className="mx-auto mb-3 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.finalTitle}</h2>
@@ -2027,6 +2119,8 @@ const MarketingEntryScreen: React.FC = () => {
       />
       </div>
     </div>
+    {introPortal}
+    </>
   );
 };
 
@@ -2180,8 +2274,8 @@ const SiteFooter = ({
     <footer
       className="mt-0 border-t border-graphite/[0.08] bg-gradient-to-b from-transparent to-pearl-200/35 pb-[max(1.75rem,env(safe-area-inset-bottom,0px))] pt-7"
       style={{
-        marginLeft: breakoutLeft ? `${-breakoutLeft}px` : 'calc(50% - 50vw)',
-        width: breakoutWidth ? `${breakoutWidth}px` : '100vw',
+        marginLeft: breakoutLeft ? `${-breakoutLeft}px` : '0px',
+        width: breakoutWidth ? `${breakoutWidth}px` : 'var(--awa-layout-vw, 100%)',
       }}
     >
       <div className="mx-auto max-w-3xl px-5 text-center sm:px-8">

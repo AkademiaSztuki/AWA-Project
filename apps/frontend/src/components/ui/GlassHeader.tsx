@@ -13,10 +13,12 @@ import { Home } from 'lucide-react';
 import { useLayout } from '@/contexts/LayoutContext';
 import { useDashboardAccess } from '@/hooks/useDashboardAccess';
 import { cn } from '@/lib/utils';
-
-/** Same as `AppContentFrame` content grid — fixed header must sit in the right column so width matches other routes. */
-const APP_CONTENT_XL_GRID =
-  'xl:grid xl:grid-cols-[minmax(320px,0.3fr)_minmax(400px,0.7fr)] xl:gap-10 xl:items-start';
+import {
+  APP_CONTENT_FRAME_PADDING_X,
+  APP_CONTENT_MAX_WIDTH,
+  APP_CONTENT_RIGHT_COLUMN,
+  APP_CONTENT_XL_GRID,
+} from '@/lib/app-content-grid';
 
 export function GlassHeader() {
   const router = useRouter();
@@ -24,16 +26,16 @@ export function GlassHeader() {
   const { isHeaderVisible } = useLayout();
   const { isComplete, isResolved } = useDashboardAccess();
 
-  const showPathSelection = pathname !== '/flow/path-selection' && pathname !== '/' && pathname !== '/start';
+  const showPathSelection = pathname !== '/flow/path-selection' && pathname !== '/';
   const showDashboard = isResolved && isComplete && pathname !== '/dashboard';
 
   // Header is visible if:
   // 1. We are NOT on the public entry pages
-  // 2. OR isHeaderVisible is true (controlled by LandingScreen / marketing home)
-  const shouldShow = (pathname !== '/' && pathname !== '/start') || isHeaderVisible;
+  // 2. OR isHeaderVisible is true (controlled by marketing home scroll)
+  const shouldShow = pathname !== '/' || isHeaderVisible;
 
   /** Fixed overlay: no layout height; horizontal band matches `AppContentFrame` (incl. xl right column). */
-  const edgeToEdgeHome = pathname === '/' || pathname === '/start';
+  const edgeToEdgeHome = pathname === '/';
 
   const glassBar = (
     <div
@@ -98,10 +100,10 @@ export function GlassHeader() {
           aria-label={pathname === '/' ? 'Główne menu nawigacyjne' : 'Main navigation'}
         >
           {edgeToEdgeHome ? (
-            <div className="w-full px-1.5 sm:px-4 md:px-8">
-              <div className={cn('mx-auto w-full max-w-screen-2xl flex flex-col', APP_CONTENT_XL_GRID)}>
+            <div className={cn('w-full', APP_CONTENT_FRAME_PADDING_X)}>
+              <div className={cn(APP_CONTENT_MAX_WIDTH, 'flex flex-col', APP_CONTENT_XL_GRID)}>
                 <div className="hidden min-w-0 xl:block" aria-hidden="true" />
-                <div className="min-w-0 w-full max-w-full px-1 lg:max-w-none lg:ml-auto">{glassBar}</div>
+                <div className={APP_CONTENT_RIGHT_COLUMN}>{glassBar}</div>
               </div>
             </div>
           ) : (

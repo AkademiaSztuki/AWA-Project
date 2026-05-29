@@ -12,10 +12,10 @@ interface AppContentFrameProps {
 }
 
 /** Full-bleed marketing hero — extra main padding would show body gradient as a top strip. */
-const EDGE_TO_EDGE_TOP_ROUTES = new Set(['/', '/start']);
+const EDGE_TO_EDGE_TOP_ROUTES = new Set(['/']);
 
 /** Marketing pages carry their own footer spacing; large main bottom padding reads as an empty strip. */
-const MINIMAL_MAIN_BOTTOM_ROUTES = new Set(['/', '/start']);
+const MINIMAL_MAIN_BOTTOM_ROUTES = new Set(['/']);
 
 export function AppContentFrame({ children }: AppContentFrameProps) {
   const pathname = usePathname();

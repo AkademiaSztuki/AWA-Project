@@ -15,7 +15,7 @@ export function ResponsiveLayoutWrapper({ children }: { children: React.ReactNod
   const isCompactLayout = useIsMobile(1280);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
-  const isMarketingPage = pathname === '/' || pathname === '/start';
+  const isMarketingPage = pathname === '/';
   const { hideModel3D } = useColorAdjustment();
 
   const [showMobileAwa, setShowMobileAwa] = useState(false);

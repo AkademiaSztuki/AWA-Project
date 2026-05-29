@@ -1,5 +1,5 @@
-import LandingScreen from '@/components/screens/LandingScreen';
+import { redirect } from 'next/navigation';
 
 export default function StartPage() {
-  return <LandingScreen />;
+  redirect('/');
 }

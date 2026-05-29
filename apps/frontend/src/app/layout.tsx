@@ -39,8 +39,9 @@ const atkinson = Atkinson_Hyperlegible({
 
 export const metadata: Metadata = {
   title: 'IDA - Interior Design Assistant',
-  description: 'Aplikacja badawcza do eksploracji współpracy człowieka z AI w projektowaniu wnętrz',
-  keywords: ['AI', 'Interior Design', 'Research', 'Akademia Sztuk Pełnych'],
+  description:
+    'Projekt doktorski — asystent AI do projektowania wnętrz i badań preferencji (Akademia Sztuki w Szczecinie)',
+  keywords: ['AI', 'Interior Design', 'Research', 'Akademia Sztuki w Szczecinie'],
 };
 
 export const viewport = {
