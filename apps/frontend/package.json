@@ -2,6 +2,9 @@
   "name": "@aura/frontend",
   "version": "1.0.0",
   "private": true,
+  "eslintConfig": {
+    "extends": "next/core-web-vitals"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
