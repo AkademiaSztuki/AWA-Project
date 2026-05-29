@@ -5,6 +5,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { BillingPeriod, CREDITS_PER_IMAGE, FREE_PLAN_CREDITS, getPlanCredits, PLAN_PRICES, PlanId } from '@/lib/stripe';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { creditsAuthHeaders } from '@/lib/credits-request-headers';
 
 interface SubscriptionPlansProps {
   userHash: string;
@@ -86,7 +87,7 @@ export function SubscriptionPlans({ userHash, onSelectPlan, className }: Subscri
     try {
       const response = await fetch('/api/stripe/create-checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...creditsAuthHeaders() },
         body: JSON.stringify({
           userHash,
           planId,

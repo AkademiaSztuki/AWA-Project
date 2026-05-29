@@ -5,6 +5,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { CreditBalance as CreditBalanceType, SubscriptionSummary } from '@/lib/credits';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { creditsAuthHeaders } from '@/lib/credits-request-headers';
 
 interface CreditBalanceProps {
   userHash: string;
@@ -70,8 +71,9 @@ export function CreditBalance({ userHash, className, embedded = false }: CreditB
     try {
       const response = await fetch('/api/stripe/create-portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...creditsAuthHeaders() },
         body: JSON.stringify({
+          userHash,
           customerId: subscription.stripe_customer_id,
           returnUrl: `${window.location.origin}/dashboard`,
         }),

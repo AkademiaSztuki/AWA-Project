@@ -9,12 +9,18 @@ import { gcpApi } from '@/lib/gcp-api-client';
  * POST /api/test/allocate-credits
  * Body: { userHash, planId, billingPeriod }
  */
+function isTestCreditsRouteAllowed(): boolean {
+  if (process.env.NODE_ENV === 'production') return false;
+  if (process.env.VERCEL_ENV === 'production') return false;
+  if (process.env.VERCEL_ENV === 'preview') return false;
+  return true;
+}
+
 export async function POST(request: NextRequest) {
-  // Tylko w development
-  if (process.env.NODE_ENV === 'production') {
+  if (!isTestCreditsRouteAllowed()) {
     return NextResponse.json(
-      { error: 'This endpoint is only available in development' },
-      { status: 403 }
+      { error: 'This endpoint is only available in local development' },
+      { status: 403 },
     );
   }
 

@@ -2,7 +2,11 @@ import type { Request } from 'express';
 
 /** Shared secret for server-to-server calls (Next webhook → GCP billing, debug/cron). */
 export function getInternalCronSecret(): string | undefined {
-  return process.env.CRON_SECRET || process.env.GCP_INTERNAL_SECRET;
+  return (
+    process.env.GCP_BILLING_INTERNAL_SECRET ||
+    process.env.CRON_SECRET ||
+    process.env.GCP_INTERNAL_SECRET
+  );
 }
 
 export function verifyInternalSecret(req: Request): boolean {

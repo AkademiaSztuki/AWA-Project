@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
+import { creditsAuthHeaders } from '@/lib/credits-request-headers';
 
 interface Subscription {
   id: string;
@@ -66,8 +67,9 @@ export function SubscriptionManagement({ userHash, className }: SubscriptionMana
     try {
       const response = await fetch('/api/stripe/create-portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...creditsAuthHeaders() },
         body: JSON.stringify({
+          userHash,
           customerId: subscription.stripe_customer_id,
           returnUrl: `${window.location.origin}/dashboard`,
         }),

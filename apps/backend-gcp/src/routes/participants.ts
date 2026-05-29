@@ -7,6 +7,8 @@ import {
   sessionSyncTrace,
 } from '../lib/session-sync-trace';
 import { verifyMigrateSecret, requireDebugOrMigrateAccess } from '../lib/internal-auth';
+import { checkRequestRateLimit } from '../lib/request-rate-limit';
+import { validateSessionPostBody } from '../lib/session-payload';
 import { ensureParticipantRecord, grantFreeCredits } from '../services/billing';
 
 const PARTICIPANT_SECRET_COLUMNS = new Set(['password_hash']);
@@ -693,17 +695,24 @@ participantsRouter.post('/participants/session-export', async (req, res) => {
 
 // POST /participants/session  (frontend: saveSessionToGcp)
 participantsRouter.post('/session', async (req, res) => {
-  const sessionData = req.body as any;
-  const userHash: string | undefined = sessionData?.userHash;
-
-  if (!userHash) {
-    return res.status(400).json({ ok: false, error: 'userHash is required' });
+  const validated = validateSessionPostBody(req.body);
+  if (!validated.ok) {
+    return res.status(400).json({ ok: false, error: validated.error });
   }
+  const { userHash, participantRow } = validated;
 
-  const participantRow = sessionData.participantRow as Record<string, unknown> | undefined;
-
-  if (!participantRow) {
-    return res.status(400).json({ ok: false, error: 'participantRow is required' });
+  const clientIp =
+    (typeof req.headers['x-forwarded-for'] === 'string'
+      ? req.headers['x-forwarded-for'].split(',')[0]?.trim()
+      : undefined) || req.ip || 'unknown';
+  const rate = checkRequestRateLimit(
+    `session:${userHash}:${clientIp}`,
+    40,
+    60_000,
+  );
+  if (!rate.ok) {
+    res.setHeader('Retry-After', String(rate.retryAfterSec));
+    return res.status(429).json({ ok: false, error: 'rate_limited' });
   }
 
   console.log('[participants.session] incoming', {
@@ -940,7 +949,7 @@ participantsRouter.post('/session', async (req, res) => {
       location: 'participants.ts:POST/session',
       message: 'session_route_unhandled_error',
       data: {
-        userHash: sessionData?.userHash ?? 'unknown',
+        userHash,
         pg: pgErrorSnapshot(error),
       },
     });

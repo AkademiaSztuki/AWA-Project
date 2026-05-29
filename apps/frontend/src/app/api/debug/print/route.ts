@@ -3,6 +3,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ ok: false, error: 'not_found' }, { status: 404 });
+  }
+
   try {
     const body = await req.json();
     console.log('\n===== DEBUG EVENT =====');
@@ -14,5 +18,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 }
-
-

@@ -6,6 +6,7 @@ import { safeLocalStorage } from '@/lib/gcp-data';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { useAuth } from '@/contexts/AuthContext';
+import { sanitizeRelativeRedirectPath } from '@/lib/safe-relative-redirect';
 
 const GOOGLE_AUTH_USER_KEY = 'aura_google_auth_user_id';
 
@@ -39,8 +40,7 @@ function VerifyEmailContent() {
         safeLocalStorage.setItem(GOOGLE_AUTH_USER_KEY, auth_user_id);
         hydrateFromMagicLink(auth_user_id, email);
         setStatus('ok');
-        const redirect = next ? decodeURIComponent(next) : '/setup/profile';
-        router.replace(redirect);
+        router.replace(sanitizeRelativeRedirectPath(next, '/setup/profile'));
       })
       .catch(() => {
         setStatus('error');

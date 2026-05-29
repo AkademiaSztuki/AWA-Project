@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createCheckoutSession, PlanId, BillingPeriod, PricingCurrency } from '@/lib/stripe';
+import { sanitizeSameOriginUrl } from '@/lib/safe-relative-redirect';
+import { requireStripeActorOwnsUserHash } from '@/lib/stripe-route-auth';
 
 export async function POST(request: NextRequest) {
   let planId: string | undefined;
   let billingPeriod: string | undefined;
-  
+
   try {
     const body = await request.json();
-    const { userHash, planId: bodyPlanId, billingPeriod: bodyBillingPeriod, currency: bodyCurrency, successUrl, cancelUrl } = body;
+    const {
+      userHash,
+      planId: bodyPlanId,
+      billingPeriod: bodyBillingPeriod,
+      currency: bodyCurrency,
+      successUrl,
+      cancelUrl,
+      authUserId: bodyAuthUserId,
+    } = body;
     planId = bodyPlanId;
     billingPeriod = bodyBillingPeriod;
     const currency = bodyCurrency === 'usd' ? 'usd' : 'pln';
@@ -15,38 +25,54 @@ export async function POST(request: NextRequest) {
     if (!userHash || !planId || !billingPeriod) {
       return NextResponse.json(
         { error: 'Missing required fields: userHash, planId, billingPeriod' },
-        { status: 400 }
+        { status: 400 },
       );
     }
+
+    const authReject = await requireStripeActorOwnsUserHash(
+      request,
+      userHash,
+      bodyAuthUserId,
+    );
+    if (authReject) return authReject;
 
     if (!['basic', 'pro', 'studio'].includes(planId)) {
       return NextResponse.json(
         { error: 'Invalid planId. Must be: basic, pro, or studio' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!['monthly', 'yearly'].includes(billingPeriod)) {
       return NextResponse.json(
         { error: 'Invalid billingPeriod. Must be: monthly or yearly' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
+    const origin = request.nextUrl.origin;
     const checkoutUrl = await createCheckoutSession({
       userHash,
       planId: planId as PlanId,
       billingPeriod: billingPeriod as BillingPeriod,
       currency: currency as PricingCurrency,
-      successUrl: successUrl || `${request.nextUrl.origin}/subscription/success`,
-      cancelUrl: cancelUrl || `${request.nextUrl.origin}/subscription/cancel`,
+      successUrl: sanitizeSameOriginUrl(
+        successUrl,
+        origin,
+        '/subscription/success',
+      ),
+      cancelUrl: sanitizeSameOriginUrl(
+        cancelUrl,
+        origin,
+        '/subscription/cancel',
+      ),
     });
 
     if (!checkoutUrl || checkoutUrl === '') {
       console.error('[API] Checkout session created but URL is empty');
       return NextResponse.json(
         { error: 'Stripe checkout session created but no URL returned. Check Stripe logs.' },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -59,14 +85,13 @@ export async function POST(request: NextRequest) {
       planId,
       billingPeriod,
     });
-    
+
     return NextResponse.json(
-      { 
+      {
         error: error.message || 'Failed to create checkout session',
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
-

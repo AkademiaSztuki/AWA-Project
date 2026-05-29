@@ -15,6 +15,7 @@ import {
   readOAuthContext,
   readPkceOAuthContext,
 } from '@/lib/google-oauth-pkce';
+import { sanitizeRelativeRedirectPath } from '@/lib/safe-relative-redirect';
 
 async function grantFreeCredits(userHash: string, authUserId: string): Promise<void> {
   const r = await fetch('/api/credits/grant-free', {
@@ -81,7 +82,10 @@ function AuthCallbackContent() {
         persistNativeGoogleUserToLocalStorage(result.user);
         await syncGoogleNativeEmailLinkAuth(result.user);
 
-        const next = ctx.authNext && ctx.authNext.length > 0 ? ctx.authNext : '/';
+        const next = sanitizeRelativeRedirectPath(
+          ctx.authNext && ctx.authNext.length > 0 ? ctx.authNext : '/',
+          '/',
+        );
         safeSessionStorage.removeItem('aura_auth_next');
         window.location.replace(next);
         return;
@@ -99,10 +103,13 @@ function AuthCallbackContent() {
       const state = params.get('state');
 
       if (!code || !state) {
-        const next = params.get('next') || safeSessionStorage.getItem('aura_auth_next') || '/';
+        const next = sanitizeRelativeRedirectPath(
+          params.get('next') || safeSessionStorage.getItem('aura_auth_next'),
+          '/',
+        );
         safeSessionStorage.removeItem('aura_auth_next');
         // Do NOT remove aura_auth_path_type here — PathSelectionScreen sets it before OAuth;
-        // OnboardingScreen / CoreProfileWizard read it and clear after apply.
+        // OnboardingScreen / CoreProfileWizard read it and apply.
         window.location.replace(next);
         return;
       }
@@ -166,7 +173,10 @@ function AuthCallbackContent() {
       persistNativeGoogleUserToLocalStorage(result.user);
       await syncGoogleNativeEmailLinkAuth(result.user);
 
-      const next = ctx.authNext && ctx.authNext.length > 0 ? ctx.authNext : '/';
+      const next = sanitizeRelativeRedirectPath(
+        ctx.authNext && ctx.authNext.length > 0 ? ctx.authNext : '/',
+        '/',
+      );
       safeSessionStorage.removeItem('aura_auth_next');
       window.location.href = next;
     };
