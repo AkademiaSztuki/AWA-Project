@@ -8,7 +8,7 @@ import {
 } from './anon-request-helpers';
 import { gcpApi } from './gcp-api-client';
 
-function useAnonMemoryOnly(): boolean {
+function isAnonMemoryOnlyMode(): boolean {
   const v = (
     process.env.IDA_ANON_LIMITS_MEMORY_ONLY ?? process.env.AWA_ANON_LIMITS_MEMORY_ONLY
   )?.toLowerCase();
@@ -28,7 +28,7 @@ export async function checkAnonLimits(
   pathScope: AnonPathScope,
 ): Promise<AnonCheckResult> {
   const ipHash = hashIpForStorage(requestIp);
-  if (useAnonMemoryOnly() || !gcpApi.isConfigured()) {
+  if (isAnonMemoryOnlyMode() || !gcpApi.isConfigured()) {
     return checkAnonLimitsMemory(anonId, ipHash, action, pathScope);
   }
 
@@ -62,7 +62,7 @@ export async function deductAnonGenerate(
   pathScope: AnonPathScope,
 ): Promise<{ ok: boolean; duplicate?: boolean; error?: string }> {
   const ipHash = hashIpForStorage(requestIp);
-  if (useAnonMemoryOnly() || !gcpApi.isConfigured()) {
+  if (isAnonMemoryOnlyMode() || !gcpApi.isConfigured()) {
     return deductAnonLimitsMemory(anonId, ipHash, generationId, pathScope);
   }
 

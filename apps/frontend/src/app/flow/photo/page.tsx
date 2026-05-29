@@ -419,7 +419,7 @@ export default function PhotoUploadPage() {
           {pendingAnalysisFile && (
             <div className="mb-6 p-4 bg-white/5 backdrop-blur-xl border border-white/15 rounded-2xl text-white">
               <p className="mb-3 font-exo2 text-base">
-                Nowe zdjęcie "{pendingAnalysisLabel || pendingAnalysisFile.name}" czeka na analizę.
+                Nowe zdjęcie &quot;{pendingAnalysisLabel || pendingAnalysisFile.name}&quot; czeka na analizę.
               </p>
               <button
                 type="button"

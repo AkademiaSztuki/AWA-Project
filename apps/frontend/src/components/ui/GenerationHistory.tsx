@@ -27,8 +27,6 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  if (history.length === 0) return null;
-
   // Check scroll position
   const checkScroll = () => {
     if (!scrollContainerRef.current) return;
@@ -38,6 +36,7 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
   };
 
   useEffect(() => {
+    if (history.length === 0) return;
     checkScroll();
     const container = scrollContainerRef.current;
     if (container) {
@@ -49,6 +48,8 @@ export const GenerationHistory: React.FC<GenerationHistoryProps> = ({
       };
     }
   }, [history]);
+
+  if (history.length === 0) return null;
 
   // Scroll functions
   const scrollLeft = () => {
