@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { deductCredits } from '@/lib/credits';
 import { getAnonSessionIdFromRequest, getRequestClientIp, parseAnonPathScope } from '@/lib/anon-request-helpers';
 import { deductAnonGenerate } from '@/lib/anon-db-limits';
-import { resolveAuthenticatedCreditsUser } from '@/lib/server-participant-auth';
+import { resolveAuthenticatedCreditsUser, strictParticipantAuthMismatchResponse } from '@/lib/server-participant-auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +22,10 @@ export async function POST(request: NextRequest) {
     }
 
     const isAuthenticated = await resolveAuthenticatedCreditsUser(request, userHash);
+    if (!isAuthenticated) {
+      const strictReject = await strictParticipantAuthMismatchResponse(request, userHash);
+      if (strictReject) return strictReject;
+    }
     if (isAuthenticated) {
       const success = await deductCredits(userHash, generationId);
       if (!success) {

@@ -7,7 +7,7 @@ import {
   type AnonLimitAction,
 } from '@/lib/anon-request-helpers';
 import { checkAnonLimits } from '@/lib/anon-db-limits';
-import { resolveAuthenticatedCreditsUser } from '@/lib/server-participant-auth';
+import { resolveAuthenticatedCreditsUser, strictParticipantAuthMismatchResponse } from '@/lib/server-participant-auth';
 
 const CREDIT_ACTIONS: AnonLimitAction[] = [
   'generate',
@@ -38,6 +38,10 @@ export async function POST(request: NextRequest) {
     }
 
     const isAuthenticated = await resolveAuthenticatedCreditsUser(request, userHash);
+    if (!isAuthenticated) {
+      const strictReject = await strictParticipantAuthMismatchResponse(request, userHash);
+      if (strictReject) return strictReject;
+    }
     if (isAuthenticated) {
       const available = await checkCreditsAvailableAdmin(userHash, amount);
       return NextResponse.json({
