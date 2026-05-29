@@ -24,12 +24,15 @@ function normalizeOAuthRedirectUri(uri: string): string {
   return uri.trim().replace(/\/+$/, '');
 }
 
+/** Path registered in GCP for this OAuth client (Authorized redirect URIs). */
+export const GOOGLE_OAUTH_CALLBACK_PATH = '/auth/google/callback';
+
 /**
  * Must match **exactly** one entry under Google Cloud → OAuth 2.0 Client → Authorized redirect URIs.
  * If you open the app as http://127.0.0.1:3000 but only registered http://localhost:3000/..., you get redirect_uri_mismatch.
  *
- * Set `NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI` in `.env.local` to the same string you registered in Google (recommended for dev).
- * The project documentation historically used `/auth/callback`, so that remains the default.
+ * Set `NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI` in `.env.local` / Vercel to the same string you registered in Google.
+ * Default: `{origin}/auth/google/callback` (legacy `/auth/callback` page still handles returns if registered separately).
  */
 export function getGoogleOAuthRedirectUri(): string {
   const explicit = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI?.trim() : '';
@@ -37,7 +40,7 @@ export function getGoogleOAuthRedirectUri(): string {
     return normalizeOAuthRedirectUri(explicit);
   }
   if (typeof window === 'undefined') return '';
-  return normalizeOAuthRedirectUri(`${window.location.origin}/auth/callback`);
+  return normalizeOAuthRedirectUri(`${window.location.origin}${GOOGLE_OAUTH_CALLBACK_PATH}`);
 }
 
 async function createPkcePair(): Promise<{ verifier: string; challenge: string; state: string }> {

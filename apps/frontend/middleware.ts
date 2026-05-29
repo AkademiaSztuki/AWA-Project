@@ -9,7 +9,8 @@ const ONE_YEAR_IN_SECONDS = 60 * 60 * 24 * 365;
 // Wszystkie inne ścieżki będą chronione (w tym /flow/* i /setup/*)
 const PUBLIC_PATHS = [
   '/', // Landing page
-  '/auth/callback', // Auth callback
+  '/auth/callback', // Legacy OAuth return (implicit + PKCE)
+  '/auth/google', // Google OAuth return (/auth/google/callback)
 ];
 
 const isLanguage = (value: string | undefined | null): value is Language =>

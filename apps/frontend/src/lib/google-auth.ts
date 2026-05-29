@@ -3,13 +3,14 @@
  * Wymaga: NEXT_PUBLIC_GOOGLE_CLIENT_ID (OAuth 2.0 Client ID z GCP Console).
  *
  * Domyślnie używa GIS token popup, bo ten flow nie wymaga redirect URI.
- * W Cursorze/Electron dev przełącza się na implicit token redirect przez istniejące `/auth/callback`,
+ * W Cursorze/Electron dev przełącza się na implicit token redirect przez `/auth/google/callback`,
  * bo Google GIS popup może otwierać pusty `https://accounts.google.com/gsi/transform`.
  * Opcjonalnie: NEXT_PUBLIC_GOOGLE_OAUTH_USE_PKCE_REDIRECT=1 wymusza redirect PKCE wszędzie.
  *
- * W Google Cloud → Credentials → OAuth client → Authorized redirect URIs dodaj:
+ * W Google Cloud → Credentials → OAuth client → Authorized redirect URIs (must match byte-for-byte):
  *   http://localhost:3000/auth/google/callback
- *   (oraz produkcyjny URL /auth/google/callback)
+ *   https://www.project-ida.com/auth/google/callback
+ * Override with NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI when origin/path differs.
  */
 
 import { gcpApi } from '@/lib/gcp-api-client';
@@ -180,7 +181,7 @@ export type SignInWithGoogleNativeOptions = {
 
 /**
  * Uruchamia logowanie przez Google (token model + link-auth).
- * W embedded browser / popup_failed_to_open przechodzi na PKCE redirect przez `/auth/callback`.
+ * W embedded browser / popup_failed_to_open przechodzi na implicit redirect przez `/auth/google/callback`.
  */
 export async function signInWithGoogleNative(
   options: SignInWithGoogleNativeOptions,

@@ -10,9 +10,11 @@ import {
 import {
   clearPkceOAuthSessionStorage,
   getGoogleOAuthRedirectUri,
+  readOAuthContext,
   readPkceOAuthContext,
 } from '@/lib/google-oauth-pkce';
 import { safeSessionStorage } from '@/lib/gcp-data';
+import { sanitizeRelativeRedirectPath } from '@/lib/safe-relative-redirect';
 
 async function grantFreeCredits(userHash: string, authUserId: string): Promise<void> {
   const r = await fetch('/api/credits/grant-free', {
@@ -32,6 +34,53 @@ function GoogleOAuthCallbackInner() {
     let cancelled = false;
 
     const run = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const hashError = hashParams.get('error');
+      const hashDesc = hashParams.get('error_description');
+      if (hashError) {
+        setMessage(hashDesc || hashError || 'Logowanie przez Google zostało przerwane.');
+        clearPkceOAuthSessionStorage();
+        return;
+      }
+
+      const hashAccessToken = hashParams.get('access_token');
+      const hashState = hashParams.get('state');
+      if (hashAccessToken && hashState) {
+        const ctx = readOAuthContext(hashState);
+        if (!ctx.stateOk) {
+          setMessage('Sesja logowania wygasła lub jest nieprawidłowa. Wróć do aplikacji i spróbuj ponownie.');
+          clearPkceOAuthSessionStorage();
+          return;
+        }
+
+        const currentUserHash = ctx.userHash && ctx.userHash.length > 0 ? ctx.userHash : null;
+        const result = await completeGoogleNativeLoginFromAccessToken(hashAccessToken, {
+          currentUserHash,
+          consentTimestamp: ctx.consent ?? undefined,
+          onGrantFreeCredits: grantFreeCredits,
+        });
+
+        if (cancelled) return;
+
+        if (!result.ok) {
+          clearPkceOAuthSessionStorage();
+          setMessage(result.error);
+          return;
+        }
+
+        clearPkceOAuthSessionStorage();
+        persistNativeGoogleUserToLocalStorage(result.user);
+        await syncGoogleNativeEmailLinkAuth(result.user);
+
+        const next = sanitizeRelativeRedirectPath(
+          ctx.authNext && ctx.authNext.length > 0 ? ctx.authNext : '/',
+          '/',
+        );
+        safeSessionStorage.removeItem('aura_auth_next');
+        window.location.replace(next);
+        return;
+      }
+
       const oauthError = searchParams.get('error');
       const oauthDesc = searchParams.get('error_description');
       if (oauthError) {
@@ -114,9 +163,12 @@ function GoogleOAuthCallbackInner() {
       persistNativeGoogleUserToLocalStorage(result.user);
       await syncGoogleNativeEmailLinkAuth(result.user);
 
-      const next = ctx.authNext && ctx.authNext.length > 0 ? ctx.authNext : '/';
+      const next = sanitizeRelativeRedirectPath(
+        ctx.authNext && ctx.authNext.length > 0 ? ctx.authNext : '/',
+        '/',
+      );
       safeSessionStorage.removeItem('aura_auth_next');
-      window.location.href = next;
+      window.location.replace(next);
     };
 
     void run();
