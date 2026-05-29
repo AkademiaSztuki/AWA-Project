@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { Check } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useFullFlowProgress } from '@/contexts/FullFlowProgressContext';
@@ -128,7 +129,7 @@ function JourneyStepMarkers({
             >
               {isActive && (
                 <span
-                  className="pointer-events-none absolute bottom-0 left-1/2 z-0 h-7 w-7 -translate-x-1/2 rounded-full bg-gold/15 blur-md"
+                  className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold/20 blur-md sm:h-10 sm:w-10"
                   aria-hidden
                 />
               )}
@@ -169,31 +170,35 @@ function DotNode({
     <motion.span
       layout
       className={cn(
-        'relative z-20 block rounded-full border-0 transition-all duration-200',
+        'relative z-20 flex items-center justify-center rounded-full border-0 transition-all duration-200',
         isActive &&
-          'h-[18px] w-[18px] bg-[rgba(255,205,70,0.82)] shadow-[0_0_0_3px_rgba(255,200,0,0.14),0_0_10px_rgba(255,200,0,0.22)] sm:h-5 sm:w-5',
+          'h-7 w-7 bg-gold text-white shadow-[0_0_0_5px_rgba(255,205,70,0.14)] sm:h-9 sm:w-9',
         !isActive &&
           isCompleted &&
-          'h-3.5 w-3.5 bg-[rgba(255,205,70,0.42)] shadow-[0_0_0_1px_rgba(170,110,0,0.08)] sm:h-4 sm:w-4',
+          'h-6 w-6 bg-gold/70 text-white shadow-[0_0_0_1px_rgba(170,110,0,0.08)] sm:h-8 sm:w-8',
         !isActive &&
           !isCompleted &&
-          'h-3.5 w-3.5 bg-[rgba(255,232,180,0.55)] shadow-[0_0_0_1px_rgba(190,150,60,0.1)] sm:h-4 sm:w-4',
-        isHovered && !isActive && isCompleted && 'bg-[rgba(255,205,70,0.82)] shadow-[0_0_0_3px_rgba(255,200,0,0.12),0_0_8px_rgba(255,200,0,0.18)]',
-        isHovered && !isActive && !isCompleted && 'bg-[rgba(255,205,70,0.58)] shadow-[0_0_0_2px_rgba(255,220,150,0.12)]',
-        isDimmed && 'opacity-[0.72]',
+          'h-5 w-5 bg-white/25 sm:h-6 sm:w-6',
+        isHovered && !isActive && isCompleted && 'bg-gold shadow-[0_0_0_3px_rgba(255,200,0,0.12)]',
+        isHovered && !isActive && !isCompleted && 'bg-gold/35',
+        isDimmed && 'opacity-70',
       )}
       initial={false}
       animate={
         isActive
-          ? { scale: [1, 1.08, 1], opacity: 1 }
-          : { scale: isHovered ? 1.18 : isDimmed ? 0.95 : 1, opacity: isDimmed ? 0.72 : 1 }
+          ? { scale: [1, 1.06, 1], opacity: 1 }
+          : { scale: isHovered ? 1.12 : isDimmed ? 0.95 : 1, opacity: isDimmed ? 0.7 : 1 }
       }
       transition={
         isActive
           ? { duration: 2.4, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }
           : { duration: 0.2 }
       }
-    />
+    >
+      {isCompleted && !isActive && (
+        <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.5} aria-hidden />
+      )}
+    </motion.span>
   );
 }
 
@@ -311,7 +316,7 @@ export function PartOneProgressBar({ currentPath, className = '' }: PartOneProgr
 
           <div className="flex flex-shrink-0 items-center gap-1.5">
             <span
-              className="rounded-full border border-transparent bg-white/10 px-3 py-0.5 font-nasalization text-xs tabular-nums text-graphite/80 ring-0 outline-none sm:py-1 sm:text-sm"
+              className="rounded-full border border-gold/20 bg-gold/10 px-3 py-0.5 font-nasalization text-xs tabular-nums text-graphite ring-0 outline-none sm:py-1 sm:text-sm"
               aria-label={language === 'pl' ? 'Procent ukończenia flow' : 'Journey completion percent'}
             >
               {Math.round(progress)}%
@@ -328,7 +333,7 @@ export function PartOneProgressBar({ currentPath, className = '' }: PartOneProgr
 
         <div className="relative mt-2.5 h-11 w-full sm:mt-3 md:hidden">
           <div
-            className="absolute left-0 right-0 top-1/2 z-[1] h-1.5 w-full -translate-y-1/2 overflow-hidden rounded-full bg-white/20"
+            className="absolute left-0 right-0 top-1/2 z-[1] h-1.5 w-full -translate-y-1/2 overflow-hidden rounded-full border border-amber-900/10 bg-white/15"
             role="progressbar"
             aria-label={language === 'pl' ? 'Postęp' : 'Progress'}
             aria-valuemin={0}
@@ -337,14 +342,14 @@ export function PartOneProgressBar({ currentPath, className = '' }: PartOneProgr
           >
             {previewWidth !== null && (
               <motion.div
-                className="absolute bottom-0 left-0 top-0 z-[1] h-full max-w-full rounded-full bg-amber-200/28"
+                className="absolute bottom-0 left-0 top-0 z-[1] h-full max-w-full rounded-full bg-gold/25"
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: `${Math.min(100, previewWidth)}%`, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
               />
             )}
             <motion.div
-              className="absolute bottom-0 left-0 top-0 z-[2] h-full min-w-0 max-w-full rounded-full bg-amber-300/75"
+              className="absolute bottom-0 left-0 top-0 z-[2] h-full min-w-0 max-w-full rounded-full bg-gold/75"
               initial={false}
               style={{ maxWidth: '100%' }}
               animate={{ width: `${progress}%` }}
@@ -384,12 +389,10 @@ export function PartOneProgressBar({ currentPath, className = '' }: PartOneProgr
           onPointerLeave={() => setHoveredIndex(null)}
         >
             <div className="absolute left-4 right-4 top-1/2 h-2 -translate-y-1/2" role="presentation" aria-hidden>
-            <div
-              className="h-full w-full rounded-full border border-amber-900/10 bg-amber-50/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-1px_0_rgba(0,0,0,0.03)]"
-            />
+            <div className="h-full w-full rounded-full border border-amber-900/10 bg-white/15" />
             {previewWidth !== null && (
               <motion.div
-                className="absolute bottom-0 left-0 z-[2] h-2 rounded-full bg-amber-200/22"
+                className="absolute bottom-0 left-0 z-[2] h-2 rounded-full bg-gold/25"
                 style={{ maxWidth: '100%' }}
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: `${Math.min(100, previewWidth)}%`, opacity: 1 }}
@@ -398,24 +401,13 @@ export function PartOneProgressBar({ currentPath, className = '' }: PartOneProgr
               />
             )}
             <motion.div
-              className="absolute bottom-0 left-0 z-[2] h-2 min-w-0 max-w-full rounded-full bg-amber-200/20"
-              initial={false}
-              style={{ maxWidth: '100%' }}
-              aria-hidden
-              animate={{ width: `${progress}%` }}
-              transition={{ type: 'spring', stiffness: 200, damping: 26 }}
-            />
-            <motion.div
-              className="absolute bottom-0 left-0 z-[3] h-2 min-w-0 max-w-full rounded-full bg-amber-300/90"
+              className="absolute bottom-0 left-0 z-[3] h-2 min-w-0 max-w-full rounded-full bg-gold/80"
               initial={false}
               style={{ maxWidth: '100%' }}
               aria-hidden
               animate={{ width: `${progress}%` }}
               transition={{ type: 'spring', stiffness: 180, damping: 24 }}
             />
-            <div className="pointer-events-none absolute bottom-0 left-0 h-2 w-full overflow-hidden rounded-full" aria-hidden>
-              <div className="h-full w-full translate-x-[-1px] bg-gradient-to-b from-white/30 via-white/0 to-white/0 opacity-[0.2]" />
-            </div>
           </div>
 
           <JourneyStepMarkers
