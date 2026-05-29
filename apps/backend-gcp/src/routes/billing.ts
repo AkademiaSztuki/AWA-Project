@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../db';
+import { requireInternalSecretInProduction } from '../lib/internal-auth';
 import {
   allocateSubscriptionCredits,
   markStripeEventFailed,
@@ -9,6 +10,13 @@ import {
 } from '../services/billing';
 
 export const billingRouter = Router();
+
+billingRouter.use((req, res, next) => {
+  if (!requireInternalSecretInProduction(req)) {
+    return res.status(401).json({ ok: false, error: 'unauthorized' });
+  }
+  next();
+});
 
 async function withStripeEventProcessing(
   eventId: string,

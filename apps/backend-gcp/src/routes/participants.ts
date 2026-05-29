@@ -6,7 +6,10 @@ import {
   pgErrorSnapshot,
   sessionSyncTrace,
 } from '../lib/session-sync-trace';
+import { verifyMigrateSecret, requireDebugOrMigrateAccess } from '../lib/internal-auth';
 import { ensureParticipantRecord, grantFreeCredits } from '../services/billing';
+
+const PARTICIPANT_SECRET_COLUMNS = new Set(['password_hash']);
 
 /** Lazily loaded; cleared on schema mismatch so new migrations are picked up after deploy. */
 let participantsTableColumns: Set<string> | null = null;
@@ -298,10 +301,19 @@ async function filterJsonbRowByPostgresCast(
   return { row: out, droppedPgCast };
 }
 
+async function participantSelectList(client: PoolClient): Promise<string> {
+  const cols = await getParticipantsTableColumns(client);
+  return [...cols]
+    .filter((c) => !PARTICIPANT_SECRET_COLUMNS.has(c))
+    .sort()
+    .join(', ');
+}
+
 /** Make a DB row JSON-serializable (Date → ISO string, BigInt → number, Buffer → skip or base64). */
 function sanitizeRow(row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(row)) {
+    if (PARTICIPANT_SECRET_COLUMNS.has(k)) continue;
     if (v === null || v === undefined) {
       out[k] = v;
     } else if (typeof v === 'bigint') {
@@ -365,16 +377,20 @@ async function runMigrateAuthUserIdToText(
 }
 
 participantsRouter.get('/debug/migrate-auth-user-id-to-text', async (req, res) => {
-  const secret = process.env.MIGRATE_SECRET || 'awa-migrate-2025';
-  if (req.query?.key !== secret) {
+  if (!requireDebugOrMigrateAccess(req)) {
+    return res.status(404).json({ ok: false, error: 'not_found' });
+  }
+  if (!verifyMigrateSecret(req)) {
     return res.status(403).json({ ok: false, error: 'forbidden' });
   }
   await runMigrateAuthUserIdToText(res);
 });
 
 participantsRouter.post('/debug/migrate-auth-user-id-to-text', async (req, res) => {
-  const secret = process.env.MIGRATE_SECRET || 'awa-migrate-2025';
-  if (req.query?.key !== secret && req.body?.key !== secret) {
+  if (!requireDebugOrMigrateAccess(req)) {
+    return res.status(404).json({ ok: false, error: 'not_found' });
+  }
+  if (!verifyMigrateSecret(req)) {
     return res.status(403).json({ ok: false, error: 'forbidden' });
   }
   await runMigrateAuthUserIdToText(res);
@@ -520,9 +536,10 @@ participantsRouter.get('/participants/by-auth/:authUserId', async (req, res) => 
   try {
     const client = await pool.connect();
     try {
+      const selectList = await participantSelectList(client);
       const { rows } = await client.query(
         `
-          SELECT *
+          SELECT ${selectList}
           FROM participants
           WHERE auth_user_id = $1
           ORDER BY core_profile_complete DESC, core_profile_completed_at DESC NULLS LAST, updated_at DESC
@@ -531,7 +548,11 @@ participantsRouter.get('/participants/by-auth/:authUserId', async (req, res) => 
         [authUserId]
       );
 
-      return res.json({ ok: true, participant: rows[0] || null });
+      const row = rows[0] as Record<string, unknown> | undefined;
+      return res.json({
+        ok: true,
+        participant: row ? sanitizeRow(row) : null,
+      });
     } finally {
       client.release();
     }
@@ -950,9 +971,11 @@ participantsRouter.get('/session/:userHash', async (req, res) => {
   try {
     const client = await pool.connect();
     try {
-      const { rows } = await client.query('SELECT * FROM participants WHERE user_hash = $1', [
-        userHash,
-      ]);
+      const selectList = await participantSelectList(client);
+      const { rows } = await client.query(
+        `SELECT ${selectList} FROM participants WHERE user_hash = $1`,
+        [userHash],
+      );
 
       if (rows.length === 0) {
         return res.json({ ok: true, participant: null });

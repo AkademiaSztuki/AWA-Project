@@ -15,6 +15,7 @@ import { billingRouter } from './routes/billing';
 import { authRouter } from './routes/auth';
 import { contactRouter } from './routes/contact';
 import { anonUsageRouter } from './routes/anon-usage';
+import { requireDebugOrMigrateAccess } from './lib/internal-auth';
 
 const app = express();
 
@@ -34,7 +35,10 @@ app.get('/health', (_req, res) => {
 
 // Debug: typ kolumny auth_user_id + czy backend łączy się przez socket Cloud SQL
 const dbHost = process.env.CLOUD_SQL_CONNECTION_NAME ? `/cloudsql/${process.env.CLOUD_SQL_CONNECTION_NAME}` : '(DATABASE_URL host)';
-app.get('/api/debug/participants-auth-column', async (_req, res) => {
+app.get('/api/debug/participants-auth-column', async (req, res) => {
+  if (!requireDebugOrMigrateAccess(req)) {
+    return res.status(404).json({ ok: false, error: 'not_found' });
+  }
   try {
     const client = await pool.connect();
     try {
