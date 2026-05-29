@@ -17,6 +17,7 @@ import { AwaDialogue } from '@/components/awa';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useAuth } from '@/contexts/AuthContext';
+import { creditsAuthHeaders } from '@/lib/credits-request-headers';
 import {
   Wand2,
   RefreshCw,
@@ -103,13 +104,12 @@ export default function ModifyPage() {
     async (userHash: string, amount: number, action: CreditAction) => {
       const response = await fetch('/api/credits/check', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...creditsAuthHeaders() },
         credentials: 'include',
         body: JSON.stringify({
           userHash,
           amount,
           action,
-          isAuthenticated,
           ...(!isAuthenticated ? { pathScope: pathTypeForCredits } : {}),
         }),
       });

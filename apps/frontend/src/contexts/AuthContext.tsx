@@ -115,11 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       currentUserHash: currentHash,
       consentTimestamp: new Date().toISOString(),
       authNextPath,
-      onGrantFreeCredits: async (userHash) => {
+      onGrantFreeCredits: async (userHash, authUserId) => {
         const r = await fetch('/api/credits/grant-free', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userHash }),
+          body: JSON.stringify({ userHash, authUserId }),
         });
         const d = await r.json();
         if (d.success) console.log('[AuthContext] Granted free credits:', userHash);

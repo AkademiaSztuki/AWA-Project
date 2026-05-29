@@ -32,6 +32,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal, type LoginNudgeEvent } from '@/components/auth/LoginModal';
 import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import { FREE_GRANT_CREDITS } from '@/lib/credits';
+import { creditsAuthHeaders } from '@/lib/credits-request-headers';
 import {
   Wand2,
   RefreshCw,
@@ -2344,13 +2345,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   const checkCreditsWithAction = async (userHash: string, amount: number, action: CreditAction) => {
     const response = await fetch('/api/credits/check', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...creditsAuthHeaders() },
       credentials: 'include',
       body: JSON.stringify({
         userHash,
         amount,
         action,
-        isAuthenticated,
         ...(!isAuthenticated ? { pathScope: pathTypeForCredits } : {}),
       }),
     });
@@ -2375,12 +2375,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   const deductCreditsViaApi = async (userHash: string, generationId: string) => {
     const response = await fetch('/api/credits/deduct', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...creditsAuthHeaders() },
       credentials: 'include',
       body: JSON.stringify({
         userHash,
         generationId,
-        isAuthenticated,
         ...(!isAuthenticated ? { pathScope: pathTypeForCredits } : {}),
       }),
     });

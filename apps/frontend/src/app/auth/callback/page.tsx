@@ -16,11 +16,11 @@ import {
   readPkceOAuthContext,
 } from '@/lib/google-oauth-pkce';
 
-async function grantFreeCredits(userHash: string): Promise<void> {
+async function grantFreeCredits(userHash: string, authUserId: string): Promise<void> {
   const r = await fetch('/api/credits/grant-free', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userHash }),
+    body: JSON.stringify({ userHash, authUserId }),
   });
   const d = await r.json().catch(() => ({}));
   if (d.success) console.log('[AuthCallback] Granted free credits:', userHash);

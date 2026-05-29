@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceAiProxyRateLimit } from '@/lib/ai-proxy-guard';
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
@@ -7,6 +8,14 @@ const ELEVENLABS_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || 'mp3_44
 
 export async function POST(request: NextRequest) {
   try {
+    const rate = await enforceAiProxyRateLimit(request, 'elevenlabs-tts');
+    if (!rate.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } },
+      );
+    }
+
     if (!ELEVENLABS_API_KEY || !ELEVENLABS_VOICE_ID) {
       return NextResponse.json(
         { error: 'Missing ElevenLabs API configuration.' },

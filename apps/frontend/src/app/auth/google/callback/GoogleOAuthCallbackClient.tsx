@@ -14,11 +14,11 @@ import {
 } from '@/lib/google-oauth-pkce';
 import { safeSessionStorage } from '@/lib/gcp-data';
 
-async function grantFreeCredits(userHash: string): Promise<void> {
+async function grantFreeCredits(userHash: string, authUserId: string): Promise<void> {
   const r = await fetch('/api/credits/grant-free', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userHash }),
+    body: JSON.stringify({ userHash, authUserId }),
   });
   const d = await r.json().catch(() => ({}));
   if (d.success) console.log('[GoogleOAuthCallback] Granted free credits:', userHash);

@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleAIClient } from '@/lib/google-ai/client';
 import { RoomAnalysisResponse } from '@/lib/google-ai/types';
+import { enforceAiProxyRateLimit } from '@/lib/ai-proxy-guard';
 
 export async function POST(request: NextRequest) {
   try {
+    const rate = await enforceAiProxyRateLimit(request, 'analyze-room');
+    if (!rate.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } },
+      );
+    }
+
     const body = await request.json();
     const { image, language } = body;
 

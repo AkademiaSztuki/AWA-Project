@@ -93,7 +93,7 @@ export async function completeGoogleNativeLoginFromAccessToken(
   options: {
     currentUserHash: string | null;
     consentTimestamp?: string;
-    onGrantFreeCredits?: (userHash: string) => Promise<void>;
+    onGrantFreeCredits?: (userHash: string, authUserId: string) => Promise<void>;
   },
 ): Promise<SignInWithGoogleNativeResult> {
   try {
@@ -123,7 +123,7 @@ export async function completeGoogleNativeLoginFromAccessToken(
     const effectiveHash = linkRes.data?.existingUserHash ?? userHash;
     if (options.onGrantFreeCredits) {
       try {
-        await options.onGrantFreeCredits(effectiveHash);
+        await options.onGrantFreeCredits(effectiveHash, authUserId);
       } catch {
         // ignore
       }
@@ -173,7 +173,7 @@ export async function syncGoogleNativeEmailLinkAuth(user: GoogleNativeUser): Pro
 export type SignInWithGoogleNativeOptions = {
   currentUserHash: string | null;
   consentTimestamp?: string;
-  onGrantFreeCredits?: (userHash: string) => Promise<void>;
+  onGrantFreeCredits?: (userHash: string, authUserId: string) => Promise<void>;
   /** Used after PKCE redirect (and stored for /auth/google/callback). */
   authNextPath?: string | null;
 };

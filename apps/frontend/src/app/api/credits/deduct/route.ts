@@ -2,17 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { deductCredits } from '@/lib/credits';
 import { getAnonSessionIdFromRequest, getRequestClientIp, parseAnonPathScope } from '@/lib/anon-request-helpers';
 import { deductAnonGenerate } from '@/lib/anon-db-limits';
+import { resolveAuthenticatedCreditsUser } from '@/lib/server-participant-auth';
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
       userHash?: string;
       generationId?: string;
-      isAuthenticated?: boolean;
       pathScope?: string;
     };
     const { userHash, generationId } = body;
-    const isAuthenticated = body.isAuthenticated === true;
     const pathScope = parseAnonPathScope(body.pathScope);
 
     if (!userHash || !generationId) {
@@ -22,6 +21,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const isAuthenticated = await resolveAuthenticatedCreditsUser(request, userHash);
     if (isAuthenticated) {
       const success = await deductCredits(userHash, generationId);
       if (!success) {

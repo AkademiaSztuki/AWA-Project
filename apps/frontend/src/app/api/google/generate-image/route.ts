@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleAIClient } from '@/lib/google-ai/client';
 import { ImageGenerationRequest, ImageGenerationResponse } from '@/lib/google-ai/types';
 import { buildGoogleNanoBananaPrompt } from '@/lib/prompt-synthesis/builder';
+import { enforceAiProxyRateLimit } from '@/lib/ai-proxy-guard';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -54,6 +55,14 @@ export async function POST(request: NextRequest) {
   // All 6 requests come in parallel from client
   // Server processes them in parallel with server-side retry for rate limits
   try {
+    const rate = await enforceAiProxyRateLimit(request, 'generate-image');
+    if (!rate.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } },
+      );
+    }
+
     const body = await request.json();
     const {
       prompt,

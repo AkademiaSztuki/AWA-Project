@@ -10,6 +10,17 @@ const getBaseUrl = (): string | null => {
   return url && url.length > 0 ? url.replace(/\/$/, '') : null;
 };
 
+/** Server-only: protects GCP billing routes from forged checkout events. */
+function getInternalBillingHeaders(): Record<string, string> {
+  if (typeof window !== 'undefined') return {};
+  const secret =
+    process.env.GCP_BILLING_INTERNAL_SECRET ||
+    process.env.CRON_SECRET ||
+    process.env.GCP_INTERNAL_SECRET;
+  if (!secret) return {};
+  return { Authorization: `Bearer ${secret}` };
+}
+
 async function apiFetch<T = unknown>(
   path: string,
   options: Omit<RequestInit, 'body'> & { body?: object } = {}
@@ -450,26 +461,31 @@ export const gcpApi = {
       apiFetch<{ ok: boolean }>('/api/billing/stripe/checkout-completed', {
         method: 'POST',
         body: payload,
+        headers: getInternalBillingHeaders(),
       }),
     subscriptionUpdated: (payload: Record<string, unknown>) =>
       apiFetch<{ ok: boolean }>('/api/billing/stripe/subscription-updated', {
         method: 'POST',
         body: payload,
+        headers: getInternalBillingHeaders(),
       }),
     subscriptionDeleted: (payload: Record<string, unknown>) =>
       apiFetch<{ ok: boolean }>('/api/billing/stripe/subscription-deleted', {
         method: 'POST',
         body: payload,
+        headers: getInternalBillingHeaders(),
       }),
     invoicePaymentSucceeded: (payload: Record<string, unknown>) =>
       apiFetch<{ ok: boolean }>('/api/billing/stripe/invoice-payment-succeeded', {
         method: 'POST',
         body: payload,
+        headers: getInternalBillingHeaders(),
       }),
     invoicePaymentFailed: (payload: Record<string, unknown>) =>
       apiFetch<{ ok: boolean }>('/api/billing/stripe/invoice-payment-failed', {
         method: 'POST',
         body: payload,
+        headers: getInternalBillingHeaders(),
       }),
   },
 };

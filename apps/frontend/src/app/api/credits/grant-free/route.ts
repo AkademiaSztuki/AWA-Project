@@ -1,15 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { grantFreeCredits } from '@/lib/credits';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
+import { resolveAuthenticatedCreditsUser } from '@/lib/server-participant-auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { userHash } = await request.json();
+    const { userHash, authUserId: bodyAuthUserId } = (await request.json()) as {
+      userHash?: string;
+      authUserId?: string;
+    };
 
     if (!userHash) {
       return NextResponse.json(
         { error: 'Missing userHash' },
         { status: 400 }
+      );
+    }
+
+    const isAuthenticated = await resolveAuthenticatedCreditsUser(
+      request,
+      userHash,
+      bodyAuthUserId,
+    );
+    if (!isAuthenticated) {
+      return NextResponse.json(
+        { error: 'Authentication required for free credit grant' },
+        { status: 401 },
       );
     }
 

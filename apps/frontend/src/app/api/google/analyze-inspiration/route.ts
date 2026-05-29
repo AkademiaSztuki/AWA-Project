@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleAIClient } from '@/lib/google-ai/client';
 import { InspirationAnalysisResponse } from '@/lib/google-ai/types';
+import { enforceAiProxyRateLimit } from '@/lib/ai-proxy-guard';
 
 // Simple in-memory cache to avoid calling Google AI multiple times
 // for the same inspiration image within a single server process
@@ -9,6 +10,14 @@ const MAX_CACHE_ENTRIES = 50;
 
 export async function POST(request: NextRequest) {
   try {
+    const rate = await enforceAiProxyRateLimit(request, 'analyze-inspiration');
+    if (!rate.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } },
+      );
+    }
+
     const body = await request.json();
     const { image } = body;
 

@@ -18,6 +18,7 @@ import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal, type LoginNudgeEvent } from '@/components/auth/LoginModal';
 import { FREE_GRANT_CREDITS } from '@/lib/credits';
+import { creditsAuthHeaders } from '@/lib/credits-request-headers';
 import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import {
   Wand2,
@@ -355,13 +356,12 @@ export default function FastGeneratePage() {
   const checkCreditsWithAction = async (userHash: string, amount: number, action: CreditAction) => {
     const response = await fetch('/api/credits/check', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...creditsAuthHeaders() },
       credentials: 'include',
       body: JSON.stringify({
         userHash,
         amount,
         action,
-        isAuthenticated,
         ...(!isAuthenticated ? { pathScope: 'fast' as const } : {}),
       }),
     });
@@ -386,12 +386,11 @@ export default function FastGeneratePage() {
   const deductCreditsViaApi = async (userHash: string, generationId: string) => {
     const response = await fetch('/api/credits/deduct', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...creditsAuthHeaders() },
       credentials: 'include',
       body: JSON.stringify({
         userHash,
         generationId,
-        isAuthenticated,
         ...(!isAuthenticated ? { pathScope: 'fast' as const } : {}),
       }),
     });
