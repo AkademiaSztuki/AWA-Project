@@ -3,9 +3,8 @@
  * Wymaga: NEXT_PUBLIC_GOOGLE_CLIENT_ID (OAuth 2.0 Client ID z GCP Console).
  *
  * Domyślnie używa GIS token popup (bez redirect_uri w authorize).
- * Na produkcji project-ida.com NIE ma fallbacku redirect przy popup_failed_to_open
- * (unika redirect_uri_mismatch gdy GCP nie ma wpisu). Redirect tylko gdy:
- *   NEXT_PUBLIC_GOOGLE_OAUTH_USE_PKCE_REDIRECT=1, lub dev Cursor/Electron na localhost.
+ * W Cursor/Electron (embedded) na produkcji: implicit redirect przez `/auth/callback` (legacy GCP URI).
+ * Na zwykłej przeglądarce produkcyjnej bez embedded: brak auto-redirect przy popup_failed_to_open.
  * W Google Cloud dodaj redirect URIs tylko jeśli używasz redirect — patrz docs/gcp/update-oauth-web-client-origins.md
  */
 
@@ -13,6 +12,11 @@ import { gcpApi } from '@/lib/gcp-api-client';
 import { safeLocalStorage } from '@/lib/gcp-data';
 import { GOOGLE_AUTH_EMAIL_STORAGE_KEY, GOOGLE_AUTH_USER_ID_STORAGE_KEY } from '@/lib/auth-storage-keys';
 import {
+  EMBEDDED_BROWSER_GOOGLE_AUTH_HINT,
+  isEmbeddedBrowser,
+} from '@/lib/embedded-browser';
+import {
+  isProductionProjectIdaOrigin,
   persistImplicitTokenSessionAndRedirect,
   persistPkceSessionAndRedirect,
   shouldAllowOAuthRedirectFallback,
@@ -67,12 +71,15 @@ export function preloadGoogleIdentityScript(): void {
 
 const GIS_TOKEN_FLOW_MS = 120_000;
 
-function shouldUsePkceForEmbeddedBrowser(): boolean {
-  if (process.env.NODE_ENV === 'production') return false;
+/** Skip GIS popup and use implicit redirect (legacy /auth/callback) in embedded webviews. */
+function shouldUseImplicitRedirectForEmbedded(): boolean {
   if (typeof window === 'undefined') return false;
-  const host = window.location.hostname;
-  if (host !== 'localhost' && host !== '127.0.0.1') return false;
-  return /Electron\//i.test(navigator.userAgent) || /\bCursor\b/i.test(navigator.userAgent);
+  if (!isEmbeddedBrowser()) return false;
+  if (process.env.NODE_ENV !== 'production') {
+    const host = window.location.hostname;
+    return host === 'localhost' || host === '127.0.0.1';
+  }
+  return isProductionProjectIdaOrigin();
 }
 
 export interface GoogleNativeUser {
@@ -178,8 +185,8 @@ export type SignInWithGoogleNativeOptions = {
 
 /**
  * Uruchamia logowanie przez Google (token model + link-auth).
- * Na localhost w Cursor/Electron przy popup_failed_to_open: implicit redirect (wymaga GCP redirect URI).
- * Na www.project-ida.com produkcji: tylko GIS popup — bez automatycznego redirect.
+ * Embedded (Cursor): implicit redirect przez /auth/callback (lub fallback po popup_failed_to_open).
+ * Zwykła przeglądarka na www.project-ida.com: GIS popup bez auto-redirect.
  */
 export async function signInWithGoogleNative(
   options: SignInWithGoogleNativeOptions,
@@ -204,7 +211,7 @@ export async function signInWithGoogleNative(
     return new Promise(() => {});
   }
 
-  if (shouldUsePkceForEmbeddedBrowser()) {
+  if (shouldUseImplicitRedirectForEmbedded()) {
     persistImplicitTokenSessionAndRedirect({
       clientId,
       currentUserHash: options.currentUserHash,
@@ -251,10 +258,13 @@ export async function signInWithGoogleNative(
 
         if (type === 'popup_failed_to_open' || combined.includes('failed to open')) {
           if (!shouldAllowOAuthRedirectFallback()) {
+            const base =
+              'Nie udało się otworzyć okna logowania Google. Zezwól na wyskakujące okna dla tej strony i spróbuj ponownie.';
             finish({
               ok: false,
-              error:
-                'Nie udało się otworzyć okna logowania Google. Zezwól na wyskakujące okna dla tej strony i spróbuj ponownie.',
+              error: isEmbeddedBrowser()
+                ? `${EMBEDDED_BROWSER_GOOGLE_AUTH_HINT}: ${base} Otwórz www.project-ida.com w Chrome.`
+                : base,
             });
             return;
           }

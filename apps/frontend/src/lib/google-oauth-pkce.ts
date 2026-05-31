@@ -1,8 +1,11 @@
 /**
  * OAuth redirect helpers (no popup).
- * Cursor's embedded browser can break Google GIS popups, so dev uses an implicit token redirect.
+ * Cursor's embedded browser can break Google GIS popups, so embedded clients use implicit token redirect
+ * via the legacy `/auth/callback` path registered in GCP.
  * PKCE code redirect remains available when a server-side Google client secret is configured.
  */
+
+import { isEmbeddedBrowser } from '@/lib/embedded-browser';
 
 const STORAGE = {
   verifier: 'ida_google_pkce_verifier',
@@ -46,7 +49,7 @@ function sanitizeRedirectUriFromEnv(raw: string): string {
  * If you open the app as http://127.0.0.1:3000 but only registered http://localhost:3000/..., you get redirect_uri_mismatch.
  *
  * Set `NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI` only when origin/path differs from the default builder.
- * Default: `{origin}/auth/google/callback` (legacy `/auth/callback` page still handles returns if registered separately).
+ * Default: `{origin}/auth/callback` (matches historical GCP registration; `/auth/google/callback` optional).
  */
 export function getGoogleOAuthRedirectUri(): string {
   const explicit =
@@ -55,7 +58,11 @@ export function getGoogleOAuthRedirectUri(): string {
     return normalizeOAuthRedirectUri(sanitizeRedirectUriFromEnv(explicit));
   }
   if (typeof window === 'undefined') return '';
-  return normalizeOAuthRedirectUri(`${window.location.origin}${GOOGLE_OAUTH_CALLBACK_PATH}`);
+  const path =
+    isEmbeddedBrowser() || isProductionProjectIdaOrigin()
+      ? GOOGLE_OAUTH_LEGACY_CALLBACK_PATH
+      : GOOGLE_OAUTH_CALLBACK_PATH;
+  return normalizeOAuthRedirectUri(`${window.location.origin}${path}`);
 }
 
 /** All redirect URIs to register in GCP when redirect fallback or PKCE is used (www + apex, both paths). */
@@ -71,9 +78,10 @@ export function isProductionProjectIdaOrigin(): boolean {
   return PROJECT_IDA_HOSTS.has(window.location.hostname);
 }
 
-/** Redirect OAuth (implicit/PKCE) when not on production project-ida, or when explicitly forced. */
+/** Redirect OAuth (implicit/PKCE) when not on production project-ida, embedded browser, or forced. */
 export function shouldAllowOAuthRedirectFallback(): boolean {
   if (process.env.NEXT_PUBLIC_GOOGLE_OAUTH_USE_PKCE_REDIRECT === '1') return true;
+  if (isEmbeddedBrowser()) return true;
   if (isProductionProjectIdaOrigin()) return false;
   return true;
 }

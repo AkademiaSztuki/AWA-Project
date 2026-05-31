@@ -11,6 +11,10 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { AwaScrollArea } from '@/components/ui/AwaScrollArea';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { preloadGoogleIdentityScript } from '@/lib/google-auth';
+import {
+  isEmbeddedBrowser,
+  isEmbeddedBrowserGoogleAuthError,
+} from '@/lib/embedded-browser';
 import { X, Mail, Sparkles } from 'lucide-react';
 
 export type LoginNudgeEvent = 'nudge_shown' | 'nudge_dismissed' | 'nudge_cta' | 'nudge_soft_later';
@@ -503,7 +507,25 @@ export function LoginModal({
                     role="alert"
                     aria-live="polite"
                   >
-                    <p className="text-xs text-red-600 font-modern whitespace-pre-wrap">{error}</p>
+                    <p className="text-xs text-red-600 font-modern whitespace-pre-wrap">
+                      {isEmbeddedBrowserGoogleAuthError(error)
+                        ? error.replace(/embedded_browser_google_auth:\s*/i, '')
+                        : error}
+                    </p>
+                    {(isEmbeddedBrowser() || isEmbeddedBrowserGoogleAuthError(error)) && (
+                      <a
+                        href={
+                          typeof window !== 'undefined'
+                            ? window.location.href
+                            : 'https://www.project-ida.com'
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex w-full items-center justify-center rounded-2xl border border-gold-400/50 bg-gold-400/15 px-4 py-2.5 text-sm font-semibold text-graphite font-modern hover:bg-gold-400/25 transition-colors"
+                      >
+                        {language === 'pl' ? 'Otwórz w Chrome' : 'Open in Chrome'}
+                      </a>
+                    )}
                     {emailNotVerified && (
                       <div className="mt-3 text-left">
                         <GlassButton
