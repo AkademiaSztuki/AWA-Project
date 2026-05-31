@@ -514,11 +514,7 @@ export function LoginModal({
                     </p>
                     {(isEmbeddedBrowser() || isEmbeddedBrowserGoogleAuthError(error)) && (
                       <a
-                        href={
-                          typeof window !== 'undefined'
-                            ? window.location.href
-                            : 'https://www.project-ida.com'
-                        }
+                        href="https://www.project-ida.com"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mt-3 inline-flex w-full items-center justify-center rounded-2xl border border-gold-400/50 bg-gold-400/15 px-4 py-2.5 text-sm font-semibold text-graphite font-modern hover:bg-gold-400/25 transition-colors"

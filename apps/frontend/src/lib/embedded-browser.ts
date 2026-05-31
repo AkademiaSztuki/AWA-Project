@@ -3,14 +3,22 @@
  * Used for OAuth redirect strategy (legacy /auth/callback) — not for security boundaries.
  */
 
-export function isEmbeddedBrowser(): boolean {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent;
+/** Shared UA checks for IDE/Electron webviews (client + debug API). */
+export function isEmbeddedBrowserUserAgent(userAgent: string): boolean {
+  const ua = userAgent;
   if (/Electron\//i.test(ua)) return true;
   if (/\bCursor\b/i.test(ua)) return true;
   if (/vscode-webview/i.test(ua)) return true;
   if (/Code\/\d/i.test(ua) && /Electron/i.test(ua)) return true;
+  // Cursor Simple Browser / some webviews omit "Cursor" in UA but keep Electron markers.
+  if (/Cursor\/\d/i.test(ua)) return true;
+  if (/HeadlessChrome/i.test(ua) && /Electron/i.test(ua)) return true;
   return false;
+}
+
+export function isEmbeddedBrowser(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return isEmbeddedBrowserUserAgent(navigator.userAgent);
 }
 
 /** User-facing hint when GIS popup cannot open in an embedded webview. */

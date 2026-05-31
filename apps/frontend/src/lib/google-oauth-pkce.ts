@@ -6,6 +6,16 @@
  */
 
 import { isEmbeddedBrowser } from '@/lib/embedded-browser';
+import {
+  buildGoogleOAuthRedirectUri,
+  isProductionProjectIdaOriginFromHost,
+} from '@/lib/google-oauth-config';
+
+export {
+  GOOGLE_OAUTH_CALLBACK_PATH,
+  GOOGLE_OAUTH_LEGACY_CALLBACK_PATH,
+  getProjectIdaRedirectUriChecklist,
+} from '@/lib/google-oauth-config';
 
 const STORAGE = {
   verifier: 'ida_google_pkce_verifier',
@@ -22,60 +32,18 @@ function base64UrlEncode(buf: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-/** No trailing slash — Google matches redirect URIs byte-for-byte. */
-function normalizeOAuthRedirectUri(uri: string): string {
-  return uri.trim().replace(/\/+$/, '');
-}
-
-/** Primary redirect path for OAuth authorize (must match GCP if redirect flow is used). */
-export const GOOGLE_OAUTH_CALLBACK_PATH = '/auth/google/callback';
-
-/** Legacy path still registered in GCP for some deployments. */
-export const GOOGLE_OAUTH_LEGACY_CALLBACK_PATH = '/auth/callback';
-
-/** Production hosts where GIS popup is preferred (no redirect_uri to Google authorize). */
-const PROJECT_IDA_HOSTS = new Set(['project-ida.com', 'www.project-ida.com']);
-
-function sanitizeRedirectUriFromEnv(raw: string): string {
-  return raw
-    .trim()
-    .replace(/^["']|["']$/g, '')
-    .replace(/\r\n|\r|\n/g, '')
-    .trim();
-}
-
 /**
  * Must match **exactly** one entry under Google Cloud → OAuth 2.0 Client → Authorized redirect URIs.
- * If you open the app as http://127.0.0.1:3000 but only registered http://localhost:3000/..., you get redirect_uri_mismatch.
- *
- * Set `NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI` only when origin/path differs from the default builder.
- * Default: `{origin}/auth/callback` (matches historical GCP registration; `/auth/google/callback` optional).
+ * Default: `{origin}/auth/callback` (same as main branch). Both callback pages handle return traffic.
  */
 export function getGoogleOAuthRedirectUri(): string {
-  const explicit =
-    typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI : undefined;
-  if (explicit?.trim()) {
-    return normalizeOAuthRedirectUri(sanitizeRedirectUriFromEnv(explicit));
-  }
   if (typeof window === 'undefined') return '';
-  const path =
-    isEmbeddedBrowser() || isProductionProjectIdaOrigin()
-      ? GOOGLE_OAUTH_LEGACY_CALLBACK_PATH
-      : GOOGLE_OAUTH_CALLBACK_PATH;
-  return normalizeOAuthRedirectUri(`${window.location.origin}${path}`);
-}
-
-/** All redirect URIs to register in GCP when redirect fallback or PKCE is used (www + apex, both paths). */
-export function getProjectIdaRedirectUriChecklist(): readonly string[] {
-  const hosts = ['https://www.project-ida.com', 'https://project-ida.com'] as const;
-  const paths = [GOOGLE_OAUTH_CALLBACK_PATH, GOOGLE_OAUTH_LEGACY_CALLBACK_PATH] as const;
-  return hosts.flatMap((origin) => paths.map((path) => `${origin}${path}`));
+  return buildGoogleOAuthRedirectUri(window.location.origin);
 }
 
 export function isProductionProjectIdaOrigin(): boolean {
-  if (process.env.NODE_ENV !== 'production') return false;
   if (typeof window === 'undefined') return false;
-  return PROJECT_IDA_HOSTS.has(window.location.hostname);
+  return isProductionProjectIdaOriginFromHost(window.location.hostname);
 }
 
 /** Redirect OAuth (implicit/PKCE) when not on production project-ida, embedded browser, or forced. */

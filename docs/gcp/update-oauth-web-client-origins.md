@@ -33,6 +33,10 @@ http://localhost:3000/auth/callback
 
 **Do not** set `NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI` on Vercel production unless it matches one of the lines above exactly (a bad value with `\r\n` causes `redirect_uri_mismatch`).
 
+**App default (all redirect flows):** `{origin}/auth/callback` — see `apps/frontend/src/lib/google-oauth-config.ts`.
+
+**Debug:** `GET /api/debug/oauth-config` (dev/preview open; production requires `OAUTH_DEBUG_SECRET`). See `OAUTH_FIX_NOW.md`.
+
 | Item | Value |
 |------|--------|
 | Client ID suffix | `...njt0347si32k8llp4qdkdnv0e1h47tq5.apps.googleusercontent.com` |
