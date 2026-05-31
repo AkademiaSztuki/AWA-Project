@@ -2,15 +2,11 @@
  * Google Identity Services (GIS) – logowanie bezpośrednio przez Google, bez Supabase.
  * Wymaga: NEXT_PUBLIC_GOOGLE_CLIENT_ID (OAuth 2.0 Client ID z GCP Console).
  *
- * Domyślnie używa GIS token popup, bo ten flow nie wymaga redirect URI.
- * W Cursorze/Electron dev przełącza się na implicit token redirect przez `/auth/google/callback`,
- * bo Google GIS popup może otwierać pusty `https://accounts.google.com/gsi/transform`.
- * Opcjonalnie: NEXT_PUBLIC_GOOGLE_OAUTH_USE_PKCE_REDIRECT=1 wymusza redirect PKCE wszędzie.
- *
- * W Google Cloud → Credentials → OAuth client → Authorized redirect URIs (must match byte-for-byte):
- *   http://localhost:3000/auth/google/callback
- *   https://www.project-ida.com/auth/google/callback
- * Override with NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI when origin/path differs.
+ * Domyślnie używa GIS token popup (bez redirect_uri w authorize).
+ * Na produkcji project-ida.com NIE ma fallbacku redirect przy popup_failed_to_open
+ * (unika redirect_uri_mismatch gdy GCP nie ma wpisu). Redirect tylko gdy:
+ *   NEXT_PUBLIC_GOOGLE_OAUTH_USE_PKCE_REDIRECT=1, lub dev Cursor/Electron na localhost.
+ * W Google Cloud dodaj redirect URIs tylko jeśli używasz redirect — patrz docs/gcp/update-oauth-web-client-origins.md
  */
 
 import { gcpApi } from '@/lib/gcp-api-client';
@@ -19,6 +15,7 @@ import { GOOGLE_AUTH_EMAIL_STORAGE_KEY, GOOGLE_AUTH_USER_ID_STORAGE_KEY } from '
 import {
   persistImplicitTokenSessionAndRedirect,
   persistPkceSessionAndRedirect,
+  shouldAllowOAuthRedirectFallback,
 } from '@/lib/google-oauth-pkce';
 
 declare global {
@@ -181,7 +178,8 @@ export type SignInWithGoogleNativeOptions = {
 
 /**
  * Uruchamia logowanie przez Google (token model + link-auth).
- * W embedded browser / popup_failed_to_open przechodzi na implicit redirect przez `/auth/google/callback`.
+ * Na localhost w Cursor/Electron przy popup_failed_to_open: implicit redirect (wymaga GCP redirect URI).
+ * Na www.project-ida.com produkcji: tylko GIS popup — bez automatycznego redirect.
  */
 export async function signInWithGoogleNative(
   options: SignInWithGoogleNativeOptions,
@@ -252,6 +250,14 @@ export async function signInWithGoogleNative(
         const combined = `${type} ${message}`.toLowerCase();
 
         if (type === 'popup_failed_to_open' || combined.includes('failed to open')) {
+          if (!shouldAllowOAuthRedirectFallback()) {
+            finish({
+              ok: false,
+              error:
+                'Nie udało się otworzyć okna logowania Google. Zezwól na wyskakujące okna dla tej strony i spróbuj ponownie.',
+            });
+            return;
+          }
           if (timeoutId !== undefined) window.clearTimeout(timeoutId);
           persistImplicitTokenSessionAndRedirect({
             clientId,

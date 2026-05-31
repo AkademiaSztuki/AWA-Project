@@ -24,23 +24,58 @@ function normalizeOAuthRedirectUri(uri: string): string {
   return uri.trim().replace(/\/+$/, '');
 }
 
-/** Path registered in GCP for this OAuth client (Authorized redirect URIs). */
+/** Primary redirect path for OAuth authorize (must match GCP if redirect flow is used). */
 export const GOOGLE_OAUTH_CALLBACK_PATH = '/auth/google/callback';
+
+/** Legacy path still registered in GCP for some deployments. */
+export const GOOGLE_OAUTH_LEGACY_CALLBACK_PATH = '/auth/callback';
+
+/** Production hosts where GIS popup is preferred (no redirect_uri to Google authorize). */
+const PROJECT_IDA_HOSTS = new Set(['project-ida.com', 'www.project-ida.com']);
+
+function sanitizeRedirectUriFromEnv(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/\r\n|\r|\n/g, '')
+    .trim();
+}
 
 /**
  * Must match **exactly** one entry under Google Cloud → OAuth 2.0 Client → Authorized redirect URIs.
  * If you open the app as http://127.0.0.1:3000 but only registered http://localhost:3000/..., you get redirect_uri_mismatch.
  *
- * Set `NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI` in `.env.local` / Vercel to the same string you registered in Google.
+ * Set `NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI` only when origin/path differs from the default builder.
  * Default: `{origin}/auth/google/callback` (legacy `/auth/callback` page still handles returns if registered separately).
  */
 export function getGoogleOAuthRedirectUri(): string {
-  const explicit = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI?.trim() : '';
-  if (explicit) {
-    return normalizeOAuthRedirectUri(explicit);
+  const explicit =
+    typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI : undefined;
+  if (explicit?.trim()) {
+    return normalizeOAuthRedirectUri(sanitizeRedirectUriFromEnv(explicit));
   }
   if (typeof window === 'undefined') return '';
   return normalizeOAuthRedirectUri(`${window.location.origin}${GOOGLE_OAUTH_CALLBACK_PATH}`);
+}
+
+/** All redirect URIs to register in GCP when redirect fallback or PKCE is used (www + apex, both paths). */
+export function getProjectIdaRedirectUriChecklist(): readonly string[] {
+  const hosts = ['https://www.project-ida.com', 'https://project-ida.com'] as const;
+  const paths = [GOOGLE_OAUTH_CALLBACK_PATH, GOOGLE_OAUTH_LEGACY_CALLBACK_PATH] as const;
+  return hosts.flatMap((origin) => paths.map((path) => `${origin}${path}`));
+}
+
+export function isProductionProjectIdaOrigin(): boolean {
+  if (process.env.NODE_ENV !== 'production') return false;
+  if (typeof window === 'undefined') return false;
+  return PROJECT_IDA_HOSTS.has(window.location.hostname);
+}
+
+/** Redirect OAuth (implicit/PKCE) when not on production project-ida, or when explicitly forced. */
+export function shouldAllowOAuthRedirectFallback(): boolean {
+  if (process.env.NEXT_PUBLIC_GOOGLE_OAUTH_USE_PKCE_REDIRECT === '1') return true;
+  if (isProductionProjectIdaOrigin()) return false;
+  return true;
 }
 
 async function createPkcePair(): Promise<{ verifier: string; challenge: string; state: string }> {

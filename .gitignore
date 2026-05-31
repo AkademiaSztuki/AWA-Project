@@ -71,3 +71,4 @@ coverage/
 
 # Exported data (may contain personal data)
 **/exports/
+.vercel

@@ -25,7 +25,10 @@ export async function POST(req: NextRequest) {
 
   const redirect_uri = rawRedirect.trim().replace(/\/+$/, '');
 
-  const expectedFixed = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI?.trim().replace(/\/+$/, '');
+  const expectedRaw = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_REDIRECT_URI?.trim();
+  const expectedFixed = expectedRaw
+    ? expectedRaw.replace(/^["']|["']$/g, '').replace(/\r\n|\r|\n/g, '').trim().replace(/\/+$/, '')
+    : '';
   if (expectedFixed && redirect_uri !== expectedFixed) {
     return NextResponse.json(
       {
