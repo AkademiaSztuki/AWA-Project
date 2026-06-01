@@ -481,6 +481,8 @@ export default function FastGeneratePage() {
     abortControllerRef.current = controller;
     setAbortController(controller);
 
+    let jobId: string | null = null;
+    let jobClosed = false;
     try {
       // Start page view tracking
       const projectId = await getOrCreateProjectId(typedSessionData.userHash);
@@ -525,7 +527,6 @@ export default function FastGeneratePage() {
 
       // Start generation job to participant_generations
       const userHash = typedSessionData.userHash;
-      let jobId: string | null = null;
       if (userHash) {
         const baseParams = getGenerationParameters('initial', generationCount);
         jobId = await startParticipantGeneration(userHash, {
@@ -579,19 +580,37 @@ export default function FastGeneratePage() {
       }, undefined, controller.signal);
 
       if (controller.signal.aborted) {
+        if (jobId) {
+          await endParticipantGeneration(jobId, {
+            status: 'error',
+            latency_ms: 0,
+            error_message: 'Generation cancelled',
+          });
+          jobClosed = true;
+        }
         return;
       }
 
       if (response.successful_count === 0) {
         setError("Nie udało się wygenerować obrazu.");
-        if (jobId) await endParticipantGeneration(jobId, { status: 'error', latency_ms: 0, error_message: 'Generation failed' });
+        if (jobId) {
+          await endParticipantGeneration(jobId, { status: 'error', latency_ms: 0, error_message: 'Generation failed' });
+          jobClosed = true;
+        }
         return;
       }
 
       const result = response.results[0];
       if (!result.success) {
         setError(result.error || "Nie udało się wygenerować obrazu.");
-        if (jobId) await endParticipantGeneration(jobId, { status: 'error', latency_ms: 0, error_message: result.error || 'Generation failed' });
+        if (jobId) {
+          await endParticipantGeneration(jobId, {
+            status: 'error',
+            latency_ms: 0,
+            error_message: result.error || 'Generation failed',
+          });
+          jobClosed = true;
+        }
         return;
       }
 
@@ -701,7 +720,10 @@ export default function FastGeneratePage() {
         console.warn('Supabase persist failed:', e);
       }
 
-      if (jobId) await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 });
+      if (jobId) {
+        await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 });
+        jobClosed = true;
+      }
       if (userHash) {
         try {
           await deductCreditsViaApi(userHash, newImage.id);
@@ -725,7 +747,26 @@ export default function FastGeneratePage() {
       console.error('Generation failed:', err);
       setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd podczas generacji.');
       setIsGenerating(false);
+      if (jobId && !jobClosed) {
+        try {
+          await endParticipantGeneration(jobId, {
+            status: 'error',
+            latency_ms: 0,
+            error_message: err instanceof Error ? err.message : 'Generation failed',
+          });
+          jobClosed = true;
+        } catch {}
+      }
     } finally {
+      if (jobId && !jobClosed) {
+        try {
+          await endParticipantGeneration(jobId, {
+            status: 'error',
+            latency_ms: 0,
+            error_message: 'Generation interrupted',
+          });
+        } catch {}
+      }
       setIsGenerating(false);
     }
     } finally {

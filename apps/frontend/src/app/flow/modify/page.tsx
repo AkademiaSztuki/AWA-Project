@@ -575,9 +575,19 @@ export default function ModifyPage() {
     setStatusMessage({ pl: `Modyfikuję obraz: ${t(modification.label)}...`, en: `Modifying image: ${t(modification.label)}...` });
     setEstimatedTime(30);
 
+    let jobId: string | null = null;
+    let jobClosed = false;
+    const closeJob = async (status: 'success' | 'error', error_message?: string) => {
+      if (!jobId || jobClosed) return;
+      await endParticipantGeneration(jobId, {
+        status,
+        latency_ms: 0,
+        ...(error_message ? { error_message } : {}),
+      });
+      jobClosed = true;
+    };
     try {
       const userHash = (sessionData as any).userHash;
-      let jobId: string | null = null;
       if (userHash) {
         jobId = await startParticipantGeneration(userHash, {
           type: isMacro ? 'macro' : 'micro',
@@ -622,6 +632,7 @@ export default function ModifyPage() {
             en: `Modification error: ${errorMessage || 'Try again'}` 
           }));
         }
+        await closeJob('error', errorMessage || 'Modification failed');
         return;
       }
 
@@ -633,6 +644,7 @@ export default function ModifyPage() {
           pl: "Modyfikacja nie powiodła się. Spróbuj ponownie.", 
           en: "Modification failed. Please try again." 
         }));
+        await closeJob('error', 'No successful result');
         return;
       }
 
@@ -743,11 +755,26 @@ export default function ModifyPage() {
         blindSelectionMade: true
       } as any);
 
-      try { if (jobId) await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 }); } catch {}
+      try {
+        await closeJob('success');
+      } catch {}
     } catch (err) {
       console.error('Modification failed:', err);
       setIsModifying(false);
       setError(err instanceof Error ? err.message : t({ pl: 'Wystąpił nieznany błąd podczas modyfikacji.', en: 'An unknown error occurred during modification.' }));
+      try {
+        await closeJob('error', err instanceof Error ? err.message : 'Modification failed');
+      } catch {}
+    } finally {
+      if (jobId && !jobClosed) {
+        try {
+          await endParticipantGeneration(jobId, {
+            status: 'error',
+            latency_ms: 0,
+            error_message: 'Modification interrupted',
+          });
+        } catch {}
+      }
     }
   };
 

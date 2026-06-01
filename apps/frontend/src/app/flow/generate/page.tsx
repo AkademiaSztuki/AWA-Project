@@ -1060,6 +1060,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       }
     }
     
+    let matrixJobId: string | null = null;
+    let matrixJobClosed = false;
     try {
       // Step 1: Assess data quality before synthesis
       console.log("[6-Image Matrix] Step 1: Assessing data quality...");
@@ -1338,29 +1340,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         strength: parameters.strength 
       });
       
-      // Log generation job to participant_generations
-      const userHash = typedSessionData.userHash;
-      let jobId: string | null = null;
-      if (userHash) {
-        // Save each prompt separately
-        for (const prompt of prompts) {
-          jobId = await startParticipantGeneration(userHash, {
-            type: 'initial',
-            prompt: prompt.prompt,
-            parameters: { ...parameters, num_sources: prompts.length, source: prompt.source },
-            has_base_image: true,
-            source: prompt.source
-          });
-        }
-        // Use first jobId for tracking
-        if (prompts.length > 0) {
-          jobId = await startParticipantGeneration(userHash, {
-            type: 'initial',
-            prompt: JSON.stringify(prompts.map(p => ({ source: p.source, prompt: p.prompt.substring(0, 200) }))),
-            parameters: { ...parameters, num_sources: prompts.length },
-            has_base_image: true,
-          });
-        }
+      // One participant_generations row per matrix run (avoid orphan pending rows)
+      if (userHash && prompts.length > 0) {
+        matrixJobId = await startParticipantGeneration(userHash, {
+          type: 'initial',
+          prompt: JSON.stringify(
+            prompts.map((p) => ({ source: p.source, prompt: p.prompt.substring(0, 200) })),
+          ),
+          parameters: { ...parameters, num_sources: prompts.length },
+          has_base_image: true,
+        });
       }
       
       // Step 3: Generate all images in parallel with progressive display
@@ -1889,7 +1878,14 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       if (generationResponse.successful_count === 0) {
         setError(t({ pl: "Wszystkie generacje zakończyły się niepowodzeniem.", en: "All generations failed." }));
-        if (jobId) await endParticipantGeneration(jobId, { status: 'error', latency_ms: Date.now() - matrixGenerationStartTime, error_message: 'All generations failed' });
+        if (matrixJobId) {
+          await endParticipantGeneration(matrixJobId, {
+            status: 'error',
+            latency_ms: Date.now() - matrixGenerationStartTime,
+            error_message: 'All generations failed',
+          });
+          matrixJobClosed = true;
+        }
         return;
       }
       
@@ -2025,12 +2021,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         // NOTE: After radical refactor we do NOT persist "spaces" in Supabase.
         // Persistence across sessions is handled via participant_images + participants snapshot.
         
-        if (userHash && jobId) {
+        if (userHash && matrixJobId) {
           const totalTime = Date.now() - matrixGenerationStartTime;
-          await endParticipantGeneration(jobId, { 
-            status: 'success', 
-            latency_ms: totalTime
+          await endParticipantGeneration(matrixJobId, {
+            status: 'success',
+            latency_ms: totalTime,
           });
+          matrixJobClosed = true;
         }
       } catch (e) {
         console.warn('[6-Image Matrix] Supabase persist failed:', e);
@@ -2067,6 +2064,17 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         setError(err instanceof Error ? err.message : t({ pl: 'Wystąpił nieznany błąd podczas generacji.', en: 'An unknown error occurred during generation.' }));
       }
     } finally {
+      if (matrixJobId && !matrixJobClosed) {
+        try {
+          await endParticipantGeneration(matrixJobId, {
+            status: 'error',
+            latency_ms: Math.max(0, Date.now() - matrixGenerationStartTime),
+            error_message: 'Generation interrupted',
+          });
+        } catch (endErr) {
+          console.warn('[6-Image Matrix] Failed to close generation job:', endErr);
+        }
+      }
       // Always cleanup
       isGeneratingRef.current = false;
       currentGenerationRunIdRef.current = null;
@@ -2719,11 +2727,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     console.log("Google Structured Prompt:", prompt);
     console.log("Google Parameters:", parameters);
 
+    let legacyJobId: string | null = null;
+    let legacyJobClosed = false;
     try {
       const userHash = (sessionData as any).userHash;
-      let jobId: string | null = null;
       if (userHash) {
-        jobId = await startParticipantGeneration(userHash, {
+        legacyJobId = await startParticipantGeneration(userHash, {
           type: 'initial',
           prompt,
           parameters,
@@ -2757,6 +2766,14 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       if (!response || !response.results || response.results.length === 0 || !response.results[0]?.image) {
         console.error("Otrzymano pustą odpowiedź z API po generowaniu.");
         setError(t({ pl: "Nie udało się wygenerować obrazów. Otrzymano pustą odpowiedź z serwera.", en: "Failed to generate images. Received empty response from server." }));
+        if (legacyJobId) {
+          await endParticipantGeneration(legacyJobId, {
+            status: 'error',
+            latency_ms: 0,
+            error_message: 'Empty response from server',
+          });
+          legacyJobClosed = true;
+        }
         return;
       }
 
@@ -2873,8 +2890,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
       // Close job with timing (approx, since we don't have precise start time here)
       try {
-        if (jobId) {
-          await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 });
+        if (legacyJobId) {
+          await endParticipantGeneration(legacyJobId, { status: 'success', latency_ms: 0 });
+          legacyJobClosed = true;
           // Odejmij kredyty po udanej generacji (użyj API route - działa po stronie serwera z service_role)
           if (userHash) {
             try {
@@ -2898,18 +2916,26 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     } catch (err) {
       console.error('Generation failed in handleInitialGeneration:', err);
       setError(err instanceof Error ? err.message : t({ pl: 'Wystąpił nieznany błąd podczas generacji.', en: 'An unknown error occurred during generation.' }));
-      try {
-        const userHash = (sessionData as any).userHash;
-        if (userHash) {
-          const jobId = await startParticipantGeneration(userHash, {
-            type: 'initial',
-            prompt: buildInitialPrompt(),
-            parameters: getOptimalParameters('initial', generationCount),
-            has_base_image: Boolean((sessionData as any).roomImage),
+      if (legacyJobId && !legacyJobClosed) {
+        try {
+          await endParticipantGeneration(legacyJobId, {
+            status: 'error',
+            latency_ms: 0,
+            error_message: String(err),
           });
-          if (jobId) await endParticipantGeneration(jobId, { status: 'error', latency_ms: 0, error_message: String(err) });
-        }
-      } catch {}
+          legacyJobClosed = true;
+        } catch {}
+      }
+    } finally {
+      if (legacyJobId && !legacyJobClosed) {
+        try {
+          await endParticipantGeneration(legacyJobId, {
+            status: 'error',
+            latency_ms: 0,
+            error_message: 'Generation interrupted',
+          });
+        } catch {}
+      }
     }
   };
 
@@ -2994,11 +3020,21 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     setEstimatedTime(30);
     setIdaComment(null); // Reset comment for new generation
 
+    let modJobId: string | null = null;
+    let modJobClosed = false;
+    const closeModJob = async (status: 'success' | 'error', error_message?: string) => {
+      if (!modJobId || modJobClosed) return;
+      await endParticipantGeneration(modJobId, {
+        status,
+        latency_ms: 0,
+        ...(error_message ? { error_message } : {}),
+      });
+      modJobClosed = true;
+    };
     try {
       const userHash = (sessionData as any).userHash;
-      let jobId: string | null = null;
       if (userHash) {
-        jobId = await startParticipantGeneration(userHash, {
+        modJobId = await startParticipantGeneration(userHash, {
           type: isMacro ? 'macro' : 'micro',
           prompt: modificationPrompt,
           parameters: googleModificationParameters,
@@ -3030,6 +3066,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         setIsModifying(false);
         setLastFailedModification(modification);
         setError(t({ pl: "Nie udało się zmodyfikować obrazu. Brak odpowiedzi z serwera.", en: "Failed to modify image. No response from server." }));
+        await closeModJob('error', 'No response from server');
         return;
       }
 
@@ -3041,6 +3078,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         setIsModifying(false);
         setLastFailedModification(modification);
         setError(t({ pl: `Nie udało się zmodyfikować obrazu: ${errorMessage}`, en: `Failed to modify image: ${errorMessage}` }));
+        await closeModJob('error', String(errorMessage));
         return;
       }
 
@@ -3051,6 +3089,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         setIsModifying(false);
         setLastFailedModification(modification);
         setError(t({ pl: "Nie udało się zmodyfikować obrazu. Otrzymano pustą odpowiedź z serwera.", en: "Failed to modify image. Received empty response from server." }));
+        await closeModJob('error', 'Empty results');
         return;
       }
 
@@ -3062,6 +3101,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         setIsModifying(false);
         setLastFailedModification(modification);
         setError(t({ pl: "Nie udało się zmodyfikować obrazu. Wszystkie próby zakończyły się niepowodzeniem.", en: "Failed to modify image. All attempts failed." }));
+        await closeModJob('error', 'All attempts failed');
         return;
       }
 
@@ -3152,7 +3192,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           type: 'generated' as const,
           is_favorite: newImage.isFavorite || false,
           source: selectedImage?.source,
-          generation_id: jobId ?? undefined,
+          generation_id: modJobId ?? undefined,
           space_id: spaceId
         }];
         await saveParticipantImages(userHash, imagesToSave);
@@ -3226,7 +3266,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         console.warn('Supabase persist failed (modification):', e);
       }
 
-      try { if (jobId) await endParticipantGeneration(jobId, { status: 'success', latency_ms: 0 }); } catch {}
+      try {
+        await closeModJob('success');
+      } catch {}
       if (userHash) {
         try {
           await deductCreditsViaApi(userHash, newImage.id);
@@ -3241,18 +3283,18 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setIsModifying(false);
       setError(err instanceof Error ? err.message : t({ pl: 'Wystąpił nieznany błąd podczas modyfikacji.', en: 'An unknown error occurred during modification.' }));
       try {
-        const userHash = (sessionData as any).userHash;
-        if (userHash) {
-          const jobId = await startParticipantGeneration(userHash, {
-            type: modification.category,
-            prompt: 'n/a',
-            parameters: getOptimalParameters(modification.category === 'macro' ? 'macro' : 'micro', generationCount),
-            has_base_image: true,
-            modification_label: t(modification.label),
-          });
-          if (jobId) await endParticipantGeneration(jobId, { status: 'error', latency_ms: 0, error_message: String(err) });
-        }
+        await closeModJob('error', String(err));
       } catch {}
+    } finally {
+      if (modJobId && !modJobClosed) {
+        try {
+          await endParticipantGeneration(modJobId, {
+            status: 'error',
+            latency_ms: 0,
+            error_message: 'Modification interrupted',
+          });
+        } catch {}
+      }
     }
   };
 
