@@ -259,14 +259,23 @@ export function mapUserProfileToSessionData(userProfile: UserProfile): Partial<S
     } as any;
   }
 
-  // Map biophiliaScore
-  if (userProfile.psychologicalBaseline?.biophiliaScore !== undefined) {
+  // Map biophiliaScore (0 is a valid score)
+  if (
+    userProfile.psychologicalBaseline?.biophiliaScore !== undefined &&
+    userProfile.psychologicalBaseline?.biophiliaScore !== null
+  ) {
     sessionUpdates.biophiliaScore = userProfile.psychologicalBaseline.biophiliaScore;
   }
 
-  // Map PRS ideal
+  // Map PRS grid answers
   if (userProfile.psychologicalBaseline?.prsIdeal) {
     sessionUpdates.prsIdeal = userProfile.psychologicalBaseline.prsIdeal;
+  }
+  if (userProfile.psychologicalBaseline?.prsCurrent) {
+    sessionUpdates.prsCurrent = userProfile.psychologicalBaseline.prsCurrent;
+  }
+  if (userProfile.psychologicalBaseline?.prsTarget) {
+    sessionUpdates.prsTarget = userProfile.psychologicalBaseline.prsTarget;
   }
 
   // Map lifestyle

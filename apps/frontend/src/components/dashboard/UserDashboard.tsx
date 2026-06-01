@@ -10,6 +10,8 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { safeLocalStorage, safeSessionStorage } from '@/lib/gcp-data';
 import { getUserProfile } from '@/lib/gcp-participant-profile';
+import { mapUserProfileToSessionData } from '@/lib/profile-mapper';
+import { resolveCompletedFullFlowStepIndices } from '@/lib/flow/full-flow-progress';
 import { fetchParticipantImages, fetchParticipantSpaces, createParticipantSpace, toggleParticipantImageFavorite, deleteParticipantImage, updateSpaceName, deleteSpace } from '@/lib/remote-spaces';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -249,49 +251,14 @@ export function UserDashboard() {
   }, [spaces, sessionData]);
 
   const completedJourneyStepIndices = useMemo(() => {
-    const typedSession = sessionData as any;
-    const completed = new Set<number>();
-
-    if (typedSession?.userHash || getUserHash()) completed.add(0);
-    if (
-      typedSession?.demographics ||
-      typedSession?.age ||
-      typedSession?.household ||
-      typedSession?.lifestyle ||
-      typedSession?.currentStep === 'dashboard'
-    ) {
-      completed.add(1);
-    }
-    if (typedSession?.visualDNA || typedSession?.tinderResults || (typedSession?.swipes?.length || 0) > 0) {
-      completed.add(2);
-    }
-    if (typedSession?.semanticDifferential || typedSession?.colorsAndMaterials?.selectedStyle) {
-      completed.add(3);
-    }
-    if (typedSession?.sensoryPreferences || typedSession?.roomPreferences?.sensoryPreferences) {
-      completed.add(4);
-    }
-    if (dashboardStats.inspirationsCount > 0) completed.add(5);
-    if (typedSession?.bigFive?.scores) completed.add(6);
-
-    const hasAnySpace = spaces.length > 0 || !!typedSession?.currentSpaceId || !!typedSession?.roomImage;
-    const hasRoomSetup =
-      !!typedSession?.roomPreferences ||
-      !!typedSession?.roomType ||
-      spaces.some((space) => (space.images || []).length > 0);
-    const hasRoomMood =
-      !!typedSession?.roomPreferences?.prsCurrent ||
-      !!typedSession?.roomPreferences?.prsTarget ||
-      !!typedSession?.roomPreferences?.biophiliaScore ||
-      !!typedSession?.biophiliaScore;
-
-    if (hasAnySpace) completed.add(7);
-    if (hasRoomSetup) completed.add(8);
-    if (hasRoomMood) completed.add(9);
-    if (dashboardStats.generatedCount > 0 || (typedSession?.generations?.length || 0) > 0) completed.add(10);
-    if (typedSession?.currentStep === 'dashboard' && dashboardStats.generatedCount > 0) completed.add(11);
-
-    return Array.from(completed).sort((a, b) => a - b);
+    return resolveCompletedFullFlowStepIndices({
+      sessionData,
+      spaces,
+      spacesCount: dashboardStats.spacesCount,
+      generatedCount: dashboardStats.generatedCount,
+      inspirationsCount: dashboardStats.inspirationsCount,
+      hasUserHash: !!(sessionData?.userHash || getUserHash()),
+    });
   }, [dashboardStats, getUserHash, sessionData, spaces]);
 
   const handleToggleFavorite = useCallback(async (imageId?: string, imageUrl?: string) => {
@@ -377,87 +344,18 @@ export function UserDashboard() {
         });
         
         if (userProfile) {
-          // Map profile data back to sessionData format
-          const mappedData: any = {};
-          
-          // Big Five / Personality
-          if (userProfile.personality) {
-            mappedData.bigFive = {
-              instrument: userProfile.personality.instrument || 'IPIP-NEO-120',
-              scores: {
-                domains: userProfile.personality.domains || {},
-                facets: userProfile.personality.facets || {}
-              },
-              completedAt: userProfile.personality.completedAt || new Date().toISOString()
-            };
-            console.log('[Dashboard] Mapped Big Five:', {
-              instrument: mappedData.bigFive.instrument,
-              hasScores: !!mappedData.bigFive.scores,
-              hasDomains: !!mappedData.bigFive.scores.domains,
-              domainsKeys: mappedData.bigFive.scores.domains ? Object.keys(mappedData.bigFive.scores.domains) : []
-            });
-          }
-          
-          // Explicit preferences (colors, materials, styles)
-          if (userProfile.aestheticDNA?.explicit) {
-            mappedData.colorsAndMaterials = {
-              selectedPalette: userProfile.aestheticDNA.explicit.selectedPalette,
-              topMaterials: userProfile.aestheticDNA.explicit.topMaterials || [],
-              selectedStyle: (userProfile.aestheticDNA.explicit as any).selectedStyle
-            };
-            mappedData.semanticDifferential = (() => {
-              const w = userProfile.aestheticDNA.explicit.warmthPreference;
-              const b = userProfile.aestheticDNA.explicit.brightnessPreference;
-              const c = userProfile.aestheticDNA.explicit.complexityPreference;
-              const partial: Record<string, number> = {};
-              if (w !== undefined) partial.warmth = w;
-              if (b !== undefined) partial.brightness = b;
-              if (c !== undefined) partial.complexity = c;
-              return Object.keys(partial).length > 0 ? partial : undefined;
-            })();
-            console.log('[Dashboard] Mapped explicit preferences:', {
-              hasPalette: !!mappedData.colorsAndMaterials.selectedPalette,
-              hasStyle: !!mappedData.colorsAndMaterials.selectedStyle,
-              materialsCount: mappedData.colorsAndMaterials.topMaterials?.length || 0,
-              hasSemantic: !!mappedData.semanticDifferential
-            });
-          }
-          
-          // Implicit preferences (visual DNA) - UKRYTE PREFERENCJE
-          if (userProfile.aestheticDNA?.implicit) {
-            mappedData.visualDNA = {
-              dominantStyle: userProfile.aestheticDNA.implicit.dominantStyles?.[0],
-              preferences: {
-                colors: userProfile.aestheticDNA.implicit.colors || [],
-                materials: userProfile.aestheticDNA.implicit.materials || [],
-                styles: userProfile.aestheticDNA.implicit.dominantStyles || [],
-                warmth: userProfile.aestheticDNA.implicit.warmth,
-                brightness: userProfile.aestheticDNA.implicit.brightness,
-                complexity: userProfile.aestheticDNA.implicit.complexity
-              },
-              implicitScores: {
-                warmth: userProfile.aestheticDNA.implicit.warmth,
-                brightness: userProfile.aestheticDNA.implicit.brightness,
-                complexity: userProfile.aestheticDNA.implicit.complexity
-              }
-            };
-            
-            
-            console.log('[Dashboard] Mapped implicit preferences (UKRYTE):', {
-              dominantStyle: mappedData.visualDNA.dominantStyle,
-              colorsCount: mappedData.visualDNA.preferences.colors?.length || 0,
-              materialsCount: mappedData.visualDNA.preferences.materials?.length || 0
-            });
-          } else {
-          }
-          
-          // Update sessionData with Supabase data
+          const mappedData = mapUserProfileToSessionData(userProfile);
+
           if (Object.keys(mappedData).length > 0) {
             updateSessionData(mappedData);
             console.log('[Dashboard] Loaded user profile from Supabase:', {
               hasBigFive: !!mappedData.bigFive,
               hasExplicit: !!mappedData.colorsAndMaterials,
-              hasImplicit: !!mappedData.visualDNA
+              hasImplicit: !!mappedData.visualDNA,
+              hasSensory: !!mappedData.sensoryPreferences,
+              hasPrsCurrent: !!mappedData.prsCurrent,
+              hasPrsTarget: !!mappedData.prsTarget,
+              biophiliaScore: mappedData.biophiliaScore,
             });
           } else {
             console.warn('[Dashboard] User profile exists but no mappable data found');

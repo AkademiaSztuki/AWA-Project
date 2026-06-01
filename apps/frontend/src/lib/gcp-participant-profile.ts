@@ -87,10 +87,21 @@ export async function getUserProfile(
         },
       },
       psychologicalBaseline: {
-        biophiliaScore: data.biophilia_score,
+        biophiliaScore:
+          data.biophilia_score !== null && data.biophilia_score !== undefined
+            ? data.biophilia_score
+            : undefined,
         prsIdeal:
           data.prs_ideal_x !== null && data.prs_ideal_x !== undefined
             ? { x: data.prs_ideal_x, y: data.prs_ideal_y ?? 0 }
+            : undefined,
+        prsCurrent:
+          data.prs_current_x !== null && data.prs_current_x !== undefined
+            ? { x: data.prs_current_x, y: data.prs_current_y ?? 0 }
+            : undefined,
+        prsTarget:
+          data.prs_target_x !== null && data.prs_target_x !== undefined
+            ? { x: data.prs_target_x, y: data.prs_target_y ?? 0 }
             : undefined,
       },
       lifestyle:
@@ -98,7 +109,7 @@ export async function getUserProfile(
           ? { vibe: data.life_vibe || '', goals: data.life_goals || [], values: [] }
           : undefined,
       sensoryPreferences:
-        data.sensory_music || data.sensory_texture || data.sensory_light
+        data.sensory_music || data.sensory_texture || data.sensory_light || data.nature_metaphor
           ? {
               music: data.sensory_music || '',
               texture: data.sensory_texture || '',

@@ -18,7 +18,9 @@ import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
 import { saveRoom } from '@/lib/gcp-participant-profile';
+import { saveSessionToGcp } from '@/lib/gcp-data';
 import { useSession, useSessionData } from '@/hooks';
+import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import { saveParticipantImages } from '@/lib/remote-spaces';
 import { useGoogleAI, getGenerationParameters, type GoogleGenerationParameters } from '@/hooks/useGoogleAI';
 import { prepareGenerationDimensionsFromRoomBase64 } from '@/lib/image-aspect';
@@ -268,6 +270,15 @@ export function RoomSetup({ householdId }: { householdId: string }) {
 
   const handleNext = () => {
     stopDialogsAndAudio();
+    if (currentStep === 'prs_current' && roomData.prsCurrent) {
+      void updateSessionData({ prsCurrent: roomData.prsCurrent });
+    }
+    if (currentStep === 'prs_target' && roomData.prsTarget) {
+      void updateSessionData({
+        ...(roomData.prsCurrent ? { prsCurrent: roomData.prsCurrent } : {}),
+        prsTarget: roomData.prsTarget,
+      });
+    }
     const nextIndex = currentStepIndex + 1;
     if (nextIndex < steps.length) {
       setCurrentStep(steps[nextIndex]);
@@ -463,6 +474,8 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         generations: [],
         ...roomExplicitToRoot,
       } as any);
+
+      await saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
 
       console.log('[RoomSetup] Session updated, navigating to generate flow');
       router.push(`/flow/generate`);

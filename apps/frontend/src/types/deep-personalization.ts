@@ -32,8 +32,10 @@ export interface UserProfile {
   };
   
   psychologicalBaseline: {
-    prsIdeal: PRSMoodGridData;
-    biophiliaScore: number;  // 0-3
+    prsIdeal?: PRSMoodGridData;
+    prsCurrent?: PRSMoodGridData;
+    prsTarget?: PRSMoodGridData;
+    biophiliaScore?: number;  // 0-3
   };
   
   lifestyle: {

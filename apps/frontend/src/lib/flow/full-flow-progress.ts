@@ -4,6 +4,7 @@
  */
 
 import type { Language } from '@/lib/questions/validated-scales';
+import type { SessionData } from '@/types';
 
 export const FULL_FLOW_STEP_COUNT = 12;
 
@@ -389,4 +390,106 @@ export function getActiveFullFlowStep(
     ),
   );
   return FULL_FLOW_USER_STEPS[idx];
+}
+
+export type FullFlowCompletionInput = {
+  sessionData: SessionData | null | undefined;
+  spaces: ReadonlyArray<{ images?: ReadonlyArray<{ type?: string }> }>;
+  spacesCount: number;
+  generatedCount: number;
+  inspirationsCount: number;
+  hasUserHash: boolean;
+};
+
+function isDefinedNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function hasSensoryCompletion(session: SessionData): boolean {
+  const sp = session.sensoryPreferences;
+  const rsp = session.roomPreferences?.sensoryPreferences;
+
+  if (sp?.music || sp?.texture || sp?.light) return true;
+  if (rsp?.music || rsp?.texture || rsp?.light) return true;
+  if (session.natureMetaphor) return true;
+  if (session.coreProfileComplete || session.coreProfileCompletedAt) return true;
+  return false;
+}
+
+function hasRoomMoodCompletion(session: SessionData): boolean {
+  const roomPrefs = session.roomPreferences as
+    | (typeof session.roomPreferences & {
+        prsCurrent?: { x: number; y: number };
+        prsTarget?: { x: number; y: number };
+        biophiliaScore?: number;
+      })
+    | undefined;
+
+  if (session.prsCurrent || session.prsTarget || session.prsIdeal) return true;
+  if (roomPrefs?.prsCurrent || roomPrefs?.prsTarget) return true;
+  if (isDefinedNumber(session.biophiliaScore)) return true;
+  if (isDefinedNumber(roomPrefs?.biophiliaScore)) return true;
+  return false;
+}
+
+/**
+ * Derive completed dashboard journey step indices (0..11) from session + participant data.
+ * Applies linear-funnel backfill so a later completed step implies earlier ones.
+ */
+export function resolveCompletedFullFlowStepIndices(input: FullFlowCompletionInput): number[] {
+  const session = input.sessionData ?? ({} as SessionData);
+  const legacySession = session as SessionData & {
+    age?: unknown;
+    household?: unknown;
+    swipes?: unknown[];
+    tinderResults?: unknown;
+  };
+  const completed = new Set<number>();
+
+  if (input.hasUserHash) completed.add(0);
+  if (
+    session.demographics ||
+    legacySession.age ||
+    legacySession.household ||
+    session.lifestyle ||
+    session.currentStep === 'dashboard'
+  ) {
+    completed.add(1);
+  }
+  if (
+    session.visualDNA ||
+    legacySession.tinderResults ||
+    (legacySession.swipes?.length || 0) > 0 ||
+    (session.tinderResults?.length || 0) > 0
+  ) {
+    completed.add(2);
+  }
+  if (session.semanticDifferential || session.colorsAndMaterials?.selectedStyle) {
+    completed.add(3);
+  }
+  if (hasSensoryCompletion(session)) completed.add(4);
+  if (input.inspirationsCount > 0) completed.add(5);
+  if (session.bigFive?.scores) completed.add(6);
+
+  const hasAnySpace =
+    input.spacesCount > 0 || !!session.currentSpaceId || !!session.roomImage;
+  const hasRoomSetup =
+    !!session.roomPreferences ||
+    !!session.roomType ||
+    input.spaces.some((space) => (space.images || []).length > 0);
+
+  if (hasAnySpace) completed.add(7);
+  if (hasRoomSetup) completed.add(8);
+  if (hasRoomMoodCompletion(session)) completed.add(9);
+  if (input.generatedCount > 0 || (session.generations?.length || 0) > 0) {
+    completed.add(10);
+  }
+  if (session.currentStep === 'dashboard' && input.generatedCount > 0) completed.add(11);
+
+  const furthest = completed.size > 0 ? Math.max(...completed) : -1;
+  for (let i = 0; i <= furthest; i++) {
+    completed.add(i);
+  }
+
+  return Array.from(completed).sort((a, b) => a - b);
 }
