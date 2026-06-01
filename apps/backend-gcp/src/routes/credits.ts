@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../db';
+import { requireInternalSecretInProduction } from '../lib/internal-auth';
 import {
   CREDITS_PER_IMAGE,
   checkCreditsAvailable,
@@ -98,7 +99,12 @@ creditsRouter.post('/credits/deduct', async (req, res) => {
   }
 });
 
-creditsRouter.post('/credits/grant-free', async (req, res) => {
+creditsRouter.post('/credits/grant-free', (req, res, next) => {
+  if (!requireInternalSecretInProduction(req)) {
+    return res.status(401).json({ ok: false, error: 'unauthorized' });
+  }
+  next();
+}, async (req, res) => {
   const { userHash } = req.body as { userHash?: string };
   if (!userHash) {
     return res.status(400).json({ ok: false, error: 'userHash is required' });

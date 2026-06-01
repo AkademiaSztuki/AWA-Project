@@ -434,6 +434,7 @@ export const gcpApi = {
       apiFetch<{ ok: boolean; granted?: boolean }>('/api/credits/grant-free', {
         method: 'POST',
         body: payload,
+        headers: getInternalBillingHeaders(),
       }),
   },
 
