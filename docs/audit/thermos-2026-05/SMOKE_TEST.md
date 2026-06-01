@@ -1,5 +1,7 @@
 # Research smoke test (Thermos regression)
 
+**SQL przed/po flow (Cloud SQL):** [SMOKE_TEST_SQL_BEFORE_AFTER.md](./SMOKE_TEST_SQL_BEFORE_AFTER.md)
+
 Run on **staging** with real `NEXT_PUBLIC_GCP_API_BASE_URL`. Repeat after each Phase 1–2 merge.
 
 ## Preconditions
