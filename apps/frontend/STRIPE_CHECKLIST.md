@@ -35,6 +35,8 @@ STRIPE_PRICE_STUDIO_YEARLY_USD=price_...
 
 # Cron Secret (opcjonalne)
 CRON_SECRET=your-secret-key-here
+# Same value on Vercel AND Cloud Run (any of these names — code accepts all):
+# GCP_BILLING_INTERNAL_SECRET, INTERNAL_API_SECRET, CRON_SECRET, GCP_INTERNAL_SECRET
 ```
 
 ## Jak uzyskać Price IDs:

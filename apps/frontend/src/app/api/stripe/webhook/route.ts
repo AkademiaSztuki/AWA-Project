@@ -41,7 +41,11 @@ export async function POST(request: NextRequest) {
     await handleWebhookEvent(event);
     return NextResponse.json({ received: true, processed: true, storage: 'gcp' });
   } catch (error: any) {
-    console.error('[Webhook] Error processing webhook event:', error);
+    console.error('[Webhook] Error processing webhook event:', {
+      type: event.type,
+      id: event.id,
+      message: error?.message,
+    });
     return NextResponse.json(
       { error: 'Error processing webhook event', details: error.message },
       { status: 500 },
@@ -68,10 +72,17 @@ async function handleWebhookEvent(event: Stripe.Event) {
       const planId = session.metadata?.plan_id as
         | 'basic'
         | 'pro'
-        | 'studio';
+        | 'studio'
+        | undefined;
       const billingPeriod = session.metadata?.billing_period as
         | 'monthly'
-        | 'yearly';
+        | 'yearly'
+        | undefined;
+      if (!planId || !billingPeriod) {
+        throw new Error(
+          `Missing checkout metadata: plan_id=${String(planId)} billing_period=${String(billingPeriod)}`,
+        );
+      }
       const credits = getPlanCredits(planId, billingPeriod);
 
       const result = await gcpApi.billing.checkoutCompleted({
@@ -94,7 +105,11 @@ async function handleWebhookEvent(event: Stripe.Event) {
           subscription.cancel_at_period_end || false,
       });
 
-      if (!result.ok) throw new Error(result.error || 'GCP checkout sync failed');
+      if (!result.ok) {
+        throw new Error(
+          `GCP checkout sync failed (${result.status ?? 'no_status'}): ${result.error || 'unknown'}`,
+        );
+      }
       return;
     }
 
@@ -118,8 +133,11 @@ async function handleWebhookEvent(event: Stripe.Event) {
         cancelAtPeriodEnd:
           subscription.cancel_at_period_end || false,
       });
-      if (!result.ok)
-        throw new Error(result.error || 'GCP subscription update failed');
+      if (!result.ok) {
+        throw new Error(
+          `GCP subscription update failed (${result.status ?? 'no_status'}): ${result.error || 'unknown'}`,
+        );
+      }
       return;
     }
 
@@ -129,8 +147,11 @@ async function handleWebhookEvent(event: Stripe.Event) {
         eventId: event.id,
         subscriptionId: subscription.id,
       });
-      if (!result.ok)
-        throw new Error(result.error || 'GCP subscription delete failed');
+      if (!result.ok) {
+        throw new Error(
+          `GCP subscription delete failed (${result.status ?? 'no_status'}): ${result.error || 'unknown'}`,
+        );
+      }
       return;
     }
 
@@ -163,8 +184,11 @@ async function handleWebhookEvent(event: Stripe.Event) {
           subscription.cancel_at_period_end || false,
         credits,
       });
-      if (!result.ok)
-        throw new Error(result.error || 'GCP invoice success sync failed');
+      if (!result.ok) {
+        throw new Error(
+          `GCP invoice success sync failed (${result.status ?? 'no_status'}): ${result.error || 'unknown'}`,
+        );
+      }
       return;
     }
 
@@ -177,8 +201,11 @@ async function handleWebhookEvent(event: Stripe.Event) {
         eventId: event.id,
         subscriptionId,
       });
-      if (!result.ok)
-        throw new Error(result.error || 'GCP invoice failure sync failed');
+      if (!result.ok) {
+        throw new Error(
+          `GCP invoice failure sync failed (${result.status ?? 'no_status'}): ${result.error || 'unknown'}`,
+        );
+      }
       return;
     }
 

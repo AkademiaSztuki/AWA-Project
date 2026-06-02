@@ -61,7 +61,12 @@ if ($RESEND_FROM) { $EnvVars += ",RESEND_FROM=$RESEND_FROM" }
 if ($env:FOUNDERS_GRANT_MAX) { $EnvVars += ",FOUNDERS_GRANT_MAX=$($env:FOUNDERS_GRANT_MAX)" }
 if ($env:FOUNDERS_GRANT_CREDITS) { $EnvVars += ",FOUNDERS_GRANT_CREDITS=$($env:FOUNDERS_GRANT_CREDITS)" }
 if ($env:PROMO_ADMIN_SECRET) { $EnvVars += ",PROMO_ADMIN_SECRET=$($env:PROMO_ADMIN_SECRET)" }
-if ($env:INTERNAL_API_SECRET) { $EnvVars += ",INTERNAL_API_SECRET=$($env:INTERNAL_API_SECRET)" }
+$BillingInternalSecret = $env:GCP_BILLING_INTERNAL_SECRET
+if (-not $BillingInternalSecret) { $BillingInternalSecret = $env:INTERNAL_API_SECRET }
+if ($BillingInternalSecret) {
+    $EnvVars += ",INTERNAL_API_SECRET=$BillingInternalSecret"
+    $EnvVars += ",GCP_BILLING_INTERNAL_SECRET=$BillingInternalSecret"
+}
 
 Write-Host "Deploy: awa-backend-api, region $REGION, Cloud SQL: $CLOUD_SQL_CONNECTION_NAME" -ForegroundColor Cyan
 Push-Location $BackendDir

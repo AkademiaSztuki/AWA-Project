@@ -4,6 +4,7 @@ import type { Request } from 'express';
 export function getInternalCronSecret(): string | undefined {
   return (
     process.env.GCP_BILLING_INTERNAL_SECRET ||
+    process.env.INTERNAL_API_SECRET ||
     process.env.CRON_SECRET ||
     process.env.GCP_INTERNAL_SECRET
   );

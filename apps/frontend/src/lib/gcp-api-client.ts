@@ -15,6 +15,7 @@ function getInternalBillingHeaders(): Record<string, string> {
   if (typeof window !== 'undefined') return {};
   const secret =
     process.env.GCP_BILLING_INTERNAL_SECRET ||
+    process.env.INTERNAL_API_SECRET ||
     process.env.CRON_SECRET ||
     process.env.GCP_INTERNAL_SECRET;
   if (!secret) return {};
