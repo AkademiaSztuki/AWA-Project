@@ -6,25 +6,35 @@ import { GlassCard } from '../ui/GlassCard';
 import { GlassButton } from '../ui/GlassButton';
 import GlassSurface from '../ui/GlassSurface';
 import { useSessionData } from '@/hooks/useSessionData';
-import { AwaDialogue } from '@/components/awa';
+import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { pruneLargeStringsForSessionExport } from '@/lib/prune-session-export';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ArrowLeft } from 'lucide-react';
+import { saveSessionToGcp, safeLocalStorage } from '@/lib/gcp-data';
+import { getSessionStoreSnapshot } from '@/hooks/useSession';
 
-function pushSessionExportToServer(userHash: string, sessionObject: unknown, approxRawChars: number): void {
+const PERSIST_TIMEOUT_MS = 8_000;
+
+function withPersistTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(`${label}_timeout`)), PERSIST_TIMEOUT_MS);
+    }),
+  ]);
+}
+
+async function saveSessionExportToServer(userHash: string, sessionObject: unknown): Promise<void> {
   const pruned = pruneLargeStringsForSessionExport(sessionObject);
-  try {
-    void gcpApi.participants.saveSessionExport(userHash, pruned).then((res) => {
-      const prunedChars = JSON.stringify(pruned).length;
-      if (!res.ok && res.status !== 503) {
-        console.warn('[ThanksScreen] session_export_json save failed:', res.error);
-      }
-    });
-  } catch {
-    console.warn('[ThanksScreen] Could not send session export to server');
+  const res = await withPersistTimeout(
+    gcpApi.participants.saveSessionExport(userHash, pruned),
+    'session_export',
+  );
+  if (!res.ok && res.status !== 503) {
+    console.warn('[ThanksScreen] session_export_json save failed:', res.error);
   }
 }
 
@@ -33,12 +43,17 @@ export function ThanksScreen() {
   const { language } = useLanguage();
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
   const { user } = useAuth();
-  const { sessionData, isInitialized } = useSessionData();
+  const { sessionData, isInitialized, updateSessionData } = useSessionData();
   const lastAutoSentPayloadRef = useRef<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
 
   const serializedSession =
     isInitialized && sessionData?.userHash ? JSON.stringify(sessionData, null, 2) : '';
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    void updateSessionData({ currentStep: 'thanks' });
+  }, [isInitialized, updateSessionData]);
 
   useEffect(() => {
     if (!isInitialized || !serializedSession) return;
@@ -54,7 +69,25 @@ export function ThanksScreen() {
     if (!hash) return;
     if (lastAutoSentPayloadRef.current === serializedSession) return;
     lastAutoSentPayloadRef.current = serializedSession;
-    pushSessionExportToServer(hash, parsed, serializedSession.length);
+
+    (async () => {
+      try {
+        await withPersistTimeout(
+          saveSessionExportToServer(hash, parsed),
+          'session_export_auto',
+        );
+      } catch (e) {
+        console.warn('[ThanksScreen] auto session export failed:', e);
+      }
+      try {
+        await withPersistTimeout(
+          saveSessionToGcp(getSessionStoreSnapshot()),
+          'session_auto',
+        );
+      } catch (e) {
+        console.warn('[ThanksScreen] auto saveSessionToGcp failed:', e);
+      }
+    })();
   }, [isInitialized, serializedSession]);
 
   const goDashboard = () => {
@@ -65,7 +98,34 @@ export function ThanksScreen() {
     router.back();
   };
 
-  const onDashboardClick = () => {
+  const flushBeforeLeave = async () => {
+    if (!isInitialized || !sessionData?.userHash) return;
+    let parsed: unknown = sessionData;
+    try {
+      parsed = JSON.parse(serializedSession || '{}');
+    } catch {
+      parsed = getSessionStoreSnapshot();
+    }
+    try {
+      await withPersistTimeout(
+        saveSessionExportToServer(sessionData.userHash, parsed),
+        'session_export_cta',
+      );
+    } catch (e) {
+      console.warn('[ThanksScreen] saveSessionExport before leave failed:', e);
+    }
+    try {
+      await withPersistTimeout(
+        saveSessionToGcp(getSessionStoreSnapshot()),
+        'session_cta',
+      );
+    } catch (e) {
+      console.warn('[ThanksScreen] saveSessionToGcp before leave failed:', e);
+    }
+  };
+
+  const onDashboardClick = async () => {
+    await flushBeforeLeave();
     if (user) {
       goDashboard();
       return;
@@ -133,7 +193,7 @@ export function ThanksScreen() {
                       height={52}
                       borderRadius={30}
                       className="flex min-h-[52px] w-full min-w-0 cursor-pointer select-none items-center justify-center rounded-2xl px-3 font-exo2 text-sm font-bold leading-snug text-white shadow-xl transition-transform duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gold-400 !w-full max-w-full sm:!w-[280px] sm:px-2 sm:text-base"
-                      onClick={onDashboardClick}
+                      onClick={() => void onDashboardClick()}
                       aria-label={primaryCtaLabel}
                       style={{ opacity: 1 }}
                     >
@@ -160,6 +220,10 @@ export function ThanksScreen() {
         onClose={() => setLoginOpen(false)}
         redirectPath="/dashboard"
         onSuccess={() => {
+          const hash = safeLocalStorage.getItem('aura_user_hash');
+          if (hash) {
+            void updateSessionData({ userHash: hash });
+          }
           setLoginOpen(false);
           goDashboard();
         }}

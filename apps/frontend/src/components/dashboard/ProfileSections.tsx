@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -28,6 +28,16 @@ import Image from 'next/image';
 import { getPaletteLabel } from '@/components/setup/paletteOptions';
 import { getStyleLabel } from '@/lib/questions/style-options';
 import { translateMaterial, translateColor } from '@/lib/translations/material-translations';
+import { resolveExplicitMaterialsForDisplay } from '@/lib/participants-mapper';
+import {
+  buildPreferenceComparisonFromSession,
+  PREFERENCE_DIMENSION_UI_LABELS,
+} from '@/lib/preferences/preference-comparison-registry';
+import {
+  translateCanonicalPreferenceToken,
+  USER_FACING_COMPARISON_DIMENSIONS,
+} from '@/lib/preferences/preference-canonical-labels';
+import type { SessionData } from '@/types';
 
 // Visual DNA Section
 export function VisualDNASection({ visualDNA }: { visualDNA: any }) {
@@ -150,36 +160,32 @@ export function PreferencesOverviewSection({
 
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
 
-  const colorsAndMaterials = sessionData?.colorsAndMaterials;
-  const sensoryPreferences = sessionData?.sensoryPreferences;
-  const semantic = sessionData?.semanticDifferential;
+  const comparison = useMemo(() => {
+    if (!sessionData?.userHash) return null;
+    try {
+      return buildPreferenceComparisonFromSession(sessionData as SessionData);
+    } catch {
+      return null;
+    }
+  }, [sessionData]);
 
-  const implicitStyleRaw = visualDNA?.dominantStyle || visualDNA?.preferences?.styles?.[0];
-  const implicitStyleLabel = implicitStyleRaw ? getStyleLabel(implicitStyleRaw, language) : undefined;
-  const implicitPalette = visualDNA?.preferences?.colors || [];
-  const implicitMaterials = visualDNA?.preferences?.materials || [];
-  const implicitWarmth = visualDNA?.preferences?.warmth ?? visualDNA?.implicitScores?.warmth;
-  const implicitBrightness = visualDNA?.preferences?.brightness ?? visualDNA?.implicitScores?.brightness;
-  const implicitComplexity = visualDNA?.preferences?.complexity ?? visualDNA?.implicitScores?.complexity;
+  const comparisonDimensions = useMemo(
+    () =>
+      (comparison?.dimensions ?? []).filter((d) =>
+        USER_FACING_COMPARISON_DIMENSIONS.has(d.id),
+      ),
+    [comparison],
+  );
+  const hasComparisonRows = comparisonDimensions.length > 0;
 
-  // CRITICAL: Check if selectedStyle exists and is not empty string
-  const explicitStyleLabel = colorsAndMaterials?.selectedStyle && colorsAndMaterials.selectedStyle.length > 0
-    ? getStyleLabel(colorsAndMaterials.selectedStyle, language)
-    : undefined;
-  const explicitPaletteLabel = colorsAndMaterials?.selectedPalette
-    ? getPaletteLabel(colorsAndMaterials.selectedPalette, language)
-    : undefined;
-  const explicitMaterials = colorsAndMaterials?.topMaterials || [];
+  const hasExplicit = comparisonDimensions.some(
+    (d) => d.explicitCanonical.length > 0,
+  );
+  const hasImplicit = comparisonDimensions.some(
+    (d) => d.implicitCanonical.length > 0,
+  ) || Boolean(visualDNA);
 
-  const hasExplicit =
-    !!(explicitStyleLabel ||
-      explicitPaletteLabel ||
-      (explicitMaterials.length || 0) > 0 ||
-      sensoryPreferences ||
-      semantic);
-  const hasImplicit = Boolean(visualDNA);
-
-  if (!hasExplicit && !hasImplicit) return null;
+  if (!hasExplicit && !hasImplicit && !hasComparisonRows) return null;
 
   const formatPercent = (value?: number | string) => {
     if (value === undefined || value === null) return null;
@@ -205,73 +211,32 @@ export function PreferencesOverviewSection({
     );
   };
 
-  const renderChips = (values?: string[], category?: 'material' | 'color' | 'other', skipTranslation = false) => {
-    if (!values || values.length === 0) return <span className="text-silver-dark text-sm font-modern">—</span>;
+  const renderChips = (
+    values?: string[],
+    dimensionId?: string,
+  ) => {
+    if (!values || values.length === 0) {
+      return <span className="text-silver-dark text-sm font-modern">—</span>;
+    }
     return (
       <div className="flex gap-2 flex-wrap">
-        {values.slice(0, 6).map((item, idx) => {
-          let translatedItem = item;
-          if (!skipTranslation) {
-            if (category === 'material') {
-              translatedItem = translateMaterial(item, language);
-            } else if (category === 'color') {
-              translatedItem = translateColor(item, language);
-            }
-          }
-          return (
-            <span
-              key={`${item}-${idx}`}
-              className="px-3 py-1 rounded-full text-xs font-modern bg-white/15 text-graphite border border-white/10"
-            >
-              {translatedItem}
-            </span>
-          );
-        })}
+        {values.slice(0, 6).map((item, idx) => (
+          <span
+            key={`${item}-${idx}`}
+            className="px-3 py-1 rounded-full text-xs font-modern bg-white/15 text-graphite border border-white/10"
+          >
+            {translateCanonicalPreferenceToken(item, language, dimensionId)}
+          </span>
+        ))}
       </div>
     );
   };
 
-  const rows = [
-    {
-      id: 'style',
-      label: t('Styl', 'Style'),
-      implicitValue: implicitStyleLabel || implicitStyleRaw,
-      explicitValue: explicitStyleLabel
-    },
-    {
-      id: 'palette',
-      label: t('Paleta', 'Palette'),
-      implicitList: implicitPalette || [],
-      explicitList: explicitPaletteLabel ? [explicitPaletteLabel] : []
-    },
-    {
-      id: 'materials',
-      label: t('Materiały', 'Materials'),
-      implicitList: implicitMaterials || [],
-      explicitList: explicitMaterials || []
-    },
-    {
-      id: 'warmth',
-      label: t('Ciepło', 'Warmth'),
-      implicitValue: implicitWarmth,
-      explicitValue: semantic?.warmth,
-      type: 'bar'
-    },
-    {
-      id: 'brightness',
-      label: t('Jasność', 'Brightness'),
-      implicitValue: implicitBrightness,
-      explicitValue: semantic?.brightness,
-      type: 'bar'
-    },
-    {
-      id: 'complexity',
-      label: t('Złożoność', 'Complexity'),
-      implicitValue: implicitComplexity,
-      explicitValue: semantic?.complexity,
-      type: 'bar'
-    }
-  ];
+  const dimensionLabel = (id: string) => {
+    const labels = PREFERENCE_DIMENSION_UI_LABELS[id];
+    if (!labels) return id;
+    return language === 'pl' ? labels.pl : labels.en;
+  };
 
   return (
     <motion.div
@@ -291,7 +256,10 @@ export function PreferencesOverviewSection({
                 {t('Preferencje – ukryte i jawne', 'Preferences – implicit & explicit')}
               </h3>
               <p className="text-sm text-silver-dark font-modern">
-                {t('W jednym miejscu: Tinder + świadome wybory', 'One place: swipe DNA + explicit choices')}
+                {t(
+                  'Po lewej wnioski ze zdjęć (Tinder), po prawej Twoje świadome wybory z profilu.',
+                  'On the left: patterns from photos (Tinder). On the right: your conscious profile choices.',
+                )}
               </p>
             </div>
           </div>
@@ -326,26 +294,27 @@ export function PreferencesOverviewSection({
             </div>
           </div>
           <div className="divide-y divide-white/10">
-            {rows.map((row) => (
-              <div key={row.id} className="grid grid-cols-3 gap-3 px-4 py-3 items-center">
-                <span className="text-sm font-modern text-silver-dark">{row.label}</span>
+            {comparisonDimensions.map((dim) => (
+              <div
+                key={dim.id}
+                className="grid grid-cols-3 gap-3 px-4 py-3 items-center"
+              >
+                <span className="text-sm font-modern text-silver-dark">
+                  {dimensionLabel(dim.id)}
+                </span>
                 <div className="min-h-[24px] flex items-center">
-                  {row.type === 'bar'
-                    ? renderBar(row.implicitValue as number | undefined)
-                    : row.implicitList && Array.isArray(row.implicitList) && row.implicitList.length > 0
-                    ? renderChips(row.implicitList as string[], row.id === 'materials' ? 'material' : row.id === 'palette' ? 'color' : 'other')
-                    : row.implicitValue && String(row.implicitValue).trim()
-                    ? renderChips([String(row.implicitValue)])
-                    : <span className="text-silver-dark text-sm font-modern">—</span>}
+                  {dim.implicitCanonical.length > 0
+                    ? renderChips(dim.implicitCanonical, dim.id)
+                    : (
+                      <span className="text-silver-dark text-sm font-modern">—</span>
+                    )}
                 </div>
                 <div className="min-h-[24px] flex items-center">
-                  {row.type === 'bar'
-                    ? renderBar(row.explicitValue as number | undefined)
-                    : row.explicitList && Array.isArray(row.explicitList) && row.explicitList.length > 0
-                    ? renderChips(row.explicitList as string[], row.id === 'materials' ? 'material' : row.id === 'palette' ? 'color' : 'other', (row as any).explicitIsTranslated)
-                    : row.explicitValue && String(row.explicitValue).trim()
-                    ? renderChips([String(row.explicitValue)])
-                    : <span className="text-silver-dark text-sm font-modern">—</span>}
+                  {dim.explicitCanonical.length > 0
+                    ? renderChips(dim.explicitCanonical, dim.id)
+                    : (
+                      <span className="text-silver-dark text-sm font-modern">—</span>
+                    )}
                 </div>
               </div>
             ))}
@@ -364,10 +333,15 @@ export function ExplicitPreferencesSection({ sessionData }: { sessionData: any }
 
   const colorsAndMaterials = sessionData?.colorsAndMaterials;
   const sensoryPreferences = sessionData?.sensoryPreferences;
+  const explicitMaterialsForDisplay = resolveExplicitMaterialsForDisplay({
+    colorsAndMaterials,
+    sensoryPreferences,
+  });
 
   // Check if we have any explicit preferences
   const hasExplicitData = !!(colorsAndMaterials?.selectedStyle || 
                               colorsAndMaterials?.selectedPalette ||
+                              explicitMaterialsForDisplay.length > 0 ||
                               sensoryPreferences?.light ||
                               sensoryPreferences?.texture ||
                               sensoryPreferences?.music ||
@@ -422,13 +396,13 @@ export function ExplicitPreferencesSection({ sessionData }: { sessionData: any }
           )}
 
           {/* Materials */}
-          {colorsAndMaterials?.topMaterials && colorsAndMaterials.topMaterials.length > 0 && (
+          {explicitMaterialsForDisplay.length > 0 && (
             <div>
               <p className="text-xs text-silver-dark font-modern mb-2">
                 {t('Materiały', 'Materials')}
               </p>
               <div className="flex gap-2 flex-wrap">
-                {colorsAndMaterials.topMaterials.map((material: string, idx: number) => (
+                {explicitMaterialsForDisplay.map((material: string, idx: number) => (
                   <span
                     key={idx}
                     className="px-3 py-1 rounded-full text-xs font-modern bg-white/20 text-graphite"
@@ -451,12 +425,6 @@ export function ExplicitPreferencesSection({ sessionData }: { sessionData: any }
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-silver-dark font-modern w-20">{t('Światło:', 'Light:')}</span>
                     <span className="text-sm text-graphite font-modern">{sensoryPreferences.light}</span>
-                  </div>
-                )}
-                {sensoryPreferences?.texture && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-silver-dark font-modern w-20">{t('Tekstura:', 'Texture:')}</span>
-                    <span className="text-sm text-graphite font-modern">{sensoryPreferences.texture}</span>
                   </div>
                 )}
                 {sensoryPreferences?.music && (

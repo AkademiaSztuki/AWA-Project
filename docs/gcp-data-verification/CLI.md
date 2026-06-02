@@ -145,6 +145,9 @@ Plik CSV otwierasz w **Excel / Arkusze Google** (wykresy) albo **File → Import
 | [`infra/gcp/scripts/cloud-sql-connect.ps1`](../../infra/gcp/scripts/cloud-sql-connect.ps1) | `gcloud sql connect` — interaktywne `psql` |
 | [`infra/gcp/scripts/cloud-sql-proxy.ps1`](../../infra/gcp/scripts/cloud-sql-proxy.ps1) | Tunel localhost → Cloud SQL |
 | [`infra/gcp/scripts/cloud-sql-export-csv.ps1`](../../infra/gcp/scripts/cloud-sql-export-csv.ps1) | `\copy` z `participants` do CSV |
+| [`infra/gcp/scripts/apply-research-migrations.ps1`](../../infra/gcp/scripts/apply-research-migrations.ps1) | Pełna kolejka migracji badawczych (02–17, bez backfill 16) |
+| [`infra/gcp/scripts/apply-migrations-16-17.ps1`](../../infra/gcp/scripts/apply-migrations-16-17.ps1) | Migracja 17 (+ opcjonalny backfill 16); `-GcloudImport` bez proxy |
+| [`infra/gcp/run-blind-dominant-tags-migration.ps1`](../../infra/gcp/run-blind-dominant-tags-migration.ps1) | `gcloud sql import` tylko dla `17_blind_selection_and_dominant_tags.sql` |
 
 ---
 

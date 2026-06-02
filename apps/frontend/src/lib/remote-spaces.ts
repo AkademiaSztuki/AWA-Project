@@ -21,25 +21,40 @@ export type SpaceImageInput = {
 // Spaces
 // ---------------------------------------------------------------------------
 
+const PARTICIPANT_SPACE_UUID_RE =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+
+export function isParticipantSpaceUuid(id?: string | null): boolean {
+  return !!id && PARTICIPANT_SPACE_UUID_RE.test(id);
+}
+
+async function pickExistingParticipantSpaceId(
+  userHash: string,
+): Promise<string | null> {
+  const spaces = await fetchParticipantSpaces(userHash);
+  if (spaces.length === 0) return null;
+  const preferred = spaces.find((s) => s.isDefault) ?? spaces[0];
+  return preferred?.id ?? null;
+}
+
 export async function getOrCreateSpaceId(
   userHash: string,
-  opts?: { spaceId?: string; name?: string; type?: string },
+  opts?: { spaceId?: string; name?: string; type?: string; is_default?: boolean },
 ): Promise<string | null> {
-  const isUuid = (id?: string) =>
-    !!id &&
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
-      id,
-    );
-
-  const normalizeSpaceId = (id?: string): string | undefined => {
-    if (!id) return undefined;
-    return id.startsWith('space_') ? id.substring(6) : id;
-  };
-
   if (!userHash) return null;
 
-  const normalizedSpaceId = normalizeSpaceId(opts?.spaceId);
-  if (normalizedSpaceId && isUuid(normalizedSpaceId)) return normalizedSpaceId;
+  const spaces = await fetchParticipantSpaces(userHash);
+
+  if (isParticipantSpaceUuid(opts?.spaceId)) {
+    const hinted = opts!.spaceId!;
+    if (spaces.some((s) => s.id === hinted)) {
+      return hinted;
+    }
+  }
+
+  const existingId =
+    spaces.find((s) => s.isDefault)?.id ?? spaces[0]?.id ?? null;
+  if (existingId) return existingId;
 
   const name = opts?.name || 'Moja Przestrzeń';
   const type = opts?.type || 'personal';
@@ -47,7 +62,7 @@ export async function getOrCreateSpaceId(
   const created = await gcpApi.spaces.create(userHash, {
     name,
     type,
-    is_default: false,
+    is_default: opts?.is_default ?? true,
   });
   return created.ok ? ((created.data?.space as any)?.id ?? null) : null;
 }
@@ -194,7 +209,7 @@ export async function saveParticipantImages(
 
 export async function saveSpaceImagesMetadata(
   userHash: string,
-  _spaceId: string,
+  spaceId: string,
   images: Array<{
     url: string;
     thumbnail_url?: string;
@@ -205,7 +220,10 @@ export async function saveSpaceImagesMetadata(
     generation_set_id?: string;
   }>,
 ): Promise<SaveParticipantImagesResult> {
-  return saveParticipantImages(userHash, images);
+  return saveParticipantImages(
+    userHash,
+    images.map((img) => ({ ...img, space_id: spaceId })),
+  );
 }
 
 // ---------------------------------------------------------------------------

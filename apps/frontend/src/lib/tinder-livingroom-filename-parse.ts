@@ -12,6 +12,9 @@ export type LivingRoomTinderCategories = {
   layout: string[];
   mood: string[];
   biophilia: number;
+  brightness?: 'bright' | 'dark' | null;
+  complexity?: 'complex' | 'simple' | null;
+  lightingMood?: 'warm_low' | 'warm_bright' | 'cool_bright' | 'neutral_light' | null;
 };
 
 export type LivingRoomTinderParsed = LivingRoomTinderCategories & {
@@ -51,6 +54,12 @@ const LIGHTING_WORDS = new Set([
 const LAYOUT_WORDS = new Set([
   'open','plan','loft','style','zoned','areas','compact','efficient','indoor','outdoor','flow','spacious','cozy','intimate'
 ]);
+
+/** Parsed from filename tokens only — images unchanged. */
+const BRIGHTNESS_WORDS = new Set(['bright', 'dark', 'light', 'dim', 'moody']);
+const COMPLEXITY_WORDS = new Set(['complex', 'simple', 'minimal', 'minimalist']);
+
+const LIGHTING_MOOD_WORDS = new Set(['warm_low', 'warm_bright', 'cool_bright', 'neutral_light']);
 
 const MOOD_WORDS = new Set([
   'cozy','warm','serene','peaceful','romantic','elegant','luxurious','dramatic','playful','fresh','relaxing','authentic','minimal','calm','refreshing','harmonious','bold',
@@ -104,12 +113,30 @@ export function parseLivingRoomTinderFilename(filename: string): LivingRoomTinde
   const layout: string[] = [];
   const mood: string[] = [];
   let biophiliaCount = 0;
+  let brightness: 'bright' | 'dark' | null = null;
+  let complexity: 'complex' | 'simple' | null = null;
+  let lightingMood: LivingRoomTinderCategories['lightingMood'] = null;
+
+  for (let i = 0; i < reconstructedTokens.length; i++) {
+    const token = reconstructedTokens[i];
+    const next = reconstructedTokens[i + 1];
+    const twoWord = next ? `${token}_${next}` : null;
+    if (twoWord && LIGHTING_MOOD_WORDS.has(twoWord)) {
+      lightingMood = twoWord as NonNullable<LivingRoomTinderCategories['lightingMood']>;
+      i++;
+      continue;
+    }
+  }
 
   for (const token of reconstructedTokens) {
     if (STYLE_WORDS.has(token)) {
       styleTokens.push(token);
     } else if (BIOPHILIA_WORDS.has(token)) {
       biophiliaCount++;
+    } else if (BRIGHTNESS_WORDS.has(token) && !brightness) {
+      brightness = token === 'dark' || token === 'dim' || token === 'moody' ? 'dark' : 'bright';
+    } else if (COMPLEXITY_WORDS.has(token) && !complexity) {
+      complexity = token === 'complex' ? 'complex' : 'simple';
     } else if (COLOR_WORDS.has(token) && colors.length < 2) {
       colors.push(token);
     } else if (MATERIAL_WORDS.has(token) && materials.length < 2) {
@@ -139,6 +166,9 @@ export function parseLivingRoomTinderFilename(filename: string): LivingRoomTinde
     layout,
     mood,
     biophilia,
+    brightness,
+    complexity,
+    lightingMood,
     tags,
   };
 }

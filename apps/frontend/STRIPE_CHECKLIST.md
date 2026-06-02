@@ -41,7 +41,7 @@ CRON_SECRET=your-secret-key-here
 
 1. Idź do **Stripe Dashboard → Products**
 2. Utwórz produkty:
-   - **Starter** (`basic`) – Monthly: 29 PLN / $9, Yearly: 290 PLN / $90
+   - **Basic** (`basic`) – Monthly: 29 PLN / $9, Yearly: 290 PLN / $90
    - **Creator** (`pro`) – Monthly: 59 PLN / $19, Yearly: 590 PLN / $190
    - **Pro** (`studio`) – Monthly: 119 PLN / $39, Yearly: 1190 PLN / $390
    - Limity subskrypcji w aplikacji: **60 / 160 / 320 obrazów AI miesięcznie** (powitanie 60 obrazów jest poza Stripe).

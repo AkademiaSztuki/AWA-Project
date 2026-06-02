@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { AwaDialogue } from "@/components/awa/AwaDialogue";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getSessionStoreSnapshot } from "@/hooks/useSession";
 import { useSessionData } from "@/hooks/useSessionData";
-import { saveSessionToGcp, logBehavioralEvent } from "@/lib/gcp-data";
+import { saveSessionToGcp, logBehavioralEvent, startPageView, endPageView } from "@/lib/gcp-data";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoginModal } from "@/components/auth/LoginModal";
 import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
@@ -45,11 +45,36 @@ export default function BigFivePage() {
   const [answeredCount, setAnsweredCount] = useState(0);
   const [openFacetDomain, setOpenFacetDomain] = useState<BigFiveDomainKey | null>(null);
   const [radarOffscreen, setRadarOffscreen] = useState(false);
+  const [likertFlashValue, setLikertFlashValue] = useState<number | null>(null);
+  const likertFlashTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefersReducedMotion = useReducedMotion();
   const autoSavedRef = React.useRef(false);
   const resultsShownRef = React.useRef(false);
   const retakeInitializedRef = React.useRef(false);
   const prevRetakeRef = React.useRef(retake);
   const initializedRef = React.useRef(false);
+  const pageViewTrackingRef = React.useRef<{ userHash: string; viewId: string } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const uh = sessionData?.userHash;
+      if (!uh) return;
+      const viewId = await startPageView(uh, "big_five");
+      if (viewId && mounted) {
+        pageViewTrackingRef.current = { userHash: uh, viewId };
+      }
+    })();
+    return () => {
+      mounted = false;
+      (async () => {
+        const t = pageViewTrackingRef.current;
+        if (t) await endPageView(t.userHash, t.viewId);
+        pageViewTrackingRef.current = null;
+      })();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionData?.userHash]);
 
   useEffect(() => {
     if (!showResults) {
@@ -57,6 +82,22 @@ export default function BigFivePage() {
       setOpenFacetDomain(null);
     }
   }, [showResults]);
+
+  useEffect(() => {
+    setLikertFlashValue(null);
+    if (likertFlashTimeoutRef.current) {
+      clearTimeout(likertFlashTimeoutRef.current);
+      likertFlashTimeoutRef.current = null;
+    }
+  }, [currentQuestion]);
+
+  useEffect(() => {
+    return () => {
+      if (likertFlashTimeoutRef.current) {
+        clearTimeout(likertFlashTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!showResults || !scores) return undefined;
@@ -214,10 +255,24 @@ export default function BigFivePage() {
     initializedRef.current = true;
   }, [sessionData?.bigFive?.completedAt, sessionData?.bigFive?.responses, retake]); // Only depend on specific fields
 
+  const triggerLikertTextFlash = (value: number) => {
+    if (likertFlashTimeoutRef.current) {
+      clearTimeout(likertFlashTimeoutRef.current);
+    }
+    setLikertFlashValue(value);
+    const holdMs = prefersReducedMotion ? 80 : 520;
+    likertFlashTimeoutRef.current = setTimeout(() => {
+      setLikertFlashValue(null);
+      likertFlashTimeoutRef.current = null;
+    }, holdMs);
+  };
+
   const handleResponse = (value: number) => {
     const item = IPIP_120_ITEMS[currentQuestion];
     if (!item) return; // Safety check
-    
+
+    triggerLikertTextFlash(value);
+
     // Prevent double-clicking or rapid responses
     if (responses[item.id] === value) {
       return; // Already answered with this value
@@ -468,7 +523,7 @@ export default function BigFivePage() {
         <div className="flex flex-col w-full">
           <div className="flex-1 flex justify-center items-start">
             <div className={`${FULL_FLOW_GLASS_SHELL} space-y-6`}>
-              <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+              <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP} !shadow-none`}>
                 <div className="text-center">
                   <p className="text-lg text-graphite font-modern mb-4">
                     {t(
@@ -518,7 +573,7 @@ export default function BigFivePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <GlassCard variant="flat" className="flex flex-col p-6 md:p-8">
+              <GlassCard variant="flat" className="flex flex-col p-6 md:p-8 !shadow-none">
                 {/* Header — no scrollable / max-height: long results use page scroll */}
                 <div className="text-center mb-8">
                   <h1 className="text-3xl md:text-4xl font-nasalization text-graphite mb-4">
@@ -753,7 +808,7 @@ export default function BigFivePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+            <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP} !shadow-none`}>
               {/* Header */}
               <div className="text-center mb-8">
                 <h1 className="text-3xl md:text-4xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-4">
@@ -804,11 +859,23 @@ export default function BigFivePage() {
                 <div className="grid grid-cols-5 gap-1.5 sm:gap-2 md:gap-3 w-full max-w-3xl xl:max-w-4xl mx-auto flex-shrink-0">
                   {[1, 2, 3, 4, 5].map((value) => {
                     const isSelected = currentItem && responses[currentItem.id] === value;
+                    const isFlashWhite = likertFlashValue === value;
+                    const likertTextTransition = prefersReducedMotion
+                      ? 'motion-reduce:transition-none motion-reduce:duration-0'
+                      : 'transition-colors duration-[460ms] ease-in group-active:duration-[260ms] group-active:ease-out motion-reduce:transition-none motion-reduce:duration-0';
+                    const likertTextClass = [
+                      likertTextTransition,
+                      isSelected
+                        ? 'text-inherit'
+                        : isFlashWhite
+                          ? 'text-white'
+                          : 'text-graphite',
+                      'group-active:text-white',
+                    ].join(' ');
                     return (
                     <motion.button
                       key={value}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
+                      type="button"
                       onClick={() => handleResponse(value)}
                       aria-label={value === 1 ? t("Zdecydowanie nie", "Strongly disagree") :
                                  value === 2 ? t("Nie", "Disagree") :
@@ -816,14 +883,20 @@ export default function BigFivePage() {
                                  value === 4 ? t("Zgadzam się", "Agree") :
                                  t("Zdecydowanie tak", "Strongly agree")}
                       aria-pressed={isSelected}
-                      className={`min-w-0 px-1.5 py-2 sm:px-2 sm:py-2.5 md:px-3 md:py-3 rounded-xl font-modern transition-all duration-300 ${
+                      className={`group relative min-w-0 touch-manipulation px-1.5 py-2 sm:px-2 sm:py-2.5 md:px-3 md:py-3 rounded-xl font-modern transition-[transform,background-color,box-shadow,border-color] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-1 hover:scale-[1.02] active:scale-[0.96] motion-reduce:hover:scale-100 motion-reduce:active:scale-100 ${
                         isSelected
-                          ? 'bg-gradient-to-br from-gold to-champagne text-white shadow-lg'
-                          : 'bg-white/50 backdrop-blur-sm border border-white/60 hover:bg-white/60 text-graphite'
+                          ? 'bg-gradient-to-br from-gold to-champagne text-white shadow-lg ring-2 ring-white/50 active:brightness-110'
+                          : 'bg-white/50 backdrop-blur-sm border border-white/60 hover:bg-white/60 active:bg-white/85 active:border-white/70'
                       }`}
                     >
-                      <div className="text-lg sm:text-xl md:text-2xl font-bold mb-0.5 sm:mb-1">{value}</div>
-                      <div className="text-[10px] sm:text-[11px] md:text-xs leading-snug text-center hyphens-none break-normal">
+                      <div
+                        className={`relative z-10 text-lg sm:text-xl md:text-2xl font-bold mb-0.5 sm:mb-1 ${likertTextClass}`}
+                      >
+                        {value}
+                      </div>
+                      <div
+                        className={`relative z-10 text-[10px] sm:text-[11px] md:text-xs leading-snug text-center hyphens-none break-normal ${likertTextClass}`}
+                      >
                         {value === 1 ? t("Zdecydowanie nie", "Strongly disagree") :
                          value === 2 ? t("Nie", "Disagree") :
                          value === 3 ? t("Neutralnie", "Neutral") :

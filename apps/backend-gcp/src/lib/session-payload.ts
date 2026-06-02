@@ -1,13 +1,31 @@
+import { PREFERENCE_SNAPSHOT_MILESTONES, type PreferenceSnapshotMilestone } from '../services/preference-snapshot';
+
 const USER_HASH_RE = /^[a-zA-Z0-9_-]{8,128}$/;
 const MAX_PARTICIPANT_ROW_KEYS = 256;
 const MAX_ROW_JSON_BYTES = 8 * 1024 * 1024;
+
+export type { PreferenceSnapshotMilestone };
+
+function parsePreferenceSnapshotMilestone(
+  value: unknown,
+): PreferenceSnapshotMilestone | undefined {
+  if (typeof value !== 'string') return undefined;
+  return PREFERENCE_SNAPSHOT_MILESTONES.includes(value as PreferenceSnapshotMilestone)
+    ? (value as PreferenceSnapshotMilestone)
+    : undefined;
+}
 
 export function isValidUserHash(value: unknown): value is string {
   return typeof value === 'string' && USER_HASH_RE.test(value);
 }
 
 export function validateSessionPostBody(body: unknown):
-  | { ok: true; userHash: string; participantRow: Record<string, unknown> }
+  | {
+      ok: true;
+      userHash: string;
+      participantRow: Record<string, unknown>;
+      preferenceSnapshotMilestone?: PreferenceSnapshotMilestone;
+    }
   | { ok: false; error: string } {
   if (!body || typeof body !== 'object') {
     return { ok: false, error: 'invalid_body' };
@@ -48,5 +66,9 @@ export function validateSessionPostBody(body: unknown):
     return { ok: false, error: 'participantRow_not_serializable' };
   }
 
-  return { ok: true, userHash, participantRow: row };
+  const preferenceSnapshotMilestone = parsePreferenceSnapshotMilestone(
+    sessionData.preferenceSnapshotMilestone,
+  );
+
+  return { ok: true, userHash, participantRow: row, preferenceSnapshotMilestone };
 }

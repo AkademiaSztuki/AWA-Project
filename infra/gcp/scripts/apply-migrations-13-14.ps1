@@ -53,7 +53,7 @@ $gcpRoot = Split-Path $PSScriptRoot -Parent
 $sqlDir = Join-Path $gcpRoot "sql"
 foreach ($f in @("13_generation_feedback_project_id_text.sql", "14_session_export_json.sql")) {
   $path = Join-Path $sqlDir $f
-  Write-Host "[apply-migrations-13-14] >>> $f"
+  Write-Host "[apply-migrations-13-14] apply $f"
   & $psqlCmd -h $DbHost -p $Port -U $User -d $Database -v ON_ERROR_STOP=1 -f $path
   if ($LASTEXITCODE -ne 0) {
     Write-Error "Migracja nieudana: $f (exit $LASTEXITCODE)"

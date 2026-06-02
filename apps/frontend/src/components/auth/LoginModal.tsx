@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { AwaScrollArea } from '@/components/ui/AwaScrollArea';
@@ -53,7 +54,14 @@ export function LoginModal({
   nudgeReason,
   softMaybeLaterLabel,
 }: LoginModalProps) {
-  const { signInWithGoogle, signInWithEmail, registerWithEmail, loginWithEmail, resendVerificationEmail } = useAuth();
+  const {
+    signInWithGoogle,
+    signInWithEmail,
+    registerWithEmail,
+    completeEmailLogin,
+    checkEmailVerificationStatus,
+    resendVerificationEmail,
+  } = useAuth();
   const { language } = useLanguage();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
@@ -61,12 +69,31 @@ export function LoginModal({
   const [mode, setMode] = useState<'login' | 'register' | 'magic'>('login');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [emailSentMode, setEmailSentMode] = useState<'register' | 'magic' | null>(null);
+  const [isPollingVerification, setIsPollingVerification] = useState(false);
   const [error, setError] = useState('');
   const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [mounted, setMounted] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const registerPasswordRef = useRef('');
   const showSoftSkip = gateMode === 'soft' && !!onMaybeLater;
+
+  const resetModalFormState = () => {
+    setEmailSent(false);
+    setEmailSentMode(null);
+    setIsPollingVerification(false);
+    setError('');
+    setEmailNotVerified(false);
+    setPassword('');
+    registerPasswordRef.current = '';
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      resetModalFormState();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     setMounted(true);
@@ -93,14 +120,22 @@ export function LoginModal({
     return () => window.clearTimeout(focusTimer);
   }, [isOpen]);
 
+  const dismissModal = () => {
+    if (onMaybeLater) {
+      onNudgeEvent?.('nudge_soft_later');
+      onMaybeLater();
+      onClose();
+      return;
+    }
+    onNudgeEvent?.('nudge_dismissed');
+    onClose();
+  };
+
   // Close on Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        if (gateMode === 'hard') {
-          onNudgeEvent?.('nudge_dismissed');
-        }
-        onClose();
+        dismissModal();
       }
     };
     
@@ -108,7 +143,7 @@ export function LoginModal({
       document.addEventListener('keydown', handleEscape);
       return () => document.removeEventListener('keydown', handleEscape);
     }
-  }, [isOpen, onClose, gateMode, onNudgeEvent]);
+  }, [isOpen, onClose, onMaybeLater, onNudgeEvent]);
 
   // Trap focus within modal when open
   useEffect(() => {
@@ -145,23 +180,82 @@ export function LoginModal({
     return redirectPath || searchParams.get('redirect') || undefined;
   };
 
-  const handleClose = () => {
-    onNudgeEvent?.('nudge_dismissed');
+  const finishEmailLoginSuccess = () => {
+    onNudgeEvent?.('nudge_cta');
     onClose();
+    onSuccess?.();
+  };
+
+  useEffect(() => {
+    if (!isOpen || !emailSent || emailSentMode !== 'register' || !email) {
+      setIsPollingVerification(false);
+      return;
+    }
+
+    setIsPollingVerification(true);
+    const startedAt = Date.now();
+    const maxMs = 15 * 60 * 1000;
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled) return;
+      const verified = await checkEmailVerificationStatus(email);
+      if (cancelled) return;
+      if (verified && registerPasswordRef.current.length >= 8) {
+        setIsLoading(true);
+        try {
+          const result = await completeEmailLogin(email, registerPasswordRef.current);
+          if (!result.error) {
+            finishEmailLoginSuccess();
+            return;
+          }
+          setError(result.error.message);
+          setEmailSent(false);
+          setEmailSentMode(null);
+          setMode('login');
+        } catch (err: unknown) {
+          setError(err instanceof Error ? err.message : 'Wystąpił błąd.');
+        } finally {
+          setIsLoading(false);
+          setIsPollingVerification(false);
+        }
+        return;
+      }
+      if (Date.now() - startedAt >= maxMs) {
+        setIsPollingVerification(false);
+        return;
+      }
+      window.setTimeout(tick, 3000);
+    };
+
+    const initialTimer = window.setTimeout(tick, 3000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(initialTimer);
+      setIsPollingVerification(false);
+    };
+  }, [
+    isOpen,
+    emailSent,
+    emailSentMode,
+    email,
+    checkEmailVerificationStatus,
+    completeEmailLogin,
+  ]);
+
+  const handleClose = () => {
+    dismissModal();
   };
 
   const handleBackdropClick = () => {
     if (gateMode === 'hard') {
       return;
     }
-    onNudgeEvent?.('nudge_dismissed');
-    onClose();
+    dismissModal();
   };
 
   const handleMaybeLater = () => {
-    onNudgeEvent?.('nudge_soft_later');
-    onMaybeLater?.();
-    onClose();
+    dismissModal();
   };
 
   const handleGoogleSignIn = async () => {
@@ -191,21 +285,27 @@ export function LoginModal({
         if (result.error) {
           setError(result.error.message);
         } else {
+          setEmailSentMode('magic');
           setEmailSent(true);
         }
       } else if (mode === 'register') {
-        const result = await registerWithEmail(email, password);
+        registerPasswordRef.current = password;
+        const result = await registerWithEmail(email, password, {
+          nextPath: getEffectiveRedirectPath(),
+        });
         if (result.error) {
           setError(result.error.message);
         } else {
+          setEmailSentMode('register');
           setEmailSent(true);
         }
       } else {
-        const result = await loginWithEmail(email, password);
+        const result = await completeEmailLogin(email, password);
         if (result.error) {
           const msg: string = result.error.message || '';
           const isNotVerified =
             msg.includes('email_not_verified') ||
+            msg.toLowerCase().includes('potwierdzony') ||
             msg.toLowerCase().includes('potwierdź maila') ||
             msg.toLowerCase().includes('not verified');
           if (isNotVerified) {
@@ -213,9 +313,7 @@ export function LoginModal({
           }
           setError(msg);
         } else {
-          onNudgeEvent?.('nudge_cta');
-          onClose();
-          onSuccess?.();
+          finishEmailLoginSuccess();
         }
       }
     } catch (err: any) {
@@ -310,19 +408,88 @@ export function LoginModal({
             </div>
 
             {emailSent ? (
-              /* Email Sent Confirmation */
-              <div className="text-center py-8">
+              <div className="text-center py-6">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
                   <Mail size={28} className="text-green-600" />
                 </div>
                 <h3 className="text-lg font-nasalization text-graphite mb-2 [text-shadow:0_1px_0_rgba(255,255,255,0.5)]">
                   {language === 'pl' ? 'Sprawdź Swoją Skrzynkę!' : 'Check Your Inbox!'}
                 </h3>
-                <p className="text-sm text-graphite/90 font-modern mb-4">
+                <p className="text-sm text-graphite/90 font-modern mb-3 text-left">
                   {language === 'pl'
-                    ? `Jeśli konto istnieje lub zostało utworzone, wysłaliśmy e‑mail na ${email}. Sprawdź też folder Spam/Oferty.`
-                    : `If the account exists or was created, we sent an email to ${email}. Please also check your Spam/Promotions folder.`}
+                    ? `Wysłaliśmy wiadomość na ${email}. Sprawdź też Spam/Oferty.`
+                    : `We sent a message to ${email}. Also check Spam/Promotions.`}
                 </p>
+                {emailSentMode === 'register' && (
+                  <ul className="text-xs text-graphite/85 font-modern mb-4 text-left list-disc pl-5 space-y-1">
+                    <li>
+                      {language === 'pl'
+                        ? 'Najlepiej otwórz link w tej samej przeglądarce.'
+                        : 'Best: open the link in this same browser.'}
+                    </li>
+                    <li>
+                      {language === 'pl'
+                        ? 'Potwierdziłeś na telefonie? Ta strona wykryje to i zaloguje Cię automatycznie.'
+                        : 'Verified on your phone? This page will detect it and sign you in automatically.'}
+                    </li>
+                  </ul>
+                )}
+                {emailSentMode === 'magic' && (
+                  <p className="text-xs text-graphite/85 font-modern mb-4 text-left">
+                    {language === 'pl'
+                      ? 'Otwórz link w tej przeglądarce, aby dokończyć logowanie.'
+                      : 'Open the link in this browser to finish signing in.'}
+                  </p>
+                )}
+                {isPollingVerification && emailSentMode === 'register' && (
+                  <p className="text-xs text-gold-700 font-modern mb-4">
+                    {language === 'pl'
+                      ? 'Czekamy na potwierdzenie adresu…'
+                      : 'Waiting for email confirmation…'}
+                  </p>
+                )}
+                {emailSentMode === 'register' && (
+                  <div className="flex flex-col gap-2">
+                    <GlassButton
+                      type="button"
+                      className="w-full"
+                      disabled={isLoading}
+                      onClick={() => {
+                        setEmailSent(false);
+                        setEmailSentMode(null);
+                        setMode('login');
+                      }}
+                    >
+                      {language === 'pl'
+                        ? 'Już potwierdziłem — zaloguj się'
+                        : 'I verified — log in'}
+                    </GlassButton>
+                    <GlassButton
+                      type="button"
+                      variant="secondary"
+                      className="w-full"
+                      disabled={isLoading}
+                      onClick={async () => {
+                        setIsLoading(true);
+                        try {
+                          const result = await resendVerificationEmail(
+                            email,
+                            getEffectiveRedirectPath(),
+                          );
+                          if (result.error) {
+                            setError(result.error.message);
+                          }
+                        } finally {
+                          setIsLoading(false);
+                        }
+                      }}
+                    >
+                      {language === 'pl'
+                        ? 'Wyślij mail ponownie'
+                        : 'Resend email'}
+                    </GlassButton>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -455,6 +622,17 @@ export function LoginModal({
                         className="w-full px-4 py-3 rounded-2xl bg-white/50 backdrop-blur-md border border-white/60 text-graphite placeholder:text-silver-dark/60 font-modern focus:border-gold-500/50 focus:ring-2 focus:ring-gold-400/30 outline-none transition-all shadow-glass-inset"
                         disabled={isLoading}
                       />
+                      {mode === 'login' && (
+                        <p className="mt-2 text-right">
+                          <Link
+                            href="/auth/forgot-password"
+                            className="text-xs font-modern text-gold-800 hover:text-gold-600 underline"
+                            onClick={() => onClose()}
+                          >
+                            {language === 'pl' ? 'Zapomniałem hasła' : 'Forgot password?'}
+                          </Link>
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -512,6 +690,15 @@ export function LoginModal({
                         ? error.replace(/embedded_browser_google_auth:\s*/i, '')
                         : error}
                     </p>
+                    {mode === 'register' &&
+                    (error.includes('już używany') ||
+                      error.toLowerCase().includes('already')) ? (
+                      <p className="text-xs text-graphite font-modern mt-2">
+                        {language === 'pl'
+                          ? 'Masz już konto? Przełącz na zakładkę Zaloguj.'
+                          : 'Already have an account? Switch to Log in.'}
+                      </p>
+                    ) : null}
                     {(isEmbeddedBrowser() || isEmbeddedBrowserGoogleAuthError(error)) && (
                       <a
                         href="https://www.project-ida.com"
@@ -532,7 +719,10 @@ export function LoginModal({
                           onClick={async () => {
                             setIsLoading(true);
                             try {
-                              const result = await resendVerificationEmail(email);
+                              const result = await resendVerificationEmail(
+                                email,
+                                getEffectiveRedirectPath(),
+                              );
                               if (result.error) {
                                 setError(result.error.message);
                               } else {

@@ -16,7 +16,10 @@ import {
   fetchParticipantImages,
   deleteParticipantImage,
   updateParticipantImageMetadata,
+  getOrCreateSpaceId,
 } from "@/lib/remote-spaces";
+import { saveSessionToGcp, startPageView, endPageView } from "@/lib/gcp-data";
+import { getSessionStoreSnapshot } from "@/hooks/useSession";
 import { gcpApi } from "@/lib/gcp-api-client";
 import { 
   Upload, 
@@ -50,6 +53,7 @@ export default function InspirationsPage() {
   const searchParams = useSearchParams();
   const { sessionData, updateSessionData } = useSessionData();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const pageViewTrackingRef = useRef<{ userHash: string; viewId: string } | null>(null);
   const [items, setItems] = useState<LocalInspiration[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -57,6 +61,27 @@ export default function InspirationsPage() {
 
   const progress = Math.min((items.length / 10) * 100, 100);
   const fromDashboard = searchParams?.get("from") === "dashboard";
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const uh = (sessionData as { userHash?: string } | null)?.userHash;
+      if (!uh) return;
+      const viewId = await startPageView(uh, "inspirations");
+      if (viewId && mounted) {
+        pageViewTrackingRef.current = { userHash: uh, viewId };
+      }
+    })();
+    return () => {
+      mounted = false;
+      (async () => {
+        const t = pageViewTrackingRef.current;
+        if (t) await endPageView(t.userHash, t.viewId);
+        pageViewTrackingRef.current = null;
+      })();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(sessionData as { userHash?: string } | null)?.userHash]);
 
   const ensureBase64 = async (item: LocalInspiration): Promise<LocalInspiration> => {
     if (item.imageBase64) return item;
@@ -373,6 +398,14 @@ export default function InspirationsPage() {
       try {
         const userHash = (sessionData as any)?.userHash;
         if (userHash) {
+          const spaceId = await getOrCreateSpaceId(userHash, {
+            spaceId: (sessionData as any)?.currentSpaceId,
+            name: (sessionData as any)?.roomName || "Moja Przestrzeń",
+          });
+          if (spaceId) {
+            await updateSessionData({ currentSpaceId: spaceId } as any);
+          }
+
           let existing = await fetchParticipantImages(userHash);
           let existingInspirations = (existing || []).filter((img) => img.type === 'inspiration');
 
@@ -450,6 +483,7 @@ export default function InspirationsPage() {
               is_favorite: false,
               source: undefined,
               generation_id: undefined,
+              space_id: spaceId || undefined,
               _localId: p.id,
             }))
             .filter((img) => !!img.url)
@@ -467,6 +501,12 @@ export default function InspirationsPage() {
 
           if (insertPayloads.length > 0) {
             const saveResult = await saveParticipantImages(userHash, insertPayloads);
+            if (saveResult.failed > 0) {
+              console.error(
+                "[Inspirations] saveParticipantImages partial failure:",
+                saveResult,
+              );
+            }
             insertLocalIds.forEach((localId, i) => {
               const d = saveResult.details[i];
               if (d?.imageId) {
@@ -528,6 +568,13 @@ export default function InspirationsPage() {
       }
 
       await updateSessionData({ inspirations: mergedSessionInspirations } as any);
+      try {
+        await saveSessionToGcp(
+          getSessionStoreSnapshot() as unknown as Record<string, unknown>,
+        );
+      } catch (e) {
+        console.warn("[Inspirations] saveSessionToGcp failed:", e);
+      }
 
       const untaggedItems = itemsWithBase64.filter(i => i.file && (!i.tags || Object.keys(i.tags).length === 0));
       if (untaggedItems.length > 0) {

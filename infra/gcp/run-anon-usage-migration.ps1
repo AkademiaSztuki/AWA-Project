@@ -55,7 +55,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Import into Cloud SQL: $InstanceName, database $Database..." -ForegroundColor Cyan
-gcloud sql import sql $InstanceName $GcsUri --database=$Database --project=$PROJECT_ID
+gcloud sql import sql $InstanceName $GcsUri --database=$Database --project=$PROJECT_ID --quiet
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Import failed. Check GCP Console (SQL -> operations / logs)." -ForegroundColor Red
     exit 1

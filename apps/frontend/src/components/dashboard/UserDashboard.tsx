@@ -1,18 +1,27 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
+import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { AwaDialogue } from '@/components/awa/AwaDialogue';
-import { safeLocalStorage, safeSessionStorage } from '@/lib/gcp-data';
+import { safeLocalStorage, safeSessionStorage, saveSessionToGcp } from '@/lib/gcp-data';
 import { getUserProfile } from '@/lib/gcp-participant-profile';
 import { mapUserProfileToSessionData } from '@/lib/profile-mapper';
-import { resolveCompletedFullFlowStepIndices } from '@/lib/flow/full-flow-progress';
-import { fetchParticipantImages, fetchParticipantSpaces, createParticipantSpace, toggleParticipantImageFavorite, deleteParticipantImage, updateSpaceName, deleteSpace } from '@/lib/remote-spaces';
+import {
+  getFullFlowDashboardStepHref,
+  resolveCompletedFullFlowStepIndices,
+} from '@/lib/flow/full-flow-progress';
+import { fetchParticipantImages, fetchParticipantSpaces, createParticipantSpace, toggleParticipantImageFavorite, deleteParticipantImage, updateSpaceName, deleteSpace, updateParticipantImageMetadata } from '@/lib/remote-spaces';
+import {
+  inferRecentSpaceIdFromImages,
+  resolveActiveSpaceId,
+  saveSessionWithActiveSpace,
+} from '@/lib/current-space-sync';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Home,
@@ -35,13 +44,33 @@ import {
   GenerationStatsSection,
 } from '@/components/dashboard/ProfileSections';
 import { CreditBalance } from '@/components/subscription/CreditBalance';
+import { AppContentFloatingAnchor } from '@/components/layout/AppContentFloatingAnchor';
 import { mergeInspirationLists } from '@/lib/inspiration-merge';
 import { DashboardTopPanel } from '@/components/dashboard/DashboardTopPanel';
 import { DashboardJourneySteps } from '@/components/dashboard/DashboardJourneySteps';
+import type { SessionData } from '@/types';
 
 /** sessionStorage — IDA na dashboardzie: jedna pełna odtworzona sekwencja na sesję karty. */
 const IDA_SESSION_DASHBOARD_IDA_DIALOGUE_SHOWN_KEY = 'awa_session_dashboard_ida_dialogue_shown';
 const DASHBOARD_RETURN_SCROLL_Y_KEY = 'awa_dashboard_return_scroll_y';
+const DASHBOARD_LOAD_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+    promise
+      .then((value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((err) => {
+        window.clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
 
 interface Space {
   id: string;
@@ -67,6 +96,42 @@ function sortImagesDescending(images: SpaceImage[]): SpaceImage[] {
     const ta = new Date(a.addedAt || 0).getTime();
     const tb = new Date(b.addedAt || 0).getTime();
     return tb - ta;
+  });
+}
+
+function spacesListSignature(spaces: Space[]): string {
+  return JSON.stringify(
+    spaces.map((s) => ({
+      id: s.id,
+      name: s.name,
+      images: (s.images || []).map((i) => `${i.id}:${i.type}:${i.isFavorite ? 1 : 0}`).sort(),
+    })),
+  );
+}
+
+function profilePatchSignature(patch: Partial<SessionData>): string {
+  return JSON.stringify({
+    bigFive: patch.bigFive?.scores?.domains ?? null,
+    visualDNA: patch.visualDNA?.dominantStyle ?? null,
+    colorsAndMaterials: patch.colorsAndMaterials
+      ? {
+          style: (patch.colorsAndMaterials as { selectedStyle?: string }).selectedStyle,
+          palette: (patch.colorsAndMaterials as { selectedPalette?: string }).selectedPalette,
+        }
+      : null,
+    sensoryPreferences: patch.sensoryPreferences ?? null,
+    biophiliaScore: patch.biophiliaScore ?? null,
+  });
+}
+
+function sessionProfileSignature(session: SessionData | Record<string, unknown>): string {
+  const s = session as SessionData;
+  return profilePatchSignature({
+    bigFive: s.bigFive,
+    visualDNA: s.visualDNA,
+    colorsAndMaterials: s.colorsAndMaterials,
+    sensoryPreferences: s.sensoryPreferences,
+    biophiliaScore: s.biophiliaScore,
   });
 }
 
@@ -146,7 +211,21 @@ export function UserDashboard() {
   
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const loadGenerationRef = useRef(0);
+  const profileHydratedForHashRef = useRef<string | null>(null);
+  const spacesLoadedForHashRef = useRef<string | null>(null);
+  const authLinkedForHashRef = useRef<string | null>(null);
+  const preferenceComparisonPersistedRef = useRef<string | null>(null);
+  const updateSessionDataRef = useRef(updateSessionData);
+  const sessionFallbackRef = useRef<{
+    roomName?: string;
+    roomType?: string;
+    spaces?: Space[];
+  }>({});
+
+  updateSessionDataRef.current = updateSessionData;
   const [actionSpaceId, setActionSpaceId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   /** Kredyty opierają się na localStorage — bez tego SSR nie ma userHash, a klient tak → błąd hydratacji. */
@@ -171,15 +250,23 @@ export function UserDashboard() {
   // dla każdego zalogowanego użytkownika, nawet jeśli profil nie jest w 100% kompletny.
 
   const getUserHash = useCallback((): string | undefined => {
-    let userHash = sessionData?.userHash as string | undefined;
-
-    if (!userHash) {
-      userHash = safeLocalStorage.getItem('aura_user_hash') || 
-                 safeSessionStorage.getItem('aura_user_hash') || undefined;
+    // After login, localStorage is updated before session store — prefer it when authenticated.
+    if (user) {
+      const stored =
+        safeLocalStorage.getItem('aura_user_hash') ||
+        safeSessionStorage.getItem('aura_user_hash');
+      if (stored) return stored;
     }
 
-    return userHash;
-  }, [sessionData?.userHash]);
+    const sessionHash = sessionData?.userHash as string | undefined;
+    if (sessionHash) return sessionHash;
+
+    return (
+      safeLocalStorage.getItem('aura_user_hash') ||
+      safeSessionStorage.getItem('aura_user_hash') ||
+      undefined
+    );
+  }, [sessionData?.userHash, user]);
 
   const sortSpacesDescending = useCallback((list: Space[]): Space[] => {
     return [...(list || [])].sort((a, b) => {
@@ -188,6 +275,14 @@ export function UserDashboard() {
       return tb - ta;
     });
   }, []);
+
+  useEffect(() => {
+    sessionFallbackRef.current = {
+      roomName: (sessionData as any)?.roomName,
+      roomType: (sessionData as any)?.roomType,
+      spaces: (sessionData as any)?.spaces,
+    };
+  }, [sessionData]);
   
   const extractUrl = useCallback((item: any): string | null => {
     if (!item) return null;
@@ -291,111 +386,165 @@ export function UserDashboard() {
 
     try {
       await deleteParticipantImage(userHash, imageId);
-      await loadUserData();
+      await loadUserData({ force: true });
     } catch (error) {
       console.error('[Dashboard] Failed to delete generated image:', error);
     }
   };
   
 
-  useEffect(() => {
-    loadUserData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionData?.userHash]);
-
-  const loadUserData = async () => {
-    try {
-      setIsLoading(true);
-      // Try to get userHash from multiple sources
-      let userHash = sessionData?.userHash;
-      
-      if (!userHash) {
-        userHash = safeLocalStorage.getItem('aura_user_hash') || 
-                   safeSessionStorage.getItem('aura_user_hash') || '';
+  const applySessionOrLocalSpacesFallback = useCallback((): boolean => {
+    const sessionSpaces = sessionFallbackRef.current.spaces;
+    if (sessionSpaces && sessionSpaces.length > 0) {
+      setSpaces(sortSpacesDescending(sessionSpaces));
+      return true;
+    }
+    const localSessionData = safeLocalStorage.getItem('aura_session');
+    if (localSessionData) {
+      try {
+        const parsed = JSON.parse(localSessionData);
+        if (parsed.spaces && parsed.spaces.length > 0) {
+          setSpaces(sortSpacesDescending(parsed.spaces));
+          return true;
+        }
+      } catch {
+        /* ignore */
       }
-      
-      if (!userHash) {
-        console.log('[Dashboard] No user hash found - showing empty dashboard');
-        setSpaces([]);
-        setIsLoading(false);
+    }
+    setSpaces([]);
+    return false;
+  }, [sortSpacesDescending]);
+
+  const persistPreferenceComparisonToGcp = useCallback(async (userHash: string) => {
+    if (!user || preferenceComparisonPersistedRef.current === userHash) return;
+    const snap = getSessionStoreSnapshot();
+    if (!Array.isArray(snap.spaces) || snap.spaces.length === 0) return;
+    try {
+      const ok = await saveSessionWithActiveSpace();
+      if (ok) {
+        preferenceComparisonPersistedRef.current = userHash;
+      }
+    } catch (e) {
+      console.warn('[Dashboard] saveSessionWithActiveSpace (preference comparison) failed:', e);
+    }
+  }, [user]);
+
+  const hydrateProfileFromGcp = useCallback(async (userHash: string, isStale: () => boolean) => {
+    if (profileHydratedForHashRef.current === userHash) {
+      void persistPreferenceComparisonToGcp(userHash);
+      return;
+    }
+
+    try {
+      const userProfile = await withTimeout(
+        getUserProfile(userHash),
+        DASHBOARD_LOAD_TIMEOUT_MS,
+        'getUserProfile',
+      );
+      if (isStale() || !userProfile) return;
+
+      const mappedData = mapUserProfileToSessionData(userProfile);
+      if (Object.keys(mappedData).length === 0) {
+        profileHydratedForHashRef.current = userHash;
+        void persistPreferenceComparisonToGcp(userHash);
         return;
       }
 
-      console.log('[Dashboard] Loading data for user:', userHash);
-      
-      // Link user_hash to auth user if logged in (one-time operation)
-      if (user && userHash) {
-        try {
-          await linkUserHashToAuth(userHash);
-        } catch (e) {
+      const nextSig = profilePatchSignature(mappedData);
+      const currentSig = sessionProfileSignature(getSessionStoreSnapshot());
+      if (nextSig !== currentSig) {
+        updateSessionDataRef.current(mappedData);
+      }
+      profileHydratedForHashRef.current = userHash;
+      void persistPreferenceComparisonToGcp(userHash);
+    } catch (e) {
+      console.warn('[Dashboard] Failed to load user profile:', e);
+    }
+  }, [persistPreferenceComparisonToGcp]);
+
+  const loadUserData = useCallback(async (options?: { force?: boolean }) => {
+    const loadId = ++loadGenerationRef.current;
+    const isStale = () => loadId !== loadGenerationRef.current;
+    const force = options?.force === true;
+
+    setIsLoading(true);
+    setLoadError(null);
+
+    try {
+      const userHash = getUserHash() || '';
+
+      if (!userHash) {
+        if (!isStale()) setSpaces([]);
+        return;
+      }
+
+      if (user && userHash && authLinkedForHashRef.current !== userHash) {
+        authLinkedForHashRef.current = userHash;
+        void linkUserHashToAuth(userHash).catch((e) => {
           console.warn('[Dashboard] Failed to link user_hash to auth:', e);
-        }
-      }
-      
-      // Load user profile from GCP participants (Big Five, explicit preferences, etc.)
-      try {
-        const userProfile = await getUserProfile(userHash);
-        console.log('[Dashboard] getUserProfile result:', {
-          hasProfile: !!userProfile,
-          hasPersonality: !!userProfile?.personality,
-          hasAestheticDNA: !!userProfile?.aestheticDNA,
-          personalityKeys: userProfile?.personality ? Object.keys(userProfile.personality) : [],
-          aestheticDNAKeys: userProfile?.aestheticDNA ? Object.keys(userProfile.aestheticDNA) : []
+          authLinkedForHashRef.current = null;
         });
-        
-        if (userProfile) {
-          const mappedData = mapUserProfileToSessionData(userProfile);
-
-          if (Object.keys(mappedData).length > 0) {
-            updateSessionData(mappedData);
-            console.log('[Dashboard] Loaded user profile from Supabase:', {
-              hasBigFive: !!mappedData.bigFive,
-              hasExplicit: !!mappedData.colorsAndMaterials,
-              hasImplicit: !!mappedData.visualDNA,
-              hasSensory: !!mappedData.sensoryPreferences,
-              hasPrsCurrent: !!mappedData.prsCurrent,
-              hasPrsTarget: !!mappedData.prsTarget,
-              biophiliaScore: mappedData.biophiliaScore,
-            });
-          } else {
-            console.warn('[Dashboard] User profile exists but no mappable data found');
-          }
-        } else {
-          console.log('[Dashboard] No user profile found in Supabase for userHash:', userHash);
-        }
-      } catch (e) {
-        console.warn('[Dashboard] Failed to load user profile from Supabase:', e);
       }
 
-      // Fetch spaces + images from participant_* (source of truth)
+      void hydrateProfileFromGcp(userHash, isStale);
+      void persistPreferenceComparisonToGcp(userHash);
+
+      if (!force && spacesLoadedForHashRef.current === userHash) {
+        return;
+      }
+      if (force) {
+        spacesLoadedForHashRef.current = null;
+      }
+
       try {
+        const [participantSpaces, participantImages] = await withTimeout(
+          Promise.all([fetchParticipantSpaces(userHash), fetchParticipantImages(userHash)]),
+          DASHBOARD_LOAD_TIMEOUT_MS,
+          'fetchParticipantSpaces/images',
+        );
 
-        const [participantSpaces, participantImages] = await Promise.all([
-          fetchParticipantSpaces(userHash),
-          fetchParticipantImages(userHash)
-        ]);
+        if (isStale()) return;
 
-        // Build spaces from participant_spaces, fallback to default if missing
-        const fallbackName = (sessionData as any)?.roomName || 'Moja Przestrzeń';
-        const fallbackType = (sessionData as any)?.roomType || 'personal';
+        const fallbackName = sessionFallbackRef.current.roomName || 'Moja Przestrzeń';
+        const fallbackType = sessionFallbackRef.current.roomType || 'personal';
 
         let spacesSource = participantSpaces;
         if (!spacesSource || spacesSource.length === 0) {
-          const created = await createParticipantSpace(userHash, { name: fallbackName, type: fallbackType, is_default: true });
+          const created = await withTimeout(
+            createParticipantSpace(userHash, {
+              name: fallbackName,
+              type: fallbackType,
+              is_default: true,
+            }),
+            DASHBOARD_LOAD_TIMEOUT_MS,
+            'createParticipantSpace',
+          );
+          if (isStale()) return;
           if (created?.id) {
-            spacesSource = [{ id: created.id, name: fallbackName, type: fallbackType, isDefault: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
+            spacesSource = [
+              {
+                id: created.id,
+                name: fallbackName,
+                type: fallbackType,
+                isDefault: true,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+            ];
           }
         }
 
         const defaultId =
-          (spacesSource || []).find(s => s.isDefault)?.id ||
+          (spacesSource || []).find((s) => s.isDefault)?.id ||
           (spacesSource || [])[0]?.id ||
           'default-space';
 
+        const knownSpaceIds = new Set((spacesSource || []).map((s) => s.id));
         const bySpaceId = new Map<string, SpaceImage[]>();
         for (const img of participantImages || []) {
           if (img.type !== 'generated' && img.type !== 'inspiration') continue;
-          const sid = (img as any).spaceId || defaultId;
+          const rawSid = (img as { spaceId?: string | null }).spaceId;
+          const sid = rawSid && knownSpaceIds.has(rawSid) ? rawSid : defaultId;
           if (!bySpaceId.has(sid)) bySpaceId.set(sid, []);
           bySpaceId.get(sid)!.push({
             id: img.id,
@@ -404,8 +553,17 @@ export function UserDashboard() {
             addedAt: img.createdAt,
             isFavorite: img.isFavorite,
             thumbnailUrl: img.thumbnailUrl,
-            tags: img.tags ? (Object.values(img.tags).flat().filter((t): t is string => typeof t === 'string')) : []
+            tags: img.tags
+              ? (Object.values(img.tags).flat().filter((t): t is string => typeof t === 'string'))
+              : [],
           });
+          if (rawSid && rawSid !== sid && rawSid !== defaultId) {
+            void updateParticipantImageMetadata(userHash, img.id, {
+              space_id: defaultId,
+            }).catch((e) => {
+              console.warn('[Dashboard] Failed to reconcile orphan image space_id:', e);
+            });
+          }
         }
 
         const mappedSpaces: Space[] = (spacesSource || []).map((s) => {
@@ -416,78 +574,127 @@ export function UserDashboard() {
             type: s.type || 'personal',
             images: imgs,
             createdAt: imgs.length > 0 ? imgs[imgs.length - 1].addedAt : s.createdAt,
-            updatedAt: imgs.length > 0 ? imgs[0].addedAt : s.updatedAt
+            updatedAt: imgs.length > 0 ? imgs[0].addedAt : s.updatedAt,
           };
         });
 
-        // Automatyczne usuwanie pustych przestrzeni (bez obrazów, ale nie domyślnych)
-        const emptySpaces = mappedSpaces.filter(space => {
-          const sourceSpace = spacesSource.find(s => s.id === space.id);
-          return space.images.length === 0 && !sourceSpace?.isDefault;
-        });
+        const displaySpaces = sortSpacesDescending(mappedSpaces);
+        setSpaces(displaySpaces);
+        spacesLoadedForHashRef.current = userHash;
 
-        if (emptySpaces.length > 0) {
-          console.log(`[Dashboard] Found ${emptySpaces.length} empty spaces, cleaning up...`);
-          for (const emptySpace of emptySpaces) {
-            try {
-              const deleted = await deleteSpace(userHash, emptySpace.id);
-              if (deleted) {
-                console.log(`[Dashboard] Deleted empty space: ${emptySpace.name} (${emptySpace.id})`);
-              }
-            } catch (e) {
-              console.warn(`[Dashboard] Failed to delete empty space ${emptySpace.id}:`, e);
-            }
-          }
-          // Filtruj puste przestrzenie z listy wyświetlanych
-          const spacesWithImages = mappedSpaces.filter(space => {
-            const sourceSpace = spacesSource.find(s => s.id === space.id);
-            return space.images.length > 0 || sourceSpace?.isDefault;
-          });
-          mappedSpaces.length = 0;
-          mappedSpaces.push(...spacesWithImages);
+        const recentSpaceId = inferRecentSpaceIdFromImages(
+          displaySpaces,
+          (participantImages || []).map((img) => ({
+            spaceId: (img as { spaceId?: string | null }).spaceId,
+            createdAt: img.createdAt,
+          })),
+        );
+        const activeSpaceId = resolveActiveSpaceId(
+          displaySpaces,
+          getSessionStoreSnapshot().currentSpaceId,
+          recentSpaceId ? [recentSpaceId] : undefined,
+        );
+
+        const nextSpacesSig = spacesListSignature(displaySpaces);
+        const currentSpacesSig = spacesListSignature(sessionFallbackRef.current.spaces || []);
+        const sessionPatch: Partial<SessionData> = { spaces: displaySpaces };
+        if (activeSpaceId) {
+          sessionPatch.currentSpaceId = activeSpaceId;
+        }
+        if (
+          nextSpacesSig !== currentSpacesSig ||
+          activeSpaceId !== getSessionStoreSnapshot().currentSpaceId
+        ) {
+          updateSessionDataRef.current(sessionPatch);
         }
 
-        setSpaces(sortSpacesDescending(mappedSpaces));
-        updateSessionData({ spaces: mappedSpaces } as any);
-        setIsLoading(false);
+        try {
+          await saveSessionWithActiveSpace(sessionPatch);
+        } catch (e) {
+          console.warn('[Dashboard] saveSessionWithActiveSpace after spaces load failed:', e);
+        }
+
+        const emptySpaces = mappedSpaces.filter((space) => {
+          const sourceSpace = spacesSource.find((s) => s.id === space.id);
+          return space.images.length === 0 && !sourceSpace?.isDefault;
+        });
+        if (emptySpaces.length > 0) {
+          void (async () => {
+            for (const emptySpace of emptySpaces) {
+              try {
+                await deleteSpace(userHash, emptySpace.id);
+              } catch (e) {
+                console.warn(`[Dashboard] Failed to delete empty space ${emptySpace.id}:`, e);
+              }
+            }
+            if (isStale()) return;
+            const pruned = displaySpaces.filter((space) => {
+              const sourceSpace = spacesSource.find((s) => s.id === space.id);
+              return space.images.length > 0 || sourceSpace?.isDefault;
+            });
+            if (pruned.length !== displaySpaces.length) {
+              setSpaces(pruned);
+              const prunedSig = spacesListSignature(pruned);
+              if (prunedSig !== spacesListSignature(sessionFallbackRef.current.spaces || [])) {
+                updateSessionDataRef.current({ spaces: pruned } as Partial<SessionData>);
+              }
+            }
+          })();
+        }
         return;
       } catch (e) {
         console.warn('[Dashboard] fetch participant_spaces/images failed, fallback to local/session', e);
+        if (!isStale()) {
+          setLoadError(
+            e instanceof Error ? e.message : 'Nie udało się załadować pomieszczeń z serwera',
+          );
+          applySessionOrLocalSpacesFallback();
+        }
       }
-
-      // Fallback: sessionData
-      if (sessionData?.spaces && sessionData.spaces.length > 0) {
-        setSpaces(sortSpacesDescending(sessionData.spaces));
-        setIsLoading(false);
-        return;
-      }
-      
-      // Fallback: localStorage
-      const localSessionData = safeLocalStorage.getItem('aura_session');
-      if (localSessionData) {
-        try {
-          const parsed = JSON.parse(localSessionData);
-          if (parsed.spaces && parsed.spaces.length > 0) {
-            setSpaces(sortSpacesDescending(parsed.spaces));
-            setIsLoading(false);
-            return;
-          }
-        } catch {}
-      }
-
-          setSpaces([]);
-      setIsLoading(false);
     } catch (error) {
       console.error('[Dashboard] Failed to load user data:', error);
-      // Only set empty if we don't have localStorage data
-      const localSessionData = safeLocalStorage.getItem('aura_session');
-      if (!localSessionData) {
-        setSpaces([]);
+      if (!isStale()) {
+        setLoadError(error instanceof Error ? error.message : 'Błąd ładowania dashboardu');
+        applySessionOrLocalSpacesFallback();
       }
     } finally {
-      setIsLoading(false);
+      if (!isStale()) setIsLoading(false);
     }
-  };
+  }, [
+    applySessionOrLocalSpacesFallback,
+    getUserHash,
+    hydrateProfileFromGcp,
+    linkUserHashToAuth,
+    persistPreferenceComparisonToGcp,
+    sortSpacesDescending,
+    user,
+  ]);
+
+  const loadUserDataRef = useRef(loadUserData);
+  loadUserDataRef.current = loadUserData;
+
+  const resolvedUserHash =
+    sessionData?.userHash ||
+    (user
+      ? safeLocalStorage.getItem('aura_user_hash') || safeSessionStorage.getItem('aura_user_hash')
+      : undefined) ||
+    undefined;
+
+  useEffect(() => {
+    if (authLoading || !isInitialized || !user || !resolvedUserHash) return;
+    void loadUserDataRef.current();
+  }, [authLoading, isInitialized, user?.id, resolvedUserHash]);
+
+  useEffect(() => {
+    if (!isLoading) return;
+    const safetyTimer = window.setTimeout(() => {
+      console.warn('[Dashboard] Load safety timeout — clearing spinner');
+      setIsLoading(false);
+      setLoadError((prev) => prev ?? 'Ładowanie trwa zbyt długo — spróbuj odświeżyć stronę');
+      applySessionOrLocalSpacesFallback();
+    }, DASHBOARD_LOAD_TIMEOUT_MS + 2_000);
+    return () => window.clearTimeout(safetyTimer);
+  }, [isLoading, applySessionOrLocalSpacesFallback]);
 
   const handleAddSpace = async () => {
     try {
@@ -516,7 +723,13 @@ export function UserDashboard() {
 
       const updatedSpaces = sortSpacesDescending([newSpace, ...spaces]);
       setSpaces(updatedSpaces);
-      updateSessionData({ spaces: updatedSpaces, currentSpaceId: newSpaceId } as any);
+      const sessionPatch = { spaces: updatedSpaces, currentSpaceId: newSpaceId } as Partial<SessionData>;
+      updateSessionData(sessionPatch);
+      try {
+        await saveSessionWithActiveSpace(sessionPatch);
+      } catch (e) {
+        console.warn('[Dashboard] saveSessionWithActiveSpace after add space failed:', e);
+      }
 
       router.push(`/setup/room/${newSpaceId}`);
     } catch (error) {
@@ -584,11 +797,16 @@ export function UserDashboard() {
       if (removed) {
         const updatedSpaces = sortSpacesDescending(spaces.filter(space => space.id !== spaceId));
         setSpaces(updatedSpaces);
-        const sessionUpdate: any = { spaces: updatedSpaces };
+        const sessionUpdate: Partial<SessionData> = { spaces: updatedSpaces };
         if ((sessionData as any)?.currentSpaceId === spaceId) {
-          sessionUpdate.currentSpaceId = undefined;
+          sessionUpdate.currentSpaceId = resolveActiveSpaceId(updatedSpaces);
         }
         updateSessionData(sessionUpdate);
+        try {
+          await saveSessionWithActiveSpace(sessionUpdate);
+        } catch (e) {
+          console.warn('[Dashboard] saveSessionWithActiveSpace after delete space failed:', e);
+        }
       }
     } catch (error) {
       console.error('[Dashboard] Error in handleDeleteSpace:', error);
@@ -703,7 +921,7 @@ export function UserDashboard() {
     // Reload via the normal dashboard source-of-truth path to avoid corrupting space grouping.
     if (userHash) {
       try {
-        await loadUserData();
+        await loadUserData({ force: true });
       } catch (error) {
         console.warn('[Dashboard] Failed to reload data after deletion:', error);
       }
@@ -782,13 +1000,13 @@ export function UserDashboard() {
             onNeedSpace={handleAddSpace}
           />
 
-          <BigFiveResults userHash={(sessionData as any)?.userHash} />
+          <BigFiveResults userHash={getUserHash()} />
 
           <PreferencesOverviewSection
             sessionData={sessionData}
             visualDNA={(sessionData as any)?.visualDNA}
-            onRetakeImplicit={() => router.push('/setup/profile?step=tinder_swipes')}
-            onRetakeExplicit={() => router.push('/setup/profile?step=semantic_diff')}
+            onRetakeImplicit={() => router.push(getFullFlowDashboardStepHref(2))}
+            onRetakeExplicit={() => router.push(getFullFlowDashboardStepHref(4))}
           />
 
           {/* Room Analysis - disabled; copy surfaced in dialogue */}
@@ -866,6 +1084,17 @@ export function UserDashboard() {
                   {language === 'pl' ? 'Ładowanie...' : 'Loading...'}
                 </p>
               </div>
+            ) : loadError && spaces.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="font-modern text-sm text-graphite">{loadError}</p>
+                <GlassButton
+                  type="button"
+                  className="mt-4"
+                  onClick={() => void loadUserData({ force: true })}
+                >
+                  {language === 'pl' ? 'Spróbuj ponownie' : 'Try again'}
+                </GlassButton>
+              </div>
             ) : spaces.length === 0 ? (
               <EmptyState onAddSpace={handleAddSpace} />
             ) : (
@@ -888,11 +1117,12 @@ export function UserDashboard() {
         </div>
       </div>
 
-      <FloatingBackToTopAction language={language} isVisible={showBackToTop} />
-
-      {spaces.length > 0 && (
-        <FloatingAddSpaceAction language={language} onAddSpace={handleAddSpace} />
-      )}
+      <FloatingDashboardActions
+        language={language}
+        onAddSpace={handleAddSpace}
+        showAddSpace={spaces.length > 0}
+        showBackToTop={showBackToTop}
+      />
 
       {/* Delete confirmation modal */}
       {pendingDelete && (
@@ -1159,58 +1389,86 @@ function EmptyState({ onAddSpace }: { onAddSpace: () => void }) {
   );
 }
 
-function FloatingAddSpaceAction({ onAddSpace, language }: { onAddSpace: () => void; language: 'pl' | 'en' }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 36, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: 'spring', stiffness: 220, damping: 24 }}
-      className="pointer-events-none fixed bottom-4 inset-x-4 z-40 flex justify-center sm:bottom-6 lg:inset-x-8 xl:translate-x-[calc(15vw+1.25rem)] 2xl:translate-x-[250px]"
-    >
-      <GlassButton
-        type="button"
-        onClick={onAddSpace}
-        className="pointer-events-auto flex min-h-[56px] w-full max-w-xl items-center justify-center gap-2 rounded-full border border-white/35 bg-white/45 px-6 py-3 shadow-[0_20px_60px_rgba(68,49,20,0.18)] backdrop-blur-glass transition hover:-translate-y-0.5 hover:bg-white/60 hover:shadow-[0_26px_70px_rgba(68,49,20,0.22)] sm:px-8 lg:max-w-2xl"
-      >
-        <Plus size={18} aria-hidden />
-        <span className="font-modern text-sm font-semibold">
-          {language === 'pl' ? 'Dodaj pomieszczenie' : 'Add a room'}
-        </span>
-      </GlassButton>
-    </motion.div>
-  );
-}
+function FloatingDashboardActions({
+  onAddSpace,
+  language,
+  showAddSpace,
+  showBackToTop,
+}: {
+  onAddSpace: () => void;
+  language: 'pl' | 'en';
+  showAddSpace: boolean;
+  showBackToTop: boolean;
+}) {
+  if (!showAddSpace && !showBackToTop) return null;
 
-function FloatingBackToTopAction({ language, isVisible }: { language: 'pl' | 'en'; isVisible: boolean }) {
+  const scrollToTop = () => {
+    document.getElementById('dashboard-top')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${window.location.search}`,
+    );
+  };
+
+  const floatSpring = { type: 'spring' as const, stiffness: 280, damping: 28 };
+
   return (
-    <motion.div
-      initial={false}
-      animate={isVisible
-        ? { opacity: 1, y: 0, pointerEvents: 'auto' }
-        : { opacity: 0, y: 12, pointerEvents: 'none' }}
-      transition={{ duration: 0.2 }}
-      className="fixed bottom-24 right-4 z-40 sm:bottom-28 sm:right-6 lg:right-8"
-    >
-      <GlassButton
-        type="button"
-        variant="secondary"
-        onClick={() => {
-          document.getElementById('dashboard-top')?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
-          });
-          window.history.replaceState(
-            null,
-            '',
-            `${window.location.pathname}${window.location.search}`,
-          );
-        }}
-        className="min-h-[44px] px-4 py-2 text-sm shadow-[0_14px_40px_rgba(68,49,20,0.18)]"
+    <AppContentFloatingAnchor columnClassName="px-4 lg:px-8">
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 36, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+        className={`pointer-events-auto flex min-h-[56px] w-full items-center gap-3 sm:gap-4${!showAddSpace && showBackToTop ? ' justify-end' : ''}`}
       >
-        <ArrowUp size={16} aria-hidden />
-        {language === 'pl' ? 'Wróć na górę' : 'Back to top'}
-      </GlassButton>
-    </motion.div>
+        {showAddSpace && (
+          <motion.div
+            layout
+            transition={floatSpring}
+            className="flex min-w-0 flex-1 justify-center"
+          >
+            <GlassButton
+              type="button"
+              onClick={onAddSpace}
+              className="min-h-[56px] w-full max-w-2xl gap-2 rounded-full border border-white/35 bg-white/45 px-6 py-3 font-modern text-sm font-semibold shadow-[0_20px_60px_rgba(68,49,20,0.18)] backdrop-blur-glass transition hover:-translate-y-0.5 hover:bg-white/60 hover:shadow-[0_26px_70px_rgba(68,49,20,0.22)] sm:px-8"
+            >
+              <Plus size={18} aria-hidden className="shrink-0" />
+              <span className="truncate">
+                {language === 'pl' ? 'Dodaj pomieszczenie' : 'Add a room'}
+              </span>
+            </GlassButton>
+          </motion.div>
+        )}
+
+        <AnimatePresence initial={false} mode="popLayout">
+          {showBackToTop && (
+            <motion.div
+              key="dashboard-back-to-top"
+              layout
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={floatSpring}
+              className="shrink-0 -translate-x-5 sm:-translate-x-7 lg:-translate-x-9"
+            >
+              <GlassButton
+                type="button"
+                variant="secondary"
+                onClick={scrollToTop}
+                className="min-h-[56px] whitespace-nowrap rounded-full px-4 py-3 text-sm drop-shadow-[0_14px_28px_rgba(68,49,20,0.16)]"
+              >
+                <ArrowUp size={16} aria-hidden className="shrink-0" />
+                {language === 'pl' ? 'Wróć na górę' : 'Back to top'}
+              </GlassButton>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </AppContentFloatingAnchor>
   );
 }
 

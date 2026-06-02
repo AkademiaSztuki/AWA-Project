@@ -8,7 +8,9 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "migrate:anon-usage": "node scripts/run-anon-usage-migration.cjs",
-    "grant-dev-credits": "node scripts/grant-dev-credits.cjs"
+    "grant-dev-credits": "node scripts/grant-dev-credits.cjs",
+    "test:preference-snapshot": "pnpm build && node dist/services/preference-snapshot.selftest.js",
+    "test:billing": "pnpm build && node dist/services/billing.selftest.js"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.12.0",

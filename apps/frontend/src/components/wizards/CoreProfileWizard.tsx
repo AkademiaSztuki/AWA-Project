@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
@@ -21,17 +21,28 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFullFlowProgress } from '@/contexts/FullFlowProgressContext';
 import {
   FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY,
+  isFullFlowFromDashboard,
   minJourneyIndexForCoreProfileStep,
   type CoreProfileWizardStepId,
 } from '@/lib/flow/full-flow-progress';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { computeWeightedDNAFromSwipes } from '@/lib/dna';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
-import { saveResearchConsent, saveParticipantSwipes, safeSessionStorage, saveSessionToGcp, logBehavioralEvent } from '@/lib/gcp-data';
+import {
+  saveResearchConsent,
+  saveParticipantSwipes,
+  safeSessionStorage,
+  safeLocalStorage,
+  saveSessionToGcp,
+  logBehavioralEvent,
+  startPageView,
+  endPageView,
+} from '@/lib/gcp-data';
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import Link from 'next/link';
 import { GLASS_CARD_SCROLL_STEP as STEP_CARD_HEIGHT } from '@/lib/flow/glass-step-layout';
+import { topMaterialsFromSensorySuiteResults } from '@/lib/participants-mapper';
 
 type WizardStep = 
   | 'consent'
@@ -458,10 +469,11 @@ export function CoreProfileWizard() {
   const searchParams = useSearchParams();
   const { updateSessionData, sessionData, isInitialized } = useSessionData();
   const { language } = useLanguage();
-  const { user, linkUserHashToAuth } = useAuth();
+  const { user } = useAuth();
   const { setProfileStep } = useFullFlowProgress();
 
   const [currentStep, setCurrentStep] = useState<WizardStep>('consent');
+  const pageViewTrackingRef = useRef<{ userHash: string; viewId: string } | null>(null);
   const hasRestoredStepRef = useRef(false);
   const sensorySuiteRef = useRef<SensoryTestSuiteHandle>(null);
   const [profileData, setProfileData] = useState<CoreProfileData>({});
@@ -497,6 +509,27 @@ export function CoreProfileWizard() {
     }
   }, [updateSessionData]);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const uh = sessionData?.userHash;
+      if (!uh) return;
+      const viewId = await startPageView(uh, 'core_profile', { wizardStep: currentStep });
+      if (viewId && mounted) {
+        pageViewTrackingRef.current = { userHash: uh, viewId };
+      }
+    })();
+    return () => {
+      mounted = false;
+      (async () => {
+        const t = pageViewTrackingRef.current;
+        if (t) await endPageView(t.userHash, t.viewId);
+        pageViewTrackingRef.current = null;
+      })();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionData?.userHash]);
+
   const steps = WIZARD_STEPS;
 
   // Restore saved step, `?step=` from progress bar (same-route navigation), or skip completed intro steps
@@ -504,12 +537,16 @@ export function CoreProfileWizard() {
     if (!isInitialized) return;
 
     const stepFromUrl = searchParams.get('step');
+    const fromDashboard = isFullFlowFromDashboard(searchParams);
     if (isWizardStep(stepFromUrl) && typeof window !== 'undefined') {
       const maxRaw = sessionStorage.getItem(FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY);
       const max = parseInt(maxRaw || '0', 10);
       const safeMax = Number.isFinite(max) && max >= 0 ? max : 0;
       const requested = stepFromUrl as CoreProfileWizardStepId;
-      if (safeMax >= minJourneyIndexForCoreProfileStep(requested)) {
+      if (
+        fromDashboard ||
+        safeMax >= minJourneyIndexForCoreProfileStep(requested)
+      ) {
         let resolved: WizardStep = stepFromUrl;
         if (
           stepFromUrl === 'demographics' &&
@@ -695,22 +732,43 @@ export function CoreProfileWizard() {
     stopAllDialogueAudio();
     await updateSessionData({ demographics });
     updateProfile({ demographics });
+    try {
+      await saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
+    } catch (e) {
+      console.warn('[CoreProfileWizard] saveSessionToGcp after demographics failed:', e);
+    }
     handleNext();
   };
 
+  const flushSessionToGcp = async () => {
+    try {
+      await saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
+    } catch (e) {
+      console.warn('[CoreProfileWizard] saveSessionToGcp on step advance failed:', e);
+    }
+  };
+
   const handleNext = () => {
-    // Generate insight for current step
-    const insight = generateInsight(currentStep, profileData);
-    if (insight) {
-      setCurrentInsight(insight);
-    }
-    
-    const nextIndex = currentStepIndex + 1;
-    if (nextIndex < steps.length) {
-      setCurrentStep(steps[nextIndex]);
-    } else {
-      handleComplete();
-    }
+    void (async () => {
+      if (currentStep === 'semantic_diff' && profileData.semanticDifferential) {
+        await updateSessionData({
+          semanticDifferential: profileData.semanticDifferential,
+        });
+      }
+
+      const insight = generateInsight(currentStep, profileData);
+      if (insight) {
+        setCurrentInsight(insight);
+      }
+
+      const nextIndex = currentStepIndex + 1;
+      if (nextIndex < steps.length) {
+        setCurrentStep(steps[nextIndex]);
+        await flushSessionToGcp();
+      } else {
+        await handleComplete();
+      }
+    })();
   };
 
   const handleBack = () => {
@@ -749,12 +807,13 @@ export function CoreProfileWizard() {
         implicitScores: mergedImplicit
       };
 
-      const explicitTopMaterials =
-        profileData.colorsAndMaterials?.topMaterials?.length
-          ? profileData.colorsAndMaterials.topMaterials
-          : profileData.sensoryPreferences?.texture
-          ? [profileData.sensoryPreferences.texture]
-          : sessionData?.colorsAndMaterials?.topMaterials || [];
+      const explicitTopMaterialsFinal = topMaterialsFromSensorySuiteResults({
+        topMaterials:
+          profileData.colorsAndMaterials?.topMaterials ??
+          sessionData?.colorsAndMaterials?.topMaterials,
+        texture:
+          profileData.sensoryPreferences?.texture ?? sessionData?.sensoryPreferences?.texture,
+      });
 
       // Save ALL profile data to session
       await updateSessionData({
@@ -782,7 +841,7 @@ export function CoreProfileWizard() {
         // Colors & Materials (explicit)
         colorsAndMaterials: {
           ...(profileData.colorsAndMaterials || {}),
-          topMaterials: explicitTopMaterials
+          topMaterials: explicitTopMaterialsFinal
         } as any,
         
         // Sensory preferences (explicit)
@@ -800,7 +859,9 @@ export function CoreProfileWizard() {
         sessionStorage.removeItem(WIZARD_STEP_STORAGE_KEY);
       }
 
-      await saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
+      await saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>, {
+        preferenceSnapshotMilestone: 'core_profile_complete',
+      });
 
       if (user) {
         router.push('/flow/inspirations');
@@ -816,14 +877,20 @@ export function CoreProfileWizard() {
 
   const handleLoginSuccess = async () => {
     setShowLoginModal(false);
-    
-    // Link user_hash to authenticated user
-    if (sessionData?.userHash && user) {
-      await linkUserHashToAuth(sessionData.userHash);
+    const hash =
+      typeof window !== 'undefined'
+        ? safeLocalStorage.getItem('aura_user_hash')
+        : sessionData?.userHash;
+    if (hash) {
+      await updateSessionData({ userHash: hash });
     }
-    
     router.push('/flow/inspirations');
   };
+
+  const handleContinueWithoutAccount = useCallback(() => {
+    setShowLoginModal(false);
+    router.push('/flow/inspirations');
+  }, [router]);
 
   return (
     <div className="awa-profile-no-scrollbars flex w-full flex-col">
@@ -886,7 +953,7 @@ export function CoreProfileWizard() {
                       visualDNA: {
                         dominantTags: [dominantStyle, ...weighted.top.colors, ...weighted.top.materials].filter(Boolean),
                         preferences: {
-                          colors: weighted.top.colors,
+                          colors: weighted.top.colors.slice(0, 5),
                           materials: weighted.top.materials,
                           styles: weighted.top.styles,
                           lighting: weighted.top.lighting,
@@ -899,6 +966,12 @@ export function CoreProfileWizard() {
                         moodSummary: mood,
                       } as any
                     });
+
+                    try {
+                      await saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
+                    } catch (e) {
+                      console.warn('[CoreProfileWizard] saveSessionToGcp after tinder failed:', e);
+                    }
                     
                     handleNext();
                   }}
@@ -979,25 +1052,13 @@ export function CoreProfileWizard() {
                             sessionData.colorsAndMaterials?.selectedPalette ||
                             profileData.colorsAndMaterials?.selectedPalette ||
                             '';
-                          let finalMaterials: string[] = [];
-                          if (
-                            Array.isArray((results as any).topMaterials) &&
-                            (results as any).topMaterials.some(Boolean)
-                          ) {
-                            finalMaterials = (results as any).topMaterials.filter(Boolean);
-                          } else if (results.texture && String(results.texture).trim()) {
-                            finalMaterials = [String(results.texture).trim()];
-                          } else {
-                            finalMaterials =
-                              sessionData.colorsAndMaterials?.topMaterials?.filter(Boolean) ||
-                              profileData.colorsAndMaterials?.topMaterials?.filter(Boolean) ||
-                              [];
-                          }
+                          const finalMaterials = topMaterialsFromSensorySuiteResults(results);
+                          const materialValue = finalMaterials[0] ?? '';
 
                           updateProfile({
                             sensoryPreferences: {
                               music: results.music,
-                              texture: results.texture,
+                              texture: materialValue,
                               light: results.light
                             },
                             natureMetaphor: results.natureMetaphor,
@@ -1015,7 +1076,7 @@ export function CoreProfileWizard() {
                             biophiliaScore: results.biophiliaScore,
                             sensoryPreferences: {
                               music: results.music,
-                              texture: results.texture,
+                              texture: materialValue,
                               light: results.light
                             },
                             natureMetaphor: results.natureMetaphor,
@@ -1025,6 +1086,11 @@ export function CoreProfileWizard() {
                               topMaterials: finalMaterials
                             }
                           });
+                          await flushSessionToGcp();
+                          if (isFullFlowFromDashboard(searchParams)) {
+                            router.push('/dashboard');
+                            return;
+                          }
                           handleNext();
                         }}
                       />
@@ -1063,16 +1129,13 @@ export function CoreProfileWizard() {
       {/* Login Modal - shown after profile completion if not logged in */}
       <LoginModal 
         isOpen={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
+        onClose={handleContinueWithoutAccount}
         onSuccess={handleLoginSuccess}
         gateMode="soft"
         nudgeLocation="setup_profile_complete"
         nudgeReason="login_required"
         redirectPath="/flow/inspirations"
-        onMaybeLater={() => {
-          setShowLoginModal(false);
-          router.push('/flow/inspirations');
-        }}
+        onMaybeLater={handleContinueWithoutAccount}
         onNudgeEvent={(ev) => {
           const h = sessionData?.userHash;
           if (h) void logBehavioralEvent(h, 'login_nudge', { page: 'setup-profile-complete', nudge: ev });

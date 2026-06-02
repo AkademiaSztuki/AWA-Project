@@ -433,7 +433,16 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
     
     // Lighting
     lightingMood: lightingWeights.mood,
-    naturalLightImportance: lightingWeights.naturalImportance,
+    naturalLightImportance: (() => {
+      const explicitBrightness = inputs.aestheticDNA?.explicit?.brightnessPreference;
+      if (sourceType === GenerationSource.Explicit && typeof explicitBrightness === 'number') {
+        return explicitBrightness;
+      }
+      if (sourceType === GenerationSource.Mixed && typeof explicitBrightness === 'number') {
+        return explicitBrightness * 0.3 + lightingWeights.naturalImportance * 0.7;
+      }
+      return lightingWeights.naturalImportance;
+    })(),
     
     // Biophilia (enhanced with inspirations; dampen boosts at high base levels)
     natureDensity: (() => {
@@ -468,6 +477,18 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
         // Average them for final complexity
         const result = (styleWeights.complexity + personalityWeights.visualComplexity) / 2;
         return result;
+      }
+      if (sourceType === GenerationSource.Explicit) {
+        return styleWeights.complexity;
+      }
+      if (sourceType === GenerationSource.Mixed) {
+        const explicitC = inputs.aestheticDNA.explicit.complexityPreference;
+        const implicitC = inputs.aestheticDNA.implicit.complexity;
+        return (
+          explicitC * 0.3 +
+          implicitC * 0.4 +
+          personalityWeights.visualComplexity * 0.3
+        );
       }
       return (styleWeights.complexity + personalityWeights.visualComplexity) / 2;
     })(),

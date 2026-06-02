@@ -61,6 +61,8 @@ async function main() {
       console.log(`OK   ${label}`);
       if (r.json) console.log(JSON.stringify(r.json, null, 2));
       else console.log(r.text.slice(0, 400));
+    } else if (path.includes('/api/debug/') && r.status === 404) {
+      console.warn(`SKIP ${label} (debug route disabled in this env)`);
     } else {
       console.error(`FAIL ${label}`);
       console.error(r.text.slice(0, 800));

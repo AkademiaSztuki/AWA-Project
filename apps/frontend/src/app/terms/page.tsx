@@ -67,19 +67,16 @@ Użytkownik zobowiązuje się do korzystania z Serwisu zgodnie z prawem i Regula
 Użytkownik ponosi odpowiedzialność za działania wykonane w ramach Konta oraz za zabezpieczenie dostępu do Konta.`
         },
         {
-          title: '6. Pakiety, limity i darmowy dostęp',
-          content: `Serwis udostępnia jednorazowe (nieodnawialne) darmowe limity Generacji przypisane do Konta:
+          title: '6. Kredyty, pakiety i program wczesnego dostępu',
+          content: `W Serwisie generowanie i powiązane operacje AI rozliczane są w kredytach. Domyślnie jedna Generacja obrazu AI kosztuje 100 kredytów (koszt może się różnić w zależności od rodzaju operacji — aktualne wartości prezentowane są w Serwisie).
 
-• Szybka ścieżka (Fast Track): 10 darmowych Generacji na Konto.
-• Pełne doświadczenie (Full Experience): 50 darmowych Generacji na Konto.
+Program wczesnego dostępu: pierwsze 1000 Kont, które zakończą rejestrację i weryfikację e-maila, może otrzymać jednorazowo 6000 kredytów (odpowiednik planu Basic na start) bez opłaty i bez automatycznego odnawiania. Po wyczerpaniu puli 1000 miejsc program nie jest przyznawany automatycznie przy rejestracji.
 
-Darmowe limity są przyznawane „raz na Konto" i nie resetują się miesięcznie ani rocznie.
+Usługodawca może udostępniać kody promocyjne zwiększające saldo kredytów; zasady każdego kodu (ważność, liczba użyć) określa Usługodawca.
 
-Po wykorzystaniu darmowych limitów Użytkownik może wykupić Subskrypcję (pkt 7), aby uzyskać dostęp do dodatkowych limitów i/lub funkcji.
+Po wykorzystaniu kredytów bezpłatnych lub promocyjnych Użytkownik może wykupić Subskrypcję (pkt 7). Plany subskrypcyjne określają liczbę kredytów na okres rozliczeniowy (np. Basic: 6000 kredytów miesięcznie).
 
-Limity dotyczą Konta i nie mogą być przenoszone na inne konto.
-
-Usługodawca może stosować zabezpieczenia anty‑nadużyciowe (np. limity częstotliwości, wykrywanie automatyzacji, blokady prób obchodzenia limitów).`
+Kredyty i uprawnienia przypisane są do Konta i nie mogą być przenoszone. Usługodawca może stosować zabezpieczenia anty‑nadużyciowe.`
         },
         {
           title: '7. Subskrypcja i płatności (Stripe)',
@@ -197,19 +194,16 @@ The User must use the Service lawfully and must not provide unlawful content.
 The User is responsible for Account security and all activity under the Account.`
         },
         {
-          title: '6. Free quotas and limits',
-          content: `The Service provides one-time (non-renewing) free Generation quotas per Account:
+          title: '6. Credits, plans, and early access',
+          content: `AI generations and related operations are billed in credits. By default, one AI image generation costs 100 credits (other operations may differ; current values are shown in the Service).
 
-• Fast Track: 10 free Generations per Account.
-• Full Experience: 50 free Generations per Account.
+Early access program: the first 1000 Accounts that complete registration and email verification may receive a one-time grant of 6000 credits (equivalent to the Basic plan) at no charge, without auto-renewal. After the 1000 slots are used, no automatic registration grant is provided.
 
-Free quotas are granted once per Account and do not reset monthly or yearly.
+The Provider may offer promotional codes that add credits; each code's validity and redemption limits are set by the Provider.
 
-After using the free quota, the User may purchase a Subscription (Section 7) to access additional Generations and/or features.
+After using free or promotional credits, the User may purchase a Subscription (Section 7). Subscription plans define credits per billing period (e.g. Basic: 6000 credits per month).
 
-Limits are per Account and non-transferable.
-
-Anti-abuse measures may be applied (rate limiting, automation detection, blocking attempts to bypass limits).`
+Credits are per Account and non-transferable. Anti-abuse measures may apply.`
         },
         {
           title: '7. Subscription & payments (Stripe)',

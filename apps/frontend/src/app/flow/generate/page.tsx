@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import { getOrCreateProjectId, saveGenerationSet, saveGeneratedImages, logBehavioralEvent, startParticipantGeneration, endParticipantGeneration, saveImageRatingEvent, startPageView, endPageView, saveGenerationFeedback, saveRegenerationEvent, safeSessionStorage, syncMatrixHistoryToGcp, saveSessionToGcp } from '@/lib/gcp-data';
+import { saveSessionWithActiveSpace } from '@/lib/current-space-sync';
 import { UpgradePrompt } from '@/components/subscription/UpgradePrompt';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { LocalizedText } from '@/lib/questions/validated-scales';
@@ -1182,7 +1183,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         await updateSessionData({
           matrixAnonPending: rest.map((p) => ({ source: p.source, prompt: p.prompt })),
         } as Record<string, unknown>);
-        void saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
+        try {
+          await saveSessionToGcp(
+            getSessionStoreSnapshot() as unknown as Record<string, unknown>,
+          );
+        } catch (e) {
+          console.warn('[generate] saveSessionToGcp failed:', e);
+        }
         void logBehavioralEvent(typedSessionData.userHash, 'login_nudge', {
           page: 'flow-generate',
           nudge: 'anon_one_of_six' as any,
@@ -1748,7 +1755,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   const mergedMatrix = [...currentMatrixHistory, newHistoryItem];
                   const uhSync = (sessionData as any)?.userHash as string | undefined;
                   if (uhSync) {
-                    void syncMatrixHistoryToGcp(uhSync, mergedMatrix);
+                    try {
+                      await syncMatrixHistoryToGcp(uhSync, mergedMatrix);
+                    } catch (syncErr) {
+                      console.warn('[6-Image Matrix] syncMatrixHistoryToGcp failed:', syncErr);
+                    }
                   }
                   console.log(`[6-Image Matrix] Progressively saved ${result.source} to session`);
                   // #region agent log (debug session 995889 — matrix generation persist)
@@ -2006,8 +2017,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             generation_id: (sessionData as any)?.currentGenerationId || undefined,
             space_id: spaceId
           }));
-          await saveParticipantImages(userHash, imagesToSave);
-          
+          const matrixSaveResult = await saveParticipantImages(userHash, imagesToSave);
+          if (matrixSaveResult.failed > 0) {
+            console.error(
+              '[generate] saveParticipantImages partial failure (matrix):',
+              matrixSaveResult,
+            );
+          }
 
           // Keep local minimal spaces snapshot
           updatedSpaces = addGeneratedImageToSpace(
@@ -2015,7 +2031,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             spaceId,
             newMatrixImages[0]?.url || ''
           );
-          await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId } as any);
+          await updateSessionData({
+            spaces: updatedSpaces,
+            currentSpaceId: spaceId,
+            currentStep: 'generate',
+          } as any);
         }
         
         // NOTE: After radical refactor we do NOT persist "spaces" in Supabase.
@@ -2028,6 +2048,29 @@ RESULT: A completely empty, bare room with only architectural structure visible.
             latency_ms: totalTime,
           });
           matrixJobClosed = true;
+        }
+
+        const snapshotAfterMatrix = getSessionStoreSnapshot() as {
+          userHash?: string;
+          matrixHistory?: unknown[];
+        };
+        const uhMatrix = snapshotAfterMatrix.userHash ?? userHash;
+        const matrixHistory = snapshotAfterMatrix.matrixHistory;
+        if (uhMatrix && matrixHistory && matrixHistory.length > 0) {
+          try {
+            await syncMatrixHistoryToGcp(uhMatrix, matrixHistory as Parameters<typeof syncMatrixHistoryToGcp>[1]);
+          } catch (syncErr) {
+            console.warn('[6-Image Matrix] syncMatrixHistoryToGcp on complete failed:', syncErr);
+          }
+        }
+        try {
+          await saveSessionWithActiveSpace({
+            spaces: updatedSpaces,
+            currentSpaceId: spaceId ?? undefined,
+            currentStep: 'generate',
+          });
+        } catch (saveErr) {
+          console.warn('[6-Image Matrix] saveSessionWithActiveSpace on complete failed:', saveErr);
         }
       } catch (e) {
         console.warn('[6-Image Matrix] Supabase persist failed:', e);
@@ -2192,7 +2235,16 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       } as any);
       const uhBlind = (sessionData as any)?.userHash as string | undefined;
       if (uhBlind) {
-        void syncMatrixHistoryToGcp(uhBlind, initialHistory);
+        try {
+          await syncMatrixHistoryToGcp(uhBlind, initialHistory);
+        } catch (syncErr) {
+          console.warn('[Generate] syncMatrixHistoryToGcp on blind selection failed:', syncErr);
+        }
+        try {
+          await saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
+        } catch (saveErr) {
+          console.warn('[Generate] saveSessionToGcp on blind selection failed:', saveErr);
+        }
       }
     } catch (e) {
       console.warn('[Generate] Failed to persist selectedImage/blindSelectionMade to session:', e);
@@ -2566,7 +2618,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           return Array.from(bySource.values());
         });
         await updateSessionData({ matrixAnonPending: [] } as Record<string, unknown>);
-        void saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
+        try {
+          await saveSessionToGcp(
+            getSessionStoreSnapshot() as unknown as Record<string, unknown>,
+          );
+        } catch (e) {
+          console.warn('[generate] saveSessionToGcp failed (matrix resume):', e);
+        }
         await deductCreditsForImages(
           userHash,
           newMatrixImages.map((i) => i.id),
@@ -2838,15 +2896,24 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           generation_id: (sessionData as any)?.currentGenerationId || undefined,
           space_id: spaceId
         }));
-        await saveParticipantImages(userHash, imagesToSave);
-        
+        const batchSaveResult = await saveParticipantImages(userHash, imagesToSave);
+        if (batchSaveResult.failed > 0) {
+          console.error(
+            '[generate] saveParticipantImages partial failure (batch):',
+            batchSaveResult,
+          );
+        }
 
         const updatedSpaces = addGeneratedImageToSpace(
           (sessionData as any)?.spaces || [],
           spaceId,
           newImages[0]?.url || ''
         );
-        await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId });
+        await updateSessionData({
+          spaces: updatedSpaces,
+          currentSpaceId: spaceId,
+          currentStep: 'generate',
+        });
       }
       
       // Complete loading
@@ -3195,7 +3262,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           generation_id: modJobId ?? undefined,
           space_id: spaceId
         }];
-        await saveParticipantImages(userHash, imagesToSave);
+        const modSaveResult = await saveParticipantImages(userHash, imagesToSave);
+        if (modSaveResult.failed > 0) {
+          console.error(
+            '[generate] saveParticipantImages partial failure (modification):',
+            modSaveResult,
+          );
+        }
       }
       updatedSpaces = addGeneratedImageToSpace(
         updatedSpaces,
@@ -3206,8 +3279,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         undefined,
         newImage.isFavorite || false
       );
-      const sessionUpdates: any = { spaces: updatedSpaces };
-      if (!activeSpaceId && updatedSpaces.length > 0) {
+      const sessionUpdates: any = { spaces: updatedSpaces, currentStep: 'generate' };
+      if (spaceId) {
+        sessionUpdates.currentSpaceId = spaceId;
+      } else if (!activeSpaceId && updatedSpaces.length > 0) {
         sessionUpdates.currentSpaceId = updatedSpaces[updatedSpaces.length - 1].id;
       }
       await updateSessionData(sessionUpdates);
@@ -3254,7 +3329,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         blindSelectionMade: true
       } as any);
 
-      void saveSessionToGcp(getSessionStoreSnapshot());
+      try {
+        await saveSessionWithActiveSpace(sessionUpdates);
+      } catch (e) {
+        console.warn('[generate] saveSessionWithActiveSpace failed (modification):', e);
+      }
 
       // Persist generation modification and user choice
       try {
@@ -3833,11 +3912,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         {guestQuotaBlockedWithVision
                           ? t({
                               pl: `Masz już pierwszą wizję. Załóż konto lub zaloguj się, żeby wygenerować pozostałe obrazy i odebrać ${String(FREE_GRANT_CREDITS)} kredytów na start.`,
-                              en: `You already have your first vision. Sign in or create an account to generate the remaining images and claim ${String(FREE_GRANT_CREDITS)} starter credits.`,
+                              en: `You already have your first vision. Sign in or create an account to generate the remaining images and claim ${String(FREE_GRANT_CREDITS)} Basic plan credits.`,
                             })
                           : t({
                               pl: `To pierwsza z 6 wizji Twojego wnętrza. Załóż konto, żeby zobaczyć wszystkie obrazy, odebrać ${String(FREE_GRANT_CREDITS)} kredytów na start i wracać do projektu, kiedy chcesz.`,
-                              en: `You're seeing the first of six visions for your space. Create an account to see all images, get ${String(FREE_GRANT_CREDITS)} starter credits, and keep your project on your profile.`,
+                              en: `You're seeing the first of six visions for your space. Create an account to see all images, get ${String(FREE_GRANT_CREDITS)} Basic plan credits, and keep your project on your profile.`,
                             })}
                       </p>
                     </GlassCard>

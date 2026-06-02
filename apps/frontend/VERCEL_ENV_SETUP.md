@@ -81,7 +81,7 @@ STRIPE_PRICE_STUDIO_YEARLY_USD=price_...
 ```
 
 Aktualne ceny:
-- Starter (`basic`): 29 PLN / $9 miesięcznie, 290 PLN / $90 rocznie
+- Basic (`basic`): 29 PLN / $9 miesięcznie, 290 PLN / $90 rocznie
 - Creator (`pro`): 59 PLN / $19 miesięcznie, 590 PLN / $190 rocznie
 - Pro (`studio`): 119 PLN / $39 miesięcznie, 1190 PLN / $390 rocznie
 

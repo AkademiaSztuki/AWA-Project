@@ -112,6 +112,7 @@ export interface SessionData {
   // Optional UI state for simple generation screen
   generatedImages?: string[];
   selectedImage?: string | null;
+  blindSelectionMade?: boolean;
   imageRatings?: Record<string, any>;
   // Inspirations for personalization
   inspirations?: Array<{

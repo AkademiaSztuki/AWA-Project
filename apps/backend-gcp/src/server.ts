@@ -11,6 +11,7 @@ import { gcsImagesRouter } from './routes/gcs-images';
 import { matrixRouter } from './routes/matrix';
 import { spacesRouter } from './routes/spaces';
 import { creditsRouter } from './routes/credits';
+import { promoRouter } from './routes/promo';
 import { billingRouter } from './routes/billing';
 import { authRouter } from './routes/auth';
 import { contactRouter } from './routes/contact';
@@ -77,6 +78,7 @@ app.use('/api', gcsImagesRouter);
 app.use('/api', matrixRouter);
 app.use('/api', spacesRouter);
 app.use('/api', creditsRouter);
+app.use('/api', promoRouter);
 app.use('/api', billingRouter);
 
 const port = process.env.PORT || 8080;

@@ -672,18 +672,28 @@ export default function FastGeneratePage() {
       if (spaceId) {
         const uploadedResult = await uploadSpaceImage(userHash, spaceId, newImage.id, newImage.url);
         const finalUrl = uploadedResult?.publicUrl || newImage.url;
-        await saveSpaceImagesMetadata(userHash, spaceId, [{
+        const initialSaveResult = await saveSpaceImagesMetadata(userHash, spaceId, [{
           url: finalUrl,
           type: 'generated',
           is_favorite: false
         }]);
+        if (initialSaveResult.failed > 0) {
+          console.error(
+            '[Fast Generate] saveParticipantImages partial failure (initial):',
+            initialSaveResult,
+          );
+        }
 
         const updatedSpaces = addGeneratedImageToSpace(
           typedSessionData?.spaces || [],
           spaceId,
           finalUrl
         );
-        await updateSessionData({ spaces: updatedSpaces, currentSpaceId: spaceId });
+        await updateSessionData({
+          spaces: updatedSpaces,
+          currentSpaceId: spaceId,
+          currentStep: 'generate',
+        });
       }
 
       // Add to history
@@ -1187,6 +1197,12 @@ export default function FastGeneratePage() {
                 space_id: modSpaceId,
               },
             ]);
+            if (saveModResult.failed > 0) {
+              console.error(
+                '[Fast Generate] saveParticipantImages partial failure (mod):',
+                saveModResult,
+              );
+            }
             const persistedUrl =
               saveModResult.details[0]?.publicUrl || newImage.url;
             sessionPatch = {
@@ -1197,6 +1213,7 @@ export default function FastGeneratePage() {
                 persistedUrl,
               ),
               currentSpaceId: modSpaceId,
+              currentStep: 'generate',
             };
           }
         } catch (persistErr) {
@@ -1209,7 +1226,13 @@ export default function FastGeneratePage() {
 
       await updateSessionData(sessionPatch as any);
 
-      void saveSessionToGcp(getSessionStoreSnapshot());
+      try {
+        await saveSessionToGcp(
+          getSessionStoreSnapshot() as unknown as Record<string, unknown>,
+        );
+      } catch (e) {
+        console.warn('[Fast Generate] saveSessionToGcp failed:', e);
+      }
 
       // Save to Supabase
       try {
@@ -1531,6 +1554,12 @@ export default function FastGeneratePage() {
                 space_id: modSpaceId,
               },
             ]);
+            if (saveModResult.failed > 0) {
+              console.error(
+                '[Fast Generate] saveParticipantImages partial failure (remove furniture):',
+                saveModResult,
+              );
+            }
             const persistedUrl =
               saveModResult.details[0]?.publicUrl || newImage.url;
             sessionPatch = {
@@ -1541,6 +1570,7 @@ export default function FastGeneratePage() {
                 persistedUrl,
               ),
               currentSpaceId: modSpaceId,
+              currentStep: 'generate',
             };
           }
         } catch (persistErr) {
@@ -1552,7 +1582,13 @@ export default function FastGeneratePage() {
       }
 
       await updateSessionData(sessionPatch as any);
-      void saveSessionToGcp(getSessionStoreSnapshot());
+      try {
+        await saveSessionToGcp(
+          getSessionStoreSnapshot() as unknown as Record<string, unknown>,
+        );
+      } catch (e) {
+        console.warn('[Fast Generate] saveSessionToGcp failed:', e);
+      }
 
       try {
         const projectId = await getOrCreateProjectId(
@@ -2120,7 +2156,7 @@ export default function FastGeneratePage() {
         message={
           language === 'pl'
             ? `Zaloguj się — ${String(FREE_GRANT_CREDITS)} darmowych kredytów na start i zapis zmian.`
-            : `Sign in for ${String(FREE_GRANT_CREDITS)} free starter credits and to save your edits.`
+            : `Sign in for ${String(FREE_GRANT_CREDITS)} free Basic plan credits and to save your edits.`
         }
         redirectPath="/flow/fast-generate"
       />
@@ -2155,7 +2191,7 @@ export default function FastGeneratePage() {
         message={
           language === 'pl'
             ? `${String(FREE_GRANT_CREDITS)} kredytów na start po zalogowaniu i zapis pracy — nic nie zginie. Możesz też iść dalej bez konta.`
-            : `${String(FREE_GRANT_CREDITS)} starter credits when you sign in, plus saved work—or continue without an account.`
+            : `${String(FREE_GRANT_CREDITS)} Basic plan credits when you sign in, plus saved work—or continue without an account.`
         }
         redirectPath="/flow/fast-generate"
         softMaybeLaterLabel={{ pl: 'Kontynuuj bez konta', en: 'Continue without account' }}

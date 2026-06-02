@@ -5,22 +5,26 @@ import { sessionSyncTrace } from '../lib/session-sync-trace';
 
 export const swipesRouter = Router();
 
+type SwipePayload = {
+  imageId: string | number;
+  direction: 'left' | 'right';
+  reactionTimeMs?: number;
+  reactionTime?: number;
+  timestamp?: string | number;
+  categories?: {
+    style?: string | null;
+    colors?: string[];
+    materials?: string[];
+    mood?: string[];
+    biophilia?: number;
+  };
+  tags?: string[];
+};
+
 // POST /participants/:userHash/swipes
 swipesRouter.post('/participants/:userHash/swipes', async (req, res) => {
   const { userHash } = req.params;
-  const swipes = (req.body?.swipes || []) as Array<{
-    imageId: string | number;
-    direction: 'left' | 'right';
-    reactionTimeMs?: number;
-    reactionTime?: number;
-    timestamp?: string | number;
-    categories?: {
-      style?: string | null;
-      colors?: string[];
-      materials?: string[];
-    };
-    tags?: string[];
-  }>;
+  const swipes = (req.body?.swipes || []) as SwipePayload[];
 
   if (!userHash || !swipes.length) {
     return res.status(400).json({ ok: false, error: 'userHash and non-empty swipes are required' });
@@ -30,6 +34,16 @@ swipesRouter.post('/participants/:userHash/swipes', async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      const hasExtendedCols = await client
+        .query(
+          `
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'participant_swipes' AND column_name = 'image_tags'
+        LIMIT 1
+      `,
+        )
+        .then((r) => r.rows.length > 0);
 
       const rows = swipes.map((s) => ({
         user_hash: userHash,
@@ -44,30 +58,88 @@ swipesRouter.post('/participants/:userHash/swipes', async (req, res) => {
         image_styles: s.categories?.style ? [s.categories.style] : [],
         image_colors: s.categories?.colors ?? [],
         image_materials: s.categories?.materials ?? [],
+        image_mood: s.categories?.mood ?? [],
+        image_biophilia:
+          typeof s.categories?.biophilia === 'number' ? s.categories.biophilia : null,
+        image_tags: Array.isArray(s.tags) ? s.tags : [],
       }));
 
-      const insertValues: any[] = [];
-      const valuePlaceholders: string[] = [];
+      if (hasExtendedCols) {
+        const insertValues: unknown[] = [];
+        const valuePlaceholders: string[] = [];
 
-      rows.forEach((r, idx) => {
-        const offset = idx * 8;
-        insertValues.push(
-          r.user_hash,
-          r.image_id,
-          r.direction,
-          r.reaction_time_ms,
-          r.swipe_timestamp,
-          r.image_styles,
-          r.image_colors,
-          r.image_materials,
-        );
-        valuePlaceholders.push(
-          `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`,
-        );
-      });
+        rows.forEach((r, idx) => {
+          const offset = idx * 11;
+          insertValues.push(
+            r.user_hash,
+            r.image_id,
+            r.direction,
+            r.reaction_time_ms,
+            r.swipe_timestamp,
+            r.image_styles,
+            r.image_colors,
+            r.image_materials,
+            r.image_mood,
+            r.image_biophilia,
+            r.image_tags,
+          );
+          valuePlaceholders.push(
+            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}, $${offset + 11})`,
+          );
+        });
 
-      await client.query(
-        `
+        await client.query(
+          `
+        INSERT INTO participant_swipes (
+          user_hash,
+          image_id,
+          direction,
+          reaction_time_ms,
+          swipe_timestamp,
+          image_styles,
+          image_colors,
+          image_materials,
+          image_mood,
+          image_biophilia,
+          image_tags
+        )
+        VALUES ${valuePlaceholders.join(', ')}
+        ON CONFLICT (user_hash, image_id) DO UPDATE SET
+          direction = EXCLUDED.direction,
+          reaction_time_ms = COALESCE(EXCLUDED.reaction_time_ms, participant_swipes.reaction_time_ms),
+          swipe_timestamp = COALESCE(EXCLUDED.swipe_timestamp, participant_swipes.swipe_timestamp),
+          image_styles = EXCLUDED.image_styles,
+          image_colors = EXCLUDED.image_colors,
+          image_materials = EXCLUDED.image_materials,
+          image_mood = EXCLUDED.image_mood,
+          image_biophilia = EXCLUDED.image_biophilia,
+          image_tags = EXCLUDED.image_tags
+      `,
+          insertValues,
+        );
+      } else {
+        const insertValues: unknown[] = [];
+        const valuePlaceholders: string[] = [];
+
+        rows.forEach((r, idx) => {
+          const offset = idx * 8;
+          insertValues.push(
+            r.user_hash,
+            r.image_id,
+            r.direction,
+            r.reaction_time_ms,
+            r.swipe_timestamp,
+            r.image_styles,
+            r.image_colors,
+            r.image_materials,
+          );
+          valuePlaceholders.push(
+            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`,
+          );
+        });
+
+        await client.query(
+          `
         INSERT INTO participant_swipes (
           user_hash,
           image_id,
@@ -87,10 +159,10 @@ swipesRouter.post('/participants/:userHash/swipes', async (req, res) => {
           image_colors = EXCLUDED.image_colors,
           image_materials = EXCLUDED.image_materials
       `,
-        insertValues,
-      );
+          insertValues,
+        );
+      }
 
-      // Recompute implicit aggregates for participant
       const { rows: swipeRows } = await client.query<{
         direction: string;
         image_styles: string[] | null;
@@ -194,6 +266,7 @@ swipesRouter.post('/participants/:userHash/swipes', async (req, res) => {
             totalInDb: total,
             likes,
             dislikes,
+            extendedMetadata: hasExtendedCols,
           },
           runId: 'persistence',
         });
@@ -212,7 +285,7 @@ swipesRouter.post('/participants/:userHash/swipes', async (req, res) => {
         },
       });
     } catch (error) {
-      await pool.query('ROLLBACK');
+      await client.query('ROLLBACK');
       console.error('swipes insert error', error);
       return res.status(500).json({ ok: false, error: 'internal_error' });
     } finally {
@@ -223,4 +296,3 @@ swipesRouter.post('/participants/:userHash/swipes', async (req, res) => {
     return res.status(500).json({ ok: false, error: 'internal_error' });
   }
 });
-

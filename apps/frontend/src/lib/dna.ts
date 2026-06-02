@@ -67,6 +67,9 @@ export function computeWeightedDNAFromSwipes(swipes: TinderSwipe[], totalShown?:
     c.layout?.forEach((t) => increment(t, CATEGORY_WEIGHTS.LAYOUT_DNA / Math.max(c.layout.length, 1)));
     // Mood
     c.mood?.forEach((t) => increment(t, CATEGORY_WEIGHTS.MOOD_DNA / Math.max(c.mood.length, 1)));
+    // Filename tags (same vocabulary as Livingroom parser — no image changes)
+    const tagWeight = CATEGORY_WEIGHTS.COLOR_DNA * 0.15;
+    s.tags?.forEach((t) => increment(t, tagWeight));
   });
 
   const pickTop = (candidates: string[], n: number) => {
@@ -106,7 +109,7 @@ export function computeWeightedDNAFromSwipes(swipes: TinderSwipe[], totalShown?:
 
   const top = {
     styles: pickTop(styleTokens, 2),
-    colors: pickTop(colors, 2),
+    colors: pickTop(colors, 5),
     materials: pickTop(materials, 2),
     furniture: pickTop(furniture, 2),
     lighting: pickTop(lighting, 2),

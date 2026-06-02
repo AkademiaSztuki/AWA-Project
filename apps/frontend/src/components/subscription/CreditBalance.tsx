@@ -161,7 +161,7 @@ export function CreditBalance({ userHash, className, embedded = false }: CreditB
                 {totalCredits.toLocaleString()}
               </span>
               <span className="text-[10px] sm:text-xs text-silver-dark font-modern">
-                {t({ pl: `kredytów (${totalGenerationsAvailable} obrazów)`, en: `credits (${totalGenerationsAvailable} images)` })}
+                {t({ pl: 'kredytów', en: 'credits' })}
               </span>
             </div>
           </div>

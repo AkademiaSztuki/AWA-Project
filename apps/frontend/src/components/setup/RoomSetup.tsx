@@ -18,10 +18,16 @@ import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
 import { saveRoom } from '@/lib/gcp-participant-profile';
-import { saveSessionToGcp } from '@/lib/gcp-data';
+import { saveSessionToGcp, startPageView, endPageView } from '@/lib/gcp-data';
+import { saveSessionWithActiveSpace } from '@/lib/current-space-sync';
+import { topMaterialsFromSensorySuiteResults } from '@/lib/participants-mapper';
 import { useSession, useSessionData } from '@/hooks';
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
-import { saveParticipantImages } from '@/lib/remote-spaces';
+import {
+  getOrCreateSpaceId,
+  isParticipantSpaceUuid,
+  saveParticipantImages,
+} from '@/lib/remote-spaces';
 import { useGoogleAI, getGenerationParameters, type GoogleGenerationParameters } from '@/hooks/useGoogleAI';
 import { prepareGenerationDimensionsFromRoomBase64 } from '@/lib/image-aspect';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
@@ -43,6 +49,7 @@ import {
   FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY,
   FULL_FLOW_PROFILE_STEP_QUERY_KEY,
   fullFlowIndexFromRoomStep,
+  isFullFlowFromDashboard,
   type RoomSetupStepId,
 } from '@/lib/flow/full-flow-progress';
 import { mapActivitiesToRecommendations } from '@/lib/preferences/activity-mapping';
@@ -191,13 +198,14 @@ export function RoomSetup({ householdId }: { householdId: string }) {
 
   useEffect(() => {
     const stepFromUrl = searchParams.get(FULL_FLOW_PROFILE_STEP_QUERY_KEY);
+    const fromDashboard = isFullFlowFromDashboard(searchParams);
     const urlStep = getValidStep(steps, stepFromUrl);
     if (urlStep && typeof window !== 'undefined') {
       const maxRaw = sessionStorage.getItem(FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY);
       const maxParsed = parseInt(maxRaw || '0', 10);
       const safeMax = Number.isFinite(maxParsed) && maxParsed >= 0 ? maxParsed : 0;
       const minIndex = fullFlowIndexFromRoomStep(urlStep as RoomSetupStepId);
-      if (safeMax >= minIndex) {
+      if (fromDashboard || safeMax >= minIndex) {
         setCurrentStep(urlStep);
         sessionStorage.setItem(stepStorageKey, urlStep);
         hasRestoredStepRef.current = true;
@@ -268,13 +276,36 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     setFurnitureSuggestionDialogActive(false);
   }, []);
 
-  const handleNext = () => {
+  const pageViewTrackingRef = useRef<{ userHash: string; viewId: string } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const uh = sessionData?.userHash;
+      if (!uh) return;
+      const viewId = await startPageView(uh, 'room_setup', { setupStep: currentStep });
+      if (viewId && mounted) {
+        pageViewTrackingRef.current = { userHash: uh, viewId };
+      }
+    })();
+    return () => {
+      mounted = false;
+      (async () => {
+        const t = pageViewTrackingRef.current;
+        if (t) await endPageView(t.userHash, t.viewId);
+        pageViewTrackingRef.current = null;
+      })();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionData?.userHash]);
+
+  const handleNext = async () => {
     stopDialogsAndAudio();
     if (currentStep === 'prs_current' && roomData.prsCurrent) {
-      void updateSessionData({ prsCurrent: roomData.prsCurrent });
+      await updateSessionData({ prsCurrent: roomData.prsCurrent });
     }
     if (currentStep === 'prs_target' && roomData.prsTarget) {
-      void updateSessionData({
+      await updateSessionData({
         ...(roomData.prsCurrent ? { prsCurrent: roomData.prsCurrent } : {}),
         prsTarget: roomData.prsTarget,
       });
@@ -282,6 +313,11 @@ export function RoomSetup({ householdId }: { householdId: string }) {
     const nextIndex = currentStepIndex + 1;
     if (nextIndex < steps.length) {
       setCurrentStep(steps[nextIndex]);
+      try {
+        await saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
+      } catch (e) {
+        console.warn('[RoomSetup] saveSessionToGcp on step advance failed:', e);
+      }
     }
   };
 
@@ -400,7 +436,6 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         firstChars: roomImageBase64?.substring(0, 50) || 'N/A'
       });
       
-      // Ensure the new space exists and becomes active for future generations
       const existingSpaces = ((sessionData as any)?.spaces || []) as Array<{
         id: string;
         name: string;
@@ -409,25 +444,44 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         createdAt: string;
         updatedAt: string;
       }>;
-      const targetSpaceId = `space_${householdId || Date.now()}`;
-      const maybeExistingSpace = existingSpaces.find((s) => s.id === targetSpaceId);
       const spaceName =
         roomData.name?.trim() ||
         (tp("Nowa przestrzeń", "New Space"));
+      const spaceType = roomData.roomType || 'personal';
 
+      const userHash = (sessionData as any)?.userHash as string | undefined;
+      let targetSpaceId: string | null = isParticipantSpaceUuid(
+        (sessionData as any)?.currentSpaceId,
+      )
+        ? ((sessionData as any).currentSpaceId as string)
+        : null;
+
+      if (userHash) {
+        targetSpaceId = await getOrCreateSpaceId(userHash, {
+          spaceId: targetSpaceId ?? undefined,
+          name: spaceName,
+          type: spaceType,
+          is_default: true,
+        });
+      }
+
+      if (!targetSpaceId) {
+        targetSpaceId = `space_${householdId || Date.now()}`;
+      }
+
+      const maybeExistingSpace = existingSpaces.find((s) => s.id === targetSpaceId);
       const spacePayload = {
         id: targetSpaceId,
         name: spaceName,
-        type: roomData.roomType || 'personal',
+        type: spaceType,
         images: maybeExistingSpace?.images || [],
         createdAt: maybeExistingSpace?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
-      const updatedSpaces =
-        maybeExistingSpace
-          ? existingSpaces.map((s) => (s.id === targetSpaceId ? spacePayload : s))
-          : [...existingSpaces, spacePayload];
+      const updatedSpaces = maybeExistingSpace
+        ? existingSpaces.map((s) => (s.id === targetSpaceId ? spacePayload : s))
+        : [...existingSpaces, spacePayload];
 
       const rp = roomData.explicitPreferences;
       const roomExplicitToRoot: Record<string, unknown> = {};
@@ -435,10 +489,20 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         roomExplicitToRoot.semanticDifferential = rp.semanticDifferential;
       }
       if (rp?.colorsAndMaterials) {
+        const rpMats = (rp.colorsAndMaterials.topMaterials || []).filter(Boolean) as string[];
+        const sessionCm = sessionData.colorsAndMaterials;
+        const sessionMats = (sessionCm?.topMaterials || []).filter(Boolean) as string[];
+        const sessionTex = sessionData.sensoryPreferences?.texture?.trim();
+        let topMaterials = rpMats;
+        if (topMaterials.length === 0) {
+          topMaterials =
+            sessionMats.length > 0 ? sessionMats : sessionTex ? [sessionTex] : [];
+        }
         roomExplicitToRoot.colorsAndMaterials = {
-          selectedPalette: rp.colorsAndMaterials.selectedPalette || '',
-          topMaterials: rp.colorsAndMaterials.topMaterials || [],
-          selectedStyle: rp.colorsAndMaterials.selectedStyle,
+          selectedPalette:
+            rp.colorsAndMaterials.selectedPalette || sessionCm?.selectedPalette || '',
+          topMaterials,
+          selectedStyle: rp.colorsAndMaterials.selectedStyle || sessionCm?.selectedStyle,
         };
       }
       if (rp?.sensoryPreferences) {
@@ -451,7 +515,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         roomExplicitToRoot.natureMetaphor = rp.natureMetaphor;
       }
 
-      await updateSessionData({
+      const roomCompletePatch = {
         roomType: roomData.roomType,
         roomName: roomData.name,
         roomUsageType: roomData.usageType,
@@ -473,49 +537,39 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         generatedImages: [],
         generations: [],
         ...roomExplicitToRoot,
-      } as any);
+      } as Partial<SessionData>;
 
-      await saveSessionToGcp(getSessionStoreSnapshot() as unknown as Record<string, unknown>);
+      await updateSessionData(roomCompletePatch);
 
-      console.log('[RoomSetup] Session updated, navigating to generate flow');
-      router.push(`/flow/generate`);
+      await saveSessionWithActiveSpace(roomCompletePatch, {
+        preferenceSnapshotMilestone: 'room_setup_complete',
+      });
 
-      // Save room photos to participant_images in background (do not block navigation)
-      try {
-        const userHash = (sessionData as any)?.userHash;
-        if (userHash && roomImageBase64) {
-          // Convert base64 to data URL for saveParticipantImages
+      if (userHash && roomImageBase64 && isParticipantSpaceUuid(targetSpaceId)) {
+        try {
           const dataUrl = `data:image/jpeg;base64,${roomImageBase64}`;
-          void saveParticipantImages(userHash, [
+          const res = await saveParticipantImages(userHash, [
             {
               url: dataUrl,
               type: 'room_photo',
               is_favorite: false,
+              space_id: targetSpaceId,
             },
-          ])
-            .then((res) => {
-              if (res.ok && res.imageIds[0]) {
-                void updateSessionData({ roomPhotoImageId: res.imageIds[0] } as Partial<SessionData>);
-              }
-              if (!res.ok) {
-                console.warn('[RoomSetup] Room photo cloud save incomplete:', res);
-                if (typeof window !== 'undefined') {
-                  window.alert(
-                    tp(
-                      'Nie udało się zapisać zdjęcia pokoju w chmurze. Sprawdź połączenie lub spróbuj ponownie później.',
-                      'Could not save your room photo to cloud storage. Check your connection or try again later.',
-                    ),
-                  );
-                }
-              }
-            })
-            .catch((e) => {
-              console.warn('[RoomSetup] Failed to save room photo to participant_images:', e);
-            });
+          ]);
+          if (res.ok && res.imageIds[0]) {
+            await updateSessionData({ roomPhotoImageId: res.imageIds[0] } as Partial<SessionData>);
+            await saveSessionWithActiveSpace(roomCompletePatch);
+          }
+          if (!res.ok || res.failed > 0) {
+            console.warn('[RoomSetup] Room photo cloud save incomplete:', res);
+          }
+        } catch (e) {
+          console.warn('[RoomSetup] Failed to save room photo to participant_images:', e);
         }
-      } catch (e) {
-        console.warn('[RoomSetup] Failed to start room photo save:', e);
       }
+
+      console.log('[RoomSetup] Session updated, navigating to generate flow');
+      router.push(`/flow/generate`);
       
     } catch (error) {
       console.error('[RoomSetup] Error in handleComplete:', error);
@@ -2146,15 +2200,13 @@ function PreferenceQuestionsStep({
                   flushSync(() => {
                     setLocalPrefs((prev) => {
                       const prevCm = prev.colorsAndMaterials || {};
-                      const tex = results.texture?.trim();
-                      const prevMats = (prevCm.topMaterials ?? []).filter(Boolean);
-                      const topMats =
-                        prevMats.length > 0 ? prevMats : tex ? [tex] : [];
+                      const topMats = topMaterialsFromSensorySuiteResults(results);
+                      const materialValue = topMats[0] ?? '';
                       const next: RoomPreferencePayload = {
                         ...prev,
                         sensoryPreferences: {
                           music: results.music,
-                          texture: results.texture,
+                          texture: materialValue,
                           light: results.light,
                         },
                         colorsAndMaterials: {

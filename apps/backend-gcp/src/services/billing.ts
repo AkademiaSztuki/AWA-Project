@@ -1,7 +1,45 @@
 import { PoolClient } from 'pg';
+import {
+  CREDITS_PER_IMAGE,
+  FOUNDERS_GRANT_CREDITS,
+  FOUNDERS_GRANT_MAX,
+  FREE_GRANT_CREDITS,
+} from '../lib/billing-constants';
 
-export const CREDITS_PER_IMAGE = 10;
-export const FREE_GRANT_CREDITS = 600;
+export { CREDITS_PER_IMAGE, FREE_GRANT_CREDITS, FOUNDERS_GRANT_CREDITS, FOUNDERS_GRANT_MAX };
+
+export type GrantFreeCreditsReason =
+  | 'granted'
+  | 'already_used'
+  | 'program_full'
+  | 'not_eligible'
+  | 'no_participant';
+
+export interface GrantFreeCreditsResult {
+  granted: boolean;
+  reason: GrantFreeCreditsReason;
+}
+
+export interface FoundersProgramStatus {
+  max: number;
+  claimed: number;
+  remaining: number;
+  open: boolean;
+}
+
+export async function getFoundersProgramStatus(client: PoolClient): Promise<FoundersProgramStatus> {
+  const { rows } = await client.query<{ count: string }>(
+    `
+      SELECT COUNT(*)::text AS count
+      FROM credit_transactions
+      WHERE source = 'free_grant'
+    `,
+  );
+  const claimed = Number(rows[0]?.count || 0);
+  const max = FOUNDERS_GRANT_MAX;
+  const remaining = Math.max(0, max - claimed);
+  return { max, claimed, remaining, open: remaining > 0 };
+}
 
 export interface SubscriptionRow {
   id: string;
@@ -104,27 +142,14 @@ export async function checkCreditsAvailable(
   return overview.balance >= amount;
 }
 
-export async function grantFreeCredits(client: PoolClient, userHash: string): Promise<boolean> {
+export async function grantFreeCredits(
+  client: PoolClient,
+  userHash: string,
+): Promise<GrantFreeCreditsResult> {
   console.log('[billing] grantFreeCredits start', { userHash });
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': '5e0063',
-    },
-    body: JSON.stringify({
-      sessionId: '5e0063',
-      runId: 'pre-fix',
-      hypothesisId: 'H1',
-      location: 'services/billing.ts:grantFreeCredits:start',
-      message: 'grantFreeCredits called',
-      data: { userHash },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion agent log
   await ensureParticipantRecord(client, userHash);
+
+  await client.query(`SELECT pg_advisory_xact_lock(hashtext('founders_grant'))`);
 
   const participantResult = await client.query<{
     free_grant_used: boolean | null;
@@ -136,104 +161,54 @@ export async function grantFreeCredits(client: PoolClient, userHash: string): Pr
       WHERE user_hash = $1
       FOR UPDATE
     `,
-    [userHash]
+    [userHash],
   );
 
   const participant = participantResult.rows[0];
   if (!participant) {
     console.log('[billing] grantFreeCredits: participant not found', { userHash });
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': '5e0063',
-      },
-      body: JSON.stringify({
-        sessionId: '5e0063',
-        runId: 'pre-fix',
-        hypothesisId: 'H1',
-        location: 'services/billing.ts:grantFreeCredits:no-participant',
-        message: 'participant not found when granting free credits',
-        data: { userHash },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion agent log
-    return false;
+    return { granted: false, reason: 'no_participant' };
   }
+
+  if (!participant.auth_user_id) {
+    console.log('[billing] grantFreeCredits: not eligible (no auth_user_id)', { userHash });
+    return { granted: false, reason: 'not_eligible' };
+  }
+
   if (participant.free_grant_used) {
     console.log('[billing] grantFreeCredits: already used on participant', { userHash });
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': '5e0063',
-      },
-      body: JSON.stringify({
-        sessionId: '5e0063',
-        runId: 'pre-fix',
-        hypothesisId: 'H1',
-        location: 'services/billing.ts:grantFreeCredits:already-used',
-        message: 'free grant already used on this participant',
-        data: { userHash },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion agent log
-    return false;
+    return { granted: false, reason: 'already_used' };
   }
 
-  if (participant.auth_user_id) {
-    const { rows: linkedRows } = await client.query<{ user_hash: string }>(
-      `
-        SELECT user_hash
-        FROM participants
-        WHERE auth_user_id = $1
-          AND user_hash <> $2
-          AND free_grant_used = TRUE
-        LIMIT 1
-      `,
-      [participant.auth_user_id, userHash]
-    );
+  const { rows: linkedRows } = await client.query<{ user_hash: string }>(
+    `
+      SELECT user_hash
+      FROM participants
+      WHERE auth_user_id = $1
+        AND user_hash <> $2
+        AND free_grant_used = TRUE
+      LIMIT 1
+    `,
+    [participant.auth_user_id, userHash],
+  );
 
-    if (linkedRows.length > 0) {
-      await client.query(
-        `
-          UPDATE participants
-          SET free_grant_used = TRUE,
-              free_grant_used_at = NOW(),
-              updated_at = NOW()
-          WHERE user_hash = $1
-        `,
-        [userHash]
-      );
-      console.log('[billing] grantFreeCredits: authUserId already used on other participant, marking current as used without new credits', {
-        userHash,
-        authUserId: participant.auth_user_id,
-        otherUserHash: linkedRows[0].user_hash,
-      });
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': '5e0063',
-        },
-        body: JSON.stringify({
-          sessionId: '5e0063',
-          runId: 'pre-fix',
-          hypothesisId: 'H2',
-          location: 'services/billing.ts:grantFreeCredits:auth-reused',
-          message: 'auth_user_id already consumed free grant on another participant',
-          data: { userHash, otherUserHash: linkedRows[0].user_hash },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion agent log
-      return false;
-    }
+  if (linkedRows.length > 0) {
+    await client.query(
+      `
+        UPDATE participants
+        SET free_grant_used = TRUE,
+            free_grant_used_at = NOW(),
+            updated_at = NOW()
+        WHERE user_hash = $1
+      `,
+      [userHash],
+    );
+    console.log('[billing] grantFreeCredits: authUserId already used on other participant', {
+      userHash,
+      authUserId: participant.auth_user_id,
+      otherUserHash: linkedRows[0].user_hash,
+    });
+    return { granted: false, reason: 'already_used' };
   }
 
   const duplicateCheck = await client.query(
@@ -244,47 +219,45 @@ export async function grantFreeCredits(client: PoolClient, userHash: string): Pr
         AND source = 'free_grant'
       LIMIT 1
     `,
-    [userHash]
+    [userHash],
   );
 
-  if (duplicateCheck.rowCount === 0) {
-    console.log('[billing] grantFreeCredits: inserting free_grant credit transaction', {
-      userHash,
-      amount: FREE_GRANT_CREDITS,
-    });
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': '5e0063',
-      },
-      body: JSON.stringify({
-        sessionId: '5e0063',
-        runId: 'pre-fix',
-        hypothesisId: 'H3',
-        location: 'services/billing.ts:grantFreeCredits:insert-transaction',
-        message: 'inserting free_grant credit transaction',
-        data: { userHash, amount: FREE_GRANT_CREDITS },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion agent log
+  if ((duplicateCheck.rowCount ?? 0) > 0) {
     await client.query(
       `
-        INSERT INTO credit_transactions (
-          user_hash,
-          type,
-          amount,
-          source,
-          generation_id,
-          expires_at
-        )
-        VALUES ($1, 'grant', $2, 'free_grant', NULL, NULL)
+        UPDATE participants
+        SET free_grant_used = TRUE,
+            free_grant_used_at = COALESCE(free_grant_used_at, NOW()),
+            updated_at = NOW()
+        WHERE user_hash = $1
       `,
-      [userHash, FREE_GRANT_CREDITS]
+      [userHash],
     );
+    return { granted: false, reason: 'already_used' };
   }
+
+  const foundersStatus = await getFoundersProgramStatus(client);
+  if (!foundersStatus.open) {
+    console.log('[billing] grantFreeCredits: founders program full', { userHash, foundersStatus });
+    return { granted: false, reason: 'program_full' };
+  }
+
+  const grantAmount = FOUNDERS_GRANT_CREDITS;
+  console.log('[billing] grantFreeCredits: inserting free_grant', { userHash, amount: grantAmount });
+  await client.query(
+    `
+      INSERT INTO credit_transactions (
+        user_hash,
+        type,
+        amount,
+        source,
+        generation_id,
+        expires_at
+      )
+      VALUES ($1, 'grant', $2, 'free_grant', NULL, NULL)
+    `,
+    [userHash, grantAmount],
+  );
 
   await client.query(
     `
@@ -294,30 +267,11 @@ export async function grantFreeCredits(client: PoolClient, userHash: string): Pr
           updated_at = NOW()
       WHERE user_hash = $1
     `,
-    [userHash]
+    [userHash],
   );
 
-  const granted = duplicateCheck.rowCount === 0;
-  console.log('[billing] grantFreeCredits done', { userHash, granted });
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Debug-Session-Id': '5e0063',
-    },
-    body: JSON.stringify({
-      sessionId: '5e0063',
-      runId: 'pre-fix',
-      hypothesisId: 'H3',
-      location: 'services/billing.ts:grantFreeCredits:end',
-      message: 'grantFreeCredits finished',
-      data: { userHash, granted },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion agent log
-  return granted;
+  console.log('[billing] grantFreeCredits done', { userHash, granted: true });
+  return { granted: true, reason: 'granted' };
 }
 
 export async function deductCredits(

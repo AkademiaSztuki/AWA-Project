@@ -6,6 +6,7 @@
 import type { FlowStep, SessionData } from '@/types';
 import { GOOGLE_AUTH_EMAIL_STORAGE_KEY } from '@/lib/auth-storage-keys';
 import { hasResearchConsent } from '@/lib/research-consent';
+import { normalizeSessionExplicitMaterials } from '@/lib/participants-mapper';
 import { gcpApi } from './gcp-api-client';
 import {
   emitPersistenceSaveAudit855,
@@ -374,7 +375,7 @@ export function finalizeSessionDataForParticipantPersist(sessionData: SessionDat
     }
   }
 
-  return out;
+  return normalizeSessionExplicitMaterials(out);
 }
 
 function summarizeParticipantRowForDebug(row: Record<string, unknown>) {
@@ -428,7 +429,15 @@ async function reportSessionPersistFailure(
   }
 }
 
-export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
+export type SaveSessionToGcpOptions = {
+  keepalive?: boolean;
+  preferenceSnapshotMilestone?: 'core_profile_complete' | 'room_setup_complete';
+};
+
+export const saveSessionToGcp = async (
+  sessionData: any,
+  options?: SaveSessionToGcpOptions,
+): Promise<boolean> => {
   const dbg = isSessionSyncDebugEnabled();
   const pdb = isPersistenceDebugEnabled();
   const shortHash = (h: string) =>
@@ -730,6 +739,9 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
 
     const payload = {
       participantRow: mergedRow,
+      ...(options?.preferenceSnapshotMilestone
+        ? { preferenceSnapshotMilestone: options.preferenceSnapshotMilestone }
+        : {}),
     };
 
     let participantRowBytesApprox = 0;
@@ -749,7 +761,9 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
       participantRowBytesApprox = -1;
     }
 
-    let r = await gcpApi.participants.saveSession(sessionData.userHash, payload);
+    let r = await gcpApi.participants.saveSession(sessionData.userHash, payload, {
+      keepalive: options?.keepalive,
+    });
     // #region agent log (debug session 995889 — generation_count persist)
     {
       fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
@@ -785,7 +799,9 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
         console.warn('[session-sync:debug] first POST failed, retry in 400ms', r.error);
       }
       await new Promise((res) => setTimeout(res, 400));
-      r = await gcpApi.participants.saveSession(sessionData.userHash, payload);
+      r = await gcpApi.participants.saveSession(sessionData.userHash, payload, {
+        keepalive: options?.keepalive,
+      });
     }
     // #region agent log (debug session 995889 — generation_count persist)
     {
@@ -846,6 +862,15 @@ export const saveSessionToGcp = async (sessionData: any): Promise<boolean> => {
         userHash: shortHash(sessionData.userHash),
       });
     }
+    // Best-effort: keep session_export_json aligned with normalized session (incl. colorsAndMaterials.topMaterials).
+    try {
+      const { pruneLargeStringsForSessionExport } = await import('@/lib/prune-session-export');
+      const prunedExport = pruneLargeStringsForSessionExport(finalized);
+      void gcpApi.participants.saveSessionExport(sessionData.userHash, prunedExport);
+    } catch {
+      // non-blocking
+    }
+
     if (pdb) {
       let readBackSummary: Record<string, unknown> | null = null;
       try {

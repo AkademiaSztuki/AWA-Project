@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowUp, ChevronDown, RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { IPIP_FACET_LABELS } from '@/lib/questions/ipip-neo-120';
+import { cn } from '@/lib/utils';
 
 export type BigFiveDomainKey = 'O' | 'C' | 'E' | 'A' | 'N';
 
@@ -905,43 +906,46 @@ export function BigFiveAboutTestCard({ className }: { className?: string }) {
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
 
   return (
-    <div className={className}>
-      <GlassCard className="p-6">
-        <h2 className="text-xl font-nasalization text-graphite mb-4">
-          {t('O Teście Big Five', 'About the Big Five Test')}
-        </h2>
-        <div className="space-y-3 text-graphite font-modern">
-          <p>
+    <section
+      className={cn(
+        'rounded-2xl border border-white/15 bg-white/[0.04] p-6 !shadow-none',
+        className
+      )}
+    >
+      <h2 className="text-xl font-nasalization text-graphite mb-4">
+        {t('O Teście Big Five', 'About the Big Five Test')}
+      </h2>
+      <div className="space-y-3 text-graphite font-modern">
+        <p>
+          {t(
+            'Test Big Five (IPIP-NEO-120) to rozbudowana, naukowo zweryfikowana wersja modelu pięciu wielkich czynników osobowości, obejmująca zarówno domeny główne, jak i 30 szczegółowych facetów.',
+            'The Big Five test (IPIP-NEO-120) is an extended, scientifically validated version of the five-factor personality model, covering both the main domains and 30 detailed facets.'
+          )}
+        </p>
+        <p>
+          {t(
+            'W kontekście designu wnętrz, Twoje cechy osobowości pomagają nam tworzyć przestrzenie, które nie tylko wyglądają pięknie, ale również odzwierciedlają KIM jesteś i jak funkcjonujesz.',
+            'In the context of interior design, your personality traits help us create spaces that not only look beautiful but also reflect WHO you are and how you function.'
+          )}
+        </p>
+        <div className="mt-4 pt-4 border-t border-white/20">
+          <p className="text-sm text-silver-dark">
             {t(
-              'Test Big Five (IPIP-NEO-120) to rozbudowana, naukowo zweryfikowana wersja modelu pięciu wielkich czynników osobowości, obejmująca zarówno domeny główne, jak i 30 szczegółowych facetów.',
-              'The Big Five test (IPIP-NEO-120) is an extended, scientifically validated version of the five-factor personality model, covering both the main domains and 30 detailed facets.'
+              'Źródło: International Personality Item Pool (IPIP) — ',
+              'Source: International Personality Item Pool (IPIP) — '
             )}
+            <a
+              href={IPIP_ORIGIN_HREF}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-gold underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40 rounded"
+            >
+              ipip.ori.org
+            </a>
           </p>
-          <p>
-            {t(
-              'W kontekście designu wnętrz, Twoje cechy osobowości pomagają nam tworzyć przestrzenie, które nie tylko wyglądają pięknie, ale również odzwierciedlają KIM jesteś i jak funkcjonujesz.',
-              'In the context of interior design, your personality traits help us create spaces that not only look beautiful but also reflect WHO you are and how you function.'
-            )}
-          </p>
-          <div className="mt-4 pt-4 border-t border-white/20">
-            <p className="text-sm text-silver-dark">
-              {t(
-                'Źródło: International Personality Item Pool (IPIP) — ',
-                'Source: International Personality Item Pool (IPIP) — '
-              )}
-              <a
-                href={IPIP_ORIGIN_HREF}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-gold underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40 rounded"
-              >
-                ipip.ori.org
-              </a>
-            </p>
-          </div>
         </div>
-      </GlassCard>
-    </div>
+      </div>
+    </section>
   );
 }
 

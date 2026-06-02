@@ -16,6 +16,8 @@ import {
   fetchParticipantSpaces,
 } from '@/lib/remote-spaces';
 import { safeLocalStorage, safeSessionStorage } from '@/lib/gcp-data';
+import { saveSessionWithActiveSpace } from '@/lib/current-space-sync';
+import { AppContentFloatingAnchor } from '@/components/layout/AppContentFloatingAnchor';
 
 interface SpaceImage {
   id: string;
@@ -178,10 +180,16 @@ export default function SpaceDetailPage() {
         updatedAt: nowIso,
       };
 
-      updateSessionData({
+      const sessionPatch = {
         spaces: [newSessionSpace, ...existingSpaces],
         currentSpaceId: newSpaceId,
-      } as any);
+      };
+      updateSessionData(sessionPatch as any);
+      try {
+        await saveSessionWithActiveSpace(sessionPatch as any);
+      } catch (e) {
+        console.warn('[SpacePage] saveSessionWithActiveSpace after add space failed:', e);
+      }
 
       safeSessionStorage.setItem(DASHBOARD_RETURN_SCROLL_Y_KEY, String(window.scrollY));
       router.push(`/setup/room/${newSpaceId}`);
@@ -194,9 +202,13 @@ export default function SpaceDetailPage() {
 
   useEffect(() => {
     if (!isInitialized || !spaceId) return;
-    void updateSessionData({
-      currentStep: 'space',
+    const patch = {
+      currentStep: 'space' as const,
       currentSpaceId: spaceId,
+    };
+    void updateSessionData(patch);
+    void saveSessionWithActiveSpace(patch).catch((e) => {
+      console.warn('[SpacePage] saveSessionWithActiveSpace failed:', e);
     });
   }, [isInitialized, spaceId, updateSessionData]);
 
@@ -818,23 +830,25 @@ function SpaceGalleryFloatingAddSpace({
   disabled: boolean;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 36, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: 'spring', stiffness: 220, damping: 24 }}
-      className="pointer-events-none fixed bottom-4 inset-x-4 z-[280] flex justify-center sm:bottom-6 lg:inset-x-8 xl:translate-x-[calc(15vw+1.25rem)] 2xl:translate-x-[250px]"
-    >
-      <GlassButton
-        type="button"
-        onClick={onAddSpace}
-        disabled={disabled}
-        className="pointer-events-auto flex min-h-[56px] w-full max-w-xl items-center justify-center gap-2 rounded-full border border-white/35 bg-white/45 px-6 py-3 shadow-[0_20px_60px_rgba(68,49,20,0.18)] backdrop-blur-glass transition hover:-translate-y-0.5 hover:bg-white/60 hover:shadow-[0_26px_70px_rgba(68,49,20,0.22)] sm:px-8 lg:max-w-2xl"
+    <AppContentFloatingAnchor className="z-[280]" columnClassName="px-4 sm:px-6 lg:px-8">
+      <motion.div
+        initial={{ opacity: 0, y: 36, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+        className="flex w-full justify-center"
       >
-        <Plus size={18} aria-hidden />
-        <span className="font-modern text-sm font-semibold">
-          {language === 'pl' ? 'Dodaj pomieszczenie' : 'Add a room'}
-        </span>
-      </GlassButton>
-    </motion.div>
+        <GlassButton
+          type="button"
+          onClick={onAddSpace}
+          disabled={disabled}
+          className="pointer-events-auto flex min-h-[56px] w-full max-w-xl items-center justify-center gap-2 rounded-full border border-white/35 bg-white/45 px-6 py-3 shadow-[0_20px_60px_rgba(68,49,20,0.18)] backdrop-blur-glass transition hover:-translate-y-0.5 hover:bg-white/60 hover:shadow-[0_26px_70px_rgba(68,49,20,0.22)] sm:px-8 lg:max-w-2xl"
+        >
+          <Plus size={18} aria-hidden />
+          <span className="font-modern text-sm font-semibold">
+            {language === 'pl' ? 'Dodaj pomieszczenie' : 'Add a room'}
+          </span>
+        </GlassButton>
+      </motion.div>
+    </AppContentFloatingAnchor>
   );
 }

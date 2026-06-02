@@ -34,15 +34,15 @@ CRON_SECRET=your-secret-key-here
 ## Konfiguracja Stripe Dashboard
 
 1. **Utwórz produkty i ceny:**
-   - Starter Monthly: 29 PLN / $9
-   - Starter Yearly: 290 PLN / $90
+   - Basic Monthly: 29 PLN / $9
+   - Basic Yearly: 290 PLN / $90
    - Creator Monthly: 59 PLN / $19
    - Creator Yearly: 590 PLN / $190
    - Pro Monthly: 119 PLN / $39
    - Pro Yearly: 1190 PLN / $390
 
    Techniczne `planId` zostają bez zmian:
-   - Starter = `basic`
+   - Basic = `basic` (plan id)
    - Creator = `pro`
    - Pro = `studio`
 

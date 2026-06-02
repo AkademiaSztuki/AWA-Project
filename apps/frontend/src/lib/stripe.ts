@@ -80,22 +80,23 @@ export interface PlanConfig {
   priceId: string; // Stripe Price ID
 }
 
-export const CREDITS_PER_IMAGE = 10;
-export const FREE_PLAN_CREDITS = 600;
+/** SYNC with apps/backend-gcp/src/lib/billing-constants.ts */
+export const CREDITS_PER_IMAGE = 100;
+export const FREE_PLAN_CREDITS = 6000;
 
 // Mapowanie planów do kredytów (dostępne po stronie klienta)
 export const PLAN_CREDITS: Record<PlanId, Record<BillingPeriod, number>> = {
   basic: {
-    monthly: 600,
-    yearly: 6000,
+    monthly: 6000,
+    yearly: 60000,
   },
   pro: {
-    monthly: 1600,
-    yearly: 19200,
+    monthly: 16000,
+    yearly: 192000,
   },
   studio: {
-    monthly: 3200,
-    yearly: 38400,
+    monthly: 32000,
+    yearly: 384000,
   },
 };
 
@@ -130,20 +131,48 @@ export const PLAN_PRICES: Record<PricingCurrency, Record<PlanId, Record<BillingP
   },
 };
 
-// Mapowanie planów do Stripe Price IDs (tylko po stronie serwera)
-// Te wartości muszą być ustawione w zmiennych środowiskowych
-function getPlanConfigs(currency: PricingCurrency): Record<PlanId, Record<BillingPeriod, Omit<PlanConfig, 'planId' | 'billingPeriod' | 'currency'>>> {
-  // Helper function to clean Price ID (remove '=' prefix if present)
-  const cleanPriceId = (priceId: string | undefined): string => {
-    if (!priceId) return '';
-    // Remove '=' prefix if present (common mistake in Vercel env vars)
-    return priceId.startsWith('=') ? priceId.substring(1) : priceId;
-  };
+function cleanStripePriceId(priceId: string | undefined): string {
+  if (!priceId) return '';
+  const trimmed = priceId.trim().replace(/\r?\n/g, '');
+  return trimmed.startsWith('=') ? trimmed.substring(1) : trimmed;
+}
 
-  const getPriceId = (planId: PlanId, billingPeriod: BillingPeriod): string => {
-    const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}_${currency.toUpperCase()}`;
-    return cleanPriceId(process.env[envVarName]);
-  };
+/** Primary: STRIPE_PRICE_BASIC_MONTHLY_PLN. Legacy (Vercel prod): STRIPE_PRICE_BASIC_MONTHLY */
+export function resolveStripePriceId(
+  planId: PlanId,
+  billingPeriod: BillingPeriod,
+  currency: PricingCurrency,
+): string {
+  const withCurrency = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}_${currency.toUpperCase()}`;
+  const fromCurrency = cleanStripePriceId(process.env[withCurrency]);
+  if (fromCurrency) return fromCurrency;
+
+  const legacy = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}`;
+  const fromLegacy = cleanStripePriceId(process.env[legacy]);
+  if (fromLegacy) {
+    if (currency !== 'pln') {
+      console.warn(
+        `[Stripe] ${withCurrency} is not set; using legacy ${legacy} for ${currency} checkout`,
+      );
+    }
+    return fromLegacy;
+  }
+
+  return '';
+}
+
+export function stripePriceEnvVarName(
+  planId: PlanId,
+  billingPeriod: BillingPeriod,
+  currency: PricingCurrency,
+): string {
+  return `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}_${currency.toUpperCase()}`;
+}
+
+// Mapowanie planów do Stripe Price IDs (tylko po stronie serwera)
+function getPlanConfigs(currency: PricingCurrency): Record<PlanId, Record<BillingPeriod, Omit<PlanConfig, 'planId' | 'billingPeriod' | 'currency'>>> {
+  const getPriceId = (planId: PlanId, billingPeriod: BillingPeriod): string =>
+    resolveStripePriceId(planId, billingPeriod, currency);
 
   return {
     basic: {
@@ -198,17 +227,18 @@ export function getPlanConfig(planId: PlanId, billingPeriod: BillingPeriod, curr
   const config = configs[planId][billingPeriod];
   
   if (!config.priceId || config.priceId === '') {
-    const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}_${currency.toUpperCase()}`;
+    const envVarName = stripePriceEnvVarName(planId, billingPeriod, currency);
+    const legacyVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}`;
     const isProduction = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
     const envLocation = isProduction ? 'Vercel environment variables' : '.env.local';
-    
-    console.error(`[Stripe] Missing environment variable: ${envVarName}`);
+
+    console.error(`[Stripe] Missing environment variable: ${envVarName} (and legacy ${legacyVarName})`);
     console.error(`[Stripe] Environment: ${process.env.VERCEL_ENV || process.env.NODE_ENV || 'unknown'}`);
     console.error(`[Stripe] Available STRIPE_* env vars:`, Object.keys(process.env).filter(k => k.startsWith('STRIPE_')).join(', '));
-    
+
     throw new Error(
       `${envVarName} is not set in ${envLocation}. ` +
-      `Please add it to Vercel Dashboard → Settings → Environment Variables (for production) or .env.local (for development).`
+        `Add it (or legacy ${legacyVarName}) in Vercel → Environment Variables or .env.local.`,
     );
   }
   
@@ -246,29 +276,18 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
       VERCEL: process.env.VERCEL,
     });
     
-    // Debug: sprawdź czy zmienne są dostępne
-    const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}_${currency.toUpperCase()}`;
-    let envValue = process.env[envVarName];
-    
-    // Usuń znak '=' z początku jeśli istnieje (częsty błąd w Vercel)
-    if (envValue && envValue.startsWith('=')) {
-      console.warn(`[Stripe] Warning: ${envVarName} starts with '='. Removing it.`);
-      envValue = envValue.substring(1);
-    }
-    
-    console.log(`[Stripe] Checking ${envVarName}:`, envValue ? `${envValue.substring(0, 20)}...` : 'NOT SET');
+    const envVarName = stripePriceEnvVarName(planId, billingPeriod, currency);
+    const resolvedPriceId = resolveStripePriceId(planId, billingPeriod, currency);
+    console.log(
+      `[Stripe] Resolved price for ${envVarName}:`,
+      resolvedPriceId ? `${resolvedPriceId.substring(0, 20)}...` : 'NOT SET',
+    );
     console.log('[Stripe] All STRIPE_* env vars:', Object.keys(process.env).filter(k => k.startsWith('STRIPE_')).sort());
-    
+
     const configs = getPlanConfigs(currency);
     const planConfig = configs[planId][billingPeriod];
-    
-    // Napraw Price ID jeśli zaczyna się od '='
-    if (planConfig.priceId && planConfig.priceId.startsWith('=')) {
-      planConfig.priceId = planConfig.priceId.substring(1);
-      console.warn(`[Stripe] Fixed Price ID: removed '=' prefix`);
-    }
-    
-    console.log('[Stripe] Plan config:', { 
+
+    console.log('[Stripe] Plan config:', {
       planId, 
       billingPeriod, 
       currency,
@@ -278,11 +297,11 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
     });
     
     if (!planConfig.priceId || planConfig.priceId === '') {
-      const envVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}_${currency.toUpperCase()}`;
-      console.error(`[Stripe] Missing environment variable: ${envVarName}`);
+      const legacyVarName = `STRIPE_PRICE_${planId.toUpperCase()}_${billingPeriod.toUpperCase()}`;
+      console.error(`[Stripe] Missing environment variable: ${envVarName} (and legacy ${legacyVarName})`);
       console.error(`[Stripe] Available env vars:`, Object.keys(process.env).filter(k => k.startsWith('STRIPE_')));
       throw new Error(
-        `${envVarName} is not set. Please add it to Vercel environment variables (production) or .env.local (development).`
+        `${envVarName} is not set. Add it or legacy ${legacyVarName} in Vercel environment variables or .env.local.`,
       );
     }
     
@@ -308,6 +327,7 @@ export async function createCheckoutSession(params: CreateCheckoutSessionParams)
       const session = await stripeInstance.checkout.sessions.create({
         mode: 'subscription',
         payment_method_types: ['card'],
+        allow_promotion_codes: true,
         line_items: [
           {
             price: planConfig.priceId,

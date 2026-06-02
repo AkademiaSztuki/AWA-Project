@@ -56,31 +56,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const success = await grantFreeCredits(userHash);
+    const { success, reason } = await grantFreeCredits(userHash);
+    const rateHeaders = {
+      'X-RateLimit-Limit': '5',
+      'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+      'X-RateLimit-Reset': new Date(rateLimit.resetAt).toISOString(),
+    };
 
     if (success) {
       return NextResponse.json(
-        { success: true, message: 'Free credits granted' },
-        {
-          headers: {
-            'X-RateLimit-Limit': '5',
-            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-            'X-RateLimit-Reset': new Date(rateLimit.resetAt).toISOString(),
-          },
-        }
-      );
-    } else {
-      return NextResponse.json(
-        { success: false, message: 'Free credits already granted or failed to grant' },
-        {
-          headers: {
-            'X-RateLimit-Limit': '5',
-            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-            'X-RateLimit-Reset': new Date(rateLimit.resetAt).toISOString(),
-          },
-        }
+        { success: true, reason, message: 'Free credits granted' },
+        { headers: rateHeaders },
       );
     }
+
+    const messages: Record<string, string> = {
+      already_used: 'Free credits were already claimed for this account.',
+      program_full: 'The early access program is full.',
+      not_eligible: 'Sign in to claim early access credits.',
+      no_participant: 'Participant record not found.',
+      error: 'Failed to grant free credits.',
+    };
+
+    return NextResponse.json(
+      {
+        success: false,
+        reason,
+        message: messages[reason] || messages.error,
+      },
+      { headers: rateHeaders },
+    );
   } catch (error: any) {
     console.error('[API Credits Grant] Error:', error);
     return NextResponse.json(

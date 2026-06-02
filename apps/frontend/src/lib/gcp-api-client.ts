@@ -23,7 +23,7 @@ function getInternalBillingHeaders(): Record<string, string> {
 
 async function apiFetch<T = unknown>(
   path: string,
-  options: Omit<RequestInit, 'body'> & { body?: object } = {}
+  options: Omit<RequestInit, 'body'> & { body?: object; keepalive?: boolean } = {}
 ): Promise<{ data?: T; ok: boolean; error?: string; status?: number; code?: string }> {
   const base = getBaseUrl();
   if (!base) {
@@ -37,12 +37,13 @@ async function apiFetch<T = unknown>(
     // #endregion
     return { ok: false, error: 'GCP_API_BASE_URL not configured' };
   }
-  const { method = 'GET', body, ...rest } = options;
+  const { method = 'GET', body, keepalive, ...rest } = options;
   const url = `${base}${path.startsWith('/') ? path : `/${path}`}`;
   try {
     const res = await fetch(url, {
       ...rest,
       method,
+      keepalive: keepalive === true,
       headers: {
         'Content-Type': 'application/json',
         ...(rest.headers as Record<string, string>),
@@ -110,8 +111,23 @@ export const gcpApi = {
         '/api/auth/verify-magic-link',
         { method: 'POST', body: payload }
       ),
-    register: (payload: { email: string; password: string }) =>
-      apiFetch<{ ok: boolean }>('/api/auth/register', {
+    register: (payload: {
+      email: string;
+      password: string;
+      linkUserHash?: string;
+      nextPath?: string;
+    }) =>
+      apiFetch<{ ok: boolean; user_hash?: string }>('/api/auth/register', {
+        method: 'POST',
+        body: {
+          email: payload.email,
+          password: payload.password,
+          link_user_hash: payload.linkUserHash,
+          next_path: payload.nextPath,
+        },
+      }),
+    verificationStatus: (payload: { email: string }) =>
+      apiFetch<{ ok: boolean; verified?: boolean }>('/api/auth/verification-status', {
         method: 'POST',
         body: payload,
       }),
@@ -125,16 +141,29 @@ export const gcpApi = {
         '/api/auth/login',
         { method: 'POST', body: payload }
       ),
-    resendVerification: (payload: { email: string }) =>
+    resendVerification: (payload: { email: string; nextPath?: string }) =>
       apiFetch<{ ok: boolean }>('/api/auth/resend-verification', {
         method: 'POST',
-        body: payload,
+        body: {
+          email: payload.email,
+          next_path: payload.nextPath,
+        },
       }),
     setPassword: (payload: { auth_user_id?: string; user_hash?: string; password: string }) =>
       apiFetch<{ ok: boolean }>('/api/auth/set-password', {
         method: 'POST',
         body: payload,
       }),
+    forgotPassword: (payload: { email: string }) =>
+      apiFetch<{ ok: boolean }>('/api/auth/forgot-password', {
+        method: 'POST',
+        body: payload,
+      }),
+    resetPassword: (payload: { token: string; password: string }) =>
+      apiFetch<{ ok: boolean; user_hash?: string; auth_user_id?: string; email?: string }>(
+        '/api/auth/reset-password',
+        { method: 'POST', body: payload },
+      ),
   },
 
   participants: {
@@ -144,10 +173,18 @@ export const gcpApi = {
         body: { userHash },
       }),
 
-    saveSession: (userHash: string, payload: { participantRow: Record<string, unknown> }) =>
+    saveSession: (
+      userHash: string,
+      payload: {
+        participantRow: Record<string, unknown>;
+        preferenceSnapshotMilestone?: 'core_profile_complete' | 'room_setup_complete';
+      },
+      options?: { keepalive?: boolean },
+    ) =>
       apiFetch<{ ok: boolean; sessionPersistPartial?: boolean }>('/api/session', {
         method: 'POST',
         body: { userHash, ...payload },
+        keepalive: options?.keepalive,
       }),
 
     fetchSession: (userHash: string) =>
@@ -160,10 +197,25 @@ export const gcpApi = {
       /** OAuth / magic-link email for participants.email (no password). */
       email?: string;
     }) =>
-      apiFetch<{ ok: boolean; existingUserHash?: string }>('/api/participants/link-auth', {
-        method: 'POST',
-        body: payload,
-      }),
+      apiFetch<{ ok: boolean; existingUserHash?: string; merged?: boolean }>(
+        '/api/participants/link-auth',
+        {
+          method: 'POST',
+          body: payload,
+        },
+      ),
+
+    mergeAnonymousSession: (payload: { authUserId: string; anonymousUserHash: string }) =>
+      apiFetch<{ ok: boolean; user_hash?: string; merged?: boolean; error?: string }>(
+        '/api/participants/merge-anonymous-session',
+        {
+          method: 'POST',
+          body: {
+            auth_user_id: payload.authUserId,
+            anonymous_user_hash: payload.anonymousUserHash,
+          },
+        },
+      ),
 
     /** Persist the same JSON as thanks-page download (`session_export_json` column). */
     saveSessionExport: (userHash: string, sessionExport: unknown) =>
@@ -431,11 +483,33 @@ export const gcpApi = {
       }),
 
     grantFree: (payload: { userHash: string }) =>
-      apiFetch<{ ok: boolean; granted?: boolean }>('/api/credits/grant-free', {
-        method: 'POST',
-        body: payload,
-        headers: getInternalBillingHeaders(),
-      }),
+      apiFetch<{ ok: boolean; granted?: boolean; reason?: string }>(
+        '/api/credits/grant-free',
+        {
+          method: 'POST',
+          body: payload,
+          headers: getInternalBillingHeaders(),
+        },
+      ),
+
+    foundersStatus: () =>
+      apiFetch<{
+        ok: boolean;
+        max?: number;
+        claimed?: number;
+        remaining?: number;
+        open?: boolean;
+      }>('/api/credits/founders-status'),
+
+    redeemPromo: (payload: { userHash: string; code: string }) =>
+      apiFetch<{ ok: boolean; granted?: boolean; reason?: string; credits?: number }>(
+        '/api/promo/redeem',
+        {
+          method: 'POST',
+          body: payload,
+          headers: getInternalBillingHeaders(),
+        },
+      ),
   },
 
   /** Anonymous generation quotas (Cloud SQL via backend-gcp). */

@@ -1,20 +1,66 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { BillingPeriod, CREDITS_PER_IMAGE, FREE_PLAN_CREDITS, getPlanCredits, PLAN_PRICES, PlanId } from '@/lib/stripe';
+import { LoginModal } from '@/components/auth/LoginModal';
+import { BillingPeriod, FREE_PLAN_CREDITS, getPlanCredits, PLAN_PRICES, PlanId } from '@/lib/stripe';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { creditsAuthHeaders } from '@/lib/credits-request-headers';
+import { GOOGLE_AUTH_USER_ID_STORAGE_KEY } from '@/lib/auth-storage-keys';
+import { fetchFoundersProgramStatus } from '@/lib/founders-program';
 
 interface SubscriptionPlansProps {
-  userHash: string;
+  userHash?: string;
   onSelectPlan?: (planId: PlanId, billingPeriod: BillingPeriod) => void;
   className?: string;
 }
 
+const PATH_AFTER_FREE_TRY = '/flow/path-selection';
+const FOUNDERS_LAUNCH_SLOTS = 1000;
+
+function resolveClientAuthUserId(userId: string | undefined): string | undefined {
+  if (userId?.trim()) return userId.trim();
+  if (typeof window === 'undefined') return undefined;
+  return localStorage.getItem(GOOGLE_AUTH_USER_ID_STORAGE_KEY)?.trim() || undefined;
+}
+
+function formatCheckoutErrorMessage(
+  status: number,
+  apiError: string | undefined,
+  t: (pl: string, en: string) => string,
+): string {
+  if (status === 401) {
+    return t(
+      'Zaloguj się na konto IDA, aby przejść do płatności.',
+      'Sign in to your IDA account to continue to payment.',
+    );
+  }
+  if (apiError?.includes('STRIPE_PRICE_') || apiError?.includes('Price ID')) {
+    return t(
+      'Płatności są chwilowo niedostępne (konfiguracja Stripe). Spróbuj za chwilę lub napisz do nas.',
+      'Payments are temporarily unavailable (Stripe configuration). Try again soon or contact us.',
+    );
+  }
+  if (apiError?.includes('STRIPE_SECRET_KEY')) {
+    return t(
+      'Płatności nie są jeszcze skonfigurowane w tym środowisku.',
+      'Payments are not configured in this environment yet.',
+    );
+  }
+  return (
+    apiError ||
+    t(
+      'Nie udało się otworzyć płatności. Spróbuj ponownie za chwilę.',
+      'Could not open checkout. Please try again in a moment.',
+    )
+  );
+}
+
 const PLAN_NAMES: Record<PlanId, string> = {
-  basic: 'Starter',
+  basic: 'Basic',
   pro: 'Creator',
   studio: 'Pro',
 };
@@ -22,50 +68,74 @@ const PLAN_NAMES: Record<PlanId, string> = {
 const PLAN_FEATURES: Record<PlanId, { pl: string[]; en: string[] }> = {
   basic: {
     pl: [
-      '60 obrazów AI miesięcznie',
-      'Dobre do testowania stylów i kolorów',
-      'Zapisuj najlepsze pomysły na później',
+      'Pełny flow na zdjęciu Twojego pokoju — od analizy po wizualizacje',
+      `${FREE_PLAN_CREDITS.toLocaleString('pl-PL')} kredytów na generowanie i modyfikacje`,
+      'Porównywanie wariantów i zapisywanie ulubionych kierunków',
+      'Powrót do projektu w dowolnym momencie z panelu',
+      'Idealny na start: test stylów, kolorów i nastroju wnętrza',
     ],
     en: [
-      '60 AI images per month',
-      'Great for testing styles and colors',
-      'Save your best ideas for later',
+      'Full flow on your room photo — from analysis to visualizations',
+      `${FREE_PLAN_CREDITS.toLocaleString('en-US')} credits for generations and edits`,
+      'Compare variants and save directions you like',
+      'Return to your project anytime from the dashboard',
+      'Perfect to start: test styles, colors, and room mood',
     ],
   },
   pro: {
     pl: [
-      '160 obrazów AI miesięcznie',
-      'Więcej iteracji i modyfikacji jednego wnętrza',
-      'Dobry wybór do kilku pomieszczeń',
+      'Wszystko z planu Basic, z większą pulą kredytów',
+      'Więcej iteracji i modyfikacji jednego wnętrza bez ograniczeń tempa',
+      'Wygodna praca nad kilkoma pomieszczeniami w jednym miesiącu',
+      'Lepszy wybór, gdy projektujesz cały pokój „na serio”',
+      'Priorytetowe tempo generacji w ramach limitu kredytów',
     ],
     en: [
-      '160 AI images per month',
-      'More iterations and edits for one room',
-      'A solid fit for several spaces',
+      'Everything in Basic, with a larger credit pool',
+      'More iterations and edits for one room without rushing',
+      'Comfortable work across several rooms in one month',
+      'A better fit when you are seriously shaping a space',
+      'Steady generation pace within your credit allowance',
     ],
   },
   studio: {
     pl: [
-      '320 obrazów AI miesięcznie',
-      'Swobodna praca nad całym mieszkaniem',
-      'Więcej miejsca na eksperymenty i dopracowanie detali',
+      'Najwyższa pula kredytów na intensywną pracę projektową',
+      'Swobodne testowanie wielu wersji całego mieszkania',
+      'Miejsce na eksperymenty, dopracowanie detali i inspiracje',
+      'Dla osób, które chcą prowadzić cały proces w IDA bez kompromisów',
+      'Najlepszy stosunek kredytów do ceny przy dużym wolumenie',
     ],
     en: [
-      '320 AI images per month',
-      'Comfortable pace across a whole home',
-      'Room to experiment and refine details',
+      'The largest credit pool for intensive design work',
+      'Freely test many versions across your home',
+      'Room for experiments, detail refinement, and inspirations',
+      'For anyone running the full IDA process without compromise',
+      'Best credits-to-price ratio at high volume',
     ],
   },
 };
 
-export function SubscriptionPlans({ userHash, onSelectPlan, className }: SubscriptionPlansProps) {
+export function SubscriptionPlans({ userHash: userHashProp, onSelectPlan, className }: SubscriptionPlansProps) {
+  const router = useRouter();
+  const { user } = useAuth();
   const { language } = useLanguage();
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
   const [loading, setLoading] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [foundersOpen, setFoundersOpen] = useState(true);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginRedirectPath, setLoginRedirectPath] = useState(PATH_AFTER_FREE_TRY);
+  const [pendingCheckoutPlanId, setPendingCheckoutPlanId] = useState<PlanId | null>(null);
+  const [storedUserHash, setStoredUserHash] = useState('');
+  const userHash =
+    userHashProp?.trim() ||
+    storedUserHash ||
+    (typeof window !== 'undefined' ? localStorage.getItem('aura_user_hash')?.trim() : '') ||
+    '';
   const currency = language === 'pl' ? 'pln' : 'usd';
   const locale = language === 'pl' ? 'pl-PL' : 'en-US';
-  const welcomeImageCount = Math.floor(FREE_PLAN_CREDITS / CREDITS_PER_IMAGE);
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
 
   const formatPrice = (price: number) =>
@@ -75,12 +145,59 @@ export function SubscriptionPlans({ userHash, onSelectPlan, className }: Subscri
       maximumFractionDigits: 0,
     }).format(price);
 
+  const formatCredits = (n: number) => n.toLocaleString(locale);
+
   React.useEffect(() => {
     setConfigError(null);
+    setCheckoutError(null);
   }, [billingPeriod, currency]);
 
-  const handleSelectPlan = async (planId: PlanId) => {
-    if (!userHash) return;
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setStoredUserHash(localStorage.getItem('aura_user_hash')?.trim() || '');
+  }, [user]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    fetchFoundersProgramStatus().then((status) => {
+      if (!cancelled) setFoundersOpen(status.open);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const openLoginForCheckout = (planId: PlanId) => {
+    setPendingCheckoutPlanId(planId);
+    setLoginRedirectPath('/subscription/plans');
+    setLoginOpen(true);
+  };
+
+  const openLoginForFreeTry = () => {
+    setPendingCheckoutPlanId(null);
+    setLoginRedirectPath(PATH_AFTER_FREE_TRY);
+    setLoginOpen(true);
+  };
+
+  const handleSelectPlan = async (planId: PlanId, options?: { skipLoginGate?: boolean }) => {
+    setCheckoutError(null);
+
+    const authUserId = resolveClientAuthUserId(user?.id);
+    if (!options?.skipLoginGate && !authUserId) {
+      openLoginForCheckout(planId);
+      return;
+    }
+
+    if (!userHash?.trim()) {
+      setCheckoutError(
+        t(
+          'Brak sesji użytkownika. Zaloguj się lub odśwież stronę.',
+          'Missing user session. Sign in or refresh the page.',
+        ),
+      );
+      openLoginForCheckout(planId);
+      return;
+    }
 
     onSelectPlan?.(planId, billingPeriod);
     setLoading(`${planId}-${billingPeriod}`);
@@ -90,6 +207,7 @@ export function SubscriptionPlans({ userHash, onSelectPlan, className }: Subscri
         headers: { 'Content-Type': 'application/json', ...creditsAuthHeaders() },
         body: JSON.stringify({
           userHash,
+          authUserId,
           planId,
           billingPeriod,
           currency,
@@ -98,101 +216,107 @@ export function SubscriptionPlans({ userHash, onSelectPlan, className }: Subscri
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        const message = formatCheckoutErrorMessage(response.status, data.error, t);
+        setCheckoutError(message);
+        if (response.status === 401) {
+          openLoginForCheckout(planId);
+        }
+        return;
+      }
+
       if (data.url) {
         window.location.href = data.url;
-      } else {
-        throw new Error('No checkout URL returned');
+        return;
       }
+
+      setCheckoutError(
+        t(
+          'Stripe nie zwrócił linku do płatności. Spróbuj ponownie.',
+          'Stripe did not return a checkout link. Please try again.',
+        ),
+      );
     } catch (error) {
       console.error('Error creating checkout session:', error);
+      setCheckoutError(
+        t(
+          'Błąd połączenia z serwerem płatności. Sprawdź internet i spróbuj ponownie.',
+          'Could not reach the payment server. Check your connection and try again.',
+        ),
+      );
 
-      if (
-        process.env.NODE_ENV === 'development' &&
-        window.confirm(
-          `${t('Błąd podczas tworzenia sesji płatności.', 'Payment session could not be created.')}\n\n` +
-            `${t(
-              'W trybie development możesz ręcznie przydzielić limity testowe.',
-              'In development mode you can manually allocate test plan limits.',
-            )}\n` +
-            t('Czy chcesz to zrobić?', 'Do you want to do that?'),
-        )
-      ) {
-        try {
-          const testResponse = await fetch('/api/test/allocate-credits', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userHash,
-              planId,
-              billingPeriod,
-            }),
-          });
-          const testData = await testResponse.json();
-          if (testData.success) {
-            alert(
-              t(
-                'Przydzielono limity testowe. Odśwież stronę, aby zobaczyć zmiany.',
-                'Test limits allocated. Refresh the page to see changes.',
-              ),
-            );
-            window.location.reload();
-          } else {
-            alert(
-              `${t('Błąd przydziału testowego:', 'Test allocation error:')} ${testData.error}`,
-            );
-          }
-        } catch (testError) {
-          console.error('Error allocating test limits:', testError);
-        }
-      } else {
-        alert(
-          t(
-            'Wystąpił błąd podczas tworzenia sesji płatności. Spróbuj ponownie.',
-            'There was an error creating the payment session. Please try again.',
-          ),
+      if (process.env.NODE_ENV === 'development' && userHash) {
+        const tryTest = window.confirm(
+          `${t('Błąd checkout (dev).', 'Checkout error (dev).')}\n\n` +
+            t('Przydzielić limity testowe lokalnie?', 'Allocate test limits locally?'),
         );
+        if (tryTest) {
+          try {
+            const testResponse = await fetch('/api/test/allocate-credits', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userHash, planId, billingPeriod }),
+            });
+            const testData = await testResponse.json();
+            if (testData.success) {
+              setCheckoutError(
+                t(
+                  'Przydzielono limity testowe (dev). Odśwież stronę.',
+                  'Test limits allocated (dev). Refresh the page.',
+                ),
+              );
+            } else {
+              setCheckoutError(`${t('Dev:', 'Dev:')} ${testData.error || 'allocate failed'}`);
+            }
+          } catch (testError) {
+            console.error('Error allocating test limits:', testError);
+          }
+        }
       }
     } finally {
       setLoading(null);
     }
   };
 
+  const handleTryBasicFree = () => {
+    if (user?.id || resolveClientAuthUserId(undefined)) {
+      router.push(PATH_AFTER_FREE_TRY);
+      return;
+    }
+    openLoginForFreeTry();
+  };
+
+  const handleLoginSuccess = () => {
+    setLoginOpen(false);
+    const planToResume = pendingCheckoutPlanId;
+    setPendingCheckoutPlanId(null);
+    if (planToResume) {
+      void handleSelectPlan(planToResume, { skipLoginGate: true });
+      return;
+    }
+    if (loginRedirectPath) {
+      router.push(loginRedirectPath);
+    }
+  };
+
   const plans: PlanId[] = ['basic', 'pro', 'studio'];
+  const showBasicLaunchOffer = foundersOpen && billingPeriod === 'monthly';
 
   return (
     <div className={`space-y-6 ${className}`}>
-      <div
-        className="rounded-2xl border border-gold-400/35 bg-gradient-to-br from-gold-400/10 to-white/40 px-5 py-5 sm:px-6 sm:py-6 shadow-sm"
-        role="region"
-        aria-label={t('Oferta startowa', 'Launch offer')}
-      >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div className="space-y-2">
-            <span className="inline-flex items-center rounded-full bg-gold-400/90 px-3 py-1 text-xs font-exo2 font-bold uppercase tracking-wide text-gray-900">
-              {t('Tylko na start', 'Launch perk')}
-            </span>
-            <h2 className="text-xl font-exo2 font-bold text-gray-900 sm:text-2xl">
-              {t(
-                `${welcomeImageCount} obrazów AI gratis przy rejestracji`,
-                `Get ${welcomeImageCount} AI images free when you sign up`,
-              )}
-            </h2>
-            <p className="text-sm text-gray-700 font-modern sm:text-base">
-              {t(
-                'Jednorazowy pakiet powitalny we wczesnym dostępie. Nie odnawia się automatycznie i nie wymaga karty.',
-                'A one-time welcome pack during early access. It does not auto-renew and no card is required.',
-              )}
-            </p>
-            <p className="text-sm font-medium text-gray-800 font-modern">
-              {t(
-                'Dołącz teraz i przetestuj pełny flow na własnym zdjęciu.',
-                'Join now and try the full flow on your own photo.',
-              )}
-            </p>
-          </div>
+      {checkoutError ? (
+        <div
+          className="rounded-xl border border-red-300/80 bg-red-50/90 px-4 py-3 text-sm text-red-900 font-modern"
+          role="alert"
+        >
+          {checkoutError}
         </div>
-      </div>
+      ) : null}
 
       <div className="flex justify-center gap-4 mb-2">
         <button
@@ -229,35 +353,43 @@ export function SubscriptionPlans({ userHash, onSelectPlan, className }: Subscri
               {t('Konfiguracja w toku', 'Configuration in progress')}
             </h3>
             <p className="text-gray-600 font-modern">{configError}</p>
-            <p className="text-sm text-gray-500 font-modern">
-              {t(
-                'Utwórz produkty w Stripe Dashboard i dodaj Price IDs do .env.local',
-                'Create products in Stripe Dashboard and add Price IDs to .env.local',
-              )}
-            </p>
-            <p className="text-xs text-gray-400 font-modern mt-4">
-              Szczegóły w pliku:{' '}
-              <code className="bg-white/10 px-2 py-1 rounded">STRIPE_LOCAL_TESTING.md</code>
-            </p>
           </div>
         </GlassCard>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:items-stretch">
           {plans.map((planId) => {
             const credits = getPlanCredits(planId, billingPeriod);
-            const images = Math.floor(credits / CREDITS_PER_IMAGE);
             const price = PLAN_PRICES[currency][planId][billingPeriod];
             const monthlyPrice = billingPeriod === 'yearly' ? price / 12 : price;
             const isPopular = planId === 'pro';
+            const isBasicLaunch = planId === 'basic' && showBasicLaunchOffer;
             const bullets = PLAN_FEATURES[planId][language];
+            const creditsLabel =
+              billingPeriod === 'monthly'
+                ? t('kredytów / miesiąc', 'credits / month')
+                : t('kredytów / rok', 'credits / year');
+
+            const cardVariant = isBasicLaunch || isPopular ? 'highlighted' : 'default';
+            const cardBorder = isBasicLaunch
+              ? 'border-gold-400/70 ring-1 ring-gold-400/30'
+              : isPopular
+                ? 'border-gold-400/60'
+                : '';
 
             return (
               <GlassCard
                 key={planId}
-                variant={isPopular ? 'highlighted' : 'default'}
-                className={`p-6 relative ${isPopular ? 'border-gold-400/60' : ''}`}
+                variant={cardVariant}
+                className={`p-6 pt-8 relative flex flex-col h-full min-h-[32rem] ${cardBorder}`}
               >
-                {isPopular && (
+                {isBasicLaunch && (
+                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 z-10">
+                    <span className="bg-gold-400 text-gray-900 px-4 py-1 rounded-full text-xs sm:text-sm font-exo2 font-bold whitespace-nowrap">
+                      {t('Oferta ograniczona ilościowo', 'Limited quantity offer')}
+                    </span>
+                  </div>
+                )}
+                {isPopular && !isBasicLaunch && (
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                     <span className="bg-gold-400 text-gray-900 px-4 py-1 rounded-full text-sm font-exo2 font-bold">
                       {t('Najpopularniejszy', 'Most popular')}
@@ -265,63 +397,145 @@ export function SubscriptionPlans({ userHash, onSelectPlan, className }: Subscri
                   </div>
                 )}
 
-                <div className="space-y-4">
-                  <div>
+                <div className="flex flex-col flex-1 min-h-0">
+                  <div className="min-h-[4.25rem] shrink-0">
                     <h3 className="text-2xl font-exo2 font-bold text-gray-900 mb-1">
                       {PLAN_NAMES[planId]}
                     </h3>
-                  </div>
-
-                  <div className="py-4 border-t border-b border-white/20">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-4xl font-exo2 font-bold text-gray-900">
-                        {formatPrice(price)}
-                      </span>
-                      <span className="text-sm text-gray-600 font-modern">
-                        /{billingPeriod === 'monthly' ? t('miesiąc', 'month') : t('rok', 'year')}
-                      </span>
-                    </div>
-                    {billingPeriod === 'yearly' && (
-                      <p className="text-xs text-gray-500 mt-1 font-modern">
-                        {formatPrice(monthlyPrice)}/{t('miesiąc', 'month')}
+                    {isBasicLaunch ? (
+                      <p className="text-xs text-gray-600 font-modern leading-relaxed">
+                        {t(
+                          'Wczesny dostęp — bez karty, bez auto-odnowienia',
+                          'Early access — no card, no auto-renewal',
+                        )}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-transparent select-none" aria-hidden="true">
+                        —
                       </p>
                     )}
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-baseline gap-2 flex-wrap">
+                  <div className="py-4 border-t border-b border-white/20 min-h-[9.5rem] shrink-0 flex flex-col justify-center">
+                    {isBasicLaunch ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className="text-lg font-modern text-gray-500 line-through">
+                            {formatPrice(price)}
+                          </span>
+                          <span className="text-xs font-modern text-gray-500">
+                            /{t('miesiąc', 'month')}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-4xl font-exo2 font-bold text-gray-900">
+                            {t('Za darmo', 'Free')}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gold-900/95 font-modern font-semibold leading-snug">
+                          {t(
+                            `Dla pierwszych ${FOUNDERS_LAUNCH_SLOTS} użytkowników`,
+                            `For the first ${FOUNDERS_LAUNCH_SLOTS} users`,
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-700 font-modern">
+                          {t(
+                            'Pakiet powitalny po weryfikacji konta',
+                            'Welcome pack after account verification',
+                          )}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-4xl font-exo2 font-bold text-gray-900">
+                            {formatPrice(price)}
+                          </span>
+                          <span className="text-sm text-gray-600 font-modern">
+                            /{billingPeriod === 'monthly' ? t('miesiąc', 'month') : t('rok', 'year')}
+                          </span>
+                        </div>
+                        {billingPeriod === 'yearly' ? (
+                          <p className="text-xs text-gray-500 font-modern">
+                            {formatPrice(monthlyPrice)}/{t('miesiąc', 'month')}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-transparent select-none" aria-hidden="true">
+                            —
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 flex flex-col space-y-3 py-4 min-h-0">
+                    <div className="flex items-baseline gap-2 flex-wrap shrink-0">
                       <span className="text-lg font-exo2 font-bold text-gray-900">
-                        {images.toLocaleString(locale)}
+                        {formatCredits(credits)}
                       </span>
-                      <span className="text-sm text-gray-600 font-modern">
-                        {billingPeriod === 'monthly'
-                          ? t('obrazów AI / miesiąc', 'AI images / month')
-                          : t('obrazów AI / rok', 'AI images / year')}
-                      </span>
+                      <span className="text-sm text-gray-600 font-modern">{creditsLabel}</span>
                     </div>
-                    <ul className="space-y-2 text-sm text-gray-700 font-modern list-disc pl-5">
+                    <ul className="space-y-2.5 text-sm text-gray-700 font-modern list-disc pl-5 flex-1">
                       {bullets.map((line) => (
                         <li key={line}>{line}</li>
                       ))}
                     </ul>
                   </div>
+                </div>
 
-                  <GlassButton
-                    onClick={() => handleSelectPlan(planId)}
-                    disabled={loading === `${planId}-${billingPeriod}`}
-                    className="w-full"
+                <GlassButton
+                    onClick={isBasicLaunch ? handleTryBasicFree : () => handleSelectPlan(planId)}
+                    disabled={!isBasicLaunch && loading === `${planId}-${billingPeriod}`}
+                    className="w-full shrink-0 mt-auto"
                     variant="primary"
                   >
-                    {loading === `${planId}-${billingPeriod}`
+                    {!isBasicLaunch && loading === `${planId}-${billingPeriod}`
                       ? t('Przetwarzanie...', 'Processing...')
-                      : t('Wybierz plan', 'Choose plan')}
-                  </GlassButton>
-                </div>
+                      : isBasicLaunch
+                        ? t('Wypróbuj za darmo', 'Try for free')
+                        : t('Wybierz plan', 'Choose plan')}
+                </GlassButton>
               </GlassCard>
             );
           })}
         </div>
       )}
+
+      <p className="text-center text-xs text-gray-500 font-modern max-w-lg mx-auto">
+        {t(
+          'Masz kod rabatowy? Wpisz go w standardowym polu przy płatności Stripe — w kolejnym kroku po wyborze planu.',
+          'Have a discount code? Enter it in the promo field at Stripe checkout — on the next step after choosing a plan.',
+        )}
+      </p>
+
+      <LoginModal
+        isOpen={loginOpen}
+        onClose={() => {
+          setLoginOpen(false);
+          setPendingCheckoutPlanId(null);
+        }}
+        onSuccess={handleLoginSuccess}
+        redirectPath={loginRedirectPath}
+        title={{
+          pl: pendingCheckoutPlanId
+            ? 'Zaloguj się, aby opłacić plan'
+            : 'Załóż konto lub zaloguj się',
+          en: pendingCheckoutPlanId
+            ? 'Sign in to complete your purchase'
+            : 'Create an account or sign in',
+        }}
+        message={
+          pendingCheckoutPlanId
+            ? t(
+                'Do płatności Stripe potrzebujemy zweryfikowanego konta powiązanego z Twoją sesją.',
+                'We need a verified account linked to your session before Stripe checkout.',
+              )
+            : t(
+                'Po rejestracji i weryfikacji e-maila możesz skorzystać z oferty na start i przejść do projektowania.',
+                'After sign-up and email verification you can use the launch offer and start designing.',
+              )
+        }
+      />
     </div>
   );
 }

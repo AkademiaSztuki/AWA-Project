@@ -48,6 +48,13 @@ SELECT
   explicit_material_1,
   explicit_material_2,
   explicit_material_3,
+  sensory_texture,
+  -- Implicit vs explicit comparison (/setup/profile vs Tinder tags)
+  preference_comparison_json,
+  style_match,
+  color_tokens_match_score,
+  biophilia_match,
+  nature_metaphor_match,
   -- Ankiety (agregaty)
   sus_score,
   clarity_score,
@@ -63,8 +70,20 @@ SELECT
   inspirations_count,
   tinder_total_swipes,
   tinder_likes,
-  tinder_dislikes
-FROM public.participants;
+  tinder_dislikes,
+  -- Optional: requires migration 20 (participant_preference_snapshots)
+  snap.latest_snapshot_id,
+  snap.latest_snapshot_at
+FROM public.participants p
+LEFT JOIN LATERAL (
+  SELECT id AS latest_snapshot_id, created_at AS latest_snapshot_at
+  FROM public.participant_preference_snapshots
+  WHERE user_hash = p.user_hash
+  ORDER BY created_at DESC, id DESC
+  LIMIT 1
+) snap ON TRUE;
 
 COMMENT ON VIEW public.v_participants_research_export IS
-  'Płaski eksport kolumn badawczych (implicit vs explicit, Big Five, ankiety) — pod BI / CSV.';
+  'Płaski eksport kolumn badawczych (implicit vs explicit, Big Five, ankiety) — pod BI / CSV. '
+  'Materiały: porównuj implicit_material_1..3 (Tinder/visualDNA) z explicit_material_1..3 (krok Materiały); '
+  'sensory_texture to legacy — zwykle = explicit_material_1.';

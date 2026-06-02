@@ -6,10 +6,26 @@ import {
   checkCreditsAvailable,
   deductCredits,
   getCreditOverview,
+  getFoundersProgramStatus,
   grantFreeCredits,
 } from '../services/billing';
 
 export const creditsRouter = Router();
+
+creditsRouter.get('/credits/founders-status', async (_req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const status = await getFoundersProgramStatus(client);
+      return res.json({ ok: true, ...status });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('credits/founders-status error', error);
+    return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
 
 creditsRouter.get('/credits/balance/:userHash', async (req, res) => {
   const { userHash } = req.params;
@@ -114,9 +130,9 @@ creditsRouter.post('/credits/grant-free', (req, res, next) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const granted = await grantFreeCredits(client, userHash);
+      const result = await grantFreeCredits(client, userHash);
       await client.query('COMMIT');
-      return res.json({ ok: true, granted });
+      return res.json({ ok: true, granted: result.granted, reason: result.reason });
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

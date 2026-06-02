@@ -19,6 +19,9 @@ type TinderImage = {
     layout: string[];
     mood: string[];
     biophilia: number;
+    brightness?: 'bright' | 'dark' | null;
+    complexity?: 'complex' | 'simple' | null;
+    lightingMood?: 'warm_low' | 'warm_bright' | 'cool_bright' | 'neutral_light' | null;
   };
 };
 
@@ -47,6 +50,9 @@ export async function GET() {
             layout: parsed.layout,
             mood: parsed.mood,
             biophilia: parsed.biophilia,
+            brightness: parsed.brightness,
+            complexity: parsed.complexity,
+            lightingMood: parsed.lightingMood,
           },
         };
         return item;

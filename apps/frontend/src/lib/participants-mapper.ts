@@ -5,6 +5,12 @@
 
 import { SessionData } from '@/types';
 import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
+import { isParticipantSpaceUuid } from '@/lib/remote-spaces';
+import {
+  buildPreferenceComparisonFromSession,
+  flattenPreferenceComparisonForParticipant,
+  resolveExplicitBiophiliaScore,
+} from '@/lib/preferences/preference-comparison-registry';
 
 /**
  * Room Setup often stores answers only in `roomPreferences`; Core Profile uses root
@@ -23,13 +29,62 @@ function mergeExplicitSemanticsForParticipant(sessionData: SessionData) {
   };
 }
 
-function mergeColorsMaterialsForParticipant(sessionData: SessionData) {
+/** Resolve explicit materials for dashboard / profile (DB columns → sensory → session export). */
+export function resolveExplicitTopMaterialsFromRow(row: {
+  explicit_material_1?: string | null;
+  explicit_material_2?: string | null;
+  explicit_material_3?: string | null;
+  sensory_texture?: string | null;
+  session_export_json?: unknown;
+}): string[] {
+  const fromCols = [
+    row.explicit_material_1,
+    row.explicit_material_2,
+    row.explicit_material_3,
+  ].filter((m): m is string => typeof m === 'string' && m.trim().length > 0);
+  if (fromCols.length > 0) return fromCols;
+
+  const sensoryTex =
+    typeof row.sensory_texture === 'string' ? row.sensory_texture.trim() : '';
+  if (sensoryTex) return [sensoryTex];
+
+  let exportObj: unknown = row.session_export_json;
+  if (typeof exportObj === 'string' && exportObj.trim()) {
+    try {
+      exportObj = JSON.parse(exportObj);
+    } catch {
+      return [];
+    }
+  }
+  if (!exportObj || typeof exportObj !== 'object') return [];
+
+  const snap = exportObj as Record<string, unknown>;
+  const cm = snap.colorsAndMaterials as { topMaterials?: string[] } | undefined;
+  const fromExport = Array.isArray(cm?.topMaterials)
+    ? cm.topMaterials.filter((m): m is string => typeof m === 'string' && m.trim().length > 0)
+    : [];
+  if (fromExport.length > 0) return fromExport;
+
+  const rp = snap.roomPreferences as { colorsAndMaterials?: { topMaterials?: string[] } } | undefined;
+  const fromRoom = rp?.colorsAndMaterials?.topMaterials;
+  if (Array.isArray(fromRoom) && fromRoom.filter(Boolean).length > 0) {
+    return fromRoom.filter((m): m is string => typeof m === 'string' && m.trim().length > 0);
+  }
+
+  const sp = snap.sensoryPreferences as { texture?: string } | undefined;
+  const rpSp = (snap.roomPreferences as { sensoryPreferences?: { texture?: string } } | undefined)
+    ?.sensoryPreferences;
+  const tex = sp?.texture?.trim() || rpSp?.texture?.trim();
+  return tex ? [tex] : [];
+}
+
+export function mergeColorsMaterialsForParticipant(sessionData: SessionData) {
   const cm = sessionData.colorsAndMaterials;
   const rcm = sessionData.roomPreferences?.colorsAndMaterials;
   const topFrom = (a?: string[]) =>
     Array.isArray(a) && a.filter(Boolean).length > 0 ? a.filter(Boolean) as string[] : undefined;
   let topMaterials = topFrom(cm?.topMaterials) ?? topFrom(rcm?.topMaterials) ?? [];
-  // Sensory suite stores chosen texture in sensoryPreferences.texture, not always in topMaterials.
+  // Legacy rows: sensory suite choice may live only in sensoryPreferences.texture.
   const tex =
     sessionData.sensoryPreferences?.texture?.trim() ||
     sessionData.roomPreferences?.sensoryPreferences?.texture?.trim();
@@ -43,12 +98,150 @@ function mergeColorsMaterialsForParticipant(sessionData: SessionData) {
   };
 }
 
+function nonEmptyString(value?: string): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+/** Only persist current_space_id when the id is listed in session spaces (synced from GCP). */
+export function resolveCurrentSpaceIdForParticipant(
+  sessionData: SessionData,
+): string | undefined {
+  const id = sessionData.currentSpaceId;
+  if (!isParticipantSpaceUuid(id)) return undefined;
+  const spaces = sessionData.spaces;
+  if (!Array.isArray(spaces) || spaces.length === 0) return undefined;
+  return spaces.some((s) => s.id === id) ? id : undefined;
+}
+
+function nonEmptyMaterials(materials?: string[]): string[] | undefined {
+  const list = Array.isArray(materials)
+    ? materials.filter((m): m is string => typeof m === 'string' && m.trim().length > 0)
+    : [];
+  return list.length > 0 ? list : undefined;
+}
+
+/** Sensory suite completion payload → explicit `topMaterials` (material = former “texture” step). */
+export type SensoryMaterialResultInput = {
+  material?: string;
+  texture?: string;
+  topMaterials?: string[];
+};
+
+export function topMaterialsFromSensorySuiteResults(
+  results: SensoryMaterialResultInput,
+): string[] {
+  const fromArr = nonEmptyMaterials(results.topMaterials);
+  if (fromArr?.length) return fromArr;
+  const choice =
+    nonEmptyString(results.material) ?? nonEmptyString(results.texture);
+  return choice ? [choice] : [];
+}
+
+/** Copy sensory texture into `colorsAndMaterials.topMaterials` when missing (session + GCP export). */
+export function normalizeSessionExplicitMaterials(sessionData: SessionData): SessionData {
+  const mergedCm = mergeColorsMaterialsForParticipant(sessionData);
+  const mergedSensory = mergeSensoryForParticipant(sessionData);
+  const out = { ...sessionData };
+
+  const existingTop = (out.colorsAndMaterials?.topMaterials || []).filter(
+    (m): m is string => typeof m === 'string' && m.trim().length > 0,
+  );
+  const topMaterials =
+    mergedCm.topMaterials.length > 0 ? mergedCm.topMaterials : existingTop;
+
+  if (
+    topMaterials.length > 0 ||
+    mergedCm.selectedPalette ||
+    mergedCm.selectedStyle ||
+    out.colorsAndMaterials
+  ) {
+    out.colorsAndMaterials = {
+      selectedPalette: mergedCm.selectedPalette || out.colorsAndMaterials?.selectedPalette || '',
+      selectedStyle: mergedCm.selectedStyle ?? out.colorsAndMaterials?.selectedStyle,
+      topMaterials,
+    };
+  }
+
+  const primaryMaterial = topMaterials[0]?.trim();
+  const tex = primaryMaterial || mergedSensory.texture?.trim();
+  if (tex || mergedSensory.music || mergedSensory.light) {
+    out.sensoryPreferences = {
+      music: mergedSensory.music || out.sensoryPreferences?.music || '',
+      texture: tex || out.sensoryPreferences?.texture || '',
+      light: mergedSensory.light || out.sensoryPreferences?.light || '',
+    };
+  }
+
+  return out;
+}
+
+/**
+ * Field-wise merge for profile reload / partial `updateSession` — avoids wiping
+ * `topMaterials` when API returns style/palette with empty material columns.
+ */
+export function mergeSessionDataUpdates(
+  base: SessionData,
+  updates: Partial<SessionData>,
+): SessionData {
+  const out: SessionData = { ...base, ...updates };
+
+  if (updates.colorsAndMaterials) {
+    const prev = base.colorsAndMaterials;
+    const next = updates.colorsAndMaterials;
+    out.colorsAndMaterials = {
+      selectedPalette:
+        nonEmptyString(next.selectedPalette) ??
+        nonEmptyString(prev?.selectedPalette) ??
+        '',
+      selectedStyle:
+        nonEmptyString(next.selectedStyle) ?? nonEmptyString(prev?.selectedStyle) ?? '',
+      topMaterials:
+        nonEmptyMaterials(next.topMaterials) ??
+        nonEmptyMaterials(prev?.topMaterials) ??
+        [],
+    };
+  }
+
+  if (updates.sensoryPreferences) {
+    const prev = base.sensoryPreferences;
+    const next = updates.sensoryPreferences;
+    out.sensoryPreferences = {
+      music: nonEmptyString(next.music) ?? nonEmptyString(prev?.music) ?? '',
+      texture: nonEmptyString(next.texture) ?? nonEmptyString(prev?.texture) ?? '',
+      light: nonEmptyString(next.light) ?? nonEmptyString(prev?.light) ?? '',
+    };
+  }
+
+  if (updates.semanticDifferential) {
+    out.semanticDifferential = {
+      ...base.semanticDifferential,
+      ...updates.semanticDifferential,
+    };
+  }
+
+  return normalizeSessionExplicitMaterials(out);
+}
+
+/** Display list for dashboard explicit materials row (session root). */
+export function resolveExplicitMaterialsForDisplay(sessionData: {
+  colorsAndMaterials?: { topMaterials?: string[] };
+  sensoryPreferences?: { texture?: string };
+}): string[] {
+  return topMaterialsFromSensorySuiteResults({
+    topMaterials: sessionData.colorsAndMaterials?.topMaterials,
+    texture: sessionData.sensoryPreferences?.texture,
+  });
+}
+
 function mergeSensoryForParticipant(sessionData: SessionData) {
   const sp = sessionData.sensoryPreferences;
   const rsp = sessionData.roomPreferences?.sensoryPreferences;
+  const explicitMaterial =
+    nonEmptyMaterials(sessionData.colorsAndMaterials?.topMaterials)?.[0] ??
+    nonEmptyMaterials(sessionData.roomPreferences?.colorsAndMaterials?.topMaterials)?.[0];
   return {
     music: sp?.music || rsp?.music,
-    texture: sp?.texture || rsp?.texture,
+    texture: explicitMaterial ?? sp?.texture ?? rsp?.texture,
     light: sp?.light || rsp?.light,
   };
 }
@@ -200,7 +393,8 @@ export interface ParticipantRow {
   consent_timestamp?: string;
   path_type?: 'fast' | 'full';
   current_step?: string;
-  
+  current_space_id?: string;
+
   // Demographics
   age_range?: string;
   gender?: string;
@@ -231,7 +425,9 @@ export interface ParticipantRow {
   implicit_warmth?: number;
   implicit_brightness?: number;
   implicit_complexity?: number;
+  implicit_dominant_tags?: string[];
   dna_accuracy_score?: number;
+  blind_selection_made?: boolean;
   
   // Explicit
   explicit_warmth?: number;
@@ -331,6 +527,13 @@ export interface ParticipantRow {
   // Profile status
   core_profile_complete?: boolean;
   core_profile_completed_at?: string;
+
+  /** Implicit (Tinder) vs explicit (/setup/profile) — canonical comparison */
+  preference_comparison_json?: import('@/lib/preferences/preference-comparison-registry').PreferenceComparisonResult;
+  style_match?: boolean;
+  color_tokens_match_score?: number;
+  biophilia_match?: boolean;
+  nature_metaphor_match?: boolean;
 }
 
 /**
@@ -342,10 +545,15 @@ export function mapSessionDataToParticipant(
   authUserId?: string,
   oauthEmail?: string,
 ): ParticipantRow {
-  const explicitSem = mergeExplicitSemanticsForParticipant(sessionData);
-  const mergedCm = mergeColorsMaterialsForParticipant(sessionData);
-  const mergedSensory = mergeSensoryForParticipant(sessionData);
-  const big5Domains = extractBigFiveDomains(sessionData);
+  const normalized = normalizeSessionExplicitMaterials(sessionData);
+  const explicitSem = mergeExplicitSemanticsForParticipant(normalized);
+  const mergedCm = mergeColorsMaterialsForParticipant(normalized);
+  const mergedSensory = mergeSensoryForParticipant(normalized);
+  const explicitTopMaterials = nonEmptyMaterials(mergedCm.topMaterials) ?? [];
+  const implicitMaterials = (normalized.visualDNA?.preferences?.materials || []).filter(
+    (m): m is string => typeof m === 'string' && m.trim().length > 0,
+  );
+  const big5Domains = extractBigFiveDomains(normalized);
 
   const emailNorm =
     typeof oauthEmail === 'string' && oauthEmail.trim().length > 0
@@ -359,7 +567,8 @@ export function mapSessionDataToParticipant(
     consent_timestamp: sessionData.consentTimestamp,
     path_type: sessionData.pathType,
     current_step: sessionData.currentStep,
-    
+    current_space_id: resolveCurrentSpaceIdForParticipant(normalized),
+
     // Demographics
     age_range: sessionData.demographics?.ageRange,
     gender: sessionData.demographics?.gender,
@@ -381,16 +590,40 @@ export function mapSessionDataToParticipant(
     implicit_style_1: sessionData.visualDNA?.preferences?.styles?.[0],
     implicit_style_2: sessionData.visualDNA?.preferences?.styles?.[1],
     implicit_style_3: sessionData.visualDNA?.preferences?.styles?.[2],
-    implicit_color_1: sessionData.visualDNA?.preferences?.colors?.[0],
-    implicit_color_2: sessionData.visualDNA?.preferences?.colors?.[1],
-    implicit_color_3: sessionData.visualDNA?.preferences?.colors?.[2],
-    implicit_material_1: sessionData.visualDNA?.preferences?.materials?.[0],
-    implicit_material_2: sessionData.visualDNA?.preferences?.materials?.[1],
-    implicit_material_3: sessionData.visualDNA?.preferences?.materials?.[2],
+    ...(() => {
+      try {
+        const comparison = buildPreferenceComparisonFromSession(normalized);
+        const flat = flattenPreferenceComparisonForParticipant(comparison);
+        const implicitProfile = comparison.dimensions.find((d) => d.id === 'color_tokens');
+        const topColors =
+          implicitProfile?.implicitCanonical?.slice(0, 5) ||
+          normalized.visualDNA?.preferences?.colors?.slice(0, 3) ||
+          [];
+        return {
+          ...flat,
+          implicit_color_1: topColors[0] ?? sessionData.visualDNA?.preferences?.colors?.[0],
+          implicit_color_2: topColors[1] ?? sessionData.visualDNA?.preferences?.colors?.[1],
+          implicit_color_3: topColors[2] ?? sessionData.visualDNA?.preferences?.colors?.[2],
+        };
+      } catch (err) {
+        console.warn('[participants-mapper] preference comparison build failed:', err);
+        return {};
+      }
+    })(),
+    // Implicit only: Tinder / visualDNA (never mixed with explicit Sensory “Materiały” choice).
+    implicit_material_1: implicitMaterials[0],
+    implicit_material_2: implicitMaterials[1],
+    implicit_material_3: implicitMaterials[2],
     implicit_warmth: sessionData.visualDNA?.implicitScores?.warmth,
     implicit_brightness: sessionData.visualDNA?.implicitScores?.brightness,
     implicit_complexity: sessionData.visualDNA?.implicitScores?.complexity,
+    implicit_dominant_tags:
+      sessionData.visualDNA?.dominantTags && sessionData.visualDNA.dominantTags.length > 0
+        ? sessionData.visualDNA.dominantTags
+        : undefined,
     dna_accuracy_score: sessionData.visualDNA?.accuracyScore ?? sessionData.dnaAccuracyScore,
+    blind_selection_made:
+      typeof sessionData.blindSelectionMade === 'boolean' ? sessionData.blindSelectionMade : undefined,
     
     // Explicit (0–1 in DB; root session OR roomPreferences from Room Setup)
     explicit_warmth: explicitSem.warmth,
@@ -399,15 +632,17 @@ export function mapSessionDataToParticipant(
     explicit_texture: explicitSem.texture,
     explicit_palette: mergedCm.selectedPalette,
     explicit_style: mergedCm.selectedStyle,
-    explicit_material_1: mergedCm.topMaterials[0],
-    explicit_material_2: mergedCm.topMaterials[1],
-    explicit_material_3: mergedCm.topMaterials[2],
+    // Explicit only: Sensory “Materiały” step → colorsAndMaterials.topMaterials (normalized).
+    explicit_material_1: explicitTopMaterials[0],
+    explicit_material_2: explicitTopMaterials[1],
+    explicit_material_3: explicitTopMaterials[2],
     
     // Sensory / Biophilia
     sensory_music: mergedSensory.music,
-    sensory_texture: mergedSensory.texture,
+    // Legacy duplicate of explicit_material_1 (same option id); research compares implicit_material_* vs explicit_material_*.
+    sensory_texture: explicitTopMaterials[0] ?? mergedSensory.texture,
     sensory_light: mergedSensory.light,
-    biophilia_score: sessionData.biophiliaScore ?? sessionData.roomPreferences?.biophiliaScore,
+    biophilia_score: resolveExplicitBiophiliaScore(normalized) ?? undefined,
     nature_metaphor: sessionData.natureMetaphor ?? sessionData.roomPreferences?.natureMetaphor,
     
     // Lifestyle
@@ -656,7 +891,23 @@ export function mapParticipantToSessionData(row: any): SessionData {
     // Visual DNA (implicit)
     visualDNA: row.implicit_dominant_style || row.implicit_style_1 ? {
       dominantStyle: row.implicit_dominant_style,
-      dominantTags: [],
+      dominantTags: (() => {
+        const raw = row.implicit_dominant_tags;
+        if (Array.isArray(raw)) {
+          return raw.filter((t): t is string => typeof t === 'string' && t.trim().length > 0);
+        }
+        if (typeof raw === 'string' && raw.trim()) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              return parsed.filter((t): t is string => typeof t === 'string' && t.trim().length > 0);
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        return [];
+      })(),
       preferences: {
         styles: [row.implicit_style_1, row.implicit_style_2, row.implicit_style_3].filter(Boolean),
         colors: [row.implicit_color_1, row.implicit_color_2, row.implicit_color_3].filter(Boolean),
@@ -696,12 +947,19 @@ export function mapParticipantToSessionData(row: any): SessionData {
       return { warmth, brightness, complexity, texture };
     })(),
     
-    colorsAndMaterials:
-      row.explicit_palette || row.explicit_style || row.explicit_material_1 ? {
+    colorsAndMaterials: (() => {
+      const topMaterials = resolveExplicitTopMaterialsFromRow(row);
+      const hasExplicit =
+        row.explicit_palette ||
+        row.explicit_style ||
+        topMaterials.length > 0;
+      if (!hasExplicit) return undefined;
+      return {
         selectedPalette: row.explicit_palette || '',
         selectedStyle: row.explicit_style,
-        topMaterials: [row.explicit_material_1, row.explicit_material_2, row.explicit_material_3].filter(Boolean),
-      } : undefined,
+        topMaterials,
+      };
+    })(),
     
     // Sensory / Biophilia
     sensoryPreferences: row.sensory_music || row.sensory_texture || row.sensory_light ? {

@@ -57,8 +57,8 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
       en: 'What does your new space sound like?'
     },
     texture: {
-      pl: 'Jaką fakturę chcesz czuć pod palcami?',
-      en: 'Which texture should your hands meet?'
+      pl: 'Jaki materiał ma dominować w Twojej przestrzeni?',
+      en: 'Which material should define your space?'
     },
     light: {
       pl: 'Jakie światło ma Ci towarzyszyć?',
@@ -145,7 +145,7 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
           <div>
             <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-gold font-bold leading-none mb-0.5">
               {type === 'music' ? (language === 'pl' ? 'Muzyka' : 'Music') :
-               type === 'texture' ? (language === 'pl' ? 'Tekstury' : 'Textures') :
+               type === 'texture' ? (language === 'pl' ? 'Materiały' : 'Materials') :
                (language === 'pl' ? 'Światło' : 'Light')}
             </p>
             <p className="text-xs sm:text-sm font-modern text-graphite leading-tight">
@@ -270,8 +270,8 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
             ? 'Muzyka ustawia tempo Twoich rytuałów.'
             : 'Music sets the tempo of your rituals.')}
           {type === 'texture' && (language === 'pl'
-            ? 'Tekstura wpływa na codzienny kontakt z przestrzenią.'
-            : 'Texture defines daily touchpoints in the space.')}
+            ? 'Materiał wpływa na codzienny kontakt z przestrzenią.'
+            : 'Material shapes how you experience the space every day.')}
           {type === 'light' && (language === 'pl'
             ? 'Światło reguluje energię i skupienie przez cały dzień.'
             : 'Light shapes your energy and focus throughout the day.')}
@@ -671,11 +671,15 @@ type SensorySuiteResults = {
 interface SensoryTestSuiteProps {
   onComplete: (results: {
     music: string;
+    /** @deprecated Internal key; same value as `material` (Sensory “Materiały” step). */
     texture: string;
+    material: string;
+    topMaterials: string[];
     light: string;
     natureMetaphor: string;
     biophiliaScore: number;
     style?: string;
+    palette?: string;
   }) => void;
   className?: string;
   profileContext?: {
@@ -954,9 +958,12 @@ export const SensoryTestSuite = forwardRef<SensoryTestSuiteHandle, SensoryTestSu
       return;
     }
     completionDispatchedRef.current = true;
+    const materialChoice = String(finalResults.texture).trim();
     const payload = {
       music: finalResults.music,
-      texture: finalResults.texture,
+      texture: materialChoice,
+      material: materialChoice,
+      topMaterials: materialChoice ? [materialChoice] : [],
       light: finalResults.light,
       natureMetaphor: finalResults.natureMetaphor,
       biophiliaScore: finalBiophilia,
@@ -1021,7 +1028,7 @@ export const SensoryTestSuite = forwardRef<SensoryTestSuiteHandle, SensoryTestSu
       case 'music':
         return language === 'pl' ? 'Muzyka' : 'Music';
       case 'texture':
-        return language === 'pl' ? 'Tekstury' : 'Textures';
+        return language === 'pl' ? 'Materiały' : 'Materials';
       case 'light':
         return language === 'pl' ? 'Światło' : 'Light';
       case 'palette':

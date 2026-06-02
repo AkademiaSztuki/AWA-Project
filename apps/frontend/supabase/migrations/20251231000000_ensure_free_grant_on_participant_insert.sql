@@ -1,7 +1,8 @@
--- Migration: Ensure every new participant gets free grant credits (600)
+-- Migration: Ensure every new participant gets free grant credits (6000 display scale)
 -- Created: 2025-12-31
 -- Purpose:
---  - Guarantee that new users receive initial 600 credits even if frontend/API call fails
+--  - Guarantee that new users receive initial 6000 credits even if frontend/API call fails
+--  NOTE: GCP path uses grantFreeCredits with founders cap; prefer disabling this trigger in GCP-only envs.
 --  - Make free_grant idempotent (no double crediting on retries/races)
 --  - Ensure guests can read credit balance via RPC (EXECUTE privilege)
 
@@ -39,7 +40,7 @@ BEGIN
     v_inserted := FALSE;
   ELSE
     INSERT INTO public.credit_transactions (user_hash, type, amount, source, generation_id, expires_at)
-    VALUES (p_user_hash, 'grant', 600, 'free_grant', NULL, NULL);
+    VALUES (p_user_hash, 'grant', 6000, 'free_grant', NULL, NULL);
     v_inserted := TRUE;
   END IF;
 

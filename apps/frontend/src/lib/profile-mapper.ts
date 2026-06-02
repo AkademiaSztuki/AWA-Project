@@ -2,6 +2,7 @@ import { SessionData } from '@/types';
 import { UserProfile } from '@/types/deep-personalization';
 import { computeWeightedDNAFromSwipes } from '@/lib/dna';
 import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
+import { topMaterialsFromSensorySuiteResults } from '@/lib/participants-mapper';
 
 export function mapSessionToUserProfile(sessionData: SessionData): Partial<UserProfile> {
   // Analyze Tinder swipes to get implicit preferences
@@ -227,9 +228,13 @@ export function mapUserProfileToSessionData(userProfile: UserProfile): Partial<S
   // Map explicit preferences (aestheticDNA.explicit)
   if (userProfile.aestheticDNA?.explicit) {
     const explicit = userProfile.aestheticDNA.explicit;
+    const topMaterials = topMaterialsFromSensorySuiteResults({
+      topMaterials: explicit.topMaterials,
+      texture: userProfile.sensoryPreferences?.texture,
+    });
     sessionUpdates.colorsAndMaterials = {
       selectedPalette: explicit.selectedPalette || '',
-      topMaterials: explicit.topMaterials || [],
+      topMaterials,
       // CRITICAL: Only map selectedStyle if it's a non-empty string    
       // If it's empty string '', null, or undefined, don't overwrite existing value in sessionData                                                    
       ...((explicit as any).selectedStyle && (explicit as any).selectedStyle.length > 0 ? { selectedStyle: (explicit as any).selectedStyle } : {})

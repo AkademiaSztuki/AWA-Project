@@ -9,9 +9,70 @@ import {
 import { verifyMigrateSecret, requireDebugOrMigrateAccess } from '../lib/internal-auth';
 import { checkRequestRateLimit } from '../lib/request-rate-limit';
 import { validateSessionPostBody } from '../lib/session-payload';
-import { ensureParticipantRecord, grantFreeCredits } from '../services/billing';
+import { ensureParticipantRecord } from '../services/billing';
+import { mergeAnonymousSession } from '../services/merge-anonymous-session';
+import {
+  insertPreferenceSnapshotIfNeeded,
+  type PreferenceSnapshotMilestone,
+} from '../services/preference-snapshot';
 
 const PARTICIPANT_SECRET_COLUMNS = new Set(['password_hash']);
+
+/** Drop current_space_id when the space row does not exist yet (avoids FK 23503). */
+async function sanitizeParticipantRowCurrentSpaceId(
+  client: PoolClient,
+  userHash: string,
+  row: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const spaceId = row.current_space_id;
+  if (typeof spaceId !== 'string' || spaceId.trim() === '') {
+    return row;
+  }
+  const { rows } = await client.query<{ ok: number }>(
+    `SELECT 1 AS ok FROM participant_spaces WHERE id = $1::uuid AND user_hash = $2 LIMIT 1`,
+    [spaceId, userHash],
+  );
+  if (rows.length > 0) return row;
+  const copy = { ...row };
+  delete copy.current_space_id;
+  console.warn('[participants.session] dropped orphan current_space_id (not in participant_spaces)', {
+    userHash,
+    current_space_id: spaceId,
+  });
+  return copy;
+}
+
+async function tryWritePreferenceSnapshotAfterUpsert(
+  client: PoolClient,
+  userHash: string,
+  milestone?: PreferenceSnapshotMilestone,
+): Promise<void> {
+  try {
+    const { rows } = await client.query<Record<string, unknown>>(
+      `SELECT * FROM participants WHERE user_hash = $1 LIMIT 1`,
+      [userHash],
+    );
+    const fresh = rows[0];
+    if (!fresh) return;
+    const result = await insertPreferenceSnapshotIfNeeded(client, {
+      userHash,
+      row: fresh,
+      milestone,
+    });
+    if (result.inserted) {
+      console.log('[participants.session] preference snapshot inserted', {
+        userHash,
+        contentHash: result.contentHash,
+        milestone: milestone ?? null,
+      });
+    }
+  } catch (err) {
+    console.warn('[participants.session] preference snapshot failed (best-effort)', {
+      userHash,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 /** Lazily loaded; cleared on schema mismatch so new migrations are picked up after deploy. */
 let participantsTableColumns: Set<string> | null = null;
@@ -120,6 +181,7 @@ const PARTICIPANTS_JSONB_COLUMNS = new Set<string>([
   'final_survey',
   'ladder_prompt_elements',
   'modification_prompt_log',
+  'preference_comparison_json',
 ]);
 
 /**
@@ -423,7 +485,6 @@ participantsRouter.post('/ensure', async (req, res) => {
         [userHash],
       );
 
-      await grantFreeCredits(client, userHash);
       return res.json({ ok: true, created: true });
     } finally {
       client.release();
@@ -431,6 +492,45 @@ participantsRouter.post('/ensure', async (req, res) => {
   } catch (error) {
     console.error('participants/ensure error', error);
     return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+});
+
+participantsRouter.post('/participants/merge-anonymous-session', async (req, res) => {
+  const { auth_user_id, anonymous_user_hash } = req.body as {
+    auth_user_id?: string;
+    anonymous_user_hash?: string;
+  };
+
+  if (!auth_user_id || !anonymous_user_hash) {
+    return res.status(400).json({
+      ok: false,
+      error: 'auth_user_id_and_anonymous_user_hash_required',
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await mergeAnonymousSession(client, {
+      authUserId: auth_user_id,
+      anonymousUserHash: anonymous_user_hash,
+    });
+    if (!result.ok) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ ok: false, error: result.error });
+    }
+    await client.query('COMMIT');
+    return res.json({
+      ok: true,
+      user_hash: result.user_hash,
+      merged: result.merged,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('participants/merge-anonymous-session error', error);
+    return res.status(500).json({ ok: false, error: 'internal_error' });
+  } finally {
+    client.release();
   }
 });
 
@@ -471,10 +571,19 @@ participantsRouter.post('/participants/link-auth', async (req, res) => {
       );
 
       if (existingForAuth[0] && existingForAuth[0].user_hash !== userHash) {
-        await client.query('ROLLBACK');
+        const mergeResult = await mergeAnonymousSession(client, {
+          authUserId,
+          anonymousUserHash: userHash,
+        });
+        if (!mergeResult.ok) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ ok: false, error: mergeResult.error });
+        }
+        await client.query('COMMIT');
         return res.json({
           ok: true,
-          existingUserHash: existingForAuth[0].user_hash,
+          existingUserHash: mergeResult.user_hash,
+          merged: mergeResult.merged,
         });
       }
 
@@ -699,7 +808,7 @@ participantsRouter.post('/session', async (req, res) => {
   if (!validated.ok) {
     return res.status(400).json({ ok: false, error: validated.error });
   }
-  const { userHash, participantRow } = validated;
+  const { userHash, participantRow, preferenceSnapshotMilestone } = validated;
 
   const clientIp =
     (typeof req.headers['x-forwarded-for'] === 'string'
@@ -785,7 +894,10 @@ participantsRouter.post('/session', async (req, res) => {
           jsonbCols,
           userHash,
         );
-        const row = rowAfterPrecast;
+        let row = rowAfterPrecast;
+        if ('current_space_id' in row) {
+          row = await sanitizeParticipantRowCurrentSpaceId(client, userHash, row);
+        }
         const columns = Object.keys(row);
         const values = Object.values(row);
 
@@ -845,7 +957,19 @@ participantsRouter.post('/session', async (req, res) => {
       `;
 
         try {
-          await client.query(sql, [userHash, ...values]);
+          await client.query('BEGIN');
+          try {
+            await client.query(sql, [userHash, ...values]);
+            await tryWritePreferenceSnapshotAfterUpsert(
+              client,
+              userHash,
+              preferenceSnapshotMilestone,
+            );
+            await client.query('COMMIT');
+          } catch (txErr) {
+            await client.query('ROLLBACK');
+            throw txErr;
+          }
           console.log('[participants.session] upsert success', { userHash });
           sessionSyncTrace({
             hypothesisId: 'S7',
@@ -904,7 +1028,19 @@ participantsRouter.post('/session', async (req, res) => {
         SET ${assignments2.join(', ')}, updated_at = NOW()
       `;
               try {
-                await client.query(sqlScalars, [userHash, ...vals2]);
+                await client.query('BEGIN');
+                try {
+                  await client.query(sqlScalars, [userHash, ...vals2]);
+                  await tryWritePreferenceSnapshotAfterUpsert(
+                    client,
+                    userHash,
+                    preferenceSnapshotMilestone,
+                  );
+                  await client.query('COMMIT');
+                } catch (txErr) {
+                  await client.query('ROLLBACK');
+                  throw txErr;
+                }
                 console.warn('[participants.session] upsert recovered after 22P02 by omitting all JSONB columns', {
                   userHash,
                 });

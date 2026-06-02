@@ -209,6 +209,24 @@ export function coreProfileStepQueryFromFlowBarIndex(index: number): CoreProfile
 
 export const FULL_FLOW_PROFILE_STEP_QUERY_KEY = 'step';
 
+/** Query flag: user opened a funnel step from the dashboard (retake / revisit). */
+export const FULL_FLOW_FROM_DASHBOARD_QUERY_KEY = 'from';
+export const FULL_FLOW_FROM_DASHBOARD_VALUE = 'dashboard';
+
+export function isFullFlowFromDashboard(
+  searchParams: Pick<URLSearchParams, 'get'> | { get: (key: string) => string | null },
+): boolean {
+  return searchParams.get(FULL_FLOW_FROM_DASHBOARD_QUERY_KEY) === FULL_FLOW_FROM_DASHBOARD_VALUE;
+}
+
+export function appendFromDashboardQuery(href: string): string {
+  if (href.includes(`${FULL_FLOW_FROM_DASHBOARD_QUERY_KEY}=`)) {
+    return href;
+  }
+  const separator = href.includes('?') ? '&' : '?';
+  return `${href}${separator}${FULL_FLOW_FROM_DASHBOARD_QUERY_KEY}=${FULL_FLOW_FROM_DASHBOARD_VALUE}`;
+}
+
 /**
  * Progress bar indices 7–9 → `step` query for `/setup/room/[id]?step=` (revisit from journey bar).
  */
@@ -269,14 +287,17 @@ export function getFullFlowDashboardStepHref(index: number, spaceId?: string | n
 
   const href = getFullFlowCompletedStepHref(index, { spaceId });
 
+  if (href.startsWith('/setup/profile') || href.startsWith('/setup/room/')) {
+    return appendFromDashboardQuery(href);
+  }
   if (href === '/flow/inspirations' || href.startsWith('/flow/inspirations?')) {
-    return '/flow/inspirations?from=dashboard';
+    return appendFromDashboardQuery('/flow/inspirations');
   }
   if (href === '/flow/big-five' || href.startsWith('/flow/big-five?')) {
-    return '/flow/big-five?from=dashboard';
+    return appendFromDashboardQuery('/flow/big-five');
   }
   if (href === '/flow/generate' || href.startsWith('/flow/generate')) {
-    return href.includes('from=') ? href : `${href}${href.includes('?') ? '&' : '?'}from=dashboard`;
+    return appendFromDashboardQuery(href);
   }
   return href;
 }
@@ -484,7 +505,11 @@ export function resolveCompletedFullFlowStepIndices(input: FullFlowCompletionInp
   if (input.generatedCount > 0 || (session.generations?.length || 0) > 0) {
     completed.add(10);
   }
-  if (session.currentStep === 'dashboard' && input.generatedCount > 0) completed.add(11);
+  if (session.currentStep === 'thanks') {
+    completed.add(11);
+  } else if (session.currentStep === 'dashboard' && input.generatedCount > 0) {
+    completed.add(11);
+  }
 
   const furthest = completed.size > 0 ? Math.max(...completed) : -1;
   for (let i = 0; i <= furthest; i++) {

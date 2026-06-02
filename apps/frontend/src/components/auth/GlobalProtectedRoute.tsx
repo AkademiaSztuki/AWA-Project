@@ -14,6 +14,8 @@ const PUBLIC_PATHS = [
   '/auth/google', // Google OAuth PKCE return (/auth/google/callback)
   '/auth/verify', // Magic link verification
   '/auth/verify-email', // Email verification after registration
+  '/auth/forgot-password', // Password reset request (logged-out)
+  '/auth/reset-password', // Password reset form from email link
   '/flow', // Onboarding / funnel without forced login
   '/setup', // Profile wizard without forced login
 ];

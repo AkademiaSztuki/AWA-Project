@@ -43,6 +43,7 @@ import {
   getOrCreateSpaceId,
   saveParticipantImages
 } from '@/lib/remote-spaces';
+import { saveSessionWithActiveSpace } from '@/lib/current-space-sync';
 
 interface GeneratedImage {
   id: string;
@@ -709,9 +710,15 @@ export default function ModifyPage() {
           generation_id: jobId ?? undefined,
           space_id: spaceId
         }];
-        await saveParticipantImages(userHash, imagesToSave);
+        const modSaveResult = await saveParticipantImages(userHash, imagesToSave);
+        if (modSaveResult.failed > 0) {
+          console.error(
+            '[modify] saveParticipantImages partial failure:',
+            modSaveResult,
+          );
+        }
       }
-      
+
       setLoadingProgress(100);
       setLoadingStage(3);
       setStatusMessage({ pl: "Modyfikacja zakończona!", en: "Modification completed!" });
@@ -729,8 +736,9 @@ export default function ModifyPage() {
       setGenerationHistory((prev) => [...prev, historyNode]);
       setCurrentHistoryIndex(generationHistory.length);
       
-      // Update session with new image and generation info (single call to avoid race conditions)
-      await updateSessionData({
+      const modSessionPatch = {
+        currentStep: 'generate' as const,
+        ...(spaceId ? { currentSpaceId: spaceId } : {}),
         generations: [
           ...((sessionData as any).generations || []),
           {
@@ -747,13 +755,19 @@ export default function ModifyPage() {
         selectedImage: {
           id: newImage.id,
           url: newImage.url,
-          base64: newImage.base64, // Include base64 for future modifications!
+          base64: newImage.base64,
           source: selectedImage?.source,
           provider: 'google' as const,
           parameters: newImage.parameters
         },
         blindSelectionMade: true
-      } as any);
+      };
+      await updateSessionData(modSessionPatch as any);
+      try {
+        await saveSessionWithActiveSpace(modSessionPatch as any);
+      } catch (e) {
+        console.warn('[modify] saveSessionWithActiveSpace failed:', e);
+      }
 
       try {
         await closeJob('success');

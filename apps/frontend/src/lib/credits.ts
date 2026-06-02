@@ -4,8 +4,9 @@
 
 import { gcpApi } from './gcp-api-client';
 
-const CREDITS_PER_GENERATION = 10;
-const FREE_GRANT_CREDITS = 600;
+/** SYNC with apps/backend-gcp/src/lib/billing-constants.ts */
+const CREDITS_PER_GENERATION = 100;
+const FREE_GRANT_CREDITS = 6000;
 
 export interface CreditBalance {
   balance: number;
@@ -118,9 +119,69 @@ export async function allocateSubscriptionCredits(
   return false;
 }
 
-export async function grantFreeCredits(userHash: string): Promise<boolean> {
+export type GrantFreeCreditsReason =
+  | 'granted'
+  | 'already_used'
+  | 'program_full'
+  | 'not_eligible'
+  | 'no_participant';
+
+export interface GrantFreeCreditsResponse {
+  success: boolean;
+  reason: GrantFreeCreditsReason | 'error';
+}
+
+export async function grantFreeCredits(userHash: string): Promise<GrantFreeCreditsResponse> {
   const result = await gcpApi.credits.grantFree({ userHash });
-  return !!result.ok && !!result.data?.granted;
+  if (!result.ok || !result.data) {
+    return { success: false, reason: 'error' };
+  }
+  const reason = (result.data.reason as GrantFreeCreditsReason) || 'error';
+  return { success: !!result.data.granted, reason };
+}
+
+export interface FoundersProgramStatus {
+  max: number;
+  claimed: number;
+  remaining: number;
+  open: boolean;
+}
+
+export async function getFoundersProgramStatus(): Promise<FoundersProgramStatus> {
+  const result = await gcpApi.credits.foundersStatus();
+  if (!result.ok || !result.data) {
+    return { max: 1000, claimed: 0, remaining: 1000, open: true };
+  }
+  return {
+    max: result.data.max ?? 1000,
+    claimed: result.data.claimed ?? 0,
+    remaining: result.data.remaining ?? 0,
+    open: !!result.data.open,
+  };
+}
+
+export type RedeemPromoReason =
+  | 'granted'
+  | 'already_redeemed'
+  | 'invalid_code'
+  | 'expired'
+  | 'exhausted'
+  | 'inactive'
+  | 'error';
+
+export async function redeemPromoCode(
+  userHash: string,
+  code: string,
+): Promise<{ success: boolean; reason: RedeemPromoReason; credits?: number }> {
+  const result = await gcpApi.credits.redeemPromo({ userHash, code });
+  if (!result.ok || !result.data) {
+    return { success: false, reason: 'error' };
+  }
+  return {
+    success: !!result.data.granted,
+    reason: (result.data.reason as RedeemPromoReason) || 'error',
+    credits: result.data.credits,
+  };
 }
 
 export async function expireCredits(): Promise<number> {

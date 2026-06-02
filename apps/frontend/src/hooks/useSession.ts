@@ -13,6 +13,7 @@ import { gcpApi } from '@/lib/gcp-api-client';
 import { GOOGLE_AUTH_EMAIL_STORAGE_KEY } from '@/lib/auth-storage-keys';
 import { mergeInspirationLists } from '@/lib/inspiration-merge';
 import { hasResearchConsent } from '@/lib/research-consent';
+import { mergeSessionDataUpdates } from '@/lib/participants-mapper';
 
 const SESSION_STORAGE_KEY = 'aura_session';
 const USER_HASH_STORAGE_KEY = 'aura_user_hash';
@@ -377,7 +378,26 @@ const persistSessionData = (data: SessionData): SessionData => {
       if (willPreserveUserHash) {
         data = { ...data, userHash: existing.userHash };
       }
-      if (willPreserveColorsAndMaterials) {
+      if (existing.colorsAndMaterials && data.colorsAndMaterials) {
+        const prev = existing.colorsAndMaterials;
+        const next = data.colorsAndMaterials;
+        const pickStr = (n?: string, p?: string) =>
+          typeof n === 'string' && n.trim().length > 0 ? n.trim() : p;
+        const pickMats = (n?: string[], p?: string[]) => {
+          const nl = Array.isArray(n) ? n.filter((m) => typeof m === 'string' && m.trim()) : [];
+          if (nl.length > 0) return nl;
+          const pl = Array.isArray(p) ? p.filter((m) => typeof m === 'string' && m.trim()) : [];
+          return pl;
+        };
+        data = {
+          ...data,
+          colorsAndMaterials: {
+            selectedPalette: pickStr(next.selectedPalette, prev.selectedPalette) ?? '',
+            selectedStyle: pickStr(next.selectedStyle, prev.selectedStyle) ?? '',
+            topMaterials: pickMats(next.topMaterials, prev.topMaterials),
+          },
+        };
+      } else if (willPreserveColorsAndMaterials) {
         data = { ...data, colorsAndMaterials: existing.colorsAndMaterials };
       }
       if (willPreserveVisualDNA) {
@@ -736,14 +756,23 @@ export const useSession = (): UseSessionReturn => {
                 return '';
               };
               
+              const textureFallback = (): string[] => {
+                const tex =
+                  mergedSession.sensoryPreferences?.texture?.trim() ||
+                  profileSessionData.sensoryPreferences?.texture?.trim();
+                return tex ? [tex] : [];
+              };
+
               return {
                 selectedPalette: getNonEmptyPalette(),
                 selectedStyle: getNonEmptyStyle(),
-                topMaterials: Array.isArray(localExplicit.topMaterials) && localExplicit.topMaterials.length > 0
-                  ? localExplicit.topMaterials
-                  : (Array.isArray(profileExplicit?.topMaterials) && profileExplicit.topMaterials.length > 0
-                      ? profileExplicit.topMaterials
-                      : [])
+                topMaterials:
+                  Array.isArray(localExplicit.topMaterials) && localExplicit.topMaterials.length > 0
+                    ? localExplicit.topMaterials.filter(Boolean)
+                    : Array.isArray(profileExplicit?.topMaterials) &&
+                        profileExplicit.topMaterials.length > 0
+                      ? profileExplicit.topMaterials.filter(Boolean)
+                      : textureFallback(),
               };
             })();
 
@@ -970,9 +999,9 @@ export const useSession = (): UseSessionReturn => {
       const prevData = prev.sessionData;
       // Preserve roomImageEmpty from previous state if not explicitly provided in updates
       const hasRoomImageEmptyInUpdates = 'roomImageEmpty' in updates;
+      const merged = mergeSessionDataUpdates(prevData, updates);
       const newData = {
-        ...prevData,
-        ...updates,
+        ...merged,
         // CRITICAL: Preserve roomImageEmpty from previous state if not explicitly in updates
         roomImageEmpty: hasRoomImageEmptyInUpdates ? updates.roomImageEmpty : prevData.roomImageEmpty,
       };
@@ -1018,6 +1047,16 @@ export function getSessionStoreSnapshot() {
   return sessionStoreState.sessionData;
 }
 
+/** Push auth-resolved user_hash into the shared session store (e.g. after email login). */
+export function syncSessionUserHash(userHash: string) {
+  if (!userHash || typeof window === 'undefined') return;
+  setSessionStoreState((prev) => {
+    if (prev.sessionData.userHash === userHash) return prev;
+    const persisted = persistSessionData({ ...prev.sessionData, userHash });
+    return { ...prev, sessionData: persisted };
+  });
+}
+
 function getSessionStoreInitSnapshot() {
   return sessionStoreState.isInitialized;
 }
@@ -1052,7 +1091,7 @@ function ensureGcpSaveFlushListeners(): void {
     if (isSessionSyncDebugEnabled()) {
       console.log('[session-sync:debug] flush GCP save (pagehide / hidden tab)');
     }
-    void saveSessionToGcp(snapshot);
+    void saveSessionToGcp(snapshot, { keepalive: true });
   };
   window.addEventListener('pagehide', flushPending);
   document.addEventListener('visibilitychange', () => {

@@ -7,14 +7,14 @@ import { gcpApi } from '@/lib/gcp-api-client';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeRelativeRedirectPath } from '@/lib/safe-relative-redirect';
-
-const GOOGLE_AUTH_USER_KEY = 'aura_google_auth_user_id';
+import { GOOGLE_AUTH_USER_ID_STORAGE_KEY } from '@/lib/auth-storage-keys';
 
 function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  const [redirectHint, setRedirectHint] = useState('');
   const { hydrateFromMagicLink } = useAuth();
 
   useEffect(() => {
@@ -37,10 +37,16 @@ function VerifyEmailContent() {
         }
         const { user_hash, auth_user_id, email } = res.data;
         safeLocalStorage.setItem('aura_user_hash', user_hash);
-        safeLocalStorage.setItem(GOOGLE_AUTH_USER_KEY, auth_user_id);
+        safeLocalStorage.setItem(GOOGLE_AUTH_USER_ID_STORAGE_KEY, auth_user_id);
         hydrateFromMagicLink(auth_user_id, email);
         setStatus('ok');
-        router.replace(sanitizeRelativeRedirectPath(next, '/setup/profile'));
+        const target = sanitizeRelativeRedirectPath(next, '/setup/profile');
+        setRedirectHint(
+          'Możesz zamknąć tę kartę i wrócić do IDA na komputerze — jeśli czekasz tam na potwierdzenie, zalogujemy Cię automatycznie.',
+        );
+        window.setTimeout(() => {
+          router.replace(target);
+        }, 2000);
       })
       .catch(() => {
         setStatus('error');
@@ -63,6 +69,24 @@ function VerifyEmailContent() {
             <div className="text-sm text-silver-dark font-modern">
               Trwa weryfikacja linku z wiadomości.
             </div>
+          </>
+        )}
+        {status === 'ok' && (
+          <>
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600">
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div className="text-xl font-nasalization text-graphite mb-3">
+              Adres potwierdzony
+            </div>
+            <p className="text-sm text-graphite font-modern mb-4">
+              Za chwilę przekierujemy Cię dalej…
+            </p>
+            {redirectHint ? (
+              <p className="text-xs text-silver-dark font-modern leading-relaxed">{redirectHint}</p>
+            ) : null}
           </>
         )}
         {status === 'error' && (

@@ -15,6 +15,7 @@ import {
 import { ensureParticipantExists } from '@/lib/gcp-data';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
+import { resolveExplicitTopMaterialsFromRow } from '@/lib/participants-mapper';
 
 // =========================
 // USER PROFILE
@@ -47,11 +48,7 @@ export async function getUserProfile(
       data.implicit_style_2,
       data.implicit_style_3,
     ].filter(Boolean) as string[];
-    const explicitMaterials = [
-      data.explicit_material_1,
-      data.explicit_material_2,
-      data.explicit_material_3,
-    ].filter(Boolean) as string[];
+    const explicitMaterials = resolveExplicitTopMaterialsFromRow(data);
 
     const profile = {
       userHash: data.user_hash,

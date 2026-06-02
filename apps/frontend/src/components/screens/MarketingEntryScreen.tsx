@@ -65,7 +65,7 @@ const copy = {
     secondaryCta: 'Zobacz jak działa',
     proof: [
       'Pierwsze propozycje w kilka minut',
-      'Możesz zacząć za darmo',
+      'Oferta na start: 6000 kredytów Basic za 0 zł',
       'Dopasowanie do Twojego profilu',
       'Przejmij kontrolę: modyfikuj kolory, światło i detale',
     ],
@@ -217,7 +217,7 @@ const copy = {
     secondaryCta: 'See how it works',
     proof: [
       'First ideas in minutes',
-      'Start for free',
+      'Launch offer: 6000 Basic credits for free',
       'Matched to your profile',
       'Take control: tweak colors, lighting, and details',
     ],
@@ -701,6 +701,10 @@ const MARKETING_HEADER_SETTLE_ADVANCE_EPS = 0.00006;
 /** Auto-advance interval for hero interior slides (ms). */
 const HERO_INTERIOR_AUTO_ADVANCE_MS = 11_000;
 
+/** Before/after split on load — lower % = more empty “before” room visible (better behind hero copy on mobile). */
+const HERO_COMPARISON_INITIAL_DESKTOP = 56;
+const HERO_COMPARISON_INITIAL_MOBILE = 38;
+
 /** Crossfade duration when swapping hero slides (seconds; exit + enter overlap in `sync` mode). */
 const HERO_INTERIOR_CROSSFADE_SEC = 2.55;
 
@@ -990,9 +994,10 @@ const MarketingEntryScreen: React.FC = () => {
   const heroCopyRelaxedOverflow =
     fontScale === 'lg' || fontScale === 'xl' || textSpacing;
   const reduceHeroCarousel = useReducedMotion();
-  const [sliderPosition, setSliderPosition] = useState(56);
+  const [sliderPosition, setSliderPosition] = useState(HERO_COMPARISON_INITIAL_DESKTOP);
   const [activeVariant, setActiveVariant] = useState(0);
   const comparisonRef = useRef<HTMLDivElement | null>(null);
+  const comparisonDraggingRef = useRef(false);
   const heroStickyFrameRef = useRef<HTMLDivElement | null>(null);
   const heroCopyGlassPanelRef = useRef<HTMLDivElement | null>(null);
   const heroStyleRailAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -1117,8 +1122,8 @@ const MarketingEntryScreen: React.FC = () => {
     ([s, desktop]) => {
       const t = Math.min(1, Math.max(0, typeof s === 'number' ? s : 0));
       const isDesktop = typeof desktop === 'number' && desktop > 0.5;
-      const basePx = isDesktop ? 16 : 10;
-      const extraPx = (1 - t) * 64;
+      const basePx = isDesktop ? 16 : 14;
+      const extraPx = (1 - t) * (isDesktop ? 64 : 28);
       return `${(basePx + extraPx).toFixed(1)}px`;
     }
   );
@@ -1129,9 +1134,9 @@ const MarketingEntryScreen: React.FC = () => {
     ([s, desktop]) => {
       const t = Math.min(1, Math.max(0, typeof s === 'number' ? s : 0));
       const isWideHeroPanel = typeof desktop === 'number' && desktop > 0.5;
-      const basePx = isWideHeroPanel ? 16 : 10;
-      const copyBottomPx = basePx + (1 - t) * 64;
-      const z20OuterBottomPx = isWideHeroPanel ? 24 : 16;
+      const basePx = isWideHeroPanel ? 16 : 14;
+      const copyBottomPx = basePx + (1 - t) * (isWideHeroPanel ? 64 : 28);
+      const z20OuterBottomPx = isWideHeroPanel ? 24 : 20;
       return `calc(${z20OuterBottomPx + copyBottomPx}px + env(safe-area-inset-bottom, 0px))`;
     }
   );
@@ -1354,6 +1359,14 @@ const MarketingEntryScreen: React.FC = () => {
       setHeaderVisible(false);
     }
   }, [heroSettle, scrollYProgress, setHeaderVisible]);
+
+  /** Align with `useIsMobile(1280)` — set split once before paint (SSR default is desktop). */
+  useLayoutEffect(() => {
+    const mobile = getLayoutViewportWidth() < 1280;
+    setSliderPosition(
+      mobile ? HERO_COMPARISON_INITIAL_MOBILE : HERO_COMPARISON_INITIAL_DESKTOP
+    );
+  }, []);
 
   useLayoutEffect(() => {
     if (typeof window !== 'undefined' && window.scrollY >= MARKETING_HEADER_WINDOW_SCROLL_REVEAL) {
@@ -1585,7 +1598,10 @@ const MarketingEntryScreen: React.FC = () => {
       {/* Width probe — must not use overflow-hidden or sticky will not behave reliably */}
       <div ref={heroBleedMeasureRef} className="pointer-events-none h-0 w-full" aria-hidden="true" />
       <div className={cn(useMarqueePortal && 'pointer-events-auto')}>
-      <section ref={heroRef} className="relative min-h-[100dvh] bg-transparent xl:min-h-[128dvh]">
+      <section
+        ref={heroRef}
+        className="relative min-h-[calc(100dvh-env(safe-area-inset-top,0px))] bg-transparent max-xl:-mt-[env(safe-area-inset-top,0px)] xl:min-h-[128dvh]"
+      >
         <motion.div
           ref={heroStickyFrameRef}
           style={
@@ -1597,7 +1613,7 @@ const MarketingEntryScreen: React.FC = () => {
                 }
           }
           className={cn(
-            'sticky top-0 z-[5] h-[100dvh] overflow-hidden',
+            'sticky top-0 z-[5] h-[calc(100dvh-env(safe-area-inset-top,0px))] overflow-hidden max-xl:pt-[env(safe-area-inset-top,0px)]',
             !isMobile && 'will-change-[width,margin-left]'
           )}
         >
@@ -1608,16 +1624,31 @@ const MarketingEntryScreen: React.FC = () => {
           <motion.div
             ref={comparisonRef}
             tabIndex={0}
-            className="absolute inset-0 z-[1] cursor-ew-resize overflow-hidden bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+            className="absolute inset-0 z-[1] cursor-ew-resize touch-none select-none overflow-hidden bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             onPointerDown={(event) => {
+              comparisonDraggingRef.current = true;
               event.currentTarget.setPointerCapture(event.pointerId);
               updateSliderFromClientX(event.clientX);
             }}
             onPointerMove={(event) => {
-              if (event.pointerType === 'touch') {
-                if (event.buttons !== 1) return;
-              }
+              if (!comparisonDraggingRef.current) return;
+              if (event.pointerType !== 'touch' && event.buttons !== 1) return;
               updateSliderFromClientX(event.clientX);
+            }}
+            onPointerUp={(event) => {
+              comparisonDraggingRef.current = false;
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+            }}
+            onPointerCancel={(event) => {
+              comparisonDraggingRef.current = false;
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+            }}
+            onLostPointerCapture={() => {
+              comparisonDraggingRef.current = false;
             }}
             onKeyDown={(event) => {
               const step = 5;
@@ -1659,59 +1690,62 @@ const MarketingEntryScreen: React.FC = () => {
                   photoCornerRadius={heroBorderRadius}
                   priority
                 />
-              <div
-                className="absolute inset-0 overflow-hidden"
-                style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
-              >
-                <AnimatePresence initial={false} mode="sync">
-                  <motion.div
-                    key={activeVariant}
-                    className="absolute inset-0"
-                    initial={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
-                    transition={{
-                      duration: reduceHeroCarousel
-                        ? 0
-                        : isMobile
-                          ? 1.15
-                          : HERO_INTERIOR_CROSSFADE_SEC,
-                      ease: HERO_INTERIOR_CROSSFADE_EASE,
-                    }}
-                  >
+                <div
+                  className="absolute inset-0 overflow-hidden"
+                  style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+                >
+                  <AnimatePresence initial={false} mode="sync">
+                    <motion.div
+                      key={activeVariant}
+                      className="absolute inset-0"
+                      initial={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
+                      transition={{
+                        duration: reduceHeroCarousel
+                          ? 0
+                          : isMobile
+                            ? 1.15
+                            : HERO_INTERIOR_CROSSFADE_SEC,
+                        ease: HERO_INTERIOR_CROSSFADE_EASE,
+                      }}
+                    >
                       <HeroPhotoLayer
                         src={activeAfterImageSrc}
                         photoCornerRadius={heroBorderRadius}
                         afterGlow
                         priority={activeVariant === 0}
                       />
-                  </motion.div>
-                </AnimatePresence>
-              </div>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
 
                 <div
                   className="absolute inset-y-0 z-[2] w-px bg-white/45"
                   style={{ left: `${sliderPosition}%` }}
                   aria-hidden="true"
                 >
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/55 bg-transparent backdrop-blur-[2px] sm:h-20 sm:w-20">
-                    <SlidersHorizontal size={28} className="text-gold-500" aria-hidden="true" />
+                  <div
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 touch-none"
+                    aria-hidden="true"
+                  >
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/55 bg-white/20 backdrop-blur-[2px] sm:h-20 sm:w-20">
+                      <SlidersHorizontal size={28} className="text-gold-500" />
+                    </div>
                   </div>
                 </div>
-              </div>
             </motion.div>
 
             <motion.div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/24 via-graphite/6 to-transparent max-xl:from-graphite/20 max-xl:via-transparent lg:from-graphite/46 lg:via-graphite/12 xl:from-graphite/38 xl:via-graphite/8" />
             <motion.div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[34%] bg-gradient-to-t from-black/22 via-black/6 to-transparent max-xl:from-black/18 xl:h-[40%] xl:from-black/44 xl:via-black/14 xl:from-black/36" />
           </motion.div>
 
-          <motion.div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between pt-[env(safe-area-inset-top,0px)] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 lg:pb-6">
+          <motion.div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between pt-0 pb-[max(2rem,calc(1.25rem+env(safe-area-inset-bottom,0px)))] max-xl:pb-[max(2.5rem,calc(1.75rem+env(safe-area-inset-bottom,0px)))] sm:pb-4 lg:pb-6">
             {/*
               Anchor copy to the sticky frame’s right edge (absolute right-*), not ml-auto — otherwise when width
               grows during hero settle, margin-left:auto absorbs the delta and the glass panel drifts left.
             */}
-            <div className="pointer-events-none relative min-h-0 flex-1 px-4 pb-2 sm:px-6 sm:pb-3 lg:px-10 lg:pb-4">
+            <div className="pointer-events-none relative min-h-0 flex-1 px-4 pb-0 max-xl:pb-0 sm:px-6 sm:pb-3 lg:px-10 lg:pb-4">
               <motion.div
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1728,38 +1762,38 @@ const MarketingEntryScreen: React.FC = () => {
                   ref={assignHeroCopyGlassPanelRef}
                   lang={language === 'pl' ? 'pl' : 'en'}
                   className={cn(
-                    'pointer-events-none rounded-[1.65rem] px-5 py-6 sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-8',
+                    'pointer-events-none rounded-[1.65rem] px-5 py-6 max-xl:px-5 max-xl:py-4 sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-8',
                     'max-xl:border-none max-xl:bg-transparent max-xl:shadow-none max-xl:backdrop-blur-none',
                     'xl:glass-panel xl:border xl:border-white/25 xl:bg-gradient-to-br xl:from-pearl-100/82 xl:via-pearl-50/55 xl:to-champagne/35 xl:shadow-[0_24px_70px_-20px_rgba(45,38,28,0.28)] xl:backdrop-blur-xl',
                     heroCopyRelaxedOverflow
                       ? 'max-h-none overflow-visible'
-                      : 'max-h-[min(56dvh,520px)] overflow-y-auto overscroll-contain sm:max-h-none sm:overflow-visible xl:max-h-[min(72dvh,680px)] xl:overflow-y-auto xl:overscroll-contain'
+                      : 'max-xl:max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-6rem)] max-xl:overflow-y-auto max-xl:overscroll-contain max-xl:scroll-pb-3 max-xl:scrollbar-hide max-xl:pointer-events-none xl:max-h-[min(72dvh,680px)] xl:overflow-y-auto xl:overscroll-contain xl:scrollbar-hide xl:pointer-events-none'
                   )}
                 >
-                  <div className="mb-3">
+                  <div className="mb-3 max-xl:mb-2">
                     <span className="inline-flex items-center gap-2 rounded-full border border-gold-500/40 bg-gold-500/12 px-3 py-1.5 text-[10px] font-modern uppercase tracking-[0.2em] text-graphite sm:text-xs">
                       <Sparkles size={13} className="text-gold-500" aria-hidden="true" />
                       {t.eyebrow}
                     </span>
                   </div>
-                  <h1 className="mb-3 text-balance break-words text-[1.5rem] font-semibold leading-[1.18] tracking-tight text-graphite hyphens-auto sm:mb-4 sm:text-[1.75rem] sm:leading-[1.2] md:text-3xl lg:text-[2rem] lg:leading-snug xl:text-[2.25rem]">
+                  <h1 className="mb-3 max-xl:mb-2.5 text-balance break-words text-[1.5rem] font-semibold leading-[1.18] tracking-tight text-graphite hyphens-auto sm:mb-4 sm:text-[1.75rem] sm:leading-[1.2] md:text-3xl lg:text-[2rem] lg:leading-snug xl:text-[2.25rem]">
                     {t.headline}
                   </h1>
-                  <ul className="mb-4 flex flex-col gap-2 sm:mb-5">
+                  <ul className="mb-4 flex flex-col gap-2 max-xl:mb-3 max-xl:gap-1.5 sm:mb-5">
                     {t.proof.map((line) => (
                       <li
                         key={line}
-                        className="flex items-start gap-2.5 font-modern text-[13px] leading-snug text-graphite/90 sm:text-sm"
+                        className="flex items-start gap-2 font-modern text-[13px] leading-snug text-graphite/90 max-xl:gap-2 sm:gap-2.5 sm:text-sm"
                       >
                         <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-gold-500" aria-hidden="true" />
                         {line}
                       </li>
                     ))}
                   </ul>
-                  <p className="mb-5 font-modern text-sm font-medium leading-relaxed text-graphite drop-shadow-[0_1px_0_rgba(255,255,255,0.45)] sm:mb-6 sm:text-base sm:leading-7">
+                  <p className="mb-5 max-xl:mb-3 max-xl:text-[13px] max-xl:leading-snug font-modern text-sm font-medium leading-relaxed text-graphite drop-shadow-[0_1px_0_rgba(255,255,255,0.45)] sm:mb-6 sm:text-base sm:leading-7">
                     {t.subheadline}
                   </p>
-                  <div className="pointer-events-auto grid w-full grid-cols-1 gap-2.5 sm:grid-cols-2 sm:items-stretch sm:gap-3">
+                  <div className="pointer-events-auto grid w-full grid-cols-1 gap-2 max-xl:gap-2 max-xl:pb-1 pb-2 sm:grid-cols-2 sm:items-stretch sm:gap-3 sm:pb-0">
                     <GlassButton
                       size="lg"
                       onClick={goToPathSelection}
