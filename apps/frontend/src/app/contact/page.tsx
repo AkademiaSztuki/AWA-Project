@@ -133,14 +133,14 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen py-8 px-4 pb-28 sm:pb-32">
+    <div className="min-h-screen py-8 px-4 pb-28 sm:pb-32" lang={lang}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="max-w-4xl mx-auto"
       >
-        <GlassCard className="p-8 md:p-12" lang={lang}>
+        <GlassCard className="p-8 md:p-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

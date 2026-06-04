@@ -151,14 +151,14 @@ Legal bases are provided during onboarding and in context (e.g., consent for res
   const t = content[language];
 
   return (
-    <div className="min-h-screen py-8 px-4">
+    <div className="min-h-screen py-8 px-4" lang={lang}>
       <div className="max-w-4xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <GlassCard className="p-8 md:p-12" lang={lang}>
+          <GlassCard className="p-8 md:p-12">
             <div className="mb-8">
               <h1 className="text-balance text-3xl md:text-4xl font-nasalization text-graphite drop-shadow-sm mb-4">
                 {t.title}
