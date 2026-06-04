@@ -17,23 +17,69 @@ import { cn } from '@/lib/utils';
 
 export const MARKETING_IDA_INTRO_SESSION_KEY = 'ida_marketing_intro_shown';
 export const MARKETING_PATH_SELECTION_DIALOGUE_SESSION_KEY = 'ida_marketing_path_selection_shown';
+export const MARKETING_PERSONALIZATION_DIALOGUE_SESSION_KEY = 'ida_marketing_personalization_shown';
+export const MARKETING_RESEARCH_DIALOGUE_SESSION_KEY = 'ida_marketing_research_shown';
+export const MARKETING_EARLY_ACCESS_DIALOGUE_SESSION_KEY = 'ida_marketing_early_access_shown';
 export const MARKETING_IDA_INTRO_SETTLE_THRESHOLD = 0.92;
 
-/** TODO: set true before release — intro once per browser session. */
+/** Intro + scroll dialogues replay on each visit (no persistence). */
 export const MARKETING_IDA_INTRO_ONCE_PER_SESSION = false;
-
-/** TODO: set true before release — path-selection dialogue once per browser session. */
-export const MARKETING_PATH_SELECTION_ONCE_PER_SESSION = false;
+export const MARKETING_SCROLL_DIALOGUE_ONCE_PER_SESSION = false;
 
 export const HOW_IT_WORKS_SECTION_ID = 'how-it-works';
 export const MARKETING_PATH_SELECTION_SECTION_ID = 'marketing-path-selection';
+export const MARKETING_WHY_SECTION_ID = 'marketing-why';
+export const MARKETING_RESEARCH_SECTION_ID = 'research-project';
+export const MARKETING_FINAL_CTA_SECTION_ID = 'marketing-final-cta';
 
 const HOW_IT_WORKS_VISIBLE_RATIO = 0.38;
 const PATH_SELECTION_VISIBLE_RATIO = 0.45;
+const WHY_SECTION_VISIBLE_RATIO = 0.4;
+const RESEARCH_SECTION_VISIBLE_RATIO = 0.4;
+const FINAL_CTA_VISIBLE_RATIO = 0.45;
 const CTA_OBSERVER_FALLBACK_MS = 1200;
 const DIALOGUE_AUDIO_POLL_MS = 160;
 
-type MarketingDialogueStep = 'marketing_intro' | 'path_selection';
+type MarketingDialogueStep =
+  | 'marketing_intro'
+  | 'marketing_path_selection'
+  | 'marketing_personalization'
+  | 'marketing_research'
+  | 'marketing_early_access';
+
+type ScrollDialogueConfig = {
+  step: Exclude<MarketingDialogueStep, 'marketing_intro'>;
+  sectionId: string;
+  sessionKey: string;
+  visibleRatio: number;
+};
+
+const SCROLL_DIALOGUES: ScrollDialogueConfig[] = [
+  {
+    step: 'marketing_path_selection',
+    sectionId: MARKETING_PATH_SELECTION_SECTION_ID,
+    sessionKey: MARKETING_PATH_SELECTION_DIALOGUE_SESSION_KEY,
+    visibleRatio: PATH_SELECTION_VISIBLE_RATIO,
+  },
+  {
+    step: 'marketing_personalization',
+    sectionId: MARKETING_WHY_SECTION_ID,
+    sessionKey: MARKETING_PERSONALIZATION_DIALOGUE_SESSION_KEY,
+    visibleRatio: WHY_SECTION_VISIBLE_RATIO,
+  },
+  {
+    step: 'marketing_research',
+    sectionId: MARKETING_RESEARCH_SECTION_ID,
+    sessionKey: MARKETING_RESEARCH_DIALOGUE_SESSION_KEY,
+    visibleRatio: RESEARCH_SECTION_VISIBLE_RATIO,
+  },
+  {
+    step: 'marketing_early_access',
+    sectionId: MARKETING_FINAL_CTA_SECTION_ID,
+    sessionKey: MARKETING_EARLY_ACCESS_DIALOGUE_SESSION_KEY,
+    visibleRatio: FINAL_CTA_VISIBLE_RATIO,
+  },
+];
 
 function hasSessionFlag(key: string, oncePerSession: boolean): boolean {
   if (!oncePerSession) return false;
@@ -62,18 +108,16 @@ function markMarketingIntroShown(): void {
   setSessionFlag(MARKETING_IDA_INTRO_SESSION_KEY, MARKETING_IDA_INTRO_ONCE_PER_SESSION);
 }
 
-function hasPathSelectionDialogueBeenShown(): boolean {
-  return hasSessionFlag(
-    MARKETING_PATH_SELECTION_DIALOGUE_SESSION_KEY,
-    MARKETING_PATH_SELECTION_ONCE_PER_SESSION
-  );
+function hasScrollDialogueBeenShown(sessionKey: string): boolean {
+  return hasSessionFlag(sessionKey, MARKETING_SCROLL_DIALOGUE_ONCE_PER_SESSION);
 }
 
-function markPathSelectionDialogueShown(): void {
-  setSessionFlag(
-    MARKETING_PATH_SELECTION_DIALOGUE_SESSION_KEY,
-    MARKETING_PATH_SELECTION_ONCE_PER_SESSION
-  );
+function markScrollDialogueShown(sessionKey: string): void {
+  setSessionFlag(sessionKey, MARKETING_SCROLL_DIALOGUE_ONCE_PER_SESSION);
+}
+
+function getScrollConfig(step: Exclude<MarketingDialogueStep, 'marketing_intro'>) {
+  return SCROLL_DIALOGUES.find((c) => c.step === step);
 }
 
 type UseMarketingIdaIntroOptions = {
@@ -113,8 +157,8 @@ export function useMarketingIdaIntro({ heroSettle, settleAdvanceEps }: UseMarket
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const introPendingCtaRef = useRef(false);
   const introActivatedRef = useRef(false);
-  const pathSelectionShownRef = useRef(false);
-  const pathSelectionQueuedRef = useRef(false);
+  const shownScrollStepsRef = useRef<Set<MarketingDialogueStep>>(new Set());
+  const pendingScrollStepsRef = useRef<MarketingDialogueStep[]>([]);
   const prevHeroSettleRef = useRef(0);
   const audioIdlePollRef = useRef<number | null>(null);
 
@@ -130,58 +174,71 @@ export function useMarketingIdaIntro({ heroSettle, settleAdvanceEps }: UseMarket
     return () => clearAudioIdlePoll();
   }, [clearAudioIdlePoll]);
 
-  const tryActivatePathSelection = useCallback(() => {
-    if (pathSelectionShownRef.current || hasPathSelectionDialogueBeenShown()) {
-      pathSelectionQueuedRef.current = false;
+  const tryActivateNextInQueue = useCallback(() => {
+    if (activeDialogue !== null) return;
+    if (isDialogueAudioPlaying()) return;
+
+    while (pendingScrollStepsRef.current.length > 0) {
+      const next = pendingScrollStepsRef.current[0];
+      const config = getScrollConfig(next as Exclude<MarketingDialogueStep, 'marketing_intro'>);
+      if (!config) {
+        pendingScrollStepsRef.current.shift();
+        continue;
+      }
+      if (shownScrollStepsRef.current.has(next) || hasScrollDialogueBeenShown(config.sessionKey)) {
+        pendingScrollStepsRef.current.shift();
+        continue;
+      }
+
+      pendingScrollStepsRef.current.shift();
+      shownScrollStepsRef.current.add(next);
+
+      if (!introActivatedRef.current && !hasMarketingIntroBeenShown()) {
+        introActivatedRef.current = true;
+        markMarketingIntroShown();
+      }
+
+      setActiveDialogue(next);
       return;
     }
-    if (activeDialogue !== null) {
-      pathSelectionQueuedRef.current = true;
-      return;
-    }
-    if (isDialogueAudioPlaying()) {
-      pathSelectionQueuedRef.current = true;
-      return;
-    }
-
-    pathSelectionQueuedRef.current = false;
-
-    if (!introActivatedRef.current && !hasMarketingIntroBeenShown()) {
-      introActivatedRef.current = true;
-      markMarketingIntroShown();
-    }
-
-    pathSelectionShownRef.current = true;
-    setActiveDialogue('path_selection');
   }, [activeDialogue]);
 
-  const schedulePathSelectionWhenAudioIdle = useCallback(() => {
-    if (!pathSelectionQueuedRef.current) return;
+  const scheduleQueueWhenAudioIdle = useCallback(() => {
+    if (pendingScrollStepsRef.current.length === 0) return;
     if (!isDialogueAudioPlaying() && activeDialogue === null) {
-      tryActivatePathSelection();
+      tryActivateNextInQueue();
       return;
     }
     if (audioIdlePollRef.current !== null) return;
 
     audioIdlePollRef.current = window.setInterval(() => {
-      if (!pathSelectionQueuedRef.current) {
+      if (pendingScrollStepsRef.current.length === 0) {
         clearAudioIdlePoll();
         return;
       }
       if (activeDialogue !== null) return;
       if (!isDialogueAudioPlaying()) {
         clearAudioIdlePoll();
-        tryActivatePathSelection();
+        tryActivateNextInQueue();
       }
     }, DIALOGUE_AUDIO_POLL_MS);
-  }, [activeDialogue, clearAudioIdlePoll, tryActivatePathSelection]);
+  }, [activeDialogue, clearAudioIdlePoll, tryActivateNextInQueue]);
 
-  const queuePathSelectionDialogue = useCallback(() => {
-    if (pathSelectionShownRef.current || hasPathSelectionDialogueBeenShown()) return;
-    pathSelectionQueuedRef.current = true;
-    tryActivatePathSelection();
-    schedulePathSelectionWhenAudioIdle();
-  }, [schedulePathSelectionWhenAudioIdle, tryActivatePathSelection]);
+  const queueScrollDialogue = useCallback(
+    (step: Exclude<MarketingDialogueStep, 'marketing_intro'>) => {
+      const config = getScrollConfig(step);
+      if (!config) return;
+      if (shownScrollStepsRef.current.has(step) || hasScrollDialogueBeenShown(config.sessionKey)) {
+        return;
+      }
+      if (!pendingScrollStepsRef.current.includes(step)) {
+        pendingScrollStepsRef.current.push(step);
+      }
+      tryActivateNextInQueue();
+      scheduleQueueWhenAudioIdle();
+    },
+    [scheduleQueueWhenAudioIdle, tryActivateNextInQueue]
+  );
 
   const finishActiveDialogue = useCallback(() => {
     if (activeDialogue === 'marketing_intro') {
@@ -190,35 +247,27 @@ export function useMarketingIdaIntro({ heroSettle, settleAdvanceEps }: UseMarket
         introActivatedRef.current = false;
       }
       introPendingCtaRef.current = false;
-    } else if (activeDialogue === 'path_selection') {
-      markPathSelectionDialogueShown();
-      pathSelectionQueuedRef.current = false;
+    } else if (activeDialogue) {
+      const config = getScrollConfig(
+        activeDialogue as Exclude<MarketingDialogueStep, 'marketing_intro'>
+      );
+      if (config) {
+        markScrollDialogueShown(config.sessionKey);
+      }
     }
 
     setActiveDialogue(null);
     clearAudioIdlePoll();
 
-    if (pathSelectionQueuedRef.current) {
-      window.requestAnimationFrame(() => {
-        tryActivatePathSelection();
-        schedulePathSelectionWhenAudioIdle();
-      });
-    }
-  }, [
-    activeDialogue,
-    clearAudioIdlePoll,
-    schedulePathSelectionWhenAudioIdle,
-    tryActivatePathSelection,
-  ]);
+    window.requestAnimationFrame(() => {
+      tryActivateNextInQueue();
+      scheduleQueueWhenAudioIdle();
+    });
+  }, [activeDialogue, clearAudioIdlePoll, scheduleQueueWhenAudioIdle, tryActivateNextInQueue]);
 
   const activateIntro = useCallback(
     (fromUserGesture = false) => {
-      if (
-        introActivatedRef.current ||
-        hasMarketingIntroBeenShown() ||
-        pathSelectionShownRef.current ||
-        hasPathSelectionDialogueBeenShown()
-      ) {
+      if (introActivatedRef.current || hasMarketingIntroBeenShown()) {
         return;
       }
       if (activeDialogue !== null) return;
@@ -235,13 +284,14 @@ export function useMarketingIdaIntro({ heroSettle, settleAdvanceEps }: UseMarket
     [activeDialogue, playAnimation]
   );
 
+  const hasAnyScrollDialoguePendingOrShown = useCallback(() => {
+    return SCROLL_DIALOGUES.some(
+      (c) => shownScrollStepsRef.current.has(c.step) || hasScrollDialogueBeenShown(c.sessionKey)
+    );
+  }, []);
+
   useMotionValueEvent(heroSettle, 'change', (value) => {
-    if (
-      introActivatedRef.current ||
-      hasMarketingIntroBeenShown() ||
-      pathSelectionShownRef.current ||
-      hasPathSelectionDialogueBeenShown()
-    ) {
+    if (introActivatedRef.current || hasMarketingIntroBeenShown() || hasAnyScrollDialoguePendingOrShown()) {
       return;
     }
     const prev = prevHeroSettleRef.current;
@@ -271,31 +321,41 @@ export function useMarketingIdaIntro({ heroSettle, settleAdvanceEps }: UseMarket
   }, [activateIntro]);
 
   useEffect(() => {
-    const el = document.getElementById(MARKETING_PATH_SELECTION_SECTION_ID);
-    if (!el) return;
+    const observers: IntersectionObserver[] = [];
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry?.isIntersecting) return;
-        if (entry.intersectionRatio < PATH_SELECTION_VISIBLE_RATIO) return;
-        queuePathSelectionDialogue();
-      },
-      { threshold: [0, PATH_SELECTION_VISIBLE_RATIO, 0.55] }
-    );
+    for (const config of SCROLL_DIALOGUES) {
+      const el = document.getElementById(config.sectionId);
+      if (!el) continue;
 
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [queuePathSelectionDialogue]);
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          if (!entry?.isIntersecting) return;
+          if (entry.intersectionRatio < config.visibleRatio) return;
+          queueScrollDialogue(config.step);
+        },
+        { threshold: [0, config.visibleRatio, 0.55] }
+      );
+
+      observer.observe(el);
+      observers.push(observer);
+    }
+
+    return () => {
+      for (const observer of observers) {
+        observer.disconnect();
+      }
+    };
+  }, [queueScrollDialogue]);
 
   useEffect(() => {
     if (activeDialogue !== null) {
       clearAudioIdlePoll();
       return;
     }
-    if (!pathSelectionQueuedRef.current) return;
-    schedulePathSelectionWhenAudioIdle();
-  }, [activeDialogue, clearAudioIdlePoll, schedulePathSelectionWhenAudioIdle]);
+    if (pendingScrollStepsRef.current.length === 0) return;
+    scheduleQueueWhenAudioIdle();
+  }, [activeDialogue, clearAudioIdlePoll, scheduleQueueWhenAudioIdle]);
 
   const scrollToHowItWorksWithIntro = useCallback(() => {
     const target = document.getElementById(HOW_IT_WORKS_SECTION_ID);

@@ -5,10 +5,13 @@ import { GlassCard, GlassButton } from '@/components/ui';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { BODY_TEXT_JUSTIFY_CLASS, joinContentOrphans } from '@/lib/typography';
 
 export default function TermsPage() {
   const { language } = useLanguage();
   const router = useRouter();
+  const lang = language === 'pl' ? 'pl' : 'en';
+  const text = (s: string) => joinContentOrphans(s, lang);
 
   const content = {
     pl: {
@@ -269,9 +272,9 @@ The Provider may remove violating content and/or suspend Accounts.`
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <GlassCard className="p-8 md:p-12">
+          <GlassCard className="p-8 md:p-12" lang={lang}>
             <div className="mb-8">
-              <h1 className="text-3xl md:text-4xl font-nasalization text-graphite drop-shadow-sm mb-4">
+              <h1 className="text-balance text-3xl md:text-4xl font-nasalization text-graphite drop-shadow-sm mb-4">
                 {t.title}
               </h1>
               <div className="space-y-2 text-sm text-graphite/80 font-modern mb-6">
@@ -285,11 +288,11 @@ The Provider may remove violating content and/or suspend Accounts.`
             <div className="space-y-8">
               {t.sections.map((section, index) => (
                 <div key={index} className="border-b border-white/10 pb-6 last:border-b-0">
-                  <h2 className="text-xl md:text-2xl font-nasalization text-gold mb-4">
+                  <h2 className="text-pretty text-xl md:text-2xl font-nasalization text-gold mb-4">
                     {section.title}
                   </h2>
-                  <div className="text-graphite font-modern whitespace-pre-line leading-relaxed">
-                    {section.content}
+                  <div className={`whitespace-pre-line ${BODY_TEXT_JUSTIFY_CLASS}`}>
+                    {text(section.content)}
                   </div>
                 </div>
               ))}

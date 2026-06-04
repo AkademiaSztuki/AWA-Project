@@ -10,7 +10,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAnimation, type AnimationType } from '@/contexts/AnimationContext';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import DialogueAudioPlayer, { markDialoguePlaybackUserGesture } from '../ui/DialogueAudioPlayer';
-import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AwaDialogueProps {
@@ -45,19 +44,74 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
       "Have feedback or found a bug? Let me know — every note helps the project grow.",
     ],
   },
-  /** Marketing home — same copy as landing, bottom bar under header (not centered hero). */
+  /** Marketing home — short intro; audio: landing_{lang}_cut.mp3 */
   marketing_intro: {
     pl: [
       "Cześć, jestem IDA.",
       "Stwórzmy razem wizualizacje wnętrz dopasowane do Ciebie.",
-      "Powstaję w ramach projektu doktorskiego Jakuba Palka na Akademii Sztuki w Szczecinie — to wciąż rozwijana wersja serwisu.",
-      "Masz uwagi lub znalazłeś błąd? Daj znać — każda informacja pomaga w rozwoju projektu.",
     ],
     en: [
       "Hi, I'm IDA.",
       "Let's create interior visualizations tailored to you together.",
-      "I'm being developed as part of Jakub Palka's doctoral project at the Academy of Art in Szczecin — this is still an evolving version of the service.",
-      "Have feedback or found a bug? Let me know — every note helps the project grow.",
+    ],
+  },
+  /** Marketing home — path cards (short); audio: marketing_path_{lang}.mp3 */
+  marketing_path_selection: {
+    pl: ['Dwie ścieżki — szybka albo pełna. Wybierz kartę poniżej.'],
+    en: ['Two paths — quick or full. Pick a card below.'],
+  },
+  /** Marketing — why block (personality / lifestyle / fit); audio: personalization_{lang}.mp3 */
+  marketing_personalization: {
+    pl: [
+      "Patrzę na osobowość, styl życia i Twoje potrzeby — żeby propozycja była naprawdę Twoja.",
+    ],
+    en: [
+      "I look at personality, how you live, and what you need — so the proposal is truly yours.",
+    ],
+  },
+  /** Marketing — research card; audio: research_project_{lang}.mp3 */
+  marketing_research: {
+    pl: [
+      'Powstaję w ramach projektu doktorskiego — chcesz wiedzieć więcej? Kliknij „O projekcie”.',
+    ],
+    en: [
+      'I\'m part of a doctoral research project — want to know more? Click "About the project".',
+    ],
+  },
+  /** Marketing — final CTA; audio: early_{lang}.mp3 */
+  marketing_early_access: {
+    pl: [
+      "Wypróbuj za darmo we wczesnym dostępie — tylko pierwsze 1000 osób.",
+    ],
+    en: [
+      "Try it for free during early access — only for the first 1000 people.",
+    ],
+  },
+  /** /o-projecie — audio: about_project_{lang}.mp3 */
+  about_project: {
+    pl: [
+      'Więcej o badaniu, autorze i ramach projektu — wszystko opisane jest poniżej.',
+    ],
+    en: [
+      'More about the study, the author, and the project — it is all described below.',
+    ],
+  },
+  /** /subscription/plans — audio: subscription_plans_{lang}.mp3 */
+  subscription_plans: {
+    pl: [
+      'Porównaj plany i kredyty — we wczesnym dostępie Basic możesz zacząć za darmo.',
+    ],
+    en: [
+      'Compare plans and credits — during early access you can start Basic for free.',
+    ],
+  },
+  /** /contact — audio: contact_page_{lang}.mp3 */
+  contact_page: {
+    pl: [
+      'Masz pytanie lub uwagę? Wypełnij formularz — odpowiem tak szybko, jak to możliwe.',
+    ],
+    en: [
+      'Have a question or feedback? Fill out the form — I will reply as soon as I can.',
     ],
   },
   path_selection: {
@@ -155,6 +209,17 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
       "The test examines five areas: openness, conscientiousness, extraversion, agreeableness, and neuroticism.",
       
     ]
+  },
+  /** Big Five — encouragement after intro; audio: big_five_encourage_{lang}.mp3 */
+  big_five_encourage: {
+    pl: [
+      "Wiem, że pytań wydaje się dużo — ale zaufaj mi, idzie to całkiem sprawnie, to tylko kilka minut.",
+      "Na końcu poznasz swój typ osobowości z pełnym raportem a na jego podstawie zaprojektujemy jedno z Twoich wnętrz.",
+    ],
+    en: [
+      "I know it seems like a lot of questions — but trust me, it goes quite smoothly; it only takes a few minutes.",
+      "At the end you'll learn your personality type with a full report, and from that we'll design one of your interiors.",
+    ],
   },
   dashboard: {
     pl: [
@@ -332,20 +397,38 @@ const DIALOGUE_MAP: Record<string, { pl: string[]; en: string[] }> = {
   }
 };
 
+/** Custom basenames under /audio/ (default convention is {step}_{lang}.mp3). */
+const AUDIO_BASENAME_BY_STEP: Record<string, Partial<Record<'pl' | 'en', string>>> = {
+  marketing_intro: { pl: 'landing_pl_cut', en: 'landing_en_cut' },
+  marketing_path_selection: { pl: 'marketing_path_pl', en: 'marketing_path_en' },
+  marketing_personalization: { pl: 'personalization_pl', en: 'personalization_en' },
+  marketing_research: { pl: 'research_project_pl', en: 'research_project_en' },
+  marketing_early_access: { pl: 'early_pl', en: 'early_en' },
+  about_project: { pl: 'about_project_pl', en: 'about_project_en' },
+  subscription_plans: { pl: 'plans_pl', en: 'plans_en' },
+  contact_page: { pl: 'contact_pl', en: 'contact_en' },
+};
+
 // Audio file naming convention: /audio/{step}_{lang}.mp3
 const getAudioFile = (step: string, lang: 'pl' | 'en'): string => {
+  const customBasename = AUDIO_BASENAME_BY_STEP[step]?.[lang];
+  if (customBasename) {
+    return `/audio/${customBasename}.mp3`;
+  }
+
   // Mapping for steps that share the same audio file
   const AUDIO_MAPPING: Record<string, string> = {
     room_analysis_ready: 'room_analysis',
-    marketing_intro: 'landing',
   };
 
   const audioStep = AUDIO_MAPPING[step] || step;
   
   const audioSteps = [
-    'landing', 'marketing_intro', 'path_selection', 'onboarding',
+    'landing', 'marketing_intro', 'marketing_path_selection', 'marketing_personalization',
+    'marketing_research', 'marketing_early_access', 'about_project', 'subscription_plans',
+    'contact_page', 'path_selection', 'onboarding',
     'wizard_demographics', 'wizard_lifestyle', 'tinder', 'wizard_semantic', 'wizard_sensory',
-    'inspirations', 'big_five', 'dashboard',
+    'inspirations', 'big_five', 'big_five_encourage', 'dashboard',
     'style_selection',
     'upload', 'room_analysis', 'room_furniture_suggestion', 'room_preference_source', 'room_prs_current',
     'room_usage', 'room_activities', 'room_pain_points', 'room_prs_target', 'room_summary',
@@ -798,16 +881,6 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     }
   };
 
-  const handleSkip = () => {
-    console.log('User skipped dialogue');
-    setIsDone(true);
-    setIsVisible(false);
-    if (onDialogueEnd && !onDialogueEndCalledRef.current) {
-      onDialogueEndCalledRef.current = true;
-      onDialogueEnd();
-    }
-  };
-
   // Fallback auto-start: only if step hasn't changed but dialogue hasn't started
   // This handles edge cases where reset useEffect might not have triggered
   // But don't run if we're currently resetting
@@ -893,23 +966,6 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
         ? 'min-h-[clamp(200px,25vh,380px)] p-4 sm:p-8' 
         : 'min-h-[clamp(80px,10vh,120px)] p-3 sm:p-4 pb-6'
     } pb-[env(safe-area-inset-bottom,10px)]`}>
-      {(isLanding || currentStep === 'marketing_intro') && audioReady && hasStarted && (
-        <button
-          onClick={handleSkip}
-          className={cn(
-            'absolute flex flex-col items-end gap-1 pointer-events-auto group transition-opacity duration-300 hover:opacity-80',
-            currentStep === 'marketing_intro' ? 'top-3 right-4 sm:top-4 sm:right-6' : 'top-40 right-8'
-          )}
-          aria-label={language === 'pl' ? 'Pomiń dialog' : 'Skip dialogue'}
-        >
-          <span className="text-white/40 text-sm font-nasalization font-medium tracking-wide">
-            {language === 'pl' ? 'Pomiń' : 'Skip'}
-          </span>
-          <div className="flex items-center gap-1 text-white/30 group-hover:text-white/50 transition-colors duration-300">
-            <ArrowRight size={16} className="translate-x-0 group-hover:translate-x-1 transition-transform duration-300" aria-hidden="true" />
-          </div>
-        </button>
-      )}
       {hasStarted && audioReady && currentSentenceIndex < dialogues.length ? (
         <TextType
           key={`${currentStep}-${currentSentenceIndex}`}

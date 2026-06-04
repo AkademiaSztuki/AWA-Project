@@ -369,7 +369,7 @@ export function SubscriptionPlans({ userHash: userHashProp, onSelectPlan, classN
                 ? t('kredytów / miesiąc', 'credits / month')
                 : t('kredytów / rok', 'credits / year');
 
-            const cardVariant = isBasicLaunch || isPopular ? 'highlighted' : 'default';
+            const cardVariant = isBasicLaunch || isPopular ? 'highlighted' : 'interactive';
             const cardBorder = isBasicLaunch
               ? 'border-gold-400/70 ring-1 ring-gold-400/30'
               : isPopular

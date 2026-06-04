@@ -122,7 +122,15 @@ export async function completeGoogleNativeLoginFromAccessToken(
     });
 
     if (!linkRes.ok) {
-      return { ok: false, error: linkRes.error || 'link-auth failed' };
+      const raw = linkRes.error || 'link-auth failed';
+      if (raw.includes('anonymous_participant_not_found')) {
+        return {
+          ok: false,
+          error:
+            'Nie udało się połączyć sesji z kontem. Wyczyść dane strony (localStorage) i zaloguj się ponownie.',
+        };
+      }
+      return { ok: false, error: raw };
     }
 
     const effectiveHash = linkRes.data?.existingUserHash ?? userHash;

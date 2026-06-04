@@ -54,6 +54,9 @@ export default function BigFivePage() {
   const prevRetakeRef = React.useRef(retake);
   const initializedRef = React.useRef(false);
   const pageViewTrackingRef = React.useRef<{ userHash: string; viewId: string } | null>(null);
+  const [bigFiveDialogueStep, setBigFiveDialogueStep] = useState<
+    'big_five' | 'big_five_encourage' | null
+  >('big_five');
 
   useEffect(() => {
     let mounted = true;
@@ -80,6 +83,7 @@ export default function BigFivePage() {
     if (!showResults) {
       setRadarOffscreen(false);
       setOpenFacetDomain(null);
+      setBigFiveDialogueStep('big_five');
     }
   }, [showResults]);
 
@@ -761,15 +765,6 @@ export default function BigFivePage() {
           </GlassButton>
         )}
 
-        {/* Dialog IDA na dole */}
-        <div className="w-full">
-          <AwaDialogue 
-            currentStep="big_five" 
-            fullWidth={true}
-            autoHide={true}
-          />
-        </div>
-
         <LoginModal
           isOpen={nudgeCOpen}
           onClose={() => setNudgeCOpen(false)}
@@ -948,14 +943,21 @@ export default function BigFivePage() {
         </div>
       </div>
 
-      {/* Dialog IDA na dole */}
-      <div className="w-full">
-        <AwaDialogue 
-          currentStep="big_five" 
-          fullWidth={true}
-          autoHide={true}
-        />
-      </div>
+      {bigFiveDialogueStep && (
+        <div className="w-full">
+          <AwaDialogue
+            key={bigFiveDialogueStep}
+            currentStep={bigFiveDialogueStep}
+            fullWidth
+            autoHide
+            onDialogueEnd={() => {
+              setBigFiveDialogueStep((step) =>
+                step === 'big_five' ? 'big_five_encourage' : null
+              );
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

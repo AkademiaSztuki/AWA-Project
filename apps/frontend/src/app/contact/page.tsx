@@ -6,6 +6,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Mail } from 'lucide-react';
+import { joinContentOrphans } from '@/lib/typography';
+import { StaticPageAwaDialogue } from '@/components/awa/StaticPageAwaDialogue';
 
 const INPUT_CLASS =
   'w-full px-4 py-3 rounded-2xl bg-white/50 backdrop-blur-md border border-white/60 text-graphite placeholder:text-silver-dark/60 font-modern focus:border-gold-500/50 focus:ring-2 focus:ring-gold-400/30 outline-none transition-all shadow-glass-inset';
@@ -86,6 +88,7 @@ export default function ContactPage() {
   };
 
   const t = content[language];
+  const lang = language === 'pl' ? 'pl' : 'en';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,24 +133,26 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen py-8 px-4">
+    <div className="min-h-screen py-8 px-4 pb-28 sm:pb-32">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="max-w-4xl mx-auto"
       >
-        <GlassCard className="p-8 md:p-12">
+        <GlassCard className="p-8 md:p-12" lang={lang}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
             <div className="mb-8">
-              <h1 className="text-3xl md:text-4xl font-nasalization text-graphite drop-shadow-sm mb-4">
+              <h1 className="text-balance text-3xl md:text-4xl font-nasalization text-graphite drop-shadow-sm mb-4">
                 {t.title}
               </h1>
-              <p className="text-graphite/80 font-modern leading-relaxed">{t.subtitle}</p>
+              <p className="text-pretty text-graphite/80 font-modern leading-relaxed">
+                {joinContentOrphans(t.subtitle, lang)}
+              </p>
             </div>
 
             <section className="mb-10 border-b border-white/10 pb-8">
@@ -294,6 +299,7 @@ export default function ContactPage() {
           </motion.div>
         </GlassCard>
       </motion.div>
+      <StaticPageAwaDialogue currentStep="contact_page" />
     </div>
   );
 }

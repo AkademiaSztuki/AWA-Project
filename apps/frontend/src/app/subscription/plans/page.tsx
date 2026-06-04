@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { SubscriptionPlans } from '@/components/subscription/SubscriptionPlans';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { StaticPageAwaDialogue } from '@/components/awa/StaticPageAwaDialogue';
 
 export default function SubscriptionPlansPage() {
   const { sessionData } = useSessionData();
@@ -19,7 +20,7 @@ export default function SubscriptionPlansPage() {
     ((sessionData as { userHash?: string } | null)?.userHash || storedHash || '').trim();
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-28 sm:pb-32">
       <div className="text-center space-y-5">
         <h1 className="text-4xl font-exo2 font-bold text-gray-900">
           {t('Wybierz plan subskrypcji', 'Choose your subscription plan')}
@@ -55,6 +56,7 @@ export default function SubscriptionPlansPage() {
       </div>
 
       <SubscriptionPlans userHash={userHash || undefined} />
+      <StaticPageAwaDialogue currentStep="subscription_plans" />
     </div>
   );
 }

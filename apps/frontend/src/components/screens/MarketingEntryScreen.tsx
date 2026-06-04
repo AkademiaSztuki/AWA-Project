@@ -33,11 +33,15 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { GlassButton, GlassCard } from '@/components/ui';
+import { LoginModal } from '@/components/auth/LoginModal';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { GOOGLE_AUTH_USER_ID_STORAGE_KEY } from '@/lib/auth-storage-keys';
 import { useLayout } from '@/contexts/LayoutContext';
 import { useWcagSettings } from '@/contexts/WcagSettingsContext';
 import { getLayoutViewportWidth } from '@/lib/layout-viewport';
 import { cn } from '@/lib/utils';
+import { BODY_TEXT_CLASS, joinContentOrphans } from '@/lib/typography';
 import Image from 'next/image';
 import {
   buildLivingRoomMarketingCards,
@@ -55,6 +59,16 @@ import {
 } from '@/lib/marketing/hero-interior-slides';
 import { useMarketingIdaIntro } from '@/components/marketing/MarketingIdaIntro';
 
+/** Align with SubscriptionPlans / subscription plans page founders offer. */
+const FOUNDERS_LAUNCH_SLOTS = 1000;
+const PATH_AFTER_FREE_TRY = '/flow/path-selection';
+
+function resolveClientAuthUserId(userId: string | undefined): string | undefined {
+  if (userId?.trim()) return userId.trim();
+  if (typeof window === 'undefined') return undefined;
+  return localStorage.getItem(GOOGLE_AUTH_USER_ID_STORAGE_KEY)?.trim() || undefined;
+}
+
 const copy = {
   pl: {
     eyebrow: 'IDA Interior Design Assistant',
@@ -62,12 +76,16 @@ const copy = {
     subheadline:
       'Punktem wyjścia jest Twoja przestrzeń. IDA pokazuje wiele możliwych wersji przyszłego wnętrza, dopasowanych do stylu życia, nastroju i tego, jak chcesz się czuć w przestrzeni.',
     primaryCta: 'Stwórz moje wnętrze',
+    tryForFreeCta: 'Wypróbuj za darmo',
     secondaryCta: 'Zobacz jak działa',
+    earlyAccessLine: `Wczesny dostęp · Basic za 0 zł · 6000 kredytów · limit ${FOUNDERS_LAUNCH_SLOTS} pierwszych osób`,
+    loginModalTitle: 'Załóż konto lub zaloguj się',
+    loginModalMessage:
+      'Po rejestracji i weryfikacji e-maila możesz skorzystać z oferty na start i przejść do projektowania.',
     proof: [
       'Pierwsze propozycje w kilka minut',
-      'Oferta na start: 6000 kredytów Basic za 0 zł',
-      'Dopasowanie do Twojego profilu',
-      'Przejmij kontrolę: modyfikuj kolory, światło i detale',
+      `Oferta na start: Basic za 0 zł · 6000 kredytów · limit ${FOUNDERS_LAUNCH_SLOTS} pierwszych osób`,
+      'Dopasowanie do profilu i kontrola nad kolorem, światłem i detalami',
     ],
     after: 'Wersja IDA',
     visualTitle: 'Porównaj pustą przestrzeń z wariantami IDA',
@@ -183,24 +201,23 @@ const copy = {
     emotion:
       'Nie każdy potrzebuje tego samego stylu. Jedni szukają spokoju, inni energii, struktury, ciepła albo przestrzeni do tworzenia. IDA pomaga odkryć, czego naprawdę potrzebujesz od swojego wnętrza - i zamienia to w obraz.',
     finalTitle: 'Zobacz, jak mogłoby wyglądać Twoje wnętrze',
-    finalSubtitle: 'Zacznij od szybkiej ścieżki albo przejdź pełną personalizację.',
+    finalSubtitle: 'Wypróbuj bezpłatnie i zobacz pierwsze propozycje wnętrza dopasowane do Ciebie.',
     research: {
       badge: 'Projekt doktorski',
       title: 'Projekt badawczy IDA',
-      thesisLabel: 'Temat pracy',
-      thesisTitle:
-        'IDA: projekt eksperymentalnej platformy badawczej do personalizacji koncepcji wnętrz na podstawie preferencji estetycznych wspomaganej sztuczną inteligencją',
       author: 'Autor: Jakub Palka',
       institution: 'Akademia Sztuki w Szczecinie',
       body:
-        'Ta strona jest częścią rozwijanego prototypu platformy IDA. Projekt bada, jak preferencje estetyczne i sztuczna inteligencja mogą wspierać personalizację koncepcji wnętrz.',
+        'IDA to projekt doktorski badający, jak preferencje estetyczne i sztuczna inteligencja wspierają personalizację koncepcji wnętrz. Platforma łączy psychologię środowiskową z generatywnym AI w ramach Research Through Design.',
       feedback:
         'Masz uwagi, pytania badawcze lub znalazłeś błąd? Każda informacja pomaga w rozwoju projektu.',
+      learnMoreCta: 'O projekcie',
       contactCta: 'Skontaktuj się z autorem',
     },
     footer: {
       tagline:
         'IDA · projekt doktorski · Autor: Jakub Palka · Akademia Sztuki w Szczecinie.',
+      about: 'O projekcie',
       contact: 'Kontakt',
       privacy: 'Prywatność',
       terms: 'Regulamin',
@@ -214,12 +231,16 @@ const copy = {
     subheadline:
       'Your space is the starting point. IDA shows many possible futures shaped around your lifestyle, mood, and how you want the space to feel.',
     primaryCta: 'Create my interior',
+    tryForFreeCta: 'Try for free',
     secondaryCta: 'See how it works',
+    earlyAccessLine: `Early access · Basic for $0 · 6000 credits · for the first ${FOUNDERS_LAUNCH_SLOTS} people`,
+    loginModalTitle: 'Create an account or sign in',
+    loginModalMessage:
+      'After sign-up and email verification you can use the launch offer and start designing.',
     proof: [
       'First ideas in minutes',
-      'Launch offer: 6000 Basic credits for free',
-      'Matched to your profile',
-      'Take control: tweak colors, lighting, and details',
+      `Launch offer: Basic for $0 · 6000 credits · for the first ${FOUNDERS_LAUNCH_SLOTS} people`,
+      'Matched to your profile with control over colors, lighting, and details',
     ],
     after: 'IDA version',
     visualTitle: 'Compare a blank room with IDA variants',
@@ -335,24 +356,23 @@ const copy = {
     emotion:
       'Not everyone needs the same style. Some people need calm, others need energy, structure, warmth, or room to create. IDA helps reveal what you truly need from your interior - and turns it into an image.',
     finalTitle: 'See what your interior could become',
-    finalSubtitle: 'Start with the quick path or go into full personalization.',
+    finalSubtitle: 'Try for free and see your first tailored interior concepts.',
     research: {
       badge: 'Doctoral research project',
       title: 'IDA research project',
-      thesisLabel: 'Research topic',
-      thesisTitle:
-        'IDA: an experimental research platform for personalizing interior concepts based on aesthetic preferences, supported by artificial intelligence',
       author: 'Author: Jakub Palka',
       institution: 'Academy of Art in Szczecin',
       body:
-        'This page is part of the evolving IDA platform prototype. The project studies how aesthetic preferences and artificial intelligence can support the personalization of interior concepts.',
+        'IDA is a doctoral research project studying how aesthetic preferences and artificial intelligence support the personalization of interior concepts. The platform combines environmental psychology with generative AI through Research Through Design.',
       feedback:
         'Have feedback, a research question, or found a bug? Every note helps the project grow.',
+      learnMoreCta: 'About the project',
       contactCta: 'Contact the author',
     },
     footer: {
       tagline:
         'IDA · doctoral research project · Author: Jakub Palka · Academy of Art in Szczecin.',
+      about: 'About the project',
       contact: 'Contact',
       privacy: 'Privacy',
       terms: 'Terms',
@@ -982,6 +1002,7 @@ function HeroVariantStyleRail({
 
 const MarketingEntryScreen: React.FC = () => {
   const router = useRouter();
+  const { user } = useAuth();
   const { updateSessionData } = useSessionData();
   const pathname = usePathname();
   /** Align with GlassCard `flatOnMobile` / AppContentFrame compact layout (1280px). */
@@ -1015,6 +1036,7 @@ const MarketingEntryScreen: React.FC = () => {
   const marqueeAnchorRef = useRef<HTMLDivElement | null>(null);
   const marqueePortalLayerRef = useRef<HTMLDivElement | null>(null);
   const [marqueePortalHost, setMarqueePortalHost] = useState<HTMLElement | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
   /** Column box inside AppContentFrame — used for viewport breakout without relying on symmetric “max bleed”. */
   const [columnBox, setColumnBox] = useState({ left: 0, width: 0 });
   const { scrollYProgress } = useScroll({
@@ -1320,6 +1342,8 @@ const MarketingEntryScreen: React.FC = () => {
   ]);
 
   const t = copy[language];
+  const marketingLang = language === 'pl' ? 'pl' : 'en';
+  const text = (s: string) => joinContentOrphans(s, marketingLang);
   const heroSlideCount = HERO_INTERIOR_SLIDES.length;
   const activeHeroSlide =
     HERO_INTERIOR_SLIDES[heroSlideCount > 0 ? Math.min(activeVariant, heroSlideCount - 1) : 0] ??
@@ -1544,6 +1568,24 @@ const MarketingEntryScreen: React.FC = () => {
     router.push('/flow/path-selection');
   }, [router]);
 
+  const openLoginForFreeTry = useCallback(() => {
+    setLoginOpen(true);
+  }, []);
+
+  const handleTryBasicFree = useCallback(() => {
+    stopAllDialogueAudio();
+    if (user?.id || resolveClientAuthUserId(undefined)) {
+      router.push(PATH_AFTER_FREE_TRY);
+      return;
+    }
+    openLoginForFreeTry();
+  }, [user?.id, router, openLoginForFreeTry]);
+
+  const handleLoginSuccess = useCallback(() => {
+    setLoginOpen(false);
+    router.push(PATH_AFTER_FREE_TRY);
+  }, [router]);
+
   const livingRoomMarqueeInner = (
     <div className="relative pb-3 sm:pb-4">
       {/*
@@ -1762,7 +1804,7 @@ const MarketingEntryScreen: React.FC = () => {
                   ref={assignHeroCopyGlassPanelRef}
                   lang={language === 'pl' ? 'pl' : 'en'}
                   className={cn(
-                    'pointer-events-none rounded-[1.65rem] px-5 py-6 max-xl:px-5 max-xl:py-4 sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-8',
+                    'pointer-events-none rounded-[1.65rem] px-5 py-6 max-xl:px-5 max-xl:py-4 sm:rounded-[1.85rem] sm:px-7 sm:py-7 lg:px-8 lg:py-7 xl:py-6',
                     'max-xl:border-none max-xl:bg-transparent max-xl:shadow-none max-xl:backdrop-blur-none',
                     'xl:glass-panel xl:border xl:border-white/25 xl:bg-gradient-to-br xl:from-pearl-100/82 xl:via-pearl-50/55 xl:to-champagne/35 xl:shadow-[0_24px_70px_-20px_rgba(45,38,28,0.28)] xl:backdrop-blur-xl',
                     heroCopyRelaxedOverflow
@@ -1779,7 +1821,7 @@ const MarketingEntryScreen: React.FC = () => {
                   <h1 className="mb-3 max-xl:mb-2.5 text-balance break-words text-[1.5rem] font-semibold leading-[1.18] tracking-tight text-graphite hyphens-auto sm:mb-4 sm:text-[1.75rem] sm:leading-[1.2] md:text-3xl lg:text-[2rem] lg:leading-snug xl:text-[2.25rem]">
                     {t.headline}
                   </h1>
-                  <ul className="mb-4 flex flex-col gap-2 max-xl:mb-3 max-xl:gap-1.5 sm:mb-5">
+                  <ul className="mb-3 flex flex-col gap-1.5 max-xl:mb-2.5 max-xl:gap-1.5 sm:mb-4">
                     {t.proof.map((line) => (
                       <li
                         key={line}
@@ -1790,10 +1832,10 @@ const MarketingEntryScreen: React.FC = () => {
                       </li>
                     ))}
                   </ul>
-                  <p className="mb-5 max-xl:mb-3 max-xl:text-[13px] max-xl:leading-snug font-modern text-sm font-medium leading-relaxed text-graphite drop-shadow-[0_1px_0_rgba(255,255,255,0.45)] sm:mb-6 sm:text-base sm:leading-7">
+                  <p className="mb-3 max-xl:mb-2 max-xl:text-[13px] max-xl:leading-snug font-modern text-sm font-medium leading-relaxed text-graphite drop-shadow-[0_1px_0_rgba(255,255,255,0.45)] sm:mb-4 sm:text-base sm:leading-7">
                     {t.subheadline}
                   </p>
-                  <div className="pointer-events-auto grid w-full grid-cols-1 gap-2 max-xl:gap-2 max-xl:pb-1 pb-2 sm:grid-cols-2 sm:items-stretch sm:gap-3 sm:pb-0">
+                  <div className="pointer-events-auto flex w-full flex-col gap-2 max-xl:gap-2 max-xl:pb-1 pb-2 sm:gap-2.5 sm:pb-0">
                     <GlassButton
                       size="lg"
                       onClick={goToPathSelection}
@@ -1890,8 +1932,8 @@ const MarketingEntryScreen: React.FC = () => {
           <h2 className="text-balance break-words text-3xl leading-[1.12] tracking-tight text-graphite sm:text-4xl sm:leading-tight lg:text-5xl">
             {t.stepsTitle}
           </h2>
-          <p className="mt-3 font-modern text-sm leading-relaxed text-silver-dark sm:mt-4 sm:text-base sm:leading-7">
-            {t.stepsSubtitle}
+          <p className={`mt-3 max-w-3xl sm:mt-4 ${BODY_TEXT_CLASS} text-sm text-silver-dark sm:text-base sm:leading-7`}>
+            {text(t.stepsSubtitle)}
           </p>
         </header>
         <div className="grid gap-5 sm:gap-6 md:grid-cols-3 md:gap-x-6 md:gap-y-7 md:[grid-template-rows:minmax(min-content,auto)_minmax(min-content,auto)_minmax(min-content,auto)]">
@@ -1972,7 +2014,7 @@ const MarketingEntryScreen: React.FC = () => {
         </div>
       </motion.section>
 
-      <motion.section className="py-8 sm:py-14" {...fadeUp}>
+      <motion.section id="marketing-why" className="py-8 sm:py-14 scroll-mt-24" {...fadeUp}>
         <h2 className="mb-6 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.whyTitle}</h2>
         <div className="grid gap-4 md:grid-cols-3 md:items-stretch">
           {t.why.map((item, index) => {
@@ -1998,17 +2040,17 @@ const MarketingEntryScreen: React.FC = () => {
           )}
         >
           <div>
-            <h2 className="max-w-3xl text-2xl leading-tight text-graphite sm:text-4xl lg:text-5xl">{t.stylesTitle}</h2>
-            <p className="mt-2 max-w-3xl font-modern text-sm leading-6 text-silver-dark sm:text-base sm:leading-7">
-              {t.stylesSubtitle}
+            <h2 className="text-balance max-w-3xl text-2xl leading-tight text-graphite sm:text-4xl lg:text-5xl">{t.stylesTitle}</h2>
+            <p className={`mt-2 max-w-3xl text-sm text-silver-dark sm:text-base sm:leading-7 ${BODY_TEXT_CLASS}`}>
+              {text(t.stylesSubtitle)}
             </p>
           </div>
           <GlassButton
             size="md"
-            onClick={goToPathSelection}
+            onClick={handleTryBasicFree}
             className="glass-button-emphasis shrink-0 self-start sm:self-auto"
           >
-            {t.primaryCta}
+            {t.tryForFreeCta}
           </GlassButton>
         </div>
 
@@ -2045,15 +2087,15 @@ const MarketingEntryScreen: React.FC = () => {
         )}
       </motion.section>
 
-      <motion.section className="py-8 sm:py-14" {...fadeUp}>
+      <motion.section className="py-8 sm:py-14" {...fadeUp} lang={marketingLang}>
         <GlassCard
           variant="flatOnMobile"
           className="overflow-hidden border border-gold-400/35 p-6 sm:p-8 xl:border-gold-400/60"
         >
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
-              <h2 className="mb-4 text-3xl leading-tight text-graphite sm:text-5xl">{t.emotionTitle}</h2>
-              <p className="font-modern text-base leading-8 text-silver-dark">{t.emotion}</p>
+              <h2 className="text-balance mb-4 text-3xl leading-tight text-graphite sm:text-5xl">{t.emotionTitle}</h2>
+              <p className={`text-base leading-8 text-silver-dark ${BODY_TEXT_CLASS}`}>{text(t.emotion)}</p>
             </div>
             <div className="relative flex min-h-[280px] flex-col overflow-hidden rounded-2xl p-4 sm:min-h-[320px] sm:rounded-[32px] sm:p-5 max-xl:border max-xl:border-white/20 xl:border xl:border-white/30 xl:bg-gradient-to-br xl:from-white/12 xl:via-pearl-100/18 xl:to-gold-500/10 xl:shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] xl:backdrop-blur-glass">
               <motion.div
@@ -2078,6 +2120,7 @@ const MarketingEntryScreen: React.FC = () => {
         className="py-8 sm:py-12 scroll-mt-24"
         {...fadeUp}
         aria-labelledby="research-project-heading"
+        lang={marketingLang}
       >
         <GlassCard
           variant="flatOnMobile"
@@ -2088,7 +2131,7 @@ const MarketingEntryScreen: React.FC = () => {
           </p>
           <h2
             id="research-project-heading"
-            className="mb-2 max-w-3xl text-2xl leading-tight text-graphite sm:text-3xl"
+            className="text-balance mb-2 max-w-3xl text-2xl leading-tight text-graphite sm:text-3xl"
           >
             {t.research.title}
           </h2>
@@ -2099,42 +2142,64 @@ const MarketingEntryScreen: React.FC = () => {
             </span>
             {t.research.institution}
           </p>
-          <p className="mb-5 max-w-3xl font-modern text-sm leading-7 text-silver-dark sm:text-base sm:leading-8">
-            {t.research.body}
+          <p className={`mb-5 max-w-3xl text-sm text-silver-dark sm:text-base sm:leading-8 ${BODY_TEXT_CLASS}`}>
+            {text(t.research.body)}
           </p>
-          <dl className="mb-5 max-w-3xl border-t border-graphite/10 pt-5">
-            <dt className="mb-2 font-modern text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-500">
-              {t.research.thesisLabel}
-            </dt>
-            <dd className="font-modern text-sm leading-7 text-graphite sm:text-base sm:leading-8">
-              {t.research.thesisTitle}
-            </dd>
-          </dl>
-          <p className="mb-6 max-w-3xl font-modern text-sm leading-6 text-silver-dark">{t.research.feedback}</p>
-          <GlassButton
-            size="md"
-            variant="secondary"
-            onClick={() => router.push('/contact')}
-            className="group"
-          >
-            {t.research.contactCta}
-            <ArrowRight
-              size={18}
-              className="text-gold-500 transition-transform group-hover:translate-x-0.5"
-              aria-hidden="true"
-            />
-          </GlassButton>
+          <p className="text-pretty mb-6 max-w-3xl font-modern text-sm leading-6 text-silver-dark">
+            {text(t.research.feedback)}
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <GlassButton
+              size="md"
+              variant="secondary"
+              onClick={() => router.push('/o-projecie')}
+              className="group"
+            >
+              {t.research.learnMoreCta}
+              <ArrowRight
+                size={18}
+                className="text-gold-500 transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </GlassButton>
+            <GlassButton
+              size="md"
+              variant="secondary"
+              onClick={() => router.push('/contact')}
+              className="group"
+            >
+              {t.research.contactCta}
+              <ArrowRight
+                size={18}
+                className="text-gold-500 transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </GlassButton>
+          </div>
         </GlassCard>
       </motion.section>
 
-      <motion.section className="py-10 text-center sm:py-16" {...fadeUp}>
+      <motion.section
+        id="marketing-final-cta"
+        className="py-10 text-center sm:py-16 scroll-mt-24"
+        {...fadeUp}
+      >
         <GlassCard variant="flatOnMobile" className="p-8 sm:p-12">
-          <h2 className="mx-auto mb-3 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.finalTitle}</h2>
-          <p className="mx-auto mb-7 max-w-2xl font-modern text-base text-silver-dark">{t.finalSubtitle}</p>
-          <GlassButton size="lg" onClick={goToPathSelection} className="glass-button-emphasis mx-auto group">
-            {t.primaryCta}
-            <ArrowRight size={20} className="text-gold-500 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-          </GlassButton>
+          <h2 className="text-balance mx-auto mb-4 max-w-4xl text-3xl leading-tight text-graphite sm:mb-5 sm:text-5xl">{t.finalTitle}</h2>
+          <p className="mx-auto mb-4 max-w-2xl font-modern text-base text-silver-dark">{t.finalSubtitle}</p>
+          <p className="mx-auto mb-7 max-w-2xl font-modern text-[11px] font-semibold leading-snug tracking-wide text-graphite/85 sm:text-xs">
+            {t.earlyAccessLine}
+          </p>
+          <div className="mx-auto flex justify-center">
+            <GlassButton
+              size="lg"
+              onClick={handleTryBasicFree}
+              className="glass-button-emphasis group w-full min-w-0 sm:w-auto sm:min-w-[12rem]"
+            >
+              <Sparkles size={20} className="shrink-0 text-gold-500" aria-hidden="true" />
+              {t.tryForFreeCta}
+            </GlassButton>
+          </div>
         </GlassCard>
       </motion.section>
       </div>
@@ -2143,6 +2208,7 @@ const MarketingEntryScreen: React.FC = () => {
       <div className={cn(useMarqueePortal && 'pointer-events-auto')}>
       <SiteFooter
         tagline={t.footer.tagline}
+        aboutLabel={t.footer.about}
         contactLabel={t.footer.contact}
         privacyLabel={t.footer.privacy}
         termsLabel={t.footer.terms}
@@ -2154,6 +2220,17 @@ const MarketingEntryScreen: React.FC = () => {
       </div>
     </div>
     {introPortal}
+    <LoginModal
+      isOpen={loginOpen}
+      onClose={() => setLoginOpen(false)}
+      onSuccess={handleLoginSuccess}
+      redirectPath={PATH_AFTER_FREE_TRY}
+      title={{
+        pl: copy.pl.loginModalTitle,
+        en: copy.en.loginModalTitle,
+      }}
+      message={language === 'pl' ? copy.pl.loginModalMessage : copy.en.loginModalMessage}
+    />
     </>
   );
 };
@@ -2283,6 +2360,7 @@ const PathCard = ({
 
 type SiteFooterProps = {
   tagline: string;
+  aboutLabel: string;
   contactLabel: string;
   privacyLabel: string;
   termsLabel: string;
@@ -2294,6 +2372,7 @@ type SiteFooterProps = {
 
 const SiteFooter = ({
   tagline,
+  aboutLabel,
   contactLabel,
   privacyLabel,
   termsLabel,
@@ -2328,6 +2407,7 @@ const SiteFooter = ({
           </span>
           <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2 sm:gap-x-0">
             {[
+              { href: '/o-projecie', label: aboutLabel },
               { href: '/contact', label: contactLabel },
               { href: '/privacy', label: privacyLabel },
               { href: '/terms', label: termsLabel },

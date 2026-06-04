@@ -50,7 +50,7 @@ import { DashboardTopPanel } from '@/components/dashboard/DashboardTopPanel';
 import { DashboardJourneySteps } from '@/components/dashboard/DashboardJourneySteps';
 import type { SessionData } from '@/types';
 
-/** sessionStorage — IDA na dashboardzie: jedna pełna odtworzona sekwencja na sesję karty. */
+/** sessionStorage — IDA na dashboardzie: raz na sesję karty (nowa karta = dialog znów). */
 const IDA_SESSION_DASHBOARD_IDA_DIALOGUE_SHOWN_KEY = 'awa_session_dashboard_ida_dialogue_shown';
 const DASHBOARD_RETURN_SCROLL_Y_KEY = 'awa_dashboard_return_scroll_y';
 const DASHBOARD_LOAD_TIMEOUT_MS = 15_000;
@@ -961,7 +961,7 @@ export function UserDashboard() {
         </div>
       )}
       
-      {/* Dialog IDA — max raz na sesję przeglądarki (sessionStorage) */}
+      {/* Dialog IDA — raz na sesję karty (sessionStorage) */}
       {showDashboardIdaDialogue === true && (
         <div className="w-full">
           <AwaDialogue

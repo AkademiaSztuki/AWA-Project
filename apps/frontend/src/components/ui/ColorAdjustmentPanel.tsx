@@ -7,7 +7,7 @@ import { useColorAdjustment } from "@/contexts/ColorAdjustmentContext";
 import { useWcagSettings, type ContrastMode, type FontScale } from "@/contexts/WcagSettingsContext";
 import { GlassSlider } from "./GlassSlider";
 import { AwaScrollArea } from "@/components/ui/AwaScrollArea";
-import { Palette, X, AlertTriangle } from "lucide-react";
+import { Settings, X, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { a11yStrings } from "@/lib/a11y-i18n";
 
@@ -230,7 +230,7 @@ export function ColorAdjustmentPanel() {
       aria-haspopup="dialog"
       type="button"
     >
-      <Palette size={18} aria-hidden="true" />
+      <Settings size={18} aria-hidden="true" />
     </button>
   );
 

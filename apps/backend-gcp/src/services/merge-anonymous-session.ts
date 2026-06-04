@@ -145,16 +145,21 @@ export async function mergeAnonymousSession(
     return { ok: false, error: 'auth_user_id_and_anonymous_user_hash_required' };
   }
 
-  const anon = await loadParticipant(client, anonHash);
-  if (!anon) {
-    return { ok: false, error: 'anonymous_participant_not_found' };
-  }
-
   const { rows: authRows } = await client.query<ParticipantRow>(
     `SELECT * FROM participants WHERE auth_user_id = $1 LIMIT 1`,
     [authUserId],
   );
   const authRow = authRows[0];
+
+  const anon = await loadParticipant(client, anonHash);
+  if (!anon) {
+    // Local aura_user_hash often exists before participants/ensure (browser-only session).
+    // Nothing to merge — keep the authenticated row when present.
+    if (authRow) {
+      return { ok: true, user_hash: authRow.user_hash, merged: false };
+    }
+    return { ok: false, error: 'anonymous_participant_not_found' };
+  }
 
   if (!authRow) {
     await client.query(
