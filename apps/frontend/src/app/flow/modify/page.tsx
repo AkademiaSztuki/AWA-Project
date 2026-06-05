@@ -44,6 +44,15 @@ import {
   saveParticipantImages
 } from '@/lib/remote-spaces';
 import { saveSessionWithActiveSpace } from '@/lib/current-space-sync';
+import { getSessionStoreSnapshot } from '@/hooks/useSession';
+import {
+  applyRatingsToImage,
+  aestheticPickerValue,
+  imageHasAestheticRating,
+  imageNeedsAestheticRating,
+  resolveSessionImageRatingsMap,
+  type SessionImageRatingsMap,
+} from '@/lib/image-aesthetic-rating';
 
 interface GeneratedImage {
   id: string;
@@ -55,7 +64,6 @@ interface GeneratedImage {
     aesthetic_match: number;
     character: number;
     harmony: number;
-    is_my_interior: number;
   };
   isFavorite: boolean;
   createdAt: number;
@@ -167,7 +175,7 @@ export default function ModifyPage() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState<number | undefined>(undefined);
   const [hasAnsweredInteriorQuestion, setHasAnsweredInteriorQuestion] = useState(false);
-  const [hasCompletedRatings, setHasCompletedRatings] = useState(false);
+  const [showTasteRatingPanel, setShowTasteRatingPanel] = useState(false);
   const [isModifying, setIsModifying] = useState(false);
   const [originalRoomPhotoUrl, setOriginalRoomPhotoUrl] = useState<string | null>(null);
   const [showOriginalRoomPhoto, setShowOriginalRoomPhoto] = useState(false);
@@ -189,7 +197,6 @@ export default function ModifyPage() {
   const [showSourceReveal, setShowSourceReveal] = useState(true); // Always show for modify page
 
   const interiorAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const ratingsAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasInitializedFromSession = useRef(false);
   /** Vertex sizing from session room upload — not recomputed from last AI PNG (avoids aspect drift). */
   const modifyFlowRoomGenerationDimsRef = useRef<PreparedGenerationDimensions | null>(null);
@@ -197,9 +204,16 @@ export default function ModifyPage() {
   useEffect(() => {
     return () => {
       if (interiorAdvanceTimeoutRef.current) clearTimeout(interiorAdvanceTimeoutRef.current);
-      if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
     };
   }, []);
+
+  // The "is this your interior?" question was removed: selecting an image already implies it.
+  // Auto-advance straight to the aesthetic rating.
+  useEffect(() => {
+    if (showSourceReveal && selectedImage && !hasAnsweredInteriorQuestion) {
+      setHasAnsweredInteriorQuestion(true);
+    }
+  }, [showSourceReveal, selectedImage, hasAnsweredInteriorQuestion]);
 
   // Restore selected image from session on mount (only once)
   useEffect(() => {
@@ -249,7 +263,7 @@ export default function ModifyPage() {
           prompt: 'Restored from session',
           provider: persistedSelected.provider || 'google',
           parameters: persistedSelected.parameters || { modificationType: 'initial', modifications: [], iterationCount: 0, usedOriginal: false },
-          ratings: imageRatings[persistedSelectedId] || { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+          ratings: imageRatings[persistedSelectedId] || { aesthetic_match: 0, character: 0, harmony: 0 },
           isFavorite: false,
           createdAt: Date.now(),
           source: persistedSelected.source || GenerationSource.Implicit,
@@ -257,15 +271,12 @@ export default function ModifyPage() {
           isBlindSelected: true
         };
         
-        setSelectedImage(restoredImage);
+        const restoredSelected = applyRatingsToImage(restoredImage, imageRatings);
+        setSelectedImage(restoredSelected);
+        setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
         
-        // Restore questionnaire state if ratings exist
-        if (restoredImage.ratings.is_my_interior > 0) {
-          setHasAnsweredInteriorQuestion(true);
-        }
-        if (restoredImage.ratings.aesthetic_match > 0) {
-          setHasCompletedRatings(true);
-        }
+        // Interior question removed — selection implies ownership.
+        setHasAnsweredInteriorQuestion(true);
       } else if (persistedSelected?.url) {
         // Fallback: create minimal image from session data
         // Extract base64 from data URL if not directly available
@@ -284,7 +295,7 @@ export default function ModifyPage() {
           prompt: 'Restored selected image from sessionData',
           provider: persistedSelected.provider || 'google',
           parameters: persistedSelected.parameters || { modificationType: 'initial', modifications: [], iterationCount: 0, usedOriginal: false },
-          ratings: imageRatings[persistedSelectedId] || { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+          ratings: imageRatings[persistedSelectedId] || { aesthetic_match: 0, character: 0, harmony: 0 },
           isFavorite: false,
           createdAt: Date.now(),
           source: persistedSelected.source || GenerationSource.Implicit,
@@ -292,15 +303,12 @@ export default function ModifyPage() {
           isBlindSelected: true
         };
         
-        setSelectedImage(restoredImage);
+        const restoredSelected = applyRatingsToImage(restoredImage, imageRatings);
+        setSelectedImage(restoredSelected);
+        setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
         
-        // Restore questionnaire state if ratings exist
-        if (restoredImage.ratings.is_my_interior > 0) {
-          setHasAnsweredInteriorQuestion(true);
-        }
-        if (restoredImage.ratings.aesthetic_match > 0) {
-          setHasCompletedRatings(true);
-        }
+        // Interior question removed — selection implies ownership.
+        setHasAnsweredInteriorQuestion(true);
       }
 
       // Restore generation history - first from matrixHistory (all 6 initial images), then modifications
@@ -440,52 +448,41 @@ export default function ModifyPage() {
     const updatedRatings = { ...selectedImage.ratings, [rating]: value };
     setSelectedImage({ ...selectedImage, ratings: updatedRatings });
 
-    // Save rating to session
-    const typedSessionData = sessionData as any;
-    const imageRatings = typedSessionData?.imageRatings || {};
-    imageRatings[imageId] = updatedRatings;
-    await updateSessionData({ imageRatings } as any);
+    if (rating === 'aesthetic_match' && value > 0) {
+      setShowTasteRatingPanel(false);
+    }
+
+    const snapRatings =
+      (getSessionStoreSnapshot() as { imageRatings?: SessionImageRatingsMap }).imageRatings || {};
+    await updateSessionData({
+      imageRatings: {
+        ...snapRatings,
+        [imageId]: {
+          ...(snapRatings[imageId] || {}),
+          ...updatedRatings,
+          timestamp: Date.now(),
+        },
+      },
+    } as any);
 
     if (!options?.suppressProgress) {
-      if (rating === 'is_my_interior') {
-        setHasAnsweredInteriorQuestion(true);
-        
-        // Show feedback based on rating
-        if (value === 1) {
-          setFeedbackMessage(t({ pl: "Rozumiem, to zupełnie inne pomieszczenie. Spróbujmy zmodyfikować obraz aby był bliższy Twojemu wnętrzu.", en: "I understand, this is a completely different room. Let's try to modify the image to be closer to your interior." }));
-          setFeedbackType('negative');
-        } else if (value === 3) {
-          setFeedbackMessage(t({ pl: "Świetnie! Widzę podobieństwa. Możemy to jeszcze dopracować.", en: "Great! I see similarities. We can still refine this." }));
-          setFeedbackType('neutral');
-        } else if (value === 5) {
-          setFeedbackMessage(t({ pl: "Doskonale! Udało nam się odtworzyć Twoje wnętrze. Teraz oceń szczegóły.", en: "Perfect! We managed to recreate your interior. Now rate the details." }));
+      const allRatingsComplete = updatedRatings.aesthetic_match > 0;
+
+      if (allRatingsComplete) {
+        const avgRating = updatedRatings.aesthetic_match;
+
+        if (avgRating >= 6) {
+          setFeedbackMessage(t({ pl: "Świetny wybór! Ten obraz ma doskonałe oceny. Możesz go zapisać lub spróbować drobnych modyfikacji.", en: "Great choice! This image has excellent ratings. You can save it or try minor modifications." }));
           setFeedbackType('positive');
+        } else if (avgRating >= 4) {
+          setFeedbackMessage(t({ pl: "Dobry wybór! Możemy jeszcze dopracować szczegóły.", en: "Good choice! We can still refine the details." }));
+          setFeedbackType('neutral');
+        } else {
+          setFeedbackMessage(t({ pl: "Spróbujmy zmodyfikować obraz, aby lepiej pasował do Twoich preferencji.", en: "Let's try to modify the image to better match your preferences." }));
+          setFeedbackType('negative');
         }
-        
+
         setTimeout(() => setFeedbackMessage(null), 5000);
-      }
-      
-      if (rating !== 'is_my_interior') {
-        const allRatingsComplete = updatedRatings.aesthetic_match > 0;
-        
-        if (allRatingsComplete) {
-          setHasCompletedRatings(true);
-          
-          const avgRating = updatedRatings.aesthetic_match;
-          
-          if (avgRating >= 6) {
-            setFeedbackMessage(t({ pl: "Świetny wybór! Ten obraz ma doskonałe oceny. Możesz go zapisać lub spróbować drobnych modyfikacji.", en: "Great choice! This image has excellent ratings. You can save it or try minor modifications." }));
-            setFeedbackType('positive');
-          } else if (avgRating >= 4) {
-            setFeedbackMessage(t({ pl: "Dobry wybór! Możemy jeszcze dopracować szczegóły.", en: "Good choice! We can still refine the details." }));
-            setFeedbackType('neutral');
-          } else {
-            setFeedbackMessage(t({ pl: "Spróbujmy zmodyfikować obraz, aby lepiej pasował do Twoich preferencji.", en: "Let's try to modify the image to better match your preferences." }));
-            setFeedbackType('negative');
-          }
-          
-          setTimeout(() => setFeedbackMessage(null), 5000);
-        }
       }
     }
   };
@@ -500,11 +497,6 @@ export default function ModifyPage() {
 
     if (isLoading || isModifying) {
       console.warn('[Modification] Already generating, ignoring duplicate request');
-      return;
-    }
-    
-    if (!hasAnsweredInteriorQuestion) {
-      setError(t({ pl: "Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed modyfikacją obrazu.", en: "Please answer the question 'Is this my interior?' before modifying the image." }));
       return;
     }
 
@@ -662,7 +654,7 @@ export default function ModifyPage() {
           usedOriginal: false,
           parentImageId: selectedImage.id
         },
-        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+        ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
         isFavorite: false,
         createdAt: Date.now(),
       };
@@ -670,10 +662,9 @@ export default function ModifyPage() {
       setSelectedImage(newImage);
       setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
-      
-      setHasAnsweredInteriorQuestion(false);
-      setHasCompletedRatings(false);
-      setShowSourceReveal(true);
+      setShowTasteRatingPanel(true);
+      setHasAnsweredInteriorQuestion(true);
+      setShowSourceReveal(false);
       
       const generatedImagePayload = {
         id: newImage.id,
@@ -800,11 +791,6 @@ export default function ModifyPage() {
       return;
     }
 
-    if (!hasAnsweredInteriorQuestion) {
-      setError(t({ pl: "Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed usunięciem mebli.", en: "Please answer the question 'Is this my interior?' before removing furniture." }));
-      return;
-    }
-    
     // Get base64 from selectedImage, or extract from URL if needed
     let baseImageForRemoval = selectedImage.base64;
     if (!baseImageForRemoval && selectedImage.url && selectedImage.url.startsWith('data:')) {
@@ -921,7 +907,7 @@ export default function ModifyPage() {
           iterationCount: generationCount,
           usedOriginal: false
         },
-        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+        ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
         isFavorite: false,
         createdAt: Date.now(),
       };
@@ -929,9 +915,9 @@ export default function ModifyPage() {
       setSelectedImage(newImage);
       setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
-      
-      setHasAnsweredInteriorQuestion(false);
-      setHasCompletedRatings(false);
+      setShowTasteRatingPanel(true);
+      setHasAnsweredInteriorQuestion(true);
+      setShowSourceReveal(false);
 
       const generatedImagePayload = {
         id: newImage.id,
@@ -1061,6 +1047,10 @@ export default function ModifyPage() {
     setSelectedImage({ ...selectedImage, isFavorite: !selectedImage.isFavorite });
   };
 
+  const sessionImageRatings = resolveSessionImageRatingsMap(
+    (sessionData as { imageRatings?: SessionImageRatingsMap } | null)?.imageRatings,
+  );
+
   const handleHistoryNodeClick = (index: number) => {
     if (index < 0 || index >= generationHistory.length) return;
     
@@ -1069,6 +1059,10 @@ export default function ModifyPage() {
     
     // Switch to the clicked image
     if (historyItem.imageUrl) {
+      const freshRatingsMap = resolveSessionImageRatingsMap(
+        (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
+      );
+
       // Extract base64 from data URL if needed
       let base64Data = (historyItem as any).base64 || '';
       if (!base64Data && historyItem.imageUrl.startsWith('data:')) {
@@ -1078,26 +1072,33 @@ export default function ModifyPage() {
         }
       }
       
-      const newSelectedImage: GeneratedImage = {
-        id: historyItem.id,
-        url: historyItem.imageUrl,
-        base64: base64Data,
-        prompt: historyItem.label || 'From history',
-        provider: 'google',
-        parameters: { modificationType: historyItem.type, modifications: [], iterationCount: 0, usedOriginal: false },
-        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
-        isFavorite: false,
-        createdAt: historyItem.timestamp || Date.now(),
-        source: (historyItem as any).source || GenerationSource.Implicit,
-        displayIndex: index,
-        isBlindSelected: true
-      };
+      const newSelectedImage = applyRatingsToImage(
+        {
+          id: historyItem.id,
+          url: historyItem.imageUrl,
+          base64: base64Data,
+          prompt: historyItem.label || 'From history',
+          provider: 'google',
+          parameters: {
+            modificationType: historyItem.type,
+            modifications: [],
+            iterationCount: 0,
+            usedOriginal: false,
+          },
+          ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
+          isFavorite: false,
+          createdAt: historyItem.timestamp || Date.now(),
+          source: (historyItem as any).source || GenerationSource.Implicit,
+          displayIndex: index,
+          isBlindSelected: true,
+        } as GeneratedImage,
+        freshRatingsMap,
+      );
       
       setSelectedImage(newSelectedImage);
-      // Reset questionnaire state when switching images
-      setHasAnsweredInteriorQuestion(false);
-      setHasCompletedRatings(false);
-      setShowSourceReveal(true);
+      setHasAnsweredInteriorQuestion(true);
+      setShowTasteRatingPanel(imageNeedsAestheticRating(newSelectedImage, freshRatingsMap));
+      setShowSourceReveal(imageHasAestheticRating(newSelectedImage, freshRatingsMap));
       
       // Also update session so base64 is preserved for modifications
       updateSessionData({
@@ -1267,55 +1268,10 @@ export default function ModifyPage() {
                 </button>
               </div>
               
-              {/* Quick Interior Question */}
+              {/* Rating Question */}
               <AnimatePresence>
-                {showSourceReveal && selectedImage && !hasAnsweredInteriorQuestion && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ 
-                      opacity: 0, 
-                      y: -20, 
-                      scale: 0.95,
-                      transition: { duration: 0.5, ease: "easeIn" }
-                    }}
-                    transition={{ duration: 0.5, ease: "easeOut" }}
-                  >
-                    <div className="space-y-6">
-                      <h4 className="font-semibold text-graphite text-lg">{t({ pl: "Czy to Twoje wnętrze?", en: "Is this your interior?" })}</h4>
-                      <div className="border-b border-gray-200/50 pb-4 last:border-b-0">
-                        <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
-                          <span>{t({ pl: "To nie moje wnętrze (1)", en: "Not my interior (1)" })}</span>
-                          <span>{t({ pl: "To moje wnętrze (5)", en: "My interior (5)" })}</span>
-                        </div>
-
-                        <GlassScalePicker
-                          min={1}
-                          max={5}
-                          value={selectedImage.ratings.is_my_interior || 3}
-                          onChange={(value) => {
-                            handleImageRating(selectedImage.id, 'is_my_interior', value, { suppressProgress: true });
-                            if (interiorAdvanceTimeoutRef.current) clearTimeout(interiorAdvanceTimeoutRef.current);
-                            interiorAdvanceTimeoutRef.current = setTimeout(() => {
-                              setHasAnsweredInteriorQuestion(true);
-                            }, 800);
-                          }}
-                          className="mb-2"
-                          highlightResetKey={selectedImage.id}
-                          ariaLabel={t({
-                            pl: 'Skala: czy to Twoje wnętrze (1–5)',
-                            en: 'Scale: is this your interior (1–5)',
-                          })}
-                        />
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Second Rating Question */}
-              <AnimatePresence>
-                {hasAnsweredInteriorQuestion && !hasCompletedRatings && selectedImage?.id !== 'original-uploaded-image' && (
+                {showTasteRatingPanel &&
+                  selectedImage?.id !== 'original-uploaded-image' && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1345,13 +1301,9 @@ export default function ModifyPage() {
                         <GlassScalePicker
                           min={1}
                           max={5}
-                          value={selectedImage.ratings[key as keyof typeof selectedImage.ratings] || 3}
+                          value={aestheticPickerValue(selectedImage.ratings)}
                           onChange={(value) => {
                             handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
-                            if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
-                            ratingsAdvanceTimeoutRef.current = setTimeout(() => {
-                              setHasCompletedRatings(true);
-                            }, 800);
                           }}
                           className="mb-2"
                           highlightResetKey={`${selectedImage.id}-${String(key)}`}
@@ -1369,7 +1321,7 @@ export default function ModifyPage() {
           </GlassCard>
           
           {/* Modifications and History - Show after selection and after completing all questions */}
-          {selectedImage && hasCompletedRatings && (
+          {selectedImage && imageHasAestheticRating(selectedImage, sessionImageRatings) && (
             <>
               {isGuestFullPath && guestModsQuotaBlocked && (
                 <GlassCard variant="flatOnMobile" className="p-4 mb-4 border-gold/30 bg-gold/5">

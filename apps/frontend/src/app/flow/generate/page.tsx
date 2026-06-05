@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSessionData } from '@/hooks/useSessionData';
@@ -14,7 +15,7 @@ import { assessAllSourcesQuality, getViableSources, type DataStatus } from '@/li
 import { calculateImplicitQuality } from '@/lib/prompt-synthesis/implicit-quality';
 import { analyzeSourceConflict } from '@/lib/prompt-synthesis/conflict-analysis';
 import { countExplicitAnswers, getRegenerationInterpretation, type GenerationFeedback, type RegenerationEvent } from '@/lib/feedback/generation-feedback';
-import { useModalAPI } from '@/hooks/useModalAPI';
+import { useAiApi } from '@/hooks/useAiApi';
 import { useGoogleAI, getGenerationParameters, type GoogleGenerationParameters } from '@/hooks/useGoogleAI';
 import { prepareGenerationDimensionsFromRoomBase64 } from '@/lib/image-aspect';
 import {
@@ -55,12 +56,13 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
-import { buildOptimizedFluxPrompt } from '@/lib/dna';
 import { 
   synthesizeSixPrompts,
   synthesizeFivePrompts, // Backward compatibility
+  synthesizeSelectedPrompts,
   GenerationSource, 
   GENERATION_SOURCE_LABELS,
+  PROMPT_SCHEMA_VERSION,
   type SixPromptSynthesisResult,
   type FivePromptSynthesisResult 
 } from '@/lib/prompt-synthesis';
@@ -73,6 +75,16 @@ import {
   appendModificationPromptLog,
   buildModificationPromptLogEntry,
 } from '@/lib/modification-prompt-log';
+import {
+  applyRatingsToImage,
+  aestheticPickerValue,
+  clearAestheticRatingInMap,
+  imageHasAestheticRating,
+  imageNeedsAestheticRating,
+  resolveSessionImageRatingsMap,
+  withUnsetAestheticRating,
+  type SessionImageRatingsMap,
+} from '@/lib/image-aesthetic-rating';
 
 interface GeneratedImage {
   id: string;
@@ -84,7 +96,6 @@ interface GeneratedImage {
     aesthetic_match: number;
     character: number;
     harmony: number;
-    is_my_interior: number;
   };
   isFavorite: boolean;
   createdAt: number;
@@ -144,7 +155,7 @@ export default function GeneratePage() {
           (g.id.startsWith('matrix-') && !g.id.startsWith('mod-') && !g.id.startsWith('remove-'))),
     );
   const { generateSixImagesParallelWithGoogle, upscaleImageWithGoogle, isLoading, error, setError } = useGoogleAI();
-  const { generateLLMComment } = useModalAPI();
+  const { generateLLMComment } = useAiApi();
 
   const [postAnonGenLoginOpen, setPostAnonGenLoginOpen] = useState(false);
   const [preGenLoginOpen, setPreGenLoginOpen] = useState(false);
@@ -161,7 +172,6 @@ export default function GeneratePage() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState<number | undefined>(undefined);
   const [hasAnsweredInteriorQuestion, setHasAnsweredInteriorQuestion] = useState(false);
-  const [hasCompletedRatings, setHasCompletedRatings] = useState(false);
   const [pageViewId, setPageViewId] = useState<string | null>(null);
   const [idaComment, setIdaComment] = useState<string | null>(null);
   const [isGeneratingComment, setIsGeneratingComment] = useState(false);
@@ -189,6 +199,8 @@ export default function GeneratePage() {
   const [matrixImages, setMatrixImages] = useState<GeneratedImage[]>([]);
   const [matrixDisplayOrder, setMatrixDisplayOrder] = useState<GenerationSource[]>([]);
   const [blindSelectionMade, setBlindSelectionMade] = useState(false);
+  /** Explicit UI gate for taste-match picker — set on vision confirm, cleared after rating. */
+  const [showTasteRatingPanel, setShowTasteRatingPanel] = useState(false);
   const [selectedSourceIndex, setSelectedSourceIndex] = useState<number | null>(null);
   const [showSourceReveal, setShowSourceReveal] = useState(false);
   const [matrixGenerationStartTime, setMatrixGenerationStartTime] = useState<number>(0);
@@ -196,6 +208,8 @@ export default function GeneratePage() {
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const navigatingToModifyRef = useRef(false); // Track if intentionally going to modify page
+  /** True after user confirms matrix choice — must survive late matrix batch completion */
+  const userConfirmedMatrixSelectionRef = useRef(false);
   const [isGenerating, setIsGenerating] = useState(false); // Prevent duplicate generations
   const isGeneratingRef = useRef(false); // Ref to avoid race conditions in rapid calls
   const currentGenerationRunIdRef = useRef<string | null>(null); // Track active generation run ID
@@ -214,7 +228,9 @@ export default function GeneratePage() {
   const [lastFailedModification, setLastFailedModification] = useState<ModificationOption | null>(null); // Track last failed modification for retry
   const [customModificationText, setCustomModificationText] = useState(''); // Custom modification text input
   const [isLightboxOpen, setIsLightboxOpen] = useState(false); // Lightbox zoom for step 2 image
-  
+  const [lightboxPortalReady, setLightboxPortalReady] = useState(false);
+  const matrixImageClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [generationHistory, setGenerationHistory] = useState<Array<{
     id: string;
     type: 'initial' | 'micro' | 'macro';
@@ -401,7 +417,6 @@ export default function GeneratePage() {
             aesthetic_match: 0,
             character: 0,
             harmony: 0,
-            is_my_interior: 0,
           },
           isFavorite: false,
           createdAt: item.timestamp || Date.now(),
@@ -421,37 +436,55 @@ export default function GeneratePage() {
           : (persistedSelectedOnly?.id || null);
 
       if (persistedSelectedIdOnly) {
-        setBlindSelectionMade(false);
+        const sessionBlindMadeEarly = typedSessionData?.blindSelectionMade === true;
+        if (sessionBlindMadeEarly) {
+          userConfirmedMatrixSelectionRef.current = true;
+          setBlindSelectionMade(true);
+          setHasAnsweredInteriorQuestion(true);
+        } else {
+          setBlindSelectionMade(false);
+          setShowTasteRatingPanel(false);
+        }
         const selectedFromRestored = restoredMatrixOnly.find((img) => img.id === persistedSelectedIdOnly);
         if (selectedFromRestored) {
-          setSelectedImage(selectedFromRestored);
+          const restoredSelected = applyRatingsToImage(selectedFromRestored, imageRatings);
+          setSelectedImage(restoredSelected);
+          if (sessionBlindMadeEarly) {
+            setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
+          }
         } else if (persistedSelectedOnly?.url) {
-          setSelectedImage({
-            id: persistedSelectedIdOnly,
-            url: persistedSelectedOnly.url,
-            base64: persistedSelectedOnly.base64 || '',
-            prompt: 'Restored selected image from sessionData',
-            provider: persistedSelectedOnly.provider || 'google',
-            parameters:
-              persistedSelectedOnly.parameters || {
-                modificationType: 'initial',
-                modifications: [],
-                iterationCount: 0,
-                usedOriginal: false,
-              },
-            ratings:
-              imageRatings[persistedSelectedIdOnly] || {
-                aesthetic_match: 0,
-                character: 0,
-                harmony: 0,
-                is_my_interior: 0,
-              },
-            isFavorite: false,
-            createdAt: Date.now(),
-            source: persistedSelectedOnly.source || GenerationSource.Implicit,
-            displayIndex: persistedSelectedOnly.displayIndex || 0,
-            isBlindSelected: true,
-          } as GeneratedImage);
+          const restoredSelected = applyRatingsToImage(
+            {
+              id: persistedSelectedIdOnly,
+              url: persistedSelectedOnly.url,
+              base64: persistedSelectedOnly.base64 || '',
+              prompt: 'Restored selected image from sessionData',
+              provider: persistedSelectedOnly.provider || 'google',
+              parameters:
+                persistedSelectedOnly.parameters || {
+                  modificationType: 'initial',
+                  modifications: [],
+                  iterationCount: 0,
+                  usedOriginal: false,
+                },
+              ratings:
+                imageRatings[persistedSelectedIdOnly] || {
+                  aesthetic_match: 0,
+                  character: 0,
+                  harmony: 0,
+                },
+              isFavorite: false,
+              createdAt: Date.now(),
+              source: persistedSelectedOnly.source || GenerationSource.Implicit,
+              displayIndex: persistedSelectedOnly.displayIndex || 0,
+              isBlindSelected: true,
+            } as GeneratedImage,
+            imageRatings,
+          );
+          setSelectedImage(restoredSelected);
+          if (sessionBlindMadeEarly) {
+            setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
+          }
         }
       }
 
@@ -498,8 +531,14 @@ export default function GeneratePage() {
       // Note: sessionData only stores lightweight versions (id, url), not full base64
       // We'll need to reconstruct the images from URLs
       const restoredImages: GeneratedImage[] = savedGeneratedImages.map((img: any, index: number) => {
-        const ratings = imageRatings[img.id] || { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 };
-        
+        const ratings = applyRatingsToImage(
+          {
+            id: img.id,
+            ratings: img.ratings || { aesthetic_match: 0, character: 0, harmony: 0 },
+          },
+          imageRatings,
+        ).ratings;
+
         // Extract source from ID if it's a matrix image (format: matrix-google-{count}-{source})
         let source: GenerationSource = GenerationSource.Implicit;
         let displayIndex = index;
@@ -576,41 +615,69 @@ export default function GeneratePage() {
           : (persistedSelected?.id || null);
 
       if (persistedSelectedId) {
-        // If user navigated back from modify page, show the 6-image grid again (don't lock to single image)
-        // We detect this by checking if we have matrix images/history - if so, user wants to re-select
+        const sessionBlindMade = typedSessionData?.blindSelectionMade === true;
         const hasMatrixHistory = (typedSessionData?.matrixHistory || []).length > 0;
         const hasMatrixCache = restoredImages.filter(img => img.id.startsWith('matrix-')).length > 0;
-        
-        if (hasMatrixHistory || hasMatrixCache) {
-          // User has seen the 6 images before - let them re-select (don't set blindSelectionMade)
-          console.log('[Generate] User navigated back - showing 6-image grid for re-selection');
-          setBlindSelectionMade(false);
-        } else {
-          // No matrix history - this is a direct restore, show selected image
+
+        if (sessionBlindMade) {
+          userConfirmedMatrixSelectionRef.current = true;
           setBlindSelectionMade(true);
+          setHasAnsweredInteriorQuestion(true);
+        } else if (hasMatrixHistory || hasMatrixCache) {
+          // Matrix exists but user has not confirmed a vision yet — show grid for blind pick
+          console.log('[Generate] Matrix cached without confirmed selection — showing grid');
+          setBlindSelectionMade(false);
+          setShowTasteRatingPanel(false);
+        } else {
+          setBlindSelectionMade(true);
+          setHasAnsweredInteriorQuestion(true);
         }
 
         const selectedFromRestored = restoredImages.find(img => img.id === persistedSelectedId);
         if (selectedFromRestored) {
           console.log('[Generate] Restoring selected image from restored images:', persistedSelectedId);
-          setSelectedImage(selectedFromRestored);
+          const restoredSelected = applyRatingsToImage(selectedFromRestored, imageRatings);
+          setSelectedImage(restoredSelected);
+          if (sessionBlindMade) {
+            setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
+          }
         } else if (persistedSelected?.url) {
           // Fallback: restore minimal selected image even if we don't have the full matrix cache
           console.log('[Generate] Restoring selected image from sessionData.selectedImage.url:', persistedSelectedId);
-          setSelectedImage({
-            id: persistedSelectedId,
-            url: persistedSelected.url,
-            base64: persistedSelected.base64 || '',
-            prompt: 'Restored selected image from sessionData',
-            provider: persistedSelected.provider || 'google',
-            parameters: persistedSelected.parameters || { modificationType: 'initial', modifications: [], iterationCount: 0, usedOriginal: false },
-            ratings: imageRatings[persistedSelectedId] || { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
-            isFavorite: false,
-            createdAt: Date.now(),
-            source: persistedSelected.source || GenerationSource.Implicit,
-            displayIndex: persistedSelected.displayIndex || 0,
-            isBlindSelected: true
-          } as any);
+          const restoredSelected = applyRatingsToImage(
+            {
+              id: persistedSelectedId,
+              url: persistedSelected.url,
+              base64: persistedSelected.base64 || '',
+              prompt: 'Restored selected image from sessionData',
+              provider: persistedSelected.provider || 'google',
+              parameters:
+                persistedSelected.parameters || {
+                  modificationType: 'initial',
+                  modifications: [],
+                  iterationCount: 0,
+                  usedOriginal: false,
+                },
+              ratings: imageRatings[persistedSelectedId] || {
+                aesthetic_match: 0,
+                character: 0,
+                harmony: 0,
+              },
+              isFavorite: false,
+              createdAt: Date.now(),
+              source: persistedSelected.source || GenerationSource.Implicit,
+              displayIndex: persistedSelected.displayIndex || 0,
+              isBlindSelected: true,
+            } as GeneratedImage,
+            imageRatings,
+          );
+          setSelectedImage(restoredSelected);
+          if (sessionBlindMade) {
+            setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
+          }
+          if (!hasMatrixHistory && !hasMatrixCache) {
+            setHasAnsweredInteriorQuestion(true);
+          }
         }
 
         // Prevent auto-generation on refresh when the user already selected a vision
@@ -645,7 +712,7 @@ export default function GeneratePage() {
               source: item.source,
               sourceLabel: item.source ? GENERATION_SOURCE_LABELS[item.source as GenerationSource] : undefined
             },
-            ratings: imageRatings[item.id] || { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+            ratings: imageRatings[item.id] || { aesthetic_match: 0, character: 0, harmony: 0 },
             isFavorite: false,
             createdAt: item.timestamp || Date.now(),
             source: item.source as GenerationSource,
@@ -675,13 +742,17 @@ export default function GeneratePage() {
       // Restore generation history
       if (savedGenerations.length > 0) {
         const history: Array<{ id: string; type: 'initial' | 'micro' | 'macro'; label: string; timestamp: number; imageUrl: string }> = savedGenerations.map((gen: any) => {
-          const image = restoredImages.find(img => img.id.startsWith(gen.id.split('-')[0] + '-'));
+          const image =
+            restoredImages.find((img) => img.id === gen.id) ||
+            restoredImages.find(
+              (img) => img.id.startsWith(`${gen.id}-`) || gen.id.startsWith(img.id),
+            );
           return {
-            id: gen.id,
+            id: image?.id ?? gen.id,
             type: gen.type || 'initial',
             label: gen.modification || gen.prompt?.substring(0, 30) || 'Generacja',
             timestamp: gen.timestamp || Date.now(),
-            imageUrl: image?.url || ''
+            imageUrl: image?.url || '',
           };
         });
         
@@ -773,17 +844,9 @@ export default function GeneratePage() {
     }
   }, [selectedImage]);
 
-  // Lightbox: close on Escape
   useEffect(() => {
-    if (!isLightboxOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsLightboxOpen(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isLightboxOpen]);
-
-  const buildInitialPrompt = () => buildOptimizedFluxPrompt(sessionData as any);
+    setLightboxPortalReady(true);
+  }, []);
 
   /**
    * Helper function to remove furniture from room image using AI
@@ -1347,14 +1410,29 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         strength: parameters.strength 
       });
       
-      // One participant_generations row per matrix run (avoid orphan pending rows)
+      // One participant_generations row per matrix run (avoid orphan pending rows).
+      // Store the FULL structured JSON per source + a snapshot of PromptWeights + schema_version,
+      // so research data is comparable field-by-field (no truncation).
       if (userHash && prompts.length > 0) {
+        const promptRecords = prompts.map((p) => {
+          let promptJson: unknown = p.prompt;
+          try {
+            promptJson = JSON.parse(p.prompt);
+          } catch {
+            // Non-JSON (text) prompt — keep raw string
+          }
+          return {
+            source: p.source,
+            schema_version: PROMPT_SCHEMA_VERSION,
+            prompt_json: promptJson,
+            weights: synthesisResult.results[p.source]?.weights ?? null,
+          };
+        });
+
         matrixJobId = await startParticipantGeneration(userHash, {
           type: 'initial',
-          prompt: JSON.stringify(
-            prompts.map((p) => ({ source: p.source, prompt: p.prompt.substring(0, 200) })),
-          ),
-          parameters: { ...parameters, num_sources: prompts.length },
+          prompt: JSON.stringify(promptRecords),
+          parameters: { ...parameters, num_sources: prompts.length, schema_version: PROMPT_SCHEMA_VERSION },
           has_base_image: true,
         });
       }
@@ -1431,7 +1509,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               sourceLabel: sourceLabel,
               processingTime: result.processing_time
             },
-            ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+            ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
             isFavorite: false,
             createdAt: Date.now(),
             source: result.source,
@@ -1657,7 +1735,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 sourceLabel: sourceLabel,
                 processingTime: result.processing_time
               },
-              ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+              ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
               isFavorite: false,
               createdAt: Date.now(),
               source: result.source,
@@ -1925,7 +2003,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               sourceLabel: sourceLabel,
               processingTime: result.processing_time
             },
-            ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+            ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
             isFavorite: false,
             createdAt: Date.now(),
             source: result.source,
@@ -1965,8 +2043,25 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         displayOrderLength: displayOrder.filter(s => newMatrixImages.some(img => img.source === s)).length,
         carouselIndex: 0
       });
-      setSelectedImage(null); // No selection yet - blind comparison mode
-      setBlindSelectionMade(false);
+      if (!userConfirmedMatrixSelectionRef.current) {
+        setSelectedImage(null);
+        setBlindSelectionMade(false);
+      } else {
+        setSelectedImage((current) => {
+          if (!current) return null;
+          const match =
+            newMatrixImages.find((img) => img.id === current.id) ||
+            (current.source != null
+              ? newMatrixImages.find((img) => img.source === current.source)
+              : undefined);
+          if (!match) return current;
+          const ratingsMap = resolveSessionImageRatingsMap(
+            (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
+          );
+          return applyRatingsToImage(match, ratingsMap);
+        });
+        setBlindSelectionMade(true);
+      }
       setShowSourceReveal(false);
       setGenerationCount(prev => prev + 1);
       
@@ -2199,13 +2294,26 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
   const handleBlindSelection = async (image: GeneratedImage) => {
     if (blindSelectionMade) return;
-    
+
+    userConfirmedMatrixSelectionRef.current = true;
+
     const selectionTime = Date.now() - matrixGenerationStartTime;
     console.log(`[6-Image Matrix] User selected image from source: ${image.source} at position ${image.displayIndex}`);
-    
-    // Mark selection but DON'T update UI state - navigate immediately
-    // setBlindSelectionMade(true) would cause a flash of the "reveal view"
-    
+
+    const ratingsMap = clearAestheticRatingInMap(
+      resolveSessionImageRatingsMap(
+        (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
+      ),
+      image.id,
+    );
+    const selectedWithRatings = applyRatingsToImage(withUnsetAestheticRating(image), ratingsMap);
+
+    setBlindSelectionMade(true);
+    setSelectedImage(selectedWithRatings);
+    setShowTasteRatingPanel(true);
+    setHasAnsweredInteriorQuestion(true);
+    setShowSourceReveal(false);
+
     // Build initial history from all generated matrix images
     const initialHistory = matrixImages.map((img, idx) => ({
       id: img.id,
@@ -2217,6 +2325,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       source: img.source,
       isSelected: img.id === image.id
     }));
+    setGenerationHistory(initialHistory);
+    setCurrentHistoryIndex(initialHistory.findIndex((h) => h.id === image.id));
 
     // Persist selection including base64 and full history so modify page can use it
     try {
@@ -2230,6 +2340,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           parameters: image.parameters
         },
         blindSelectionMade: true,
+        imageRatings: ratingsMap,
         // Save all matrix images for history display in modify page
         matrixHistory: initialHistory
       } as any);
@@ -2250,15 +2361,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       console.warn('[Generate] Failed to persist selectedImage/blindSelectionMade to session:', e);
     }
     
-    // Navigate to modify page IMMEDIATELY (no delay, no state change that causes flash)
-    // Set flags so cleanup doesn't abort generation - let it continue in background
-    navigatingToModifyRef.current = true;
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('awa-navigating-to-modify', 'true');
-    }
-    router.push('/flow/modify');
-    
-    // Collect feedback in background (don't await - let it run after navigation)
+    // Collect feedback in background
     (async () => {
       try {
         const projectId = await getOrCreateProjectId((sessionData as any).userHash);
@@ -2330,6 +2433,75 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     })();
   };
 
+  const lightboxNavigableImages = useMemo(() => {
+    if (!isMatrixMode || blindSelectionMade) return [];
+    const displayOrder = synthesisResult?.displayOrder ?? [];
+    return displayOrder
+      .map((src) => matrixImages.find((img) => img.source === src && img.provider === 'google'))
+      .filter((img): img is GeneratedImage => Boolean(img));
+  }, [isMatrixMode, blindSelectionMade, synthesisResult?.displayOrder, matrixImages]);
+
+  const navigateLightboxImage = useCallback(
+    (direction: 'prev' | 'next') => {
+      if (!selectedImage || lightboxNavigableImages.length <= 1) return;
+      const currentIndex = lightboxNavigableImages.findIndex((img) => img.id === selectedImage.id);
+      if (currentIndex === -1) return;
+      const nextIndex =
+        direction === 'next'
+          ? (currentIndex + 1) % lightboxNavigableImages.length
+          : (currentIndex - 1 + lightboxNavigableImages.length) % lightboxNavigableImages.length;
+      setSelectedImage(lightboxNavigableImages[nextIndex]!);
+    },
+    [selectedImage, lightboxNavigableImages]
+  );
+
+  useEffect(() => {
+    if (!isLightboxOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsLightboxOpen(false);
+        return;
+      }
+      if (!isMatrixMode || blindSelectionMade || lightboxNavigableImages.length <= 1) return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigateLightboxImage('prev');
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigateLightboxImage('next');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    isLightboxOpen,
+    isMatrixMode,
+    blindSelectionMade,
+    lightboxNavigableImages.length,
+    navigateLightboxImage,
+  ]);
+
+  const handleMatrixImageClick = (image: GeneratedImage) => {
+    setSelectedImage(image);
+    if (matrixImageClickTimerRef.current) {
+      clearTimeout(matrixImageClickTimerRef.current);
+    }
+    matrixImageClickTimerRef.current = setTimeout(() => {
+      setIsLightboxOpen(true);
+      matrixImageClickTimerRef.current = null;
+    }, 250);
+  };
+
+  const handleMatrixImageDoubleClick = (image: GeneratedImage) => {
+    if (matrixImageClickTimerRef.current) {
+      clearTimeout(matrixImageClickTimerRef.current);
+      matrixImageClickTimerRef.current = null;
+    }
+    setIsLightboxOpen(false);
+    setSelectedImage(image);
+    void handleBlindSelection(image);
+  };
+
   // Generate IDA comment for generated images
   const generateIdaComment = async () => {
     if (!selectedImage || isGeneratingComment) return;
@@ -2353,24 +2525,79 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     }
   };
 
+  const sessionImageRatings = resolveSessionImageRatingsMap(
+    (sessionData as { imageRatings?: SessionImageRatingsMap } | null)?.imageRatings,
+  );
+
+  const mergeImageRatingsIntoCollections = useCallback(
+    (imageWithRatings: GeneratedImage) => {
+      setGeneratedImages((prev) => {
+        const idx = prev.findIndex((img) => img.id === imageWithRatings.id);
+        if (idx >= 0) {
+          return prev.map((img) => (img.id === imageWithRatings.id ? imageWithRatings : img));
+        }
+        return [...prev, imageWithRatings];
+      });
+      setMatrixImages((prev) => {
+        const idx = prev.findIndex((img) => img.id === imageWithRatings.id);
+        if (idx < 0) return prev;
+        return prev.map((img) => (img.id === imageWithRatings.id ? imageWithRatings : img));
+      });
+    },
+    [],
+  );
+
   // Navigate through generation history
   const handleHistoryNodeClick = (index: number) => {
-    if (index >= 0 && index < generationHistory.length) {
-      const historyNode = generationHistory[index];
-      const image = generatedImages.find(img => img.id === historyNode.id);
-      if (image) {
-        // If user is previewing original room photo, switch back to the generated image when navigating history
-        if (showOriginalRoomPhoto) {
-          setShowOriginalRoomPhoto(false);
-        }
-        setSelectedImage(image);
-        setCurrentHistoryIndex(index);
-        setIdaComment(null); // Reset comment for historical image
-      }
+    if (index < 0 || index >= generationHistory.length) return;
+
+    const historyNode = generationHistory[index];
+    const freshRatingsMap = resolveSessionImageRatingsMap(
+      (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
+    );
+
+    const cached =
+      generatedImages.find((img) => img.id === historyNode.id) ||
+      matrixImages.find((img) => img.id === historyNode.id);
+
+    const baseImage: GeneratedImage | null =
+      cached ??
+      (historyNode.imageUrl
+        ? {
+            id: historyNode.id,
+            url: historyNode.imageUrl,
+            base64: '',
+            prompt: historyNode.label || 'From history',
+            provider: 'google',
+            parameters: {
+              modificationType: historyNode.type,
+              modifications: [],
+              iterationCount: 0,
+              usedOriginal: false,
+            },
+            ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
+            isFavorite: false,
+            createdAt: historyNode.timestamp || Date.now(),
+          }
+        : null);
+
+    if (!baseImage) return;
+
+    if (showOriginalRoomPhoto) {
+      setShowOriginalRoomPhoto(false);
     }
+
+    const imageWithRatings = applyRatingsToImage(baseImage, freshRatingsMap);
+
+    setSelectedImage(imageWithRatings);
+    mergeImageRatingsIntoCollections(imageWithRatings);
+    setCurrentHistoryIndex(index);
+    setIdaComment(null);
+    setHasAnsweredInteriorQuestion(true);
+    setShowSourceReveal(imageHasAestheticRating(imageWithRatings, freshRatingsMap));
   };
 
-  // Use centralized parameters from useModalAPI
+  // Use centralized parameters from useGoogleAI
   const getOptimalParameters = getGenerationParameters;
 
   type CreditAction = 'generate' | 'regenerate' | 'upscale' | 'save' | 'matrix';
@@ -2591,7 +2818,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               base64: result.image,
               prompt: result.prompt,
               parameters: { ...parameters, source: result.source },
-              ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+              ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
               isFavorite: false,
               createdAt: Date.now(),
               source: result.source,
@@ -2753,7 +2980,18 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     setLoadingProgress(35);
     setEstimatedTime(60);
     
-    const prompt = buildInitialPrompt();
+    // Use the SAME structured JSON pipeline as the matrix. Single representative source
+    // (Mixed blends all available aesthetic data and degrades gracefully on sparse input).
+    const legacyRoomType = (typedSessionData.roomType as string) || 'living room';
+    const legacySynth = await synthesizeSelectedPrompts(
+      sessionData as any,
+      legacyRoomType,
+      [GenerationSource.Mixed],
+    );
+    const prompt =
+      legacySynth[GenerationSource.Mixed]?.prompt ||
+      Object.values(legacySynth)[0]?.prompt ||
+      '';
 
     let cleanForDims = processedRoomImage;
     if (typeof cleanForDims === 'string' && cleanForDims.includes(',')) {
@@ -2847,7 +3085,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           iterationCount: generationCount,
           usedOriginal: true
         },
-        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+        ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
         isFavorite: false,
         createdAt: Date.now(),
       }));
@@ -2860,9 +3098,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setSelectedImage(newImages[0]);
       setGenerationCount((prev) => prev + 1);
       
-      setHasAnsweredInteriorQuestion(false);
-      setHasCompletedRatings(false);
-      
+      setHasAnsweredInteriorQuestion(true);
+      setShowTasteRatingPanel(true);
+
       // Save generated images to sessionData (lightweight, no base64)
       const generatedImagesPayload = newImages.map(img => ({
         id: img.id,
@@ -3208,7 +3446,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           usedOriginal: false,
           parentImageId: selectedImage.id // Track which image this modification is based on
         },
-        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+        ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
         isFavorite: false,
         createdAt: Date.now(),
       };
@@ -3219,10 +3457,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setSelectedImage(newImage);
       setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
-      
-      setHasAnsweredInteriorQuestion(false);
-      setHasCompletedRatings(false);
-      setShowSourceReveal(true);
+      setBlindSelectionMade(true);
+      setShowTasteRatingPanel(true);
+      setHasAnsweredInteriorQuestion(true);
+      setShowSourceReveal(false);
       
       // Save modified image to sessionData (but not to generatedImages array to avoid showing in matrix)
       const generatedImagePayload = {
@@ -3461,7 +3699,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           iterationCount: generationCount,
           usedOriginal: false
         },
-        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+        ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
         isFavorite: false,
         createdAt: Date.now(),
       };
@@ -3470,9 +3708,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setSelectedImage(newImage);
       setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
-      
-      setHasAnsweredInteriorQuestion(false);
-      setHasCompletedRatings(false);
+      setHasAnsweredInteriorQuestion(true);
+      setShowSourceReveal(false);
 
       // Save generated image to sessionData (like inspirations)
       const generatedImagePayload = {
@@ -3627,14 +3864,31 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   };
 
   const interiorAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const ratingsAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (interiorAdvanceTimeoutRef.current) clearTimeout(interiorAdvanceTimeoutRef.current);
-      if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
     };
   }, []);
+
+  // Interior question removed — selection / first generated image already implies ownership.
+  useEffect(() => {
+    if (!selectedImage || hasAnsweredInteriorQuestion) return;
+    if (
+      blindSelectionMade ||
+      showSourceReveal ||
+      (!isMatrixMode && generatedImages.length > 0)
+    ) {
+      setHasAnsweredInteriorQuestion(true);
+    }
+  }, [
+    blindSelectionMade,
+    showSourceReveal,
+    selectedImage,
+    hasAnsweredInteriorQuestion,
+    isMatrixMode,
+    generatedImages.length,
+  ]);
 
   const handleImageRating = async (
     imageId: string,
@@ -3642,68 +3896,57 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     value: number,
     options?: { suppressProgress?: boolean },
   ) => {
+    const applyRating = (img: GeneratedImage): GeneratedImage => ({
+      ...img,
+      ratings: { ...img.ratings, [rating]: value },
+    });
+
     setGeneratedImages((prev) =>
-      prev.map((img) =>
-        img.id === imageId ? { ...img, ratings: { ...img.ratings, [rating]: value } } : img,
-      ),
+      prev.map((img) => (img.id === imageId ? applyRating(img) : img)),
+    );
+    setMatrixImages((prev) =>
+      prev.map((img) => (img.id === imageId ? applyRating(img) : img)),
     );
 
     if (selectedImage?.id === imageId) {
-      setSelectedImage((prev) => (prev ? { ...prev, ratings: { ...prev.ratings, [rating]: value } } : null));
+      setSelectedImage((prev) => (prev ? applyRating(prev) : null));
+    }
+
+    if (rating === 'aesthetic_match' && value > 0) {
+      setShowTasteRatingPanel(false);
     }
 
     if (selectedImage?.id === imageId && !options?.suppressProgress) {
       const updatedRatings = { ...selectedImage.ratings, [rating]: value };
-      
-      if (rating === 'is_my_interior') {
-        setHasAnsweredInteriorQuestion(true);
-        
-        // Show feedback based on rating
-        if (value === 1) {
-          setFeedbackMessage(t({ pl: "Rozumiem, to zupełnie inne pomieszczenie. Spróbujmy zmodyfikować obraz aby był bliższy Twojemu wnętrzu.", en: "I understand, this is a completely different room. Let's try to modify the image to be closer to your interior." }));
-          setFeedbackType('negative');
-        } else if (value === 3) {
-          setFeedbackMessage(t({ pl: "Świetnie! Widzę podobieństwa. Możemy to jeszcze dopracować.", en: "Great! I see similarities. We can still refine this." }));
-          setFeedbackType('neutral');
-        } else if (value === 5) {
-          setFeedbackMessage(t({ pl: "Doskonale! Udało nam się odtworzyć Twoje wnętrze. Teraz oceń szczegóły.", en: "Perfect! We managed to recreate your interior. Now rate the details." }));
+
+      const allRatingsComplete = updatedRatings.aesthetic_match > 0;
+
+      if (allRatingsComplete) {
+        // Calculate rating for feedback
+        const avgRating = updatedRatings.aesthetic_match;
+
+        if (avgRating >= 6) {
+          setFeedbackMessage(t({ pl: "Świetny wybór! Ten obraz ma doskonałe oceny. Możesz go zapisać lub spróbować drobnych modyfikacji.", en: "Great choice! This image has excellent ratings. You can save it or try minor modifications." }));
           setFeedbackType('positive');
+        } else if (avgRating >= 4) {
+          setFeedbackMessage(t({ pl: "Dobra ocena! Możemy jeszcze popracować nad szczegółami.", en: "Good rating! We can still work on the details." }));
+          setFeedbackType('neutral');
+        } else {
+          setFeedbackMessage(t({ pl: "Rozumiem, spróbujmy czegoś innego. Wybierz modyfikację makro dla zupełnie nowego kierunku.", en: "I understand, let's try something else. Choose a macro modification for a completely new direction." }));
+          setFeedbackType('negative');
         }
-        
-        // Auto-hide feedback after 5 seconds
+
         setTimeout(() => setFeedbackMessage(null), 5000);
-      }
-      
-      if (rating !== 'is_my_interior') {
-        const allRatingsComplete = updatedRatings.aesthetic_match > 0;
-        
-        if (allRatingsComplete) {
-          setHasCompletedRatings(true);
-          
-          // Calculate rating for feedback
-          const avgRating = updatedRatings.aesthetic_match;
-          
-          if (avgRating >= 6) {
-            setFeedbackMessage(t({ pl: "Świetny wybór! Ten obraz ma doskonałe oceny. Możesz go zapisać lub spróbować drobnych modyfikacji.", en: "Great choice! This image has excellent ratings. You can save it or try minor modifications." }));
-            setFeedbackType('positive');
-          } else if (avgRating >= 4) {
-            setFeedbackMessage(t({ pl: "Dobra ocena! Możemy jeszcze popracować nad szczegółami.", en: "Good rating! We can still work on the details." }));
-            setFeedbackType('neutral');
-          } else {
-            setFeedbackMessage(t({ pl: "Rozumiem, spróbujmy czegoś innego. Wybierz modyfikację makro dla zupełnie nowego kierunku.", en: "I understand, let's try something else. Choose a macro modification for a completely new direction." }));
-            setFeedbackType('negative');
-          }
-          
-          setTimeout(() => setFeedbackMessage(null), 5000);
-        }
       }
     }
 
+    const snapRatings =
+      (getSessionStoreSnapshot() as { imageRatings?: SessionImageRatingsMap }).imageRatings || {};
     await updateSessionData({
       imageRatings: {
-        ...(sessionData as any).imageRatings || {},
+        ...snapRatings,
         [imageId]: {
-          ...((sessionData as any).imageRatings?.[imageId] || {}),
+          ...(snapRatings[imageId] || {}),
           [rating]: value,
           timestamp: Date.now(),
         },
@@ -3729,13 +3972,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   };
 
   const handleImageSelect = (image: GeneratedImage) => {
-    setSelectedImage(image);
-    
-    const hasInteriorRating = image.ratings.is_my_interior > 0;
-    const hasAllRatings = image.ratings.aesthetic_match > 0;
-    
-    setHasAnsweredInteriorQuestion(hasInteriorRating);
-    setHasCompletedRatings(hasAllRatings);
+    const freshRatingsMap = resolveSessionImageRatingsMap(
+      (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
+    );
+    const imageWithRatings = applyRatingsToImage(image, freshRatingsMap);
+    setSelectedImage(imageWithRatings);
+    mergeImageRatingsIntoCollections(imageWithRatings);
+    setHasAnsweredInteriorQuestion(true);
   };
 
   const handleContinue = () => {
@@ -3980,12 +4223,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       className="relative"
                     >
                       {/* No GlassCard wrapper - image fills the entire placeholder */}
-                      <div className="relative aspect-square w-full rounded-lg overflow-hidden group">
+                      <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden group shadow-md">
                         {isLockedAnon ? (
                           <button
                             type="button"
                             onClick={openAnonUnlockLoginModal}
-                            className="relative aspect-square w-full rounded-lg overflow-hidden bg-graphite/30 backdrop-blur-sm border border-white/15 flex flex-col items-center justify-center gap-2 p-3 cursor-pointer hover:border-gold/40 hover:bg-graphite/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2 text-left"
+                            className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-graphite/30 backdrop-blur-sm border border-white/15 flex flex-col items-center justify-center gap-2 p-3 cursor-pointer hover:border-gold/40 hover:bg-graphite/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2 text-left"
                             aria-label={t({ pl: 'Załóż konto, aby odblokować', en: 'Create an account to unlock' })}
                           >
                             <Lock className="w-10 h-10 text-gold/80" aria-hidden />
@@ -3999,7 +4242,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         ) : slotIsLoading ? (
                           /* Loading Skeleton - Futuristic transparent glass style */
                           <div 
-                            className="relative aspect-square w-full rounded-lg overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10"
+                            className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10"
                             role="status"
                             aria-live="polite"
                             aria-busy="true"
@@ -4120,18 +4363,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                       {statusText}
                                     </span>
                                   </div>
-                                  {qualityInfo.confidence !== undefined && qualityInfo.confidence !== null && (
-                                    <div className="flex justify-between gap-2">
-                                      <span>Pewność</span>
-                                      <span className="font-semibold text-white/90">{qualityInfo.confidence}%</span>
-                                    </div>
-                                  )}
-                                  {qualityInfo.dataPoints !== undefined && qualityInfo.dataPoints !== null && (
-                                    <div className="flex justify-between gap-2">
-                                      <span>Punkty danych</span>
-                                      <span className="font-semibold text-white/90">{qualityInfo.dataPoints}</span>
-                                    </div>
-                                  )}
                                   {qualityInfo.warnings && qualityInfo.warnings.length > 0 && qualityInfo.status !== 'sufficient' && (
                                     <div className="mt-1 pt-1 border-t border-white/10">
                                       <div className="text-[10px] text-white/70 space-y-0.5">
@@ -4155,18 +4386,32 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.5 }}
-                            className={`relative aspect-square w-full rounded-lg overflow-hidden bg-graphite/10 cursor-pointer hover:scale-[1.02] transition-transform ${
+                            role="button"
+                            tabIndex={0}
+                            className={`relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-graphite/10 cursor-zoom-in hover:scale-[1.02] transition-transform ${
                               selectedImage?.id === image.id 
                                 ? 'ring-2 ring-gold ring-offset-2 ring-offset-transparent shadow-xl' 
                                 : ''
                             }`}
-                            onClick={() => setSelectedImage(image)}
+                            onClick={() => handleMatrixImageClick(image)}
+                            onDoubleClick={() => handleMatrixImageDoubleClick(image)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleMatrixImageClick(image);
+                              }
+                            }}
+                            title={t({
+                              pl: 'Kliknij, aby powiększyć. Dwuklik wybiera wizję.',
+                              en: 'Click to zoom. Double-click to select.',
+                            })}
                           >
                             <Image
                               src={image.url}
                               alt={sourceLabel}
                               fill
-                              className="object-contain"
+                              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
+                              className="object-cover"
                               priority={index < 2}
                             />
                             
@@ -4200,7 +4445,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                           </motion.div>
                         ) : (
                           /* Fallback: keep showing loader instead of "Brak wizji" */
-                          <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10" />
+                          <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10" />
                         )}
                       </div>
                     </motion.div>
@@ -4219,8 +4464,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   {!selectedImage && !isUpscaling && (
                     <p className="text-center text-xs text-silver-dark mb-2 md:mb-3">
                       {t({
-                        pl: 'Dotknij jednej wizji powyżej, potem potwierdź wybór.',
-                        en: 'Tap one vision above, then confirm your choice.',
+                        pl: 'Kliknij wizję, aby powiększyć. Dwuklik wybiera od razu — albo potwierdź przyciskiem poniżej.',
+                        en: 'Click a vision to zoom. Double-click selects immediately — or confirm with the button below.',
                       })}
                     </p>
                   )}
@@ -4270,57 +4515,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 </div>
               )}
 
-              {/* Selected vision detail — secondary; below the main CTA */}
-              {selectedImage && (
-                <GlassCard variant="flatOnMobile" className="p-3 sm:p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-gold/10 rounded-lg shrink-0">
-                      <Eye size={20} className="text-gold" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-graphite text-sm sm:text-base">
-                        {t({
-                          pl: `Wybrana wizja: ${GENERATION_SOURCE_LABELS[selectedImage.source!]?.pl || ''}`,
-                          en: `Selected vision: ${GENERATION_SOURCE_LABELS[selectedImage.source!]?.en || GENERATION_SOURCE_LABELS[selectedImage.source!]?.pl || ''}`,
-                        })}
-                      </h3>
-                      <p className="text-xs sm:text-sm text-silver-dark mt-1 leading-snug">
-                        {selectedImage.source === GenerationSource.Implicit &&
-                          t({
-                            pl: 'Wygenerowane na podstawie Twoich intuicyjnych wyborów z Tindera i inspiracji.',
-                            en: 'Generated based on your intuitive choices from Tinder and inspirations.',
-                          })}
-                        {selectedImage.source === GenerationSource.Explicit &&
-                          t({
-                            pl: 'Wygenerowane na podstawie Twoich świadomych deklaracji preferencji.',
-                            en: 'Generated based on your conscious preference declarations.',
-                          })}
-                        {selectedImage.source === GenerationSource.Personality &&
-                          t({
-                            pl: 'Wygenerowane na podstawie Twojego profilu osobowości Big Five.',
-                            en: 'Generated based on your Big Five personality profile.',
-                          })}
-                        {selectedImage.source === GenerationSource.Mixed &&
-                          t({
-                            pl: 'Mix wszystkich danych estetycznych (40% implicit, 30% explicit, 30% personality).',
-                            en: 'Mix of all aesthetic data (40% implicit, 30% explicit, 30% personality).',
-                          })}
-                        {selectedImage.source === GenerationSource.MixedFunctional &&
-                          t({
-                            pl: 'Pełny mix + dane funkcjonalne (aktywności, problemy, nastrój PRS).',
-                            en: 'Full mix + functional data (activities, problems, PRS mood).',
-                          })}
-                        {selectedImage.source === GenerationSource.InspirationReference &&
-                          t({
-                            pl: 'Multi-reference z polubionych inspiracji — style i kolory z obrazów referencyjnych.',
-                            en: 'Multi-reference from liked inspirations — styles and colors from reference images.',
-                          })}
-                      </p>
-                    </div>
-                  </div>
-                </GlassCard>
-              )}
-              
               {/* Upscaling feedback */}
               {isUpscaling && selectedImage && (
                 <GlassCard variant="flatOnMobile" className="p-4">
@@ -4333,11 +4527,95 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   </div>
                 </GlassCard>
               )}
+
+              {lightboxPortalReady &&
+                createPortal(
+                  <AnimatePresence>
+                    {isLightboxOpen && selectedImage && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="fixed inset-0 z-[300] flex items-center justify-center bg-black/25 backdrop-blur-xl"
+                        onClick={() => setIsLightboxOpen(false)}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={t({ pl: 'Powiększone zdjęcie', en: 'Zoomed image' })}
+                      >
+                        <div
+                          className="flex max-h-[90vh] max-w-[90vw] flex-col items-center gap-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="relative flex items-center justify-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={selectedImage.url}
+                              alt={t({ pl: 'Powiększona wizja wnętrza', en: 'Zoomed interior vision' })}
+                              className="max-h-[calc(90vh-5rem)] w-auto max-w-full rounded-2xl object-contain"
+                            />
+                            {lightboxNavigableImages.length > 1 && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigateLightboxImage('prev');
+                                  }}
+                                  className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                                  aria-label={t({ pl: 'Poprzednia wizja', en: 'Previous vision' })}
+                                >
+                                  <ChevronLeft size={28} aria-hidden="true" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigateLightboxImage('next');
+                                  }}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                                  aria-label={t({ pl: 'Następna wizja', en: 'Next vision' })}
+                                >
+                                  <ChevronRight size={28} aria-hidden="true" />
+                                </button>
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsLightboxOpen(false);
+                              }}
+                              className="absolute top-4 right-4 rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                              aria-label={t({ pl: 'Zamknij', en: 'Close' })}
+                            >
+                              <X size={24} aria-hidden="true" />
+                            </button>
+                          </div>
+                          <GlassButton
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsLightboxOpen(false);
+                              void handleBlindSelection(selectedImage);
+                            }}
+                            disabled={isUpscaling}
+                            className="flex shrink-0 items-center gap-2 px-8 py-3"
+                          >
+                            <CheckCircle2 size={20} aria-hidden="true" />
+                            <span>{t({ pl: 'Wybieram tę wizję', en: 'I choose this vision' })}</span>
+                          </GlassButton>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>,
+                  document.body
+                )}
             </div>
           )}
 
           {/* 6-Image Matrix: After Selection - Reveal View */}
-          {isMatrixMode && blindSelectionMade && selectedImage && (
+          {blindSelectionMade && selectedImage && (
             <div className="space-y-6">
               {/* Selected Image - Main Display */}
               <GlassCard variant="flatOnMobile" className="p-4">
@@ -4526,55 +4804,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     )}
                   </div>
                   
-                  {/* Quick Interior Question */}
+                  {/* Rating Question */}
                   <AnimatePresence>
-                    {showSourceReveal && selectedImage && !hasAnsweredInteriorQuestion && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ 
-                          opacity: 0, 
-                          y: -20, 
-                          scale: 0.95,
-                          transition: { duration: 0.5, ease: "easeIn" }
-                        }}
-                        transition={{ duration: 0.5, ease: "easeOut" }}
-                      >
-                        <div className="space-y-6">
-                          <h4 className="font-semibold text-graphite text-lg">{t({ pl: "Czy to Twoje wnętrze?", en: "Is this your interior?" })}</h4>
-                          <div className="border-b border-gray-200/50 pb-4 last:border-b-0">
-                            <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
-                              <span>{t({ pl: "To nie moje wnętrze (1)", en: "Not my interior (1)" })}</span>
-                              <span>{t({ pl: "To moje wnętrze (5)", en: "My interior (5)" })}</span>
-                            </div>
-
-                            <GlassScalePicker
-                              min={1}
-                              max={5}
-                              value={(selectedImage.ratings as any).is_my_interior || 3}
-                              onChange={(value) => {
-                                handleImageRating(selectedImage.id, 'is_my_interior', value, { suppressProgress: true });
-                                if (interiorAdvanceTimeoutRef.current) clearTimeout(interiorAdvanceTimeoutRef.current);
-                                interiorAdvanceTimeoutRef.current = setTimeout(() => {
-                                  setHasAnsweredInteriorQuestion(true);
-                                }, 800);
-                              }}
-                              className="mb-2"
-                              highlightResetKey={selectedImage.id}
-                              ariaLabel={t({
-                                pl: 'Skala: czy to Twoje wnętrze (1–5)',
-                                en: 'Scale: is this your interior (1–5)',
-                              })}
-                            />
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  {/* Second Rating Question */}
-                  <AnimatePresence>
-                    {hasAnsweredInteriorQuestion && !hasCompletedRatings && selectedImage?.id !== 'original-uploaded-image' && (
+                    {showTasteRatingPanel &&
+                      selectedImage.id !== 'original-uploaded-image' && (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -4604,13 +4837,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             <GlassScalePicker
                               min={1}
                               max={5}
-                              value={(selectedImage.ratings as any)[key] || 3}
+                              value={aestheticPickerValue(selectedImage.ratings)}
                               onChange={(value) => {
                                 handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
-                                if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
-                                ratingsAdvanceTimeoutRef.current = setTimeout(() => {
-                                  setHasCompletedRatings(true);
-                                }, 800);
                               }}
                               className="mb-2"
                               highlightResetKey={`${selectedImage.id}-${String(key)}`}
@@ -4628,7 +4857,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               </GlassCard>
               
               {/* Modifications and History - Show after selection and after completing all questions */}
-              {selectedImage && blindSelectionMade && hasCompletedRatings && (
+              {selectedImage && blindSelectionMade && imageHasAestheticRating(selectedImage, sessionImageRatings) && (
                 <>
                   {/* Modifications Button */}
                   <motion.div
@@ -4797,41 +5026,45 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               )}
 
               {/* Lightbox: zoom image in step 2 */}
-              <AnimatePresence>
-                {isLightboxOpen && selectedImage && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
-                    onClick={() => setIsLightboxOpen(false)}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label={t({ pl: "Powiększone zdjęcie", en: "Zoomed image" })}
-                  >
-                    <div
-                      className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url}
-                        alt={showOriginalRoomPhoto ? t({ pl: "Oryginalne zdjęcie pokoju", en: "Original room photo" }) : t({ pl: "Wybrane wnętrze", en: "Selected interior" })}
-                        className="max-w-full max-h-[90vh] w-auto object-contain"
-                      />
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setIsLightboxOpen(false); }}
-                        className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
-                        aria-label={t({ pl: "Zamknij", en: "Close" })}
+              {lightboxPortalReady &&
+                createPortal(
+                  <AnimatePresence>
+                    {isLightboxOpen && selectedImage && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="fixed inset-0 z-[300] flex items-center justify-center bg-black/25 backdrop-blur-xl"
+                        onClick={() => setIsLightboxOpen(false)}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={t({ pl: "Powiększone zdjęcie", en: "Zoomed image" })}
                       >
-                        <X size={24} aria-hidden="true" />
-                      </button>
-                    </div>
-                  </motion.div>
+                        <div
+                          className="relative flex max-h-[90vh] max-w-[90vw] items-center justify-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url}
+                            alt={showOriginalRoomPhoto ? t({ pl: "Oryginalne zdjęcie pokoju", en: "Original room photo" }) : t({ pl: "Wybrane wnętrze", en: "Selected interior" })}
+                            className="max-h-[90vh] w-auto max-w-full object-contain"
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setIsLightboxOpen(false); }}
+                            className="absolute top-4 right-4 rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/30"
+                            aria-label={t({ pl: "Zamknij", en: "Close" })}
+                          >
+                            <X size={24} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>,
+                  document.body
                 )}
-              </AnimatePresence>
             </div>
           )}
 
@@ -4893,65 +5126,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         </AnimatePresence>
 
                         <AnimatePresence>
-                          {!hasAnsweredInteriorQuestion && (
-                            <motion.div
-                              initial={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -20 }}
-                              transition={{ duration: 0.3 }}
-                            >
-                              <GlassCard variant="highlighted" className="p-6">
-                                <h4 className="font-semibold text-graphite mb-3 text-lg">{t({ pl: "Czy to Twoje wnętrze?", en: "Is this your interior?" })}</h4>
-                                <p className="text-sm text-silver-dark mb-4">
-                                  {t({ pl: "Oceń, czy wygenerowany obraz rzeczywiście przedstawia Twoje wnętrze, czy jest to zupełnie inne pomieszczenie.", en: "Rate whether the generated image actually represents your interior, or if it is a completely different room." })}
-                                </p>
-                                <div className="flex flex-col sm:flex-row gap-3">
-                                  <button
-                                    onClick={() => {
-                                      handleImageRating(selectedImage.id, 'is_my_interior', 1);
-                                      setHasAnsweredInteriorQuestion(true);
-                                    }}
-                                    className={`px-6 py-3 rounded-2xl text-sm font-medium transition-all duration-300 ${
-                                      (selectedImage.ratings as any).is_my_interior === 1
-                                        ? 'bg-gold/20 border-2 border-gold/60 text-gold-800 shadow-lg'
-                                        : 'bg-white/10 border border-white/30 text-graphite hover:bg-white/20 hover:border-white/40 backdrop-blur-sm'
-                                    }`}
-                                  >
-                                    {t({ pl: "To nie moje wnętrze", en: "Not my interior" })}
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      handleImageRating(selectedImage.id, 'is_my_interior', 3);
-                                      setHasAnsweredInteriorQuestion(true);
-                                    }}
-                                    className={`px-6 py-3 rounded-2xl text-sm font-medium transition-all duration-300 ${
-                                      (selectedImage.ratings as any).is_my_interior === 3
-                                        ? 'bg-gold/20 border-2 border-gold/60 text-gold-800 shadow-lg'
-                                        : 'bg-white/10 border border-white/30 text-graphite hover:bg-white/20 hover:border-white/40 backdrop-blur-sm'
-                                    }`}
-                                  >
-                                    {t({ pl: "Częściowo podobne", en: "Partially similar" })}
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      handleImageRating(selectedImage.id, 'is_my_interior', 5);
-                                      setHasAnsweredInteriorQuestion(true);
-                                    }}
-                                    className={`px-6 py-3 rounded-2xl text-sm font-medium transition-all duration-300 ${
-                                      (selectedImage.ratings as any).is_my_interior === 5
-                                        ? 'bg-gold/20 border-2 border-gold/60 text-gold-800 shadow-lg'
-                                        : 'bg-white/10 border border-white/30 text-graphite hover:bg-white/20 hover:border-white/40 backdrop-blur-sm'
-                                    }`}
-                                  >
-                                    {t({ pl: "To moje wnętrze", en: "My interior" })}
-                                  </button>
-                                </div>
-                              </GlassCard>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        <AnimatePresence>
-                          {hasAnsweredInteriorQuestion && !hasCompletedRatings && selectedImage?.id !== 'original-uploaded-image' && (
+                          {showTasteRatingPanel &&
+                            selectedImage.id !== 'original-uploaded-image' && (
                             <motion.div
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
@@ -4981,13 +5157,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                   <GlassScalePicker
                                     min={1}
                                     max={5}
-                                    value={(selectedImage.ratings as any)[key] || 3}
+                                    value={aestheticPickerValue(selectedImage.ratings)}
                                     onChange={(value) => {
                                       handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
-                                      if (ratingsAdvanceTimeoutRef.current) clearTimeout(ratingsAdvanceTimeoutRef.current);
-                                      ratingsAdvanceTimeoutRef.current = setTimeout(() => {
-                                        setHasCompletedRatings(true);
-                                      }, 800);
                                     }}
                                     className="mb-2"
                                     highlightResetKey={`${selectedImage.id}-${String(key)}`}
@@ -5004,7 +5176,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       </div>
 
                       <AnimatePresence>
-                        {(hasCompletedRatings || selectedImage?.id === 'original-uploaded-image') && hasAnsweredInteriorQuestion && (
+                        {(imageHasAestheticRating(selectedImage, sessionImageRatings) || selectedImage?.id === 'original-uploaded-image') && hasAnsweredInteriorQuestion && (
                           <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
