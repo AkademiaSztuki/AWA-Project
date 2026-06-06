@@ -78,13 +78,18 @@ import {
 import {
   applyRatingsToImage,
   aestheticPickerValue,
-  clearAestheticRatingInMap,
+  hasTasteRating,
   imageHasAestheticRating,
-  imageNeedsAestheticRating,
+  normalizeSessionImageRatingsMap,
   resolveSessionImageRatingsMap,
-  withUnsetAestheticRating,
+  shouldShowTasteRating,
+  writeAestheticRatingToMap,
   type SessionImageRatingsMap,
 } from '@/lib/image-aesthetic-rating';
+import {
+  buildGenerationHistoryFromSession,
+  mergeMatrixHistoryRecords,
+} from '@/lib/generation-history';
 
 interface GeneratedImage {
   id: string;
@@ -199,8 +204,6 @@ export default function GeneratePage() {
   const [matrixImages, setMatrixImages] = useState<GeneratedImage[]>([]);
   const [matrixDisplayOrder, setMatrixDisplayOrder] = useState<GenerationSource[]>([]);
   const [blindSelectionMade, setBlindSelectionMade] = useState(false);
-  /** Explicit UI gate for taste-match picker — set on vision confirm, cleared after rating. */
-  const [showTasteRatingPanel, setShowTasteRatingPanel] = useState(false);
   const [selectedSourceIndex, setSelectedSourceIndex] = useState<number | null>(null);
   const [showSourceReveal, setShowSourceReveal] = useState(false);
   const [matrixGenerationStartTime, setMatrixGenerationStartTime] = useState<number>(0);
@@ -239,6 +242,7 @@ export default function GeneratePage() {
     imageUrl: string;
   }>>([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
+  const tasteRatingPanelRef = useRef<HTMLDivElement>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<'positive' | 'neutral' | 'negative'>('neutral');
   /** Anonymous full path: server says no free generate left (session/IP) — show inline guidance. */
@@ -443,15 +447,11 @@ export default function GeneratePage() {
           setHasAnsweredInteriorQuestion(true);
         } else {
           setBlindSelectionMade(false);
-          setShowTasteRatingPanel(false);
         }
         const selectedFromRestored = restoredMatrixOnly.find((img) => img.id === persistedSelectedIdOnly);
         if (selectedFromRestored) {
           const restoredSelected = applyRatingsToImage(selectedFromRestored, imageRatings);
           setSelectedImage(restoredSelected);
-          if (sessionBlindMadeEarly) {
-            setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
-          }
         } else if (persistedSelectedOnly?.url) {
           const restoredSelected = applyRatingsToImage(
             {
@@ -482,35 +482,23 @@ export default function GeneratePage() {
             imageRatings,
           );
           setSelectedImage(restoredSelected);
-          if (sessionBlindMadeEarly) {
-            setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
-          }
         }
       }
 
-      if (savedGenerations.length > 0) {
-        const historyOnly: Array<{
-          id: string;
-          type: 'initial' | 'micro' | 'macro';
-          label: string;
-          timestamp: number;
-          imageUrl: string;
-        }> = savedGenerations.map((gen: any) => {
-          const image = restoredMatrixOnly.find((img) =>
-            img.id.startsWith(gen.id.split('-')[0] + '-'),
-          );
-          return {
-            id: gen.id,
-            type: gen.type || 'initial',
-            label: gen.modification || gen.prompt?.substring(0, 30) || 'Generacja',
-            timestamp: gen.timestamp || Date.now(),
-            imageUrl: image?.url || '',
-          };
-        });
-        if (historyOnly.length > 0) {
-          setGenerationHistory(historyOnly);
-          setCurrentHistoryIndex(historyOnly.length - 1);
-        }
+      const restoredFullHistory = buildGenerationHistoryFromSession({
+        matrixHistory: matrixHistoryEarly,
+        generations: savedGenerations,
+        generatedImages: restoredMatrixOnly,
+        selectedImageId: persistedSelectedIdOnly,
+      });
+      if (restoredFullHistory.length > 0) {
+        setGenerationHistory(restoredFullHistory);
+        const selectedIdx = restoredFullHistory.findIndex(
+          (h) => h.isSelected || h.id === persistedSelectedIdOnly,
+        );
+        setCurrentHistoryIndex(
+          selectedIdx >= 0 ? selectedIdx : restoredFullHistory.length - 1,
+        );
       }
 
       setHasAttemptedGeneration(true);
@@ -627,7 +615,6 @@ export default function GeneratePage() {
           // Matrix exists but user has not confirmed a vision yet — show grid for blind pick
           console.log('[Generate] Matrix cached without confirmed selection — showing grid');
           setBlindSelectionMade(false);
-          setShowTasteRatingPanel(false);
         } else {
           setBlindSelectionMade(true);
           setHasAnsweredInteriorQuestion(true);
@@ -638,9 +625,6 @@ export default function GeneratePage() {
           console.log('[Generate] Restoring selected image from restored images:', persistedSelectedId);
           const restoredSelected = applyRatingsToImage(selectedFromRestored, imageRatings);
           setSelectedImage(restoredSelected);
-          if (sessionBlindMade) {
-            setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
-          }
         } else if (persistedSelected?.url) {
           // Fallback: restore minimal selected image even if we don't have the full matrix cache
           console.log('[Generate] Restoring selected image from sessionData.selectedImage.url:', persistedSelectedId);
@@ -672,9 +656,6 @@ export default function GeneratePage() {
             imageRatings,
           );
           setSelectedImage(restoredSelected);
-          if (sessionBlindMade) {
-            setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
-          }
           if (!hasMatrixHistory && !hasMatrixCache) {
             setHasAnsweredInteriorQuestion(true);
           }
@@ -739,28 +720,21 @@ export default function GeneratePage() {
         setMatrixImages(restoredMatrixImages);
       }
 
-      // Restore generation history
-      if (savedGenerations.length > 0) {
-        const history: Array<{ id: string; type: 'initial' | 'micro' | 'macro'; label: string; timestamp: number; imageUrl: string }> = savedGenerations.map((gen: any) => {
-          const image =
-            restoredImages.find((img) => img.id === gen.id) ||
-            restoredImages.find(
-              (img) => img.id.startsWith(`${gen.id}-`) || gen.id.startsWith(img.id),
-            );
-          return {
-            id: image?.id ?? gen.id,
-            type: gen.type || 'initial',
-            label: gen.modification || gen.prompt?.substring(0, 30) || 'Generacja',
-            timestamp: gen.timestamp || Date.now(),
-            imageUrl: image?.url || '',
-          };
-        });
-        
-        if (history.length > 0) {
-          setGenerationHistory(history);
-          const currentIndex = history.length - 1;
-          setCurrentHistoryIndex(currentIndex);
-        }
+      // Restore generation history: matrix visions first, then modification steps
+      const restoredFullHistory = buildGenerationHistoryFromSession({
+        matrixHistory,
+        generations: savedGenerations,
+        generatedImages: restoredImages,
+        selectedImageId: persistedSelectedId,
+      });
+      if (restoredFullHistory.length > 0) {
+        setGenerationHistory(restoredFullHistory);
+        const selectedIdx = restoredFullHistory.findIndex(
+          (h) => h.isSelected || h.id === persistedSelectedId,
+        );
+        setCurrentHistoryIndex(
+          selectedIdx >= 0 ? selectedIdx : restoredFullHistory.length - 1,
+        );
       }
 
       // Mark that we've restored state, so don't trigger new generation
@@ -2300,33 +2274,82 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     const selectionTime = Date.now() - matrixGenerationStartTime;
     console.log(`[6-Image Matrix] User selected image from source: ${image.source} at position ${image.displayIndex}`);
 
-    const ratingsMap = clearAestheticRatingInMap(
-      resolveSessionImageRatingsMap(
-        (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
-      ),
-      image.id,
+    const ratingsMap = resolveSessionImageRatingsMap(
+      (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
     );
-    const selectedWithRatings = applyRatingsToImage(withUnsetAestheticRating(image), ratingsMap);
+    const selectedWithRatings = applyRatingsToImage(image, ratingsMap);
 
     setBlindSelectionMade(true);
     setSelectedImage(selectedWithRatings);
-    setShowTasteRatingPanel(true);
     setHasAnsweredInteriorQuestion(true);
     setShowSourceReveal(false);
 
-    // Build initial history from all generated matrix images
-    const initialHistory = matrixImages.map((img, idx) => ({
+    // Union in-memory matrix cache with progressively saved session history
+    const sessionMatrixHistory =
+      ((sessionData as { matrixHistory?: Array<{ id: string }> } | null)?.matrixHistory ||
+        []) as Array<{
+        id: string;
+        label?: string;
+        timestamp?: number;
+        imageUrl?: string;
+        url?: string;
+        base64?: string;
+        source?: string;
+        isSelected?: boolean;
+      }>;
+    const matrixById = new Map<string, GeneratedImage>();
+    for (const item of sessionMatrixHistory) {
+      let imageUrl = item.imageUrl || item.url || '';
+      if (!imageUrl && item.base64) {
+        imageUrl = `data:image/png;base64,${item.base64}`;
+      }
+      matrixById.set(item.id, {
+        id: item.id,
+        url: imageUrl,
+        base64: item.base64 || '',
+        prompt: item.label || 'Restored from history',
+        provider: 'google',
+        parameters: {
+          modificationType: 'initial',
+          modifications: [],
+          iterationCount: 0,
+          usedOriginal: false,
+          source: item.source as GenerationSource | undefined,
+        },
+        ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
+        isFavorite: false,
+        createdAt: item.timestamp || Date.now(),
+        source: item.source as GenerationSource | undefined,
+        displayIndex: 0,
+      });
+    }
+    for (const img of matrixImages) {
+      matrixById.set(img.id, img);
+    }
+    const allMatrixImages = Array.from(matrixById.values()).sort(
+      (a, b) => (a.displayIndex || 0) - (b.displayIndex || 0),
+    );
+
+    const initialHistory = allMatrixImages.map((img, idx) => ({
       id: img.id,
       type: 'initial' as const,
-      label: GENERATION_SOURCE_LABELS[img.source!]?.[language] || GENERATION_SOURCE_LABELS[img.source!]?.pl || `Wizja ${idx + 1}`,
+      label:
+        GENERATION_SOURCE_LABELS[img.source!]?.[language] ||
+        GENERATION_SOURCE_LABELS[img.source!]?.pl ||
+        `Wizja ${idx + 1}`,
       timestamp: img.createdAt || Date.now(),
       imageUrl: img.url,
       base64: img.base64,
       source: img.source,
-      isSelected: img.id === image.id
+      isSelected: img.id === image.id,
     }));
+    const mergedMatrixHistory = mergeMatrixHistoryRecords(
+      sessionMatrixHistory,
+      initialHistory,
+    );
     setGenerationHistory(initialHistory);
-    setCurrentHistoryIndex(initialHistory.findIndex((h) => h.id === image.id));
+    const selectedHistoryIdx = initialHistory.findIndex((h) => h.id === image.id);
+    setCurrentHistoryIndex(selectedHistoryIdx >= 0 ? selectedHistoryIdx : 0);
 
     // Persist selection including base64 and full history so modify page can use it
     try {
@@ -2341,13 +2364,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         },
         blindSelectionMade: true,
         imageRatings: ratingsMap,
-        // Save all matrix images for history display in modify page
-        matrixHistory: initialHistory
+        // Merge — do not overwrite progressively saved matrix visions
+        matrixHistory: mergedMatrixHistory,
       } as any);
       const uhBlind = (sessionData as any)?.userHash as string | undefined;
       if (uhBlind) {
         try {
-          await syncMatrixHistoryToGcp(uhBlind, initialHistory);
+          await syncMatrixHistoryToGcp(uhBlind, mergedMatrixHistory);
         } catch (syncErr) {
           console.warn('[Generate] syncMatrixHistoryToGcp on blind selection failed:', syncErr);
         }
@@ -2529,6 +2552,70 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     (sessionData as { imageRatings?: SessionImageRatingsMap } | null)?.imageRatings,
   );
 
+  const resolveHistoryImageAtIndex = useCallback(
+    (index: number): GeneratedImage | null => {
+      const node = generationHistory[index];
+      if (!node?.id) return null;
+
+      const freshRatingsMap = resolveSessionImageRatingsMap(
+        (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
+      );
+
+      const cached =
+        matrixImages.find((img) => img.id === node.id) ||
+        generatedImages.find((img) => img.id === node.id) ||
+        matrixImages.find((img) => img.url === node.imageUrl) ||
+        generatedImages.find((img) => img.url === node.imageUrl);
+
+      let base64Data = (node as { base64?: string }).base64 || cached?.base64 || '';
+      if (!base64Data && node.imageUrl?.startsWith('data:')) {
+        const parts = node.imageUrl.split(',');
+        if (parts.length > 1) base64Data = parts[1] ?? '';
+      }
+
+      const resolvedUrl =
+        node.imageUrl ||
+        cached?.url ||
+        (base64Data ? `data:image/png;base64,${base64Data}` : '');
+      if (!resolvedUrl) return null;
+
+      return applyRatingsToImage(
+        {
+          id: node.id,
+          url: resolvedUrl,
+          base64: base64Data,
+          prompt: node.label || cached?.prompt || 'From history',
+          provider: cached?.provider || 'google',
+          parameters: cached?.parameters ?? {
+            modificationType: node.type,
+            modifications: [],
+            iterationCount: 0,
+            usedOriginal: false,
+          },
+          ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
+          isFavorite: cached?.isFavorite ?? false,
+          createdAt: node.timestamp || cached?.createdAt || Date.now(),
+          source: cached?.source,
+          displayIndex: cached?.displayIndex,
+          isBlindSelected: cached?.isBlindSelected,
+        } as GeneratedImage,
+        freshRatingsMap,
+      );
+    },
+    [generationHistory, generatedImages, matrixImages, sessionData],
+  );
+
+  const safeHistoryIndex =
+    generationHistory.length > 0
+      ? Math.min(Math.max(0, currentHistoryIndex), generationHistory.length - 1)
+      : 0;
+  const activeImageId = selectedImage?.id;
+  const tasteRatingPanelVisible =
+    (blindSelectionMade || !isMatrixMode) &&
+    shouldShowTasteRating(activeImageId, sessionImageRatings);
+  const currentImageActionsEnabled =
+    activeImageId != null && hasTasteRating(activeImageId, sessionImageRatings);
+
   const mergeImageRatingsIntoCollections = useCallback(
     (imageWithRatings: GeneratedImage) => {
       setGeneratedImages((prev) => {
@@ -2552,49 +2639,52 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     if (index < 0 || index >= generationHistory.length) return;
 
     const historyNode = generationHistory[index];
+    const imageWithRatings = resolveHistoryImageAtIndex(index);
+    if (!imageWithRatings) return;
+
     const freshRatingsMap = resolveSessionImageRatingsMap(
       (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
     );
-
-    const cached =
-      generatedImages.find((img) => img.id === historyNode.id) ||
-      matrixImages.find((img) => img.id === historyNode.id);
-
-    const baseImage: GeneratedImage | null =
-      cached ??
-      (historyNode.imageUrl
-        ? {
-            id: historyNode.id,
-            url: historyNode.imageUrl,
-            base64: '',
-            prompt: historyNode.label || 'From history',
-            provider: 'google',
-            parameters: {
-              modificationType: historyNode.type,
-              modifications: [],
-              iterationCount: 0,
-              usedOriginal: false,
-            },
-            ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
-            isFavorite: false,
-            createdAt: historyNode.timestamp || Date.now(),
-          }
-        : null);
-
-    if (!baseImage) return;
+    const nodeId = historyNode.id;
+    const needsRating = shouldShowTasteRating(nodeId, freshRatingsMap);
 
     if (showOriginalRoomPhoto) {
       setShowOriginalRoomPhoto(false);
     }
 
-    const imageWithRatings = applyRatingsToImage(baseImage, freshRatingsMap);
-
+    setCurrentHistoryIndex(index);
     setSelectedImage(imageWithRatings);
     mergeImageRatingsIntoCollections(imageWithRatings);
-    setCurrentHistoryIndex(index);
     setIdaComment(null);
     setHasAnsweredInteriorQuestion(true);
-    setShowSourceReveal(imageHasAestheticRating(imageWithRatings, freshRatingsMap));
+    setShowModifications(false);
+    setShowSourceReveal(!needsRating);
+
+    const selectedPayload = {
+      id: imageWithRatings.id,
+      url: imageWithRatings.url,
+      base64: imageWithRatings.base64,
+      source: imageWithRatings.source,
+      provider: imageWithRatings.provider ?? 'google',
+      parameters: imageWithRatings.parameters,
+    };
+
+    void updateSessionData({
+      selectedImage: selectedPayload,
+    } as any);
+
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[Generate] history click', {
+        nodeId,
+        sessionScore: freshRatingsMap[nodeId]?.aesthetic_match,
+        needsRating,
+        tasteRatingPanelVisible: needsRating,
+      });
+    }
+
+    requestAnimationFrame(() => {
+      tasteRatingPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
   };
 
   // Use centralized parameters from useGoogleAI
@@ -3099,7 +3189,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setGenerationCount((prev) => prev + 1);
       
       setHasAnsweredInteriorQuestion(true);
-      setShowTasteRatingPanel(true);
 
       // Save generated images to sessionData (lightweight, no base64)
       const generatedImagesPayload = newImages.map(img => ({
@@ -3458,7 +3547,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
       setBlindSelectionMade(true);
-      setShowTasteRatingPanel(true);
       setHasAnsweredInteriorQuestion(true);
       setShowSourceReveal(false);
       
@@ -3541,8 +3629,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         timestamp: Date.now(),
         imageUrl: newImage.url,
       };
-      setGenerationHistory((prev) => [...prev, historyNode]);
-      setCurrentHistoryIndex(generationHistory.length);
+      setGenerationHistory((prev) => {
+        const next = [...prev, historyNode];
+        setCurrentHistoryIndex(next.length - 1);
+        return next;
+      });
 
       await updateSessionData({
         generations: [
@@ -3890,6 +3981,15 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     generatedImages.length,
   ]);
 
+  useEffect(() => {
+    if (generationHistory.length === 0) return;
+    if (currentHistoryIndex < 0 || currentHistoryIndex >= generationHistory.length) {
+      setCurrentHistoryIndex(
+        Math.min(Math.max(0, currentHistoryIndex), generationHistory.length - 1),
+      );
+    }
+  }, [generationHistory.length, currentHistoryIndex]);
+
   const handleImageRating = async (
     imageId: string,
     rating: keyof GeneratedImage['ratings'],
@@ -3908,16 +4008,15 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       prev.map((img) => (img.id === imageId ? applyRating(img) : img)),
     );
 
-    if (selectedImage?.id === imageId) {
-      setSelectedImage((prev) => (prev ? applyRating(prev) : null));
-    }
+    setSelectedImage((prev) => (prev?.id === imageId ? applyRating(prev) : prev));
 
     if (rating === 'aesthetic_match' && value > 0) {
-      setShowTasteRatingPanel(false);
+      setShowSourceReveal(true);
     }
 
-    if (selectedImage?.id === imageId && !options?.suppressProgress) {
-      const updatedRatings = { ...selectedImage.ratings, [rating]: value };
+    const ratedBase = selectedImage?.id === imageId ? selectedImage : null;
+    if (ratedBase && !options?.suppressProgress) {
+      const updatedRatings = { ...ratedBase.ratings, [rating]: value };
 
       const allRatingsComplete = updatedRatings.aesthetic_match > 0;
 
@@ -3940,17 +4039,23 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       }
     }
 
-    const snapRatings =
-      (getSessionStoreSnapshot() as { imageRatings?: SessionImageRatingsMap }).imageRatings || {};
+    const snapRatings = normalizeSessionImageRatingsMap(
+      (getSessionStoreSnapshot() as { imageRatings?: SessionImageRatingsMap }).imageRatings,
+    );
+    const nextRatings =
+      rating === 'aesthetic_match' && value > 0
+        ? writeAestheticRatingToMap(snapRatings, imageId, value)
+        : {
+            ...snapRatings,
+            [imageId]: {
+              ...(snapRatings[imageId] || {}),
+              [rating]: value,
+              ratedAt: Date.now(),
+              timestamp: Date.now(),
+            },
+          };
     await updateSessionData({
-      imageRatings: {
-        ...snapRatings,
-        [imageId]: {
-          ...(snapRatings[imageId] || {}),
-          [rating]: value,
-          timestamp: Date.now(),
-        },
-      },
+      imageRatings: nextRatings,
     } as any);
 
     // ratings history event
@@ -4803,19 +4908,25 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       </div>
                     )}
                   </div>
-                  
-                  {/* Rating Question */}
-                  <AnimatePresence>
-                    {showTasteRatingPanel &&
-                      selectedImage.id !== 'original-uploaded-image' && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.8, ease: "easeInOut" }}
-                        className="space-y-6"
-                      >
-                        <h4 className="font-semibold text-graphite text-lg">{t({ pl: "Oceń to wnętrze:", en: "Rate this interior:" })}</h4>
+                </div>
+              </GlassCard>
+
+              {/* Taste rating — keyed to active history node / display image */}
+              <div ref={tasteRatingPanelRef}>
+                <AnimatePresence mode="wait">
+                  {tasteRatingPanelVisible && selectedImage && (
+                    <motion.div
+                      key={`taste-rating-${selectedImage.id}`}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.25, ease: 'easeOut' }}
+                      className="space-y-6"
+                    >
+                      <GlassCard variant="flatOnMobile" className="p-4">
+                        <h4 className="font-semibold text-graphite text-lg mb-4">
+                          {t({ pl: 'Oceń to wnętrze:', en: 'Rate this interior:' })}
+                        </h4>
                         {[
                           {
                             key: 'aesthetic_match',
@@ -4837,7 +4948,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             <GlassScalePicker
                               min={1}
                               max={5}
-                              value={aestheticPickerValue(selectedImage.ratings)}
+                              value={aestheticPickerValue(sessionImageRatings[selectedImage.id])}
                               onChange={(value) => {
                                 handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
                               }}
@@ -4850,14 +4961,14 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                             />
                           </div>
                         ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </GlassCard>
+                      </GlassCard>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               
               {/* Modifications and History - Show after selection and after completing all questions */}
-              {selectedImage && blindSelectionMade && imageHasAestheticRating(selectedImage, sessionImageRatings) && (
+              {selectedImage && blindSelectionMade && currentImageActionsEnabled && (
                 <>
                   {/* Modifications Button */}
                   <motion.div
@@ -4988,27 +5099,27 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                       </motion.div>
                     )}
                   </AnimatePresence>
-
-                  {/* Generation History */}
-                  {generationHistory.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 }}
-                      className="mt-8"
-                    >
-                      <GenerationHistory
-                        history={generationHistory}
-                        currentIndex={currentHistoryIndex}
-                        onNodeClick={handleHistoryNodeClick}
-                      />
-                    </motion.div>
-                  )}
                 </>
               )}
 
+              {/* Generation History — visible after selection, independent of taste rating */}
+              {blindSelectionMade && generationHistory.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  className="mt-8"
+                >
+                  <GenerationHistory
+                    history={generationHistory}
+                    currentIndex={safeHistoryIndex}
+                    onNodeClick={handleHistoryNodeClick}
+                  />
+                </motion.div>
+              )}
+
               {/* Continue Button */}
-              {showSourceReveal && (
+              {showSourceReveal && currentImageActionsEnabled && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -5125,14 +5236,14 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                           )}
                         </AnimatePresence>
 
-                        <AnimatePresence>
-                          {showTasteRatingPanel &&
-                            selectedImage.id !== 'original-uploaded-image' && (
+                        <AnimatePresence mode="wait">
+                          {tasteRatingPanelVisible && selectedImage && (
                             <motion.div
+                              key={`taste-rating-${selectedImage.id}`}
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -20 }}
-                              transition={{ duration: 0.8, ease: "easeInOut" }}
+                              exit={{ opacity: 0, y: -12 }}
+                              transition={{ duration: 0.25, ease: 'easeOut' }}
                               className="space-y-6"
                             >
                               <h4 className="font-semibold text-graphite text-lg">{t({ pl: "Oceń to wnętrze:", en: "Rate this interior:" })}</h4>
@@ -5157,7 +5268,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                                   <GlassScalePicker
                                     min={1}
                                     max={5}
-                                    value={aestheticPickerValue(selectedImage.ratings)}
+                                    value={aestheticPickerValue(sessionImageRatings[selectedImage.id])}
                                     onChange={(value) => {
                                       handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
                                     }}
@@ -5337,7 +5448,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   <div className="mt-12 mb-8">
                     <GenerationHistory
                       history={generationHistory}
-                      currentIndex={currentHistoryIndex}
+                      currentIndex={safeHistoryIndex}
                       onNodeClick={handleHistoryNodeClick}
                     />
                   </div>

@@ -390,12 +390,11 @@ export function calculatePromptWeights(inputs: PromptInputs, sourceType?: Genera
   
   // 9. INSPIRATION TAGS INTEGRATION
   const inspirationWeights = integrateInspirationTags(inputs.inspirations);
-  
-  // Use averaged biophilia from inspirations if available
-  if (sourceType === GenerationSource.InspirationReference || (inputs.inspirations && inputs.inspirations.length > 0)) {
-    biophiliaScoreToUse = inspirationWeights.biophiliaBoost;
-    console.log('[Biophilia] Using averaged biophilia from inspirations:', biophiliaScoreToUse);
-  }
+
+  // NOTE: do NOT overwrite biophiliaScoreToUse with inspirationWeights.biophiliaBoost here.
+  // biophiliaScoreToUse is on a 0-3 scale and is already consumed by calculateBiophiliaIntegration
+  // above. inspirationWeights.biophiliaBoost is 0-1 and is correctly blended into natureDensity below
+  // (base 0-1 + boost 0-1). Mixing a 0-1 value into the 0-3 path undercounted plants.
   
   // COMBINE ALL WEIGHTS
   const finalWeights: PromptWeights = {

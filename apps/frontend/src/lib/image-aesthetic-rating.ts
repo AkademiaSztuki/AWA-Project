@@ -6,15 +6,22 @@ export type ImageRatings = {
   harmony: number;
 };
 
-export type SessionImageRatingsMap = Record<
-  string,
-  Partial<ImageRatings> & { timestamp?: number }
->;
+export type SessionImageRatingEntry = Partial<ImageRatings> & {
+  ratedAt?: number;
+  /** @deprecated prefer ratedAt */
+  timestamp?: number;
+};
+
+export type SessionImageRatingsMap = Record<string, SessionImageRatingEntry>;
 
 export type RatedImageLike = {
   id: string;
   ratings?: Partial<ImageRatings>;
 };
+
+function ratingTimestamp(entry?: SessionImageRatingEntry): number {
+  return entry?.ratedAt ?? entry?.timestamp ?? 0;
+}
 
 function coercePositiveScore(value: unknown): number | undefined {
   if (value == null || value === '') return undefined;
@@ -43,7 +50,7 @@ export function normalizeSessionImageRatingsMap(raw: unknown): SessionImageRatin
     const map: SessionImageRatingsMap = {};
     for (const entry of raw) {
       if (!entry || typeof entry !== 'object') continue;
-      const row = entry as { id?: string } & Partial<ImageRatings> & { timestamp?: number };
+      const row = entry as { id?: string } & SessionImageRatingEntry;
       if (typeof row.id !== 'string' || !row.id) continue;
       const { id, ...scores } = row;
       map[id] = scores;
@@ -53,34 +60,41 @@ export function normalizeSessionImageRatingsMap(raw: unknown): SessionImageRatin
   return raw as SessionImageRatingsMap;
 }
 
+/** Session-only gate for the taste rating panel (per imageId, never global). */
+export function shouldShowTasteRating(
+  imageId: string | null | undefined,
+  ratings: SessionImageRatingsMap,
+): boolean {
+  if (!imageId || imageId === 'original-uploaded-image') return false;
+  return coercePositiveScore(ratings[imageId]?.aesthetic_match) === undefined;
+}
+
+export function hasTasteRating(
+  imageId: string | null | undefined,
+  ratings: SessionImageRatingsMap,
+): boolean {
+  if (!imageId || imageId === 'original-uploaded-image') return true;
+  return !shouldShowTasteRating(imageId, ratings);
+}
+
 export function getEffectiveRatings(
   image: RatedImageLike,
   imageRatingsMap?: SessionImageRatingsMap,
 ): ImageRatings {
   const session = imageRatingsMap?.[image.id];
   return {
-    aesthetic_match: pickRatingScore(image.ratings?.aesthetic_match, session?.aesthetic_match),
-    character: pickRatingScore(image.ratings?.character, session?.character),
-    harmony: pickRatingScore(image.ratings?.harmony, session?.harmony),
+    aesthetic_match: pickRatingScore(session?.aesthetic_match, image.ratings?.aesthetic_match),
+    character: pickRatingScore(session?.character, image.ratings?.character),
+    harmony: pickRatingScore(session?.harmony, image.ratings?.harmony),
   };
 }
 
+/** @deprecated use hasTasteRating(image?.id, map) */
 export function imageHasAestheticRating(
   image: RatedImageLike | null | undefined,
   imageRatingsMap?: SessionImageRatingsMap,
 ): boolean {
-  if (!image) return false;
-  if (image.id === 'original-uploaded-image') return true;
-  return !isUnsetAestheticScore(getEffectiveRatings(image, imageRatingsMap).aesthetic_match);
-}
-
-export function imageNeedsAestheticRating(
-  image: RatedImageLike | null | undefined,
-  imageRatingsMap?: SessionImageRatingsMap,
-): boolean {
-  if (!image) return false;
-  if (image.id === 'original-uploaded-image') return false;
-  return isUnsetAestheticScore(getEffectiveRatings(image, imageRatingsMap).aesthetic_match);
+  return hasTasteRating(image?.id, imageRatingsMap ?? {});
 }
 
 /** Merge hook session ratings with the live zustand snapshot (rating writes land in snapshot first). */
@@ -94,16 +108,7 @@ export function resolveSessionImageRatingsMap(
   const ids = new Set([...Object.keys(hook), ...Object.keys(snap)]);
   const merged: SessionImageRatingsMap = {};
   for (const id of ids) {
-    const h = hook[id];
-    const s = snap[id];
-    merged[id] = {
-      ...h,
-      ...s,
-      aesthetic_match: pickRatingScore(h?.aesthetic_match, s?.aesthetic_match),
-      character: pickRatingScore(h?.character, s?.character),
-      harmony: pickRatingScore(h?.harmony, s?.harmony),
-      timestamp: s?.timestamp ?? h?.timestamp,
-    };
+    merged[id] = mergeRatingEntries(hook[id], snap[id]);
   }
   return merged;
 }
@@ -115,48 +120,104 @@ export function applyRatingsToImage<T extends RatedImageLike>(image: T, map?: Se
   };
 }
 
-/** Clear taste-match score for a fresh blind pick (session + in-memory ratings). */
-export function withUnsetAestheticRating<T extends RatedImageLike>(image: T): T {
-  const base = image.ratings ?? {};
+function mergeRatingEntries(
+  local?: SessionImageRatingEntry,
+  remote?: SessionImageRatingEntry,
+): SessionImageRatingEntry {
+  const lScore = coercePositiveScore(local?.aesthetic_match);
+  const rScore = coercePositiveScore(remote?.aesthetic_match);
+  const lTs = ratingTimestamp(local);
+  const rTs = ratingTimestamp(remote);
+
+  if (lScore !== undefined && rScore === undefined) {
+    return {
+      ...remote,
+      ...local,
+      aesthetic_match: lScore,
+      ratedAt: lTs || rTs || undefined,
+      timestamp: local?.timestamp ?? remote?.timestamp,
+    };
+  }
+  if (rScore !== undefined && lScore === undefined) {
+    return {
+      ...local,
+      ...remote,
+      aesthetic_match: rScore,
+      ratedAt: rTs || lTs || undefined,
+      timestamp: local?.timestamp ?? remote?.timestamp,
+    };
+  }
+
+  if (lTs > rTs) {
+    return {
+      ...remote,
+      ...local,
+      aesthetic_match: pickRatingScore(local?.aesthetic_match, remote?.aesthetic_match),
+      character: pickRatingScore(local?.character, remote?.character),
+      harmony: pickRatingScore(local?.harmony, remote?.harmony),
+      ratedAt: lTs || undefined,
+      timestamp: local?.timestamp ?? remote?.timestamp,
+    };
+  }
+  if (rTs > lTs) {
+    return {
+      ...local,
+      ...remote,
+      aesthetic_match: pickRatingScore(local?.aesthetic_match, remote?.aesthetic_match),
+      character: pickRatingScore(local?.character, remote?.character),
+      harmony: pickRatingScore(local?.harmony, remote?.harmony),
+      ratedAt: rTs || undefined,
+      timestamp: local?.timestamp ?? remote?.timestamp,
+    };
+  }
+
   return {
-    ...image,
-    ratings: {
-      ...base,
-      aesthetic_match: 0,
-    },
+    ...local,
+    ...remote,
+    aesthetic_match: pickRatingScore(local?.aesthetic_match, remote?.aesthetic_match),
+    character: pickRatingScore(local?.character, remote?.character),
+    harmony: pickRatingScore(local?.harmony, remote?.harmony),
+    ratedAt: lTs || rTs || undefined,
+    timestamp: local?.timestamp ?? remote?.timestamp,
   };
 }
 
-export function clearAestheticRatingInMap(
+/** Merge local + remote imageRatings; newer ratedAt wins; zeros never overwrite positives. */
+export function mergePersistedImageRatingsMaps(
+  local?: SessionImageRatingsMap | unknown,
+  remote?: SessionImageRatingsMap | unknown,
+): SessionImageRatingsMap {
+  const l = normalizeSessionImageRatingsMap(local);
+  const r = normalizeSessionImageRatingsMap(remote);
+  const ids = new Set([...Object.keys(l), ...Object.keys(r)]);
+  const merged: SessionImageRatingsMap = {};
+  for (const id of ids) {
+    merged[id] = mergeRatingEntries(l[id], r[id]);
+  }
+  return merged;
+}
+
+export function writeAestheticRatingToMap(
   map: SessionImageRatingsMap,
   imageId: string,
+  value: number,
 ): SessionImageRatingsMap {
-  const prev = map[imageId];
-  if (!prev) {
-    return { ...map, [imageId]: { aesthetic_match: 0, timestamp: Date.now() } };
-  }
+  const now = Date.now();
   return {
     ...map,
     [imageId]: {
-      ...prev,
-      aesthetic_match: 0,
-      timestamp: Date.now(),
+      ...(map[imageId] || {}),
+      aesthetic_match: value,
+      ratedAt: now,
+      timestamp: now,
     },
   };
 }
 
 export function aestheticPickerValue(
-  ratings: Partial<ImageRatings> | undefined,
+  ratings: Partial<ImageRatings> | SessionImageRatingEntry | undefined,
   fallback = 3,
 ): number {
   const score = ratings?.aesthetic_match;
   return score != null && score > 0 ? score : fallback;
-}
-
-/** True when the taste-match scale should be shown for the current selection. */
-export function shouldShowAestheticRatingPanel(
-  image: RatedImageLike | null | undefined,
-  imageRatingsMap?: SessionImageRatingsMap,
-): boolean {
-  return imageNeedsAestheticRating(image, imageRatingsMap);
 }

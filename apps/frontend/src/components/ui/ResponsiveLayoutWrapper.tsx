@@ -6,7 +6,7 @@ import ParticlesBackground from '@/components/ui/ParticlesBackground';
 import AuroraBubbles from '@/components/ui/AuroraBubbles';
 import { DesktopBackground } from '@/components/ui/DesktopBackground';
 import { MobileBackground } from '@/components/ui/MobileBackground';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useColorAdjustment } from '@/contexts/ColorAdjustmentContext';
 
@@ -20,7 +20,7 @@ export function ResponsiveLayoutWrapper({ children }: { children: React.ReactNod
 
   const [showMobileAwa, setShowMobileAwa] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setMounted(true);
   }, []);
 
@@ -34,7 +34,6 @@ export function ResponsiveLayoutWrapper({ children }: { children: React.ReactNod
     if (!(isMobile || isCompactLayout)) return;
 
     const handleExitComplete = () => {
-      console.log('[ResponsiveLayoutWrapper] Exit animation complete, removing AwaBackground');
       setShowMobileAwa(false);
     };
 
@@ -46,32 +45,40 @@ export function ResponsiveLayoutWrapper({ children }: { children: React.ReactNod
     !hideModel3D && (!isCompactLayout || (isMarketingPage && showMobileAwa));
   const showAwaMobile = !hideModel3D && showMobileAwa && isMarketingPage;
 
+  const portalHosts =
+    pathname === '/' ? (
+      <>
+        <div
+          id="living-room-marquee-layer"
+          className="pointer-events-none fixed inset-0 z-[2] isolate"
+        />
+        <div id="hero-style-rail-layer" className="pointer-events-none fixed inset-0 z-[6] isolate" />
+      </>
+    ) : null;
+
   if (!mounted) {
-    return <>{children}</>;
+    return (
+      <>
+        {portalHosts}
+        {children}
+      </>
+    );
   }
 
   return (
     <>
+      {portalHosts}
       {!isMobile ? (
         <>
           <DesktopBackground />
           <AuroraBubbles variant="reduced" />
-          {pathname === '/' && (
-            <>
-              <div id="living-room-marquee-layer" className="pointer-events-none fixed inset-0 z-[2] isolate" />
-              <div id="hero-style-rail-layer" className="pointer-events-none fixed inset-0 z-[6] isolate" />
-            </>
-          )}
           {showAwaDesktop && <AwaBackground />}
           <ParticlesBackground />
         </>
       ) : (
         <>
           <MobileBackground />
-          {pathname === '/' && (
-            <div id="hero-style-rail-layer" className="pointer-events-none fixed inset-0 z-[6] isolate" />
-          )}
-          {showAwaMobile && <AwaBackground />}
+          {showMobileAwa && <AwaBackground />}
         </>
       )}
 

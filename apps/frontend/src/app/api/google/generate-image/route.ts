@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleAIClient } from '@/lib/google-ai/client';
 import { ImageGenerationRequest, ImageGenerationResponse } from '@/lib/google-ai/types';
-import { buildGoogleNanoBananaPrompt } from '@/lib/prompt-synthesis/builder';
 import { enforceAiProxyRateLimit } from '@/lib/ai-proxy-guard';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -89,12 +88,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert JSON structured prompt to text prompt for Google Nano Banana
+    // Structured JSON prompts are sent VERBATIM to the model (rigid, comparable across
+    // sources). The architectural lock lives in system_instruction + JSON `preserve` fields.
+    // Only the text branch (furniture removal / RoomSetup / modifications) augments the prompt.
     let fullPrompt: string;
     
     if (prompt.trim().startsWith('{')) {
-      // JSON structured prompt - convert to text
-      fullPrompt = buildGoogleNanoBananaPrompt(prompt);
+      // JSON structured prompt - pass through unchanged
+      fullPrompt = prompt;
       
     } else {
       // Text prompt - use as-is but add style/modifications if needed

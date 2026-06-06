@@ -13,7 +13,7 @@ import { MoodGrid } from '@/components/research';
 import { PAIN_POINTS, getQuestionsForRoom } from '@/lib/questions/adaptive-questions';
 import { ArrowRight, ArrowLeft, Camera, X, Sparkles } from 'lucide-react';
 import Image from 'next/image';
-import { useModalAPI } from '@/hooks/useModalAPI';
+import { useAiApi } from '@/hooks/useAiApi';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
@@ -1097,7 +1097,7 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
 
 export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: any) {
   const { language, tp, joinCopy } = useLanguage();
-  const { analyzeRoom, generateLLMComment } = useModalAPI();
+  const { analyzeRoom, generateLLMComment } = useAiApi();
   const { sessionData, updateSessionData } = useSessionData();
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>(photos || []);
   const [uploadedPhotosBase64, setUploadedPhotosBase64] = useState<string[]>([]); // Store base64 for API

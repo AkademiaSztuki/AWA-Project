@@ -271,7 +271,49 @@ function inferLightingFromTokens(tokens: string[]): LightingCanonical | null {
   if (tokens.includes('warm_low')) return 'warm_low';
   if (tokens.includes('warm_bright')) return 'warm_bright';
   if (tokens.includes('cool_bright')) return 'cool_bright';
+  // Filename tags store compounds as separate tokens (e.g. warm + low).
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const compound = `${tokens[i]}_${tokens[i + 1]}`;
+    if (LIGHTING_MOOD_COMPOUNDS[compound]) return LIGHTING_MOOD_COMPOUNDS[compound];
+  }
   return null;
+}
+
+/** Fallback when swipe `lightingMood` is missing (e.g. after GCP rehydration). */
+function inferLightingFromSemantics(
+  colorTemperature: ColorTemperatureBucket | null,
+  brightness: BrightnessBucket | null,
+): LightingCanonical | null {
+  if (!colorTemperature && !brightness) return null;
+  const temp = colorTemperature ?? 'neutral';
+  const bright = brightness ?? 'balanced';
+
+  if (temp === 'warm') {
+    if (bright === 'dim') return 'warm_low';
+    return 'warm_bright';
+  }
+  if (temp === 'cool') {
+    if (bright === 'bright') return 'cool_bright';
+    return 'neutral';
+  }
+  if (bright === 'dim') return 'warm_low';
+  if (bright === 'bright') return 'neutral';
+  return 'neutral';
+}
+
+function voteLightingMoodFromLikedSwipes(
+  liked: TinderSwipe[],
+): LightingCanonical | null {
+  const votes: Partial<Record<LightingCanonical, number>> = {};
+  liked.forEach((s) => {
+    const raw = (s.categories as { lightingMood?: string | null } | undefined)?.lightingMood;
+    if (!raw) return;
+    const lm = raw.replace('neutral_light', 'neutral') as LightingCanonical;
+    if (!['warm_low', 'warm_bright', 'neutral', 'cool_bright'].includes(lm)) return;
+    votes[lm] = (votes[lm] || 0) + 1;
+  });
+  const ranked = Object.entries(votes).sort((a, b) => b[1] - a[1]);
+  return ranked[0]?.[0] as LightingCanonical | undefined ?? null;
 }
 
 function semanticWarmthToBucket(value: number | undefined): ColorTemperatureBucket | null {
@@ -412,14 +454,12 @@ export function buildImplicitPreferenceProfile(swipes: TinderSwipe[]): ImplicitP
   let biophiliaN = 0;
   let brightnessVotes: BrightnessBucket | null = null;
   let complexityVotes: ComplexityBucket | null = null;
-  let lightingFromCategories: LightingCanonical | null = null;
 
   liked.forEach((s) => {
     const c = s.categories as {
       biophilia?: number;
       brightness?: 'bright' | 'dark' | null;
       complexity?: 'complex' | 'simple' | null;
-      lightingMood?: string | null;
     } | undefined;
     const b = c?.biophilia;
     if (typeof b === 'number' && !Number.isNaN(b)) {
@@ -430,14 +470,9 @@ export function buildImplicitPreferenceProfile(swipes: TinderSwipe[]): ImplicitP
     else if (c?.brightness === 'dark' && brightnessVotes !== 'bright') brightnessVotes = 'dim';
     if (c?.complexity === 'complex') complexityVotes = 'complex';
     else if (c?.complexity === 'simple' && complexityVotes !== 'complex') complexityVotes = 'simple';
-    if (c?.lightingMood) {
-      const lm = c.lightingMood.replace('neutral_light', 'neutral') as LightingCanonical;
-      if (['warm_low', 'warm_bright', 'neutral', 'cool_bright'].includes(lm)) {
-        lightingFromCategories = lm;
-      }
-    }
   });
   const biophilia = biophiliaN > 0 ? Math.round(biophiliaSum / biophiliaN) : null;
+  const lightingFromCategories = voteLightingMoodFromLikedSwipes(liked);
 
   let natureMetaphor: string | null = null;
   for (const t of allTokens) {
@@ -447,15 +482,23 @@ export function buildImplicitPreferenceProfile(swipes: TinderSwipe[]): ImplicitP
     }
   }
 
+  const colorTemperature = inferColorTemperatureFromTokens(allTokens);
+  const brightness = brightnessVotes ?? inferBrightnessFromTokens(allTokens);
+  const complexity = complexityVotes ?? inferComplexityFromTokens(allTokens);
+  const lighting =
+    lightingFromCategories ??
+    inferLightingFromTokens(allTokens) ??
+    inferLightingFromSemantics(colorTemperature, brightness);
+
   return {
     styles: topWeightedTokens(dna.weights, styleCandidates, 3),
     materials: topWeightedTokens(dna.weights, materialCandidates, 3),
     colorTokens,
     moods: topWeightedTokens(dna.weights, moodCandidates, 3),
-    colorTemperature: inferColorTemperatureFromTokens(allTokens),
-    brightness: brightnessVotes ?? inferBrightnessFromTokens(allTokens),
-    complexity: complexityVotes ?? inferComplexityFromTokens(allTokens),
-    lighting: lightingFromCategories ?? inferLightingFromTokens(allTokens),
+    colorTemperature,
+    brightness,
+    complexity,
+    lighting,
     biophilia,
     natureMetaphor,
     colorWeights,
@@ -725,6 +768,14 @@ function enrichImplicitFromVisualDna(
   }
   if (!out.complexity && out.colorTokens.length > 0) {
     out.complexity = inferComplexityFromTokens(out.colorTokens);
+  }
+
+  const storedLightingMood = (v as { lightingMood?: LightingCanonical | null }).lightingMood;
+  if (!out.lighting && storedLightingMood) {
+    out.lighting = storedLightingMood;
+  }
+  if (!out.lighting) {
+    out.lighting = inferLightingFromSemantics(out.colorTemperature, out.brightness);
   }
 
   return out;

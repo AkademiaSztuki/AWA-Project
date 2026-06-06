@@ -63,315 +63,6 @@ interface PromptComponents {
 }
 
 // =========================
-// MAIN BUILDER FUNCTION
-// =========================
-
-export function buildPromptFromWeights(
-  weights: PromptWeights,
-  roomType: string
-): {
-  prompt: string;
-  components: PromptComponents;
-  metadata: {
-    tokenCount: number;
-    weights: PromptWeights;
-  };
-} {
-
-  const components: PromptComponents = {
-    roomType: buildRoomTypePhrase(roomType),
-    style: buildStylePhrase(weights),
-    mood: buildMoodPhrase(weights),
-    colors: buildColorPhrase(weights),
-    materials: buildMaterialsPhrase(weights),
-    lighting: buildLightingPhrase(weights),
-    biophilia: buildBiophiliaPhrase(weights),
-    functional: buildFunctionalPhrase(weights, roomType),
-    layout: buildLayoutPhrase(weights, roomType)
-  };
-  
-  
-  // Assemble full prompt with prioritization
-  const prompt = assemblePrompt(components, weights);
-  
-  // Token count estimation (rough)
-  const tokenCount = prompt.split(/\s+/).length;
-  
-  
-  return {
-    prompt,
-    components,
-    metadata: {
-      tokenCount,
-      weights
-    }
-  };
-}
-
-// =========================
-// COMPONENT BUILDERS
-// =========================
-
-function buildRoomTypePhrase(roomType: string): string {
-  const roomTypeMap: Record<string, string> = {
-    bedroom: 'bedroom',
-    living_room: 'living room',
-    kitchen: 'kitchen',
-    bathroom: 'bathroom',
-    home_office: 'home office',
-    dining_room: 'dining room',
-    kids_room: 'children\'s bedroom',
-    default: 'interior space'
-  };
-  
-  const result = `A ${roomTypeMap[roomType] || roomTypeMap.default}`;
-  return result;
-}
-
-function buildStylePhrase(weights: PromptWeights): string {
-  if (!weights.dominantStyle) {
-    return '';
-  }
-  
-  // Style confidence influences how strongly we state it
-  let result: string;
-  if (weights.styleConfidence > 0.7) {
-    result = `in ${weights.dominantStyle} style`;
-  } else if (weights.styleConfidence > 0.4) {
-    result = `with ${weights.dominantStyle} influences`;
-  } else {
-    result = `with eclectic, ${weights.dominantStyle}-inspired design`;
-  }
-  
-  return result;
-}
-
-function buildMoodPhrase(weights: PromptWeights): string {
-  const moods: string[] = [];
-  
-  // PRS-derived moods (prioritize highest scores)
-  if (weights.needsCalming > 0.6) {
-    moods.push('serene', 'calming atmosphere');
-  } else if (weights.needsEnergizing > 0.6) {
-    moods.push('energizing', 'invigorating vibe');
-  }
-  
-  if (weights.needsInspiration > 0.6) {
-    moods.push('inspiring', 'creative energy');
-  } else if (weights.needsGrounding > 0.6) {
-    moods.push('grounded', 'stable presence');
-  }
-  
-  // Social context mood
-  if (weights.privateVsShared > 0.6) {
-    moods.push('welcoming', 'sociable ambiance');
-  } else if (weights.privateVsShared < 0.3) {
-    moods.push('intimate', 'personal sanctuary feel');
-  }
-  
-  const result = moods.length === 0 
-    ? 'with balanced, comfortable atmosphere'
-    : `featuring ${moods.slice(0, 2).join(' and ')}`;
-  
-  return result;
-}
-
-function buildColorPhrase(weights: PromptWeights): string {
-  let result: string;
-  if (!weights.colorPalette || weights.colorPalette.length === 0) {
-    // Fallback to temperature
-    if (weights.colorTemperature > 0.6) {
-      result = 'in warm tones';
-    } else if (weights.colorTemperature < 0.4) {
-      result = 'in cool tones';
-    } else {
-      result = 'in neutral, balanced colors';
-    }
-  } else {
-    // Use specific colors from palette
-    const colors = weights.colorPalette.slice(0, 3).join(', ');
-    
-    // Add temperature descriptor
-    const tempDescriptor = weights.colorTemperature > 0.6 ? 'warm' :
-                           weights.colorTemperature < 0.4 ? 'cool' : '';
-    
-    if (tempDescriptor) {
-      result = `with ${tempDescriptor} color palette of ${colors}`;
-    } else {
-      result = `featuring colors of ${colors}`;
-    }
-  }
-  
-  return result;
-}
-
-function buildMaterialsPhrase(weights: PromptWeights): string {
-  if (!weights.primaryMaterials || weights.primaryMaterials.length === 0) {
-    return '';
-  }
-  
-  const materials = weights.primaryMaterials.slice(0, 3).join(', ');
-  
-  // Complexity influences how we describe materials
-  const result = weights.visualComplexity > 0.6
-    ? `with rich textures including ${materials}`
-    : `featuring ${materials}`;
-  
-  return result;
-}
-
-function buildLightingPhrase(weights: PromptWeights): string {
-  const lightPhrases: string[] = [];
-  
-  // Mood-based lighting
-  const lightingMoodMap: Record<string, string> = {
-    warm_low: 'soft, warm ambient lighting',
-    warm_bright: 'bright, inviting warm light',
-    neutral: 'balanced natural daylight',
-    cool_bright: 'crisp, focused cool lighting'
-  };
-  
-  const moodLight = lightingMoodMap[weights.lightingMood];
-  if (moodLight) {
-    lightPhrases.push(moodLight);
-  }
-  
-  // Natural light importance
-  if (weights.naturalLightImportance > 0.7) {
-    lightPhrases.push('abundant natural light');
-  } else if (weights.naturalLightImportance > 0.4) {
-    lightPhrases.push('good natural light');
-  }
-  
-  const result = lightPhrases.length === 0 ? '' : `with ${lightPhrases.join(' and ')}`;
-  
-  return result;
-}
-
-function buildBiophiliaPhrase(weights: PromptWeights): string {
-  const descriptor = getBiophiliaDescriptors(weights.natureDensity, weights.biophilicElements);
-  
-  
-  if (descriptor.tier === 'none') {
-    return '';
-  }
-
-  const extraElements = descriptor.naturalElements.slice(0, 2);
-  const result = extraElements.length > 0
-    ? `${descriptor.shortPhrase}, including ${extraElements.join(' and ')}`
-    : descriptor.shortPhrase;
-  
-  return result;
-}
-
-function buildFunctionalPhrase(weights: PromptWeights, roomType: string): string {
-  const phrases: string[] = [];
-  
-  // Primary activity
-  if (weights.primaryActivity) {
-    const activityPhrases: Record<string, string> = {
-      work: 'optimized for focused work',
-      sleep: 'designed for restful sleep',
-      relax: 'perfect for relaxation',
-      cook: 'functional for cooking',
-      entertain: 'ideal for entertaining',
-      read: 'with dedicated reading area',
-      exercise: 'suitable for physical activity',
-      creative: 'inspiring creative pursuits'
-    };
-    
-    const activityPhrase = activityPhrases[weights.primaryActivity];
-    if (activityPhrase) {
-      phrases.push(activityPhrase);
-    }
-  }
-  
-  // Functional priorities
-  if (weights.functionalPriorities.length > 0) {
-    const priority = weights.functionalPriorities[0];
-    phrases.push(priority);
-  }
-  
-  const result = phrases.length > 0 ? phrases.join(', ') : '';
-  
-  return result;
-}
-
-function buildLayoutPhrase(weights: PromptWeights, roomType: string): string {
-  const phrases: string[] = [];
-  
-  // Zoning for shared spaces
-  if (weights.requiresZoning) {
-    phrases.push('with distinct functional zones');
-  }
-  
-  // Address specific pain points
-  if (weights.addressPainPoints.includes('layout')) {
-    phrases.push('improved space flow');
-  }
-  if (weights.addressPainPoints.includes('storage')) {
-    phrases.push('smart storage solutions');
-  }
-  if (weights.addressPainPoints.includes('clutter')) {
-    phrases.push('clean, organized aesthetic');
-  }
-  
-  // Visual complexity
-  if (weights.visualComplexity < 0.3) {
-    phrases.push('minimalist, uncluttered layout');
-  } else if (weights.visualComplexity > 0.7) {
-    phrases.push('richly layered, detailed composition');
-  }
-  
-  const result = phrases.length > 0 ? phrases.join(', ') : '';
-  
-  return result;
-}
-
-// =========================
-// PROMPT ASSEMBLY
-// =========================
-
-function assemblePrompt(
-  components: PromptComponents,
-  weights: PromptWeights
-): string {
-  
-  // Priority-based assembly to stay under token limit
-  const parts: string[] = [];
-  
-  // TIER 1: Essential (always include)
-  parts.push(components.roomType);  // "A bedroom"
-  if (components.style) parts.push(components.style);  // "in Scandinavian style"
-  
-  // TIER 2: High priority (mood + colors)
-  if (components.mood) parts.push(components.mood);
-  if (components.colors) parts.push(components.colors);
-  
-  // TIER 3: Medium priority (materials + lighting)
-  if (components.materials) parts.push(components.materials);
-  if (components.lighting) parts.push(components.lighting);
-  
-  // TIER 4: Context-dependent
-  if (components.biophilia) parts.push(components.biophilia);
-  if (components.functional) parts.push(components.functional);
-  if (components.layout) parts.push(components.layout);
-  
-  
-  // Join with proper punctuation
-  let prompt = parts.join(', ');
-  
-  // Ensure proper capitalization and ending
-  prompt = prompt.charAt(0).toUpperCase() + prompt.slice(1);
-  if (!prompt.endsWith('.')) {
-    prompt += '.';
-  }
-  
-  
-  return prompt;
-}
-
-// =========================
 // UTILITIES
 // =========================
 
@@ -1166,14 +857,77 @@ function getFurnitureForRoom(
 }
 
 /**
- * Builds FLUX 2 JSON structured prompt
- * This format gives precise control over all design elements
- * 
+ * Schema version for the structured JSON prompt. Stored alongside generations so
+ * research data stays comparable when the schema evolves.
+ */
+export const PROMPT_SCHEMA_VERSION = 'v3';
+
+/**
+ * Room geometry that MUST stay identical between the input photo and the generated
+ * image. Surface finishes (walls, floor, ceiling colors/materials) are NOT locked —
+ * see `restyle_surfaces` in the assembled prompt object.
+ */
+export const ARCHITECTURAL_GEOMETRY_PRESERVE = [
+  'windows',
+  'doors',
+  'camera_angle',
+  'perspective',
+  'ceiling_height',
+  'room_footprint',
+] as const;
+
+/** @deprecated Use ARCHITECTURAL_GEOMETRY_PRESERVE — v2 locked walls; v3 does not. */
+export const ARCHITECTURAL_PRESERVE = ARCHITECTURAL_GEOMETRY_PRESERVE;
+
+/**
+ * Core, identical-across-sources fields of the structured prompt. Every one of the 6
+ * generation sources fills exactly these keys (only the values differ), guaranteeing
+ * comparable records in the research database.
+ */
+export interface StructuredPromptCore {
+  room_type: string;
+  primary_style: string;
+  secondary_styles: string[];
+  colors: string[];
+  materials: string[];
+  complexity: string;
+  brightness: string;
+  lighting_mood: string;
+  nature_metaphor: string;
+  texture: string;
+  mood: string;
+  plants: number;
+}
+
+/**
+ * Assembles the final structured prompt object used by ALL generation sources.
+ * Guarantees: a leading `schema_version`, the identical core key set, optional
+ * source-specific `extra` fields (e.g. functional_requirements, vision_* labels),
+ * and the fixed architectural lock fields appended at the end.
+ */
+export function buildStructuredPromptObject(
+  core: StructuredPromptCore,
+  extra?: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    schema_version: PROMPT_SCHEMA_VERSION,
+    ...core,
+    ...(extra || {}),
+    restyle_surfaces: true,
+    preserve: [...ARCHITECTURAL_GEOMETRY_PRESERVE],
+    architectural_lock: true,
+  };
+}
+
+/**
+ * Builds the structured JSON prompt sent verbatim to the image model (Nano Banana).
+ * This format gives precise control over all design elements.
+ *
  * @param weights - Calculated prompt weights
  * @param roomType - Type of room being designed
  * @param sourceType - Optional source type for source-specific customization
  */
-export function buildFlux2Prompt(
+export function buildNanoBananaJsonPrompt(
   weights: PromptWeights,
   roomType: string,
   sourceType?: GenerationSource
@@ -1318,195 +1072,43 @@ export function buildFlux2Prompt(
   }
   
   
-  // MINIMAL JSON - only the fields we want the model to follow
-  const promptJson: any = {
-    room_type: roomName, // Add room type from photo analysis
-    primary_style: finalStyle, // ONE dominant style
-    secondary_styles: secondaryStyles, // Subtle secondary influences
-    colors: uniqueColors,
-    materials: materials,
-    complexity,
-    brightness,
-    lighting_mood: weights.lightingMood,
-    nature_metaphor: weights.natureMetaphor || '',
-    texture: getTextureFocus(materials, styleLabel),
-    mood: moodAtmosphere,
-    plants: plantCount
-  };
-  
-  // Add functional requirements for MixedFunctional
-  if (functionalRequirements) {
-    promptJson.functional_requirements = functionalRequirements;
-    promptJson.furniture = furnitureList; // Add furniture list for MixedFunctional
+  // Source-specific extra fields
+  const extra: Record<string, unknown> = {};
+  if (layoutVariation?.description) {
+    extra.layout = layoutVariation.description;
   }
-  
+  if (furnitureList.length > 0) {
+    extra.furniture = furnitureList;
+  }
+  if (functionalRequirements) {
+    extra.functional_requirements = functionalRequirements;
+  }
+
+  // Shared schema: identical core keys for every source + architectural lock + schema_version
+  const promptJson = buildStructuredPromptObject(
+    {
+      room_type: roomName, // from photo analysis
+      primary_style: finalStyle, // ONE dominant style
+      secondary_styles: secondaryStyles, // subtle secondary influences
+      colors: uniqueColors,
+      materials,
+      complexity,
+      brightness,
+      lighting_mood: weights.lightingMood,
+      nature_metaphor: weights.natureMetaphor || '',
+      texture: getTextureFocus(materials, styleLabel),
+      mood: moodAtmosphere,
+      plants: plantCount,
+    },
+    extra
+  );
 
   return JSON.stringify(promptJson, null, 2);
 }
 
-/**
- * Converts FLUX 2 JSON structured prompt to JSON format for Google Nano Banana
- * Google Nano Banana receives JSON as text in prompt, which provides better structure
- * 
- * @param jsonPrompt - JSON string from buildFlux2Prompt
- * @returns JSON string formatted for Google Nano Banana (sent as text in prompt)
- */
-export function buildGoogleNanoBananaPrompt(jsonPrompt: string): string {
-
-  // Check if it's JSON
-  if (!jsonPrompt.trim().startsWith('{')) {
-    return jsonPrompt;
-  }
-
-  try {
-    const promptData = JSON.parse(jsonPrompt);
-    
-    // Extract key data from simplified JSON
-    const roomType = promptData.room_type || 'interior space';
-    // Ensure style is ONE dominant style (extract primary if it's a blend)
-    const primaryStyle = promptData.primary_style || promptData.style || 'modern';
-    const secondaryStyles = promptData.secondary_styles || [];
-    const style = extractPrimaryStyle(primaryStyle);
-    
-    const colors = promptData.colors || [];
-    const materials = promptData.materials || [];
-    const complexity = promptData.complexity || 'balanced';
-    const brightness = promptData.brightness || 'balanced';
-    const lightingMood = promptData.lighting_mood || '';
-    const natureMetaphor = promptData.nature_metaphor || '';
-    const texture = promptData.texture || '';
-    const mood = promptData.mood || '';
-    const plants = typeof promptData.plants === 'number' ? promptData.plants : 0;
-
-    const mustFurnish = promptData.must_furnish === true;
-    const furnishMode = promptData.generation_mode === 'furnish_empty_or_uploaded_room';
-    const emptyRoomInput = promptData.empty_room_input === true;
-    const layoutRequirementsExtra =
-      typeof promptData.layout_requirements === 'string' ? promptData.layout_requirements.trim() : '';
-    const furnitureDensity =
-      typeof promptData.furniture_density === 'string' ? promptData.furniture_density.trim() : 'high';
-    const modernFurnitureChecklist =
-      typeof promptData.modern_furniture_checklist === 'string'
-        ? promptData.modern_furniture_checklist.trim()
-        : '';
-
-    const isFurnishStrong = mustFurnish || furnishMode;
-    
-    // Extract functional requirements (for MixedFunctional)
-    const functionalRequirements = promptData.functional_requirements || null;
-    const furnitureList = promptData.furniture || [];
-    
-    // Build SHORT, SIMPLE prompt
-    const colorList = colors.slice(0, 3).join(', ');
-    const materialList = materials.slice(0, 2).join(' and ');
-    
-    
-    // Build functional requirements text (for MixedFunctional)
-    let functionalText = '';
-    if (functionalRequirements) {
-      const primaryActivity = functionalRequirements.primary_activity || '';
-      const secondaryActivities = functionalRequirements.secondary_activities || [];
-      const functionalPriorities = functionalRequirements.functional_priorities || [];
-      
-      const activityText = primaryActivity ? `Primary activity: ${primaryActivity}` : '';
-      const secondaryText = secondaryActivities.length > 0 ? `Secondary activities: ${secondaryActivities.join(', ')}` : '';
-      const prioritiesText = functionalPriorities.length > 0 ? `Functional priorities: ${functionalPriorities.join(', ')}` : '';
-      
-      functionalText = [activityText, secondaryText, prioritiesText].filter(Boolean).join('. ') + '.';
-      
-      // Add furniture list if available
-      if (furnitureList.length > 0) {
-        functionalText += ` Required furniture: ${furnitureList.slice(0, 8).join(', ')}.`;
-      }
-    }
-    
-    const secondaryStyleText = secondaryStyles.length > 0 
-      ? ` with subtle ${secondaryStyles.join(' and ')} influences`
-      : '';
-
-    const furnishLayoutBlock = layoutRequirementsExtra
-      ? `\nLAYOUT / COVERAGE (mandatory): ${layoutRequirementsExtra}`
-      : '';
-
-    const modernChecklistBlock = modernFurnitureChecklist
-      ? `\nSTYLE-SPECIFIC FURNISH CHECKLIST (include visibly): ${modernFurnitureChecklist}`
-      : '';
-
-    let coreTaskBlock: string;
-    let changeBlock: string;
-
-    if (isFurnishStrong) {
-      if (emptyRoomInput) {
-        coreTaskBlock = `ARCHITECTURAL LOCK: Keep walls, windows, doors 100% IDENTICAL. Keep exact camera perspective.
-Also: do not add or remove window/door openings; keep ceiling height and room footprint unchanged.
-CORE TASK: The input may already be an unfurnished or mostly empty shell. ADD a complete, magazine-ready furnished interior in the requested style. Furniture coverage must read as ${furnitureDensity} — clearly inhabited, not a minimalist void.`;
-      } else {
-        coreTaskBlock = `ARCHITECTURAL LOCK: Keep walls, windows, doors 100% IDENTICAL. Keep exact camera perspective.
-Also: do not add or remove window/door openings; keep ceiling height and room footprint unchanged.
-CORE TASK: Replace or refresh furniture and decor to match the requested style. If movable pieces clash with the new design, swap them for new coherent items; inpaint surfaces only where items are replaced. Final result must be fully furnished with ${furnitureDensity} visual occupancy.`;
-      }
-
-      changeBlock = `KEEP: walls, windows, doors, camera angle - IDENTICAL.
-
-CHANGE:
-- Style: ${style}${secondaryStyleText}
-- Mood: ${mood || 'match the style'}
-- Wall colors: ${colorList || 'match the style palette'}
-- Materials: ${materialList || 'match the style'}
-- Texture: ${texture || 'match the style'}
-- Complexity: ${complexity}; Brightness: ${brightness}; Lighting mood: ${lightingMood || 'neutral'}
-- Nature metaphor: ${natureMetaphor || 'none'}
-- Plants: ${plants} plants (Interpret into a realistic botanical arrangement)
-${functionalText ? `- Functional requirements: ${functionalText}\n` : ''}- FURNISH (mandatory): Add or replace furniture, lighting, textiles, and decor so the room is clearly and believably furnished end-to-end. Use varied heights, depths, and focal points; avoid an empty stage look.
-- Rugs: Add ONE cohesive area rug when it suits the style; otherwise keep an attractive, styled floor (not a bare expanse).${furnishLayoutBlock}${modernChecklistBlock}`;
-    } else {
-      coreTaskBlock = `ARCHITECTURAL LOCK: Keep walls, windows, doors 100% IDENTICAL. Keep exact camera perspective.
-Also: do not add or remove window/door openings; keep ceiling height and room footprint unchanged.
-CORE TASK: Remove all existing furniture/decor. Reconstruct surfaces. Furnish from scratch.`;
-
-      changeBlock = `KEEP: walls, windows, doors, camera angle - IDENTICAL.
-
-CHANGE:
-- Style: ${style}${secondaryStyleText}
-- Mood: ${mood || 'match the style'}
-- Wall colors: ${colorList || 'match the style palette'}
-- Materials: ${materialList || 'match the style'}
-- Texture: ${texture || 'match the style'}
-- Complexity: ${complexity}; Brightness: ${brightness}; Lighting mood: ${lightingMood || 'neutral'}
-- Nature metaphor: ${natureMetaphor || 'none'}
-- Plants: ${plants} plants (Interpret into a realistic botanical arrangement)
-${functionalText ? `- Functional requirements: ${functionalText}\n` : ''}- REMOVE COMPLETELY: all furniture, rugs/carpets, curtains/blinds, lamps, wall art, shelves, TVs/monitors, plants, clutter, accessories. Inpaint surfaces behind them.
-- NEW INTERIOR: Add entirely NEW furniture + decor (new shapes, new layout) matching the ${style} style${functionalText ? ' and functional requirements' : ''}.
-- Rugs: REMOVE all. Floor must be visible unless the style REQUIRES a new rug.`;
-    }
-
-    const finalPrompt = `Publication-quality interior design photography for a prestigious architectural magazine (editorial standards like Architectural Digest, Dwell, or Elle Decoration).
-
-${coreTaskBlock}
-
-Professional ${roomType} in ${style}${secondaryStyleText} style.
-
-${changeBlock}`;
-
-    return finalPrompt;
-  } catch (error) {
-    console.error('[buildGoogleNanoBananaPrompt] Error parsing JSON:', error);
-    return jsonPrompt;
-  }
-}
-
 // =========================
-// DESCRIPTIVE MAPPINGS FOR GOOGLE NANO BANANA
+// DESCRIPTIVE MAPPINGS
 // =========================
-
-const NATURE_METAPHOR_DESCRIPTIONS: Record<string, string> = {
-  'forest': 'Forest (Dappled light, organic forms, deep greens and earthy browns)',
-  'ocean': 'Ocean (Fluid forms, cooler shadows, tranquil blues and seafoam tones)',
-  'mountain': 'Mountain (Strong vertical lines, rugged stone textures, airy and crisp feel)',
-  'desert': 'Desert (Warm directional light, sandy textures, terracotta and ochre palette)',
-  'meadow': 'Meadow (Soft diffused light, airy textiles, wildflower accents and fresh greens)',
-  'jungle': 'Jungle (Lush foliage, high humidity feel, vibrant exotic colors and dense layering)'
-};
 
 const COMPLEXITY_LEVEL_MAPPINGS = [
   { threshold: 0.2, label: 'Very Minimal (Hero pieces only, massive negative space, zero clutter)' },
@@ -1516,20 +1118,8 @@ const COMPLEXITY_LEVEL_MAPPINGS = [
   { threshold: 1.1, label: 'Maximalist (Dense patterns, abundant decor, highly complex visual interest)' }
 ];
 
-const LIGHTING_SCENARIO_MAPPINGS: Record<string, string> = {
-  'warm_dim': 'Intimate Warm (Soft, low-intensity evening light, approx 2700K)',
-  'warm_bright': 'Golden Hour (Warm, directional sun-drenched light, approx 3000K)',
-  'neutral': 'Natural Daylight (Balanced, crisp morning light, approx 4500K)',
-  'cool_bright': 'Gallery Light (Clear, high-intensity focused light, approx 5500K)'
-};
-
 export function getComplexityLabel(weight: number): string {
   return COMPLEXITY_LEVEL_MAPPINGS.find(m => weight <= m.threshold)?.label || 'Balanced';
-}
-
-function getNatureMetaphorDescription(id?: string): string {
-  if (!id) return 'Natural (Organic forms and balanced lighting)';
-  return NATURE_METAPHOR_DESCRIPTIONS[id.toLowerCase()] || `${id} inspired (Organic forms and nature-aligned colors)`;
 }
 
 function getTextureFocus(materials: string[], style: string): string {
@@ -1544,7 +1134,6 @@ function getTextureFocus(materials: string[], style: string): string {
 export {
   type PromptComponents,
   getBiophiliaDescriptors
-  // buildFlux2Prompt is already exported above as a named export
-  // buildGoogleNanoBananaPrompt is already exported above as a named export
+  // buildNanoBananaJsonPrompt is already exported above as a named export
 };
 

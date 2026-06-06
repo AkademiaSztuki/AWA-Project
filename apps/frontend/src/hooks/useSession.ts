@@ -14,6 +14,7 @@ import { GOOGLE_AUTH_EMAIL_STORAGE_KEY } from '@/lib/auth-storage-keys';
 import { mergeInspirationLists } from '@/lib/inspiration-merge';
 import { hasResearchConsent } from '@/lib/research-consent';
 import { mergeSessionDataUpdates } from '@/lib/participants-mapper';
+import { mergePersistedImageRatingsMaps } from '@/lib/image-aesthetic-rating';
 
 const SESSION_STORAGE_KEY = 'aura_session';
 const USER_HASH_STORAGE_KEY = 'aura_user_hash';
@@ -628,6 +629,10 @@ export const useSession = (): UseSessionReturn => {
         ...(remoteSession || {}),
         ...(mergedLocalSession || {}),
         userHash,
+        imageRatings: mergePersistedImageRatingsMaps(
+          mergedLocalSession?.imageRatings,
+          remoteSession?.imageRatings,
+        ),
       };
 
       const localCoreProfileComplete = !!mergedLocalSession?.coreProfileComplete;

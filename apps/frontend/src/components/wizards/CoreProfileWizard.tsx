@@ -27,6 +27,7 @@ import {
 } from '@/lib/flow/full-flow-progress';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { computeWeightedDNAFromSwipes } from '@/lib/dna';
+import { buildImplicitPreferenceProfile } from '@/lib/preferences/preference-comparison-registry';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import {
   saveResearchConsent,
@@ -942,6 +943,7 @@ export function CoreProfileWizard() {
                     
                     // Compute DNA analysis in background
                     const weighted = computeWeightedDNAFromSwipes(swipes, swipes.length);
+                    const implicitProfile = buildImplicitPreferenceProfile(swipes);
                     const dominantStyle = weighted.top.styles.join(' + ') || 'Modern';
                     const colorPalette = weighted.top.colors.join(' + ') || 'Neutral colors';
                     const materials = weighted.top.materials.join(' + ') || 'Natural materials';
@@ -964,6 +966,7 @@ export function CoreProfileWizard() {
                         materialsSummary: materials,
                         lightingSummary: lighting,
                         moodSummary: mood,
+                        lightingMood: implicitProfile.lighting ?? undefined,
                       } as any
                     });
 

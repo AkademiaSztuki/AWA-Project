@@ -69,6 +69,30 @@ function resolveClientAuthUserId(userId: string | undefined): string | undefined
   return localStorage.getItem(GOOGLE_AUTH_USER_ID_STORAGE_KEY)?.trim() || undefined;
 }
 
+/** Child layout effects can run before portal hosts mount — retry briefly (production DOM, local dev race). */
+function resolvePortalHost(elementId: string, onResolved: (host: HTMLElement) => void): () => void {
+  const tryResolve = () => {
+    const el = document.getElementById(elementId);
+    if (el) onResolved(el);
+    return Boolean(el);
+  };
+
+  if (tryResolve()) return () => undefined;
+
+  let rafId = 0;
+  const schedule = (attempt: number) => {
+    rafId = window.requestAnimationFrame(() => {
+      if (tryResolve() || attempt >= 8) return;
+      schedule(attempt + 1);
+    });
+  };
+  schedule(0);
+
+  return () => {
+    if (rafId !== 0) window.cancelAnimationFrame(rafId);
+  };
+}
+
 const copy = {
   pl: {
     eyebrow: 'IDA Interior Design Assistant',
@@ -493,9 +517,9 @@ const ProfileTagRows: React.FC<{
     <LayoutGroup id={layoutGroupId}>
       <motion.div
         className={cn('relative grid', compact ? 'gap-2' : 'gap-3')}
-        initial={{ opacity: 0, y: 14 }}
+        initial={{ opacity: 1, y: 14 }}
         whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-48px' }}
+        viewport={{ once: true, amount: 0.12 }}
         transition={{ duration: 0.65, ease: 'easeOut' }}
       >
         {items.map((item) => (
@@ -731,10 +755,11 @@ const HERO_INTERIOR_CROSSFADE_SEC = 2.55;
 /** Smooth ease-in-out for hero crossfade (symmetric cubic bezier). */
 const HERO_INTERIOR_CROSSFADE_EASE: [number, number, number, number] = [0.45, 0, 0.55, 1];
 
+/** Keep opacity at 1 — whileInView + scroll-linked hero often leaves sections invisible. */
 const fadeUp = {
-  initial: { opacity: 0, y: 32 },
+  initial: { opacity: 1, y: 28 },
   whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true, margin: '-90px' },
+  viewport: { once: true, amount: 0.12 },
   transition: { duration: 0.75, ease: 'easeOut' },
 };
 
@@ -1252,7 +1277,7 @@ const MarketingEntryScreen: React.FC = () => {
       setHeroStyleRailPortalHost(null);
       return;
     }
-    setHeroStyleRailPortalHost(document.getElementById('hero-style-rail-layer'));
+    return resolvePortalHost('hero-style-rail-layer', setHeroStyleRailPortalHost);
   }, [heroCopyRelaxedOverflow, isMobile]);
 
   const applyHeroStyleRailPortalGeometry = useCallback(
@@ -1471,7 +1496,7 @@ const MarketingEntryScreen: React.FC = () => {
       setMarqueePortalHost(null);
       return;
     }
-    setMarqueePortalHost(document.getElementById('living-room-marquee-layer'));
+    return resolvePortalHost('living-room-marquee-layer', setMarqueePortalHost);
   }, [useMarqueePortal]);
 
   const applyMarqueePortalGeometry = useCallback((force = false) => {

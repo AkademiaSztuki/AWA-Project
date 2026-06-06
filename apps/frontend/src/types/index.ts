@@ -240,6 +240,8 @@ export interface VisualDNA {
     brightness?: number;
     complexity?: number;
   };
+  /** Canonical lighting mood inferred from Tinder swipes (warm_low, warm_bright, neutral, cool_bright). */
+  lightingMood?: 'warm_low' | 'warm_bright' | 'neutral' | 'cool_bright';
 }
 
 export interface LadderStep {

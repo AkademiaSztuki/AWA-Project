@@ -4,7 +4,7 @@
 import { PromptInputs } from './scoring';
 import { GenerationSource, filterInputsBySource } from './modes';
 import { calculatePromptWeights } from './scoring';
-import { buildFlux2Prompt } from './builder';
+import { buildNanoBananaJsonPrompt } from './builder';
 
 export interface PipelineDebugInfo {
   source: GenerationSource;
@@ -80,7 +80,7 @@ export function debugPipeline(
   const weights = calculatePromptWeights(filteredInputs, source);
 
   // BUILD PROMPT
-  const finalPrompt = buildFlux2Prompt(weights, roomType, source);
+  const finalPrompt = buildNanoBananaJsonPrompt(weights, roomType, source);
 
   return {
     source,

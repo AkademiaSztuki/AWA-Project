@@ -11,7 +11,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { AwaContainer, AwaDialogue } from '@/components/awa';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
-import { useModalAPI } from '@/hooks/useModalAPI';
+import { useAiApi } from '@/hooks/useAiApi';
 import { EXAMPLE_IMAGES_METADATA, getExampleImageMetadata, isExampleImage } from '@/lib/exampleImagesMetadata';
 import { fileToNormalizedBase64 } from '@/lib/utils';
 import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
@@ -21,7 +21,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 export default function PhotoUploadPage() {
   const router = useRouter();
   const { sessionData, updateSession } = useSession();
-  const { analyzeRoom, generateLLMComment } = useModalAPI();
+  const { analyzeRoom, generateLLMComment } = useAiApi();
   const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
   const { language } = useLanguage();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);

@@ -164,7 +164,6 @@ interface GeneratedImage {
     aesthetic_match: number;
     character: number;
     harmony: number;
-    is_my_interior: number;
   };
   isFavorite: boolean;
   createdAt: number;
@@ -620,7 +619,7 @@ export default function FastGeneratePage() {
         base64: result.image,
         prompt: prompt,
         parameters: parameters,
-        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+        ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
         isFavorite: false,
         createdAt: Date.now(),
         provider: 'google'
@@ -893,7 +892,7 @@ export default function FastGeneratePage() {
           base64: base64,
           prompt: savedImage.prompt || 'Restored from session',
           parameters: savedImage.parameters || {},
-          ratings: savedImage.ratings || { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+          ratings: savedImage.ratings || { aesthetic_match: 0, character: 0, harmony: 0 },
           isFavorite: savedImage.isFavorite || false,
           createdAt: savedImage.createdAt || Date.now(),
         };
@@ -907,14 +906,10 @@ export default function FastGeneratePage() {
       if (savedImage && savedImage.url) {
         setGeneratedImage(restoredImages[0]);
         
-        // Restore ratings state if ratings exist
-        if (savedImage.ratings) {
-          if (savedImage.ratings.is_my_interior > 0) {
-            setHasAnsweredInteriorQuestion(true);
-          }
-          if (savedImage.ratings.harmony > 0) {
-            setHasCompletedRatings(true);
-          }
+        // Interior question removed — selection implies ownership.
+        setHasAnsweredInteriorQuestion(true);
+        if (savedImage.ratings && savedImage.ratings.harmony > 0) {
+          setHasCompletedRatings(true);
         }
         
         // Restore generation history if available (align with fast-gen rows only)
@@ -955,6 +950,14 @@ export default function FastGeneratePage() {
       }
     };
   }, []);
+
+  // The "is this your interior?" question was removed: generating an image already implies it.
+  // Auto-advance straight to the aesthetic rating.
+  useEffect(() => {
+    if (generatedImage && !hasAnsweredInteriorQuestion) {
+      setHasAnsweredInteriorQuestion(true);
+    }
+  }, [generatedImage, hasAnsweredInteriorQuestion]);
 
   const handleCustomModification = async () => {
     const trimmed = customModificationText.trim();
@@ -1130,7 +1133,7 @@ export default function FastGeneratePage() {
           modifications: [language === 'pl' ? modification.label.pl : modification.label.en],
           iterationCount: generationCount,
         },
-        ratings: { aesthetic_match: 0, character: 0, harmony: 0, is_my_interior: 0 },
+        ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
         isFavorite: false,
         createdAt: Date.now(),
         provider: 'google'
@@ -1265,15 +1268,6 @@ export default function FastGeneratePage() {
 
   const handleRemoveFurniture = async () => {
     if (isGenerating) return;
-
-    if (!hasAnsweredInteriorQuestion) {
-      setError(
-        language === 'pl'
-          ? "Najpierw odpowiedz na pytanie 'Czy to moje wnętrze?' przed usunięciem mebli."
-          : "Please answer the question 'Is this my interior?' before removing furniture.",
-      );
-      return;
-    }
 
     let baseForRemoval: GeneratedImage | null =
       resolveSelectedGeneratedImageForModification();
@@ -1454,7 +1448,6 @@ export default function FastGeneratePage() {
           aesthetic_match: 0,
           character: 0,
           harmony: 0,
-          is_my_interior: 0,
         },
         isFavorite: false,
         createdAt: Date.now(),
@@ -1465,7 +1458,7 @@ export default function FastGeneratePage() {
       setGenerationCount((prev) => prev + 1);
       setShowOriginalRoomPhoto(false);
 
-      setHasAnsweredInteriorQuestion(false);
+      setHasAnsweredInteriorQuestion(true);
       setHasCompletedRatings(false);
 
       setLoadingProgress(100);
@@ -1796,54 +1789,6 @@ export default function FastGeneratePage() {
                         <Heart size={20} fill={generatedImage.isFavorite ? 'currentColor' : 'none'} />
                       </button>
                     </div>
-
-                    {/* Interior Question - exactly like main generate */}
-                    <AnimatePresence>
-                      {!hasAnsweredInteriorQuestion && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ 
-                            opacity: 0, 
-                            y: -20, 
-                            scale: 0.95,
-                            transition: { duration: 0.5, ease: "easeIn" }
-                          }}
-                          transition={{ duration: 0.5, ease: "easeOut" }}
-                        >
-                          <div className="space-y-6">
-                            <h4 className="font-semibold text-graphite text-lg">
-                              {language === 'pl' ? 'Czy to Twoje wnętrze?' : 'Is this your interior?'}
-                            </h4>
-                            <div className="border-b border-gray-200/50 pb-4 last:border-b-0">
-                              <div className="flex items-center justify-between text-xs text-silver-dark mb-3 font-modern">
-                                <span>{language === 'pl' ? 'To nie moje wnętrze (1)' : 'Not my interior (1)'}</span>
-                                <span>{language === 'pl' ? 'To moje wnętrze (5)' : 'This is my interior (5)'}</span>
-                              </div>
-
-                              <GlassScalePicker
-                                min={1}
-                                max={5}
-                                value={(generatedImage.ratings as any).is_my_interior || 3}
-                                onChange={(value) => {
-                                  handleImageRating(generatedImage.id, 'is_my_interior', value);
-                                  setTimeout(() => {
-                                    setHasAnsweredInteriorQuestion(true);
-                                  }, 800);
-                                }}
-                                className="mb-2"
-                                highlightResetKey={generatedImage.id}
-                                ariaLabel={
-                                  language === 'pl'
-                                    ? 'Skala: czy to Twoje wnętrze (1–5)'
-                                    : 'Scale: is this your interior (1–5)'
-                                }
-                              />
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
 
                     {/* Ratings - exactly like main generate */}
                     <AnimatePresence>

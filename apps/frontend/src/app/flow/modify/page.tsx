@@ -44,13 +44,16 @@ import {
   saveParticipantImages
 } from '@/lib/remote-spaces';
 import { saveSessionWithActiveSpace } from '@/lib/current-space-sync';
+import { buildGenerationHistoryFromSession } from '@/lib/generation-history';
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import {
   applyRatingsToImage,
   aestheticPickerValue,
-  imageHasAestheticRating,
-  imageNeedsAestheticRating,
+  hasTasteRating,
+  normalizeSessionImageRatingsMap,
   resolveSessionImageRatingsMap,
+  shouldShowTasteRating,
+  writeAestheticRatingToMap,
   type SessionImageRatingsMap,
 } from '@/lib/image-aesthetic-rating';
 
@@ -175,7 +178,6 @@ export default function ModifyPage() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState<number | undefined>(undefined);
   const [hasAnsweredInteriorQuestion, setHasAnsweredInteriorQuestion] = useState(false);
-  const [showTasteRatingPanel, setShowTasteRatingPanel] = useState(false);
   const [isModifying, setIsModifying] = useState(false);
   const [originalRoomPhotoUrl, setOriginalRoomPhotoUrl] = useState<string | null>(null);
   const [showOriginalRoomPhoto, setShowOriginalRoomPhoto] = useState(false);
@@ -192,6 +194,7 @@ export default function ModifyPage() {
     isSelected?: boolean;
   }>>([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
+  const tasteRatingPanelRef = useRef<HTMLDivElement>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<'positive' | 'neutral' | 'negative'>('neutral');
   const [showSourceReveal, setShowSourceReveal] = useState(true); // Always show for modify page
@@ -273,7 +276,6 @@ export default function ModifyPage() {
         
         const restoredSelected = applyRatingsToImage(restoredImage, imageRatings);
         setSelectedImage(restoredSelected);
-        setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
         
         // Interior question removed — selection implies ownership.
         setHasAnsweredInteriorQuestion(true);
@@ -305,71 +307,29 @@ export default function ModifyPage() {
         
         const restoredSelected = applyRatingsToImage(restoredImage, imageRatings);
         setSelectedImage(restoredSelected);
-        setShowTasteRatingPanel(imageNeedsAestheticRating(restoredSelected, imageRatings));
         
         // Interior question removed — selection implies ownership.
         setHasAnsweredInteriorQuestion(true);
       }
 
-      // Restore generation history - first from matrixHistory (all 6 initial images), then modifications
       const matrixHistory = typedSessionData?.matrixHistory || [];
       const savedGenerations = typedSessionData?.generations || [];
-      
-      let fullHistory: Array<{
-        id: string;
-        type: 'initial' | 'micro' | 'macro';
-        label: string;
-        timestamp: number;
-        imageUrl: string;
-        base64?: string;
-        source?: string;
-        isSelected?: boolean;
-      }> = [];
-      
-      // First: Add all initial matrix images (the 6 generated images)
-      if (matrixHistory.length > 0) {
-        fullHistory = matrixHistory.map((item: any) => ({
-          id: item.id,
-          type: 'initial' as const,
-          label: item.label || 'Wizja',
-          timestamp: item.timestamp || Date.now(),
-          imageUrl: item.imageUrl || item.url || '',
-          base64: item.base64 || '',
-          source: item.source,
-          isSelected: item.isSelected || item.id === persistedSelectedId
-        }));
-        console.log('[Modify] Restored matrix history:', fullHistory.length, 'items');
-      }
-      
-      // Then: Add any modifications from generations
-      if (savedGenerations.length > 0) {
-        const modificationHistory = savedGenerations
-          .filter((gen: any) => gen.type === 'micro' || gen.type === 'macro' || gen.type === 'remove_furniture')
-          .map((gen: any) => {
-            // Try to find matching image URL from generatedImages
-            const matchingImage = savedGeneratedImages.find((img: any) => 
-              img.id === gen.id || 
-              img.id?.includes(gen.id) || 
-              gen.id?.includes(img.id?.split('-').slice(0, -1).join('-'))
-            );
-            
-            return {
-              id: gen.id,
-              type: (gen.type === 'remove_furniture' ? 'micro' : gen.type) as 'initial' | 'micro' | 'macro',
-              label: gen.modification || gen.prompt?.substring(0, 30) || 'Modyfikacja',
-              timestamp: gen.timestamp || Date.now(),
-              imageUrl: matchingImage?.url || ''
-            };
-          });
-        
-        fullHistory = [...fullHistory, ...modificationHistory];
-      }
-      
+      const fullHistory = buildGenerationHistoryFromSession({
+        matrixHistory,
+        generations: savedGenerations,
+        generatedImages: savedGeneratedImages,
+        selectedImageId: persistedSelectedId,
+      });
+
       if (fullHistory.length > 0) {
+        console.log('[Modify] Restored generation history:', fullHistory.length, 'items');
         setGenerationHistory(fullHistory);
-        // Set current index to the selected image or last item
-        const selectedIdx = fullHistory.findIndex(h => h.isSelected || h.id === persistedSelectedId);
-        setCurrentHistoryIndex(selectedIdx >= 0 ? selectedIdx : fullHistory.length - 1);
+        const selectedIdx = fullHistory.findIndex(
+          (h) => h.isSelected || h.id === persistedSelectedId,
+        );
+        setCurrentHistoryIndex(
+          selectedIdx >= 0 ? selectedIdx : fullHistory.length - 1,
+        );
       }
 
       // Restore generation count
@@ -443,27 +403,41 @@ export default function ModifyPage() {
     value: number,
     options?: { suppressProgress?: boolean },
   ) => {
-    if (!selectedImage || selectedImage.id !== imageId) return;
+    const applyRating = (img: GeneratedImage): GeneratedImage => ({
+      ...img,
+      ratings: { ...img.ratings, [rating]: value },
+    });
 
-    const updatedRatings = { ...selectedImage.ratings, [rating]: value };
-    setSelectedImage({ ...selectedImage, ratings: updatedRatings });
+    setSelectedImage((prev) => (prev?.id === imageId ? applyRating(prev) : prev));
+
+    const snapRatings = normalizeSessionImageRatingsMap(
+      (getSessionStoreSnapshot() as { imageRatings?: SessionImageRatingsMap }).imageRatings,
+    );
+    const nextRatings =
+      rating === 'aesthetic_match' && value > 0
+        ? writeAestheticRatingToMap(snapRatings, imageId, value)
+        : {
+            ...snapRatings,
+            [imageId]: {
+              ...(snapRatings[imageId] || {}),
+              [rating]: value,
+              ratedAt: Date.now(),
+              timestamp: Date.now(),
+            },
+          };
+    const updatedRatings = {
+      aesthetic_match: nextRatings[imageId]?.aesthetic_match ?? 0,
+      character: nextRatings[imageId]?.character ?? 0,
+      harmony: nextRatings[imageId]?.harmony ?? 0,
+    } as GeneratedImage['ratings'];
+
+    await updateSessionData({
+      imageRatings: nextRatings,
+    } as any);
 
     if (rating === 'aesthetic_match' && value > 0) {
-      setShowTasteRatingPanel(false);
+      setShowSourceReveal(true);
     }
-
-    const snapRatings =
-      (getSessionStoreSnapshot() as { imageRatings?: SessionImageRatingsMap }).imageRatings || {};
-    await updateSessionData({
-      imageRatings: {
-        ...snapRatings,
-        [imageId]: {
-          ...(snapRatings[imageId] || {}),
-          ...updatedRatings,
-          timestamp: Date.now(),
-        },
-      },
-    } as any);
 
     if (!options?.suppressProgress) {
       const allRatingsComplete = updatedRatings.aesthetic_match > 0;
@@ -662,7 +636,6 @@ export default function ModifyPage() {
       setSelectedImage(newImage);
       setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
-      setShowTasteRatingPanel(true);
       setHasAnsweredInteriorQuestion(true);
       setShowSourceReveal(false);
       
@@ -724,8 +697,11 @@ export default function ModifyPage() {
         imageUrl: newImage.url,
         base64: newImage.base64, // Include base64 for history navigation
       };
-      setGenerationHistory((prev) => [...prev, historyNode]);
-      setCurrentHistoryIndex(generationHistory.length);
+      setGenerationHistory((prev) => {
+        const next = [...prev, historyNode];
+        setCurrentHistoryIndex(next.length - 1);
+        return next;
+      });
       
       const modSessionPatch = {
         currentStep: 'generate' as const,
@@ -915,7 +891,6 @@ export default function ModifyPage() {
       setSelectedImage(newImage);
       setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
-      setShowTasteRatingPanel(true);
       setHasAnsweredInteriorQuestion(true);
       setShowSourceReveal(false);
 
@@ -1051,31 +1026,30 @@ export default function ModifyPage() {
     (sessionData as { imageRatings?: SessionImageRatingsMap } | null)?.imageRatings,
   );
 
-  const handleHistoryNodeClick = (index: number) => {
-    if (index < 0 || index >= generationHistory.length) return;
-    
-    const historyItem = generationHistory[index];
-    setCurrentHistoryIndex(index);
-    
-    // Switch to the clicked image
-    if (historyItem.imageUrl) {
+  const resolveHistoryImageAtIndex = useCallback(
+    (index: number): GeneratedImage | null => {
+      const historyItem = generationHistory[index];
+      if (!historyItem?.id || !historyItem.imageUrl) return null;
+
       const freshRatingsMap = resolveSessionImageRatingsMap(
         (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
       );
 
-      // Extract base64 from data URL if needed
-      let base64Data = (historyItem as any).base64 || '';
+      let base64Data = historyItem.base64 || '';
       if (!base64Data && historyItem.imageUrl.startsWith('data:')) {
         const parts = historyItem.imageUrl.split(',');
-        if (parts.length > 1) {
-          base64Data = parts[1];
-        }
+        if (parts.length > 1) base64Data = parts[1] ?? '';
       }
-      
-      const newSelectedImage = applyRatingsToImage(
+
+      const resolvedUrl =
+        historyItem.imageUrl ||
+        (base64Data ? `data:image/png;base64,${base64Data}` : '');
+      if (!resolvedUrl) return null;
+
+      return applyRatingsToImage(
         {
           id: historyItem.id,
-          url: historyItem.imageUrl,
+          url: resolvedUrl,
           base64: base64Data,
           prompt: historyItem.label || 'From history',
           provider: 'google',
@@ -1088,32 +1062,58 @@ export default function ModifyPage() {
           ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
           isFavorite: false,
           createdAt: historyItem.timestamp || Date.now(),
-          source: (historyItem as any).source || GenerationSource.Implicit,
+          source: (historyItem.source as GenerationSource) || GenerationSource.Implicit,
           displayIndex: index,
           isBlindSelected: true,
         } as GeneratedImage,
         freshRatingsMap,
       );
-      
-      setSelectedImage(newSelectedImage);
-      setHasAnsweredInteriorQuestion(true);
-      setShowTasteRatingPanel(imageNeedsAestheticRating(newSelectedImage, freshRatingsMap));
-      setShowSourceReveal(imageHasAestheticRating(newSelectedImage, freshRatingsMap));
-      
-      // Also update session so base64 is preserved for modifications
-      updateSessionData({
-        selectedImage: {
-          id: newSelectedImage.id,
-          url: newSelectedImage.url,
-          base64: base64Data,
-          source: newSelectedImage.source,
-          provider: 'google' as const,
-          parameters: newSelectedImage.parameters
-        }
-      } as any);
-      
-      console.log('[Modify] Switched to history item:', historyItem.id, historyItem.label);
-    }
+    },
+    [generationHistory, sessionData],
+  );
+
+  const safeHistoryIndex =
+    generationHistory.length > 0
+      ? Math.min(Math.max(0, currentHistoryIndex), generationHistory.length - 1)
+      : 0;
+  const activeImageId = selectedImage?.id;
+  const tasteRatingPanelVisible = shouldShowTasteRating(activeImageId, sessionImageRatings);
+  const currentImageActionsEnabled =
+    activeImageId != null && hasTasteRating(activeImageId, sessionImageRatings);
+
+  const handleHistoryNodeClick = (index: number) => {
+    if (index < 0 || index >= generationHistory.length) return;
+
+    const historyItem = generationHistory[index];
+    const newSelectedImage = resolveHistoryImageAtIndex(index);
+    if (!newSelectedImage) return;
+
+    const freshRatingsMap = resolveSessionImageRatingsMap(
+      (sessionData as { imageRatings?: SessionImageRatingsMap })?.imageRatings,
+    );
+    const nodeId = historyItem.id;
+    const needsRating = shouldShowTasteRating(nodeId, freshRatingsMap);
+
+    setCurrentHistoryIndex(index);
+    setSelectedImage(newSelectedImage);
+    setHasAnsweredInteriorQuestion(true);
+    setShowModifications(false);
+    setShowSourceReveal(!needsRating);
+
+    updateSessionData({
+      selectedImage: {
+        id: newSelectedImage.id,
+        url: newSelectedImage.url,
+        base64: newSelectedImage.base64,
+        source: newSelectedImage.source,
+        provider: 'google' as const,
+        parameters: newSelectedImage.parameters,
+      },
+    } as any);
+
+    requestAnimationFrame(() => {
+      tasteRatingPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
   };
 
   const handleContinue = () => {
@@ -1157,7 +1157,7 @@ export default function ModifyPage() {
                 title={t({ pl: "Kliknij, aby powiększyć", en: "Click to zoom" })}
               >
                 <IntrinsicContainImage
-                  src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage.url}
+                  src={(showOriginalRoomPhoto && originalRoomPhotoUrl) ? originalRoomPhotoUrl : selectedImage!.url}
                   alt={
                     showOriginalRoomPhoto
                       ? t({ pl: "Oryginalne zdjęcie pokoju", en: "Original room photo" })
@@ -1258,28 +1258,33 @@ export default function ModifyPage() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleFavorite(selectedImage.id);
+                    handleFavorite(selectedImage!.id);
                   }}
                   className={`absolute top-4 right-4 p-2 rounded-full backdrop-blur transition-all ${
-                    selectedImage.isFavorite ? 'bg-red-100 text-red-500' : 'bg-white/20 text-white hover:bg-white/30'
+                    selectedImage!.isFavorite ? 'bg-red-100 text-red-500' : 'bg-white/20 text-white hover:bg-white/30'
                   }`}
                 >
-                  <Heart size={20} fill={selectedImage.isFavorite ? 'currentColor' : 'none'} aria-hidden="true" />
+                  <Heart size={20} fill={selectedImage!.isFavorite ? 'currentColor' : 'none'} aria-hidden="true" />
                 </button>
               </div>
-              
-              {/* Rating Question */}
-              <AnimatePresence>
-                {showTasteRatingPanel &&
-                  selectedImage?.id !== 'original-uploaded-image' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.8, ease: "easeInOut" }}
-                    className="space-y-6"
-                  >
-                    <h4 className="font-semibold text-graphite text-lg">{t({ pl: "Oceń to wnętrze:", en: "Rate this interior:" })}</h4>
+            </div>
+          </GlassCard>
+
+          <div ref={tasteRatingPanelRef}>
+            <AnimatePresence>
+              {tasteRatingPanelVisible && selectedImage && (
+                <motion.div
+                  key={`taste-rating-${selectedImage.id}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.8, ease: 'easeInOut' }}
+                  className="space-y-6"
+                >
+                  <GlassCard variant="flatOnMobile" className="p-4">
+                    <h4 className="font-semibold text-graphite text-lg mb-4">
+                      {t({ pl: 'Oceń to wnętrze:', en: 'Rate this interior:' })}
+                    </h4>
                     {[
                       {
                         key: 'aesthetic_match',
@@ -1301,7 +1306,7 @@ export default function ModifyPage() {
                         <GlassScalePicker
                           min={1}
                           max={5}
-                          value={aestheticPickerValue(selectedImage.ratings)}
+                          value={aestheticPickerValue(sessionImageRatings[selectedImage.id])}
                           onChange={(value) => {
                             handleImageRating(selectedImage.id, key as any, value, { suppressProgress: true });
                           }}
@@ -1314,14 +1319,14 @@ export default function ModifyPage() {
                         />
                       </div>
                     ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </GlassCard>
+                  </GlassCard>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           
           {/* Modifications and History - Show after selection and after completing all questions */}
-          {selectedImage && imageHasAestheticRating(selectedImage, sessionImageRatings) && (
+          {selectedImage && currentImageActionsEnabled && (
             <>
               {isGuestFullPath && guestModsQuotaBlocked && (
                 <GlassCard variant="flatOnMobile" className="p-4 mb-4 border-gold/30 bg-gold/5">
@@ -1506,14 +1511,14 @@ export default function ModifyPage() {
             >
               <GenerationHistory
                 history={generationHistory}
-                currentIndex={currentHistoryIndex}
+                currentIndex={safeHistoryIndex}
                 onNodeClick={handleHistoryNodeClick}
               />
             </motion.div>
           )}
 
           {/* Continue Button */}
-          {showSourceReveal && (
+          {showSourceReveal && currentImageActionsEnabled && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

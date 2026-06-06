@@ -459,14 +459,20 @@ This image must meet the quality standards of top-tier architectural publication
 - Perfect attention to detail suitable for print publication
 - No artifacts, floating objects, or unrealistic elements
 
-CRITICAL CONSTRAINTS:
-- Preserve walls, windows, doors 100% IDENTICAL to input. NO structural changes.
-- Maintain exact camera perspective and viewpoint.
+CRITICAL CONSTRAINTS — GEOMETRY ONLY:
+- Preserve window positions, door positions, ceiling height, and room footprint exactly as in the input.
+- Maintain exact camera perspective and viewpoint. NO structural changes to openings or room shape.
+- Do NOT copy wall, floor, or ceiling colors/materials from the input photo when restyle_surfaces is true.
+
+SURFACE RESTYLING:
+- Fully redesign wall, floor, and ceiling finishes (colors, materials, textures) as a cohesive whole.
+- Match primary_style, colors, and materials from the user prompt JSON.
+- Interpret the style freely — do not assume fixed iconic elements for any style label.
 
 CORE TASK:
 1. Remove all existing furniture, decor, and objects completely
-2. Reconstruct floor/wall surfaces seamlessly where items were removed
-3. Add NEW furniture and decor matching user's requested style, colors, and materials
+2. Apply new surface finishes on walls, floor, and ceiling per the style and palette
+3. Add NEW furniture and decor matching the requested style, colors, and materials
 
 DESIGN EXCELLENCE:
 - Blend conflicting materials artistically for style cohesion
