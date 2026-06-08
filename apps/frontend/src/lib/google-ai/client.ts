@@ -97,7 +97,7 @@ export class GoogleAIClient {
       const accessToken = await this.getAccessToken();
       
       // Use Gemini 2.5 Flash Lite - cheaper and faster for text analysis
-      // This is different from the image generation model (gemini-3.1-flash-image-preview)
+      // This is different from the image generation model (gemini-3.1-flash-image)
       const MODEL_ID = 'gemini-2.5-flash-lite';
       const url = `${VERTEX_AI_API_BASE}/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${MODEL_ID}:generateContent`;
       
@@ -196,7 +196,7 @@ EXAMPLE:
       const accessToken = await this.getAccessToken();
       
       // Use Gemini 2.5 Flash Lite - cheaper and faster for text analysis
-      // This is different from the image generation model (gemini-3.1-flash-image-preview)
+      // This is different from the image generation model (gemini-3.1-flash-image)
       const MODEL_ID = 'gemini-2.5-flash-lite';
       const url = `${VERTEX_AI_API_BASE}/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${MODEL_ID}:generateContent`;
       
@@ -328,7 +328,7 @@ EXAMPLE:
   }
 
   /**
-   * Generate image using Gemini 3.1 Flash Image (preview) via Vertex AI
+   * Generate image using Gemini 3.1 Flash Image (GA) via Vertex AI
    * Requires OAuth 2.0/ADC (Application Default Credentials)
    * See: https://cloud.google.com/vertex-ai/generative-ai/docs/image/generate-images
    */
@@ -355,7 +355,7 @@ EXAMPLE:
       const accessToken = await this.getAccessToken();
       
       // Vertex AI endpoint for image generation
-      const MODEL_ID = 'gemini-3.1-flash-image-preview';
+      const MODEL_ID = 'gemini-3.1-flash-image';
       const url = `${VERTEX_AI_API_BASE}/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${MODEL_ID}:generateContent`;
       console.log('[GoogleAI] Vertex AI URL:', url);
 
