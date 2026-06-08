@@ -4266,7 +4266,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   return (
     <div className="w-full flex flex-col relative">
       
-      <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
+      <div className="pointer-events-none fixed inset-0 -z-10 hidden md:block bg-gradient-radial from-pearl-50/40 via-platinum-50/20 to-transparent" />
       {/* Ensure navigation is always accessible - no blocking overlays */}
       <div className="w-full px-4 sm:px-8 pb-8 pt-2 relative z-10 xl:flex-1 xl:min-h-0">
         <motion.div
@@ -4708,7 +4708,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 const hasAtLeastOneImage = readyCount >= 1;
                 return hasAtLeastOneImage;
               })() && (
-                <div className="md:static sticky bottom-0 z-20 -mx-2 px-2 pt-2 pb-3 md:pb-0 md:mx-0 md:pt-0 bg-gradient-to-t from-pearl-50 via-pearl-50/98 to-pearl-50/85 md:bg-transparent md:from-transparent border-t border-white/25 md:border-t-0 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] md:shadow-none rounded-t-xl md:rounded-none">
+                <div className="md:static sticky bottom-0 z-20 -mx-2 px-2 pt-2 pb-3 md:pb-0 md:mx-0 md:pt-0 bg-gradient-to-t from-black/25 via-black/10 to-transparent backdrop-blur-md md:bg-transparent md:from-transparent md:backdrop-blur-none border-t border-white/20 md:border-t-0 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] md:shadow-none rounded-t-xl md:rounded-none">
                   {!selectedImage && !isUpscaling && (
                     <p className="text-center text-xs text-silver-dark mb-2 md:mb-3">
                       {t({

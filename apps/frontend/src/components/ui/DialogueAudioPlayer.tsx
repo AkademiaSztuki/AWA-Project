@@ -306,15 +306,30 @@ const DialogueAudioPlayer: React.FC<DialogueAudioPlayerProps> = ({
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !onEnded) return;
-    
+
+    let endedFired = false;
+
     const handleEnded = () => {
-      // Reset retry flag when audio ends
+      if (endedFired) return;
+      endedFired = true;
       retryOnInteractionRef.current = false;
       playAttemptedRef.current = false;
       onEnded();
     };
+
+    const handleTimeUpdate = () => {
+      if (endedFired || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      if (audio.currentTime >= audio.duration - 0.2) {
+        handleEnded();
+      }
+    };
+
     audio.addEventListener('ended', handleEnded);
-    return () => audio.removeEventListener('ended', handleEnded);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    return () => {
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+    };
   }, [onEnded, src]);
 
   return (

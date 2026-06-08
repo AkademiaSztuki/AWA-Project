@@ -54,12 +54,16 @@ export const GlassSlider: React.FC<GlassSliderProps> = ({
       ? "border-gold/60 bg-white/65 ring-2 ring-gold-400/55 shadow-[0_0_22px_rgba(251,191,36,0.5),0_0_0_1px_rgba(255,255,255,0.25)_inset]"
       : "border-white/50 bg-white/40 shadow-xl";
 
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleChange(parseInt(e.target.value, 10));
+  };
+
   return (
-    <div className={cn("relative min-h-[20px] w-full", className)}>
+    <div className={cn("relative min-h-[44px] w-full flex items-center", className)}>
       {/* Glass container - pill-shaped like GlassSurface buttons */}
       <div
         className={cn(
-          "relative w-full h-5 overflow-visible rounded-[20px] border bg-white/10 shadow-xl backdrop-blur-xl transition-[box-shadow,border-color] duration-300",
+          "relative w-full h-5 sm:h-5 min-h-[20px] overflow-visible rounded-[20px] border bg-white/10 shadow-xl backdrop-blur-xl transition-[box-shadow,border-color] duration-300",
           hasInteracted
             ? "border-gold-400/35 shadow-[0_0_20px_rgba(251,191,36,0.18),inset_0_1px_0_rgba(255,255,255,0.12)]"
             : "border-white/20",
@@ -97,12 +101,13 @@ export const GlassSlider: React.FC<GlassSliderProps> = ({
           min={min}
           max={max}
           value={value}
-          onChange={(e) => handleChange(parseInt(e.target.value, 10))}
+          onChange={handleInput}
+          onInput={handleInput}
           onPointerDown={() => setIsDragging(true)}
           onPointerUp={() => setIsDragging(false)}
           onPointerCancel={() => setIsDragging(false)}
           onPointerLeave={() => setIsDragging(false)}
-          className="glass-slider-input absolute inset-0 z-10 h-full w-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+          className="glass-slider-input absolute inset-0 z-10 h-full min-h-[44px] w-full cursor-pointer touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
           style={{
             WebkitAppearance: 'none',
             appearance: 'none',

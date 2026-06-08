@@ -321,6 +321,8 @@ body:has(.awa-profile-no-scrollbars)::-webkit-scrollbar {
 
 html {
   color-scheme: light;
+  /* Solid gold fallback — visible in safe-area / behind dynamic Safari chrome when layers differ in height */
+  background-color: rgb(199, 152, 51);
   scrollbar-width: thin;
   scrollbar-color: rgb(255 255 255 / 0.2) transparent;
   /* Single page scroll: avoids body vs document fighting; stable gutter tames 1px overflow flashes */
@@ -399,8 +401,10 @@ textarea:focus-visible {
 .glass-slider-input::-webkit-slider-thumb {
   -webkit-appearance: none !important;
   appearance: none !important;
-  width: 0 !important;
-  height: 0 !important;
+  /* Invisible but touchable — iOS Safari ignores 0×0 thumbs */
+  width: 44px !important;
+  height: 44px !important;
+  margin-top: -20px !important;
   background: transparent !important;
   border: none !important;
   outline: none !important;
@@ -410,8 +414,8 @@ textarea:focus-visible {
 .glass-slider-input::-moz-range-thumb {
   -moz-appearance: none !important;
   appearance: none !important;
-  width: 0 !important;
-  height: 0 !important;
+  width: 44px !important;
+  height: 44px !important;
   background: transparent !important;
   border: none !important;
   outline: none !important;

@@ -530,9 +530,19 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
   // Refs to prevent multiple calls
   const onDialogueEndCalledRef = useRef(false);
   const hideScheduledRef = useRef(false);
+  const allSentencesCompletedRef = useRef(false);
+  const audioEndedRef = useRef(false);
   
   // Track transitioning state to prevent double-triggering
   const isTransitioningRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    allSentencesCompletedRef.current = allSentencesCompleted;
+  }, [allSentencesCompleted]);
+
+  useEffect(() => {
+    audioEndedRef.current = audioEnded;
+  }, [audioEnded]);
 
   /** When autoHide finishes, hide UI and notify parent (e.g. session “shown once” flags). */
   const finishAutoHideAndNotify = () => {
@@ -586,6 +596,7 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       console.log('[AwaDialogue] All sentences completed');
       setIsDone(true);
       setAllSentencesCompleted(true);
+      allSentencesCompletedRef.current = true;
       
       // For landing / room_analysis / room_furniture_suggestion: wait for audio to finish before calling onDialogueEnd
       // For path_selection: if autoHide, hide after audio ends
@@ -609,17 +620,9 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
         } else {
         }
         // If audio is still playing, onDialogueEnd will be called in handleAudioEnded
-      } else if (autoHide && !hideScheduledRef.current) {
-        hideScheduledRef.current = true;
-        // For path_selection or other steps with autoHide, hide after delay
-        // But also wait for audio to end if it's still playing
-        if (audioEnded || !voiceEnabled || !audioFile) {
-          setTimeout(() => {
-            console.log('AwaDialogue: Hiding dialogue after completion');
-            finishAutoHideAndNotify();
-          }, PAUSE_AFTER_ALL_SENTENCES);
-        }
-        // If audio is still playing, hide will be called in handleAudioEnded
+      } else if (autoHide) {
+        tryScheduleAutoHide();
+        // If audio is still playing, hide will be called in handleAudioEnded / playback listeners
       } else if (onDialogueEnd && !onDialogueEndCalledRef.current) {
         onDialogueEndCalledRef.current = true;
         setTimeout(() => {
@@ -671,13 +674,42 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
     prevModelAnimationRef.current = currentAnimation;
   }, [currentAnimation, hasStarted, isWaveIntroStep, skipModelAnimation, playRandomTalk]);
 
+  const scheduleAutoHideAfterPlayback = () => {
+    if (!autoHide || hideScheduledRef.current) return;
+    hideScheduledRef.current = true;
+    setTimeout(() => {
+      console.log('AwaDialogue: Hiding dialogue after playback complete');
+      finishAutoHideAndNotify();
+    }, PAUSE_AFTER_ALL_SENTENCES);
+  };
+
+  const tryScheduleAutoHide = () => {
+    if (!autoHide || !allSentencesCompletedRef.current || hideScheduledRef.current) return;
+
+    const dialogueAudio = document.querySelector('audio[data-type="dialogue"]') as HTMLAudioElement | null;
+    const playbackComplete =
+      audioEndedRef.current ||
+      !voiceEnabled ||
+      !audioFile ||
+      !dialogueAudio ||
+      dialogueAudio.ended ||
+      (Number.isFinite(dialogueAudio.duration) &&
+        dialogueAudio.duration > 0 &&
+        dialogueAudio.currentTime >= dialogueAudio.duration - 0.2);
+
+    if (playbackComplete) {
+      scheduleAutoHideAfterPlayback();
+    }
+  };
+
   const handleAudioEnded = () => {
     console.log('[AwaDialogue] Audio completed for entire dialogue', { currentStep, allSentencesCompleted, autoHide });
     setAudioEnded(true);
+    audioEndedRef.current = true;
     
     // If all sentences completed and audio ended, call onDialogueEnd for landing / room_analysis / room_furniture_suggestion
     const waitForAudioSteps = ['landing', 'marketing_intro', 'room_analysis', 'room_furniture_suggestion'];
-    if (waitForAudioSteps.includes(String(currentStep)) && allSentencesCompleted && onDialogueEnd && !onDialogueEndCalledRef.current) {
+    if (waitForAudioSteps.includes(String(currentStep)) && allSentencesCompletedRef.current && onDialogueEnd && !onDialogueEndCalledRef.current) {
       onDialogueEndCalledRef.current = true;
       const delay =
         currentStep === 'landing' || currentStep === 'marketing_intro'
@@ -693,21 +725,36 @@ export const AwaDialogue: React.FC<AwaDialogueProps> = ({
       }, delay);
     }
     
-    // For autoHide, hide after audio ends
-    if (autoHide && allSentencesCompleted && !hideScheduledRef.current) {
-      hideScheduledRef.current = true;
-      setTimeout(() => {
-        console.log('AwaDialogue: Hiding dialogue after audio ended');
-        finishAutoHideAndNotify();
-      }, PAUSE_AFTER_ALL_SENTENCES);
-    } else if (autoHide && allSentencesCompleted && hideScheduledRef.current) {
-      // If hide was already scheduled from handleSentenceComplete, execute it now after audio ends
-      setTimeout(() => {
-        console.log('AwaDialogue: Executing hide after audio ended');
-        finishAutoHideAndNotify();
-      }, PAUSE_AFTER_ALL_SENTENCES);
-    }
+    tryScheduleAutoHide();
   };
+
+  // Mobile Safari sometimes skips `ended` — poll dialogue audio once all sentences are done
+  useEffect(() => {
+    if (!autoHide || !allSentencesCompleted) return;
+
+    tryScheduleAutoHide();
+
+    const dialogueAudio = document.querySelector('audio[data-type="dialogue"]') as HTMLAudioElement | null;
+    if (!dialogueAudio || !audioFile || !voiceEnabled) return;
+
+    const onPlaybackProgress = () => tryScheduleAutoHide();
+    dialogueAudio.addEventListener('ended', onPlaybackProgress);
+    dialogueAudio.addEventListener('timeupdate', onPlaybackProgress);
+
+    const fallbackMs = isMobile ? 20000 : 45000;
+    const fallbackTimer = window.setTimeout(() => {
+      if (!hideScheduledRef.current && allSentencesCompletedRef.current) {
+        console.warn('[AwaDialogue] Auto-hide fallback after timeout');
+        scheduleAutoHideAfterPlayback();
+      }
+    }, fallbackMs);
+
+    return () => {
+      dialogueAudio.removeEventListener('ended', onPlaybackProgress);
+      dialogueAudio.removeEventListener('timeupdate', onPlaybackProgress);
+      window.clearTimeout(fallbackTimer);
+    };
+  }, [allSentencesCompleted, autoHide, audioFile, voiceEnabled, isMobile]);
 
   // Track previous step to only reset on actual step change
   const prevStepRef = useRef<string | FlowStep | undefined>(undefined);
