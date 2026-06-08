@@ -22,6 +22,11 @@ import { Volume2, Hand, Lightbulb, Play, Pause, Palette, Check, SwatchBook } fro
 import { NatureMetaphorTest } from '@/components/research/ProjectiveTechniques';
 import { BiophiliaTest } from '@/components/research/BiophiliaTest';
 import { STYLE_OPTIONS, type StyleOption } from '@/lib/questions/style-options';
+import {
+  duckAmbientMusic,
+  forceRestoreAmbientMusic,
+  restoreAmbientMusic,
+} from '@/lib/ambient-music-duck';
 
 interface SensoryTestProps {
   type: 'music' | 'texture' | 'light';
@@ -37,7 +42,7 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const sampleAudioRef = useRef<HTMLAudioElement | null>(null);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
   
 
@@ -68,21 +73,34 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
 
   const Icon = icons[type];
 
+  const stopSamplePlayback = useCallback(() => {
+    sampleAudioRef.current?.pause();
+    sampleAudioRef.current = null;
+    setPlayingAudio(null);
+    restoreAmbientMusic();
+  }, []);
+
   useEffect(() => {
     setSelectedId(value || null);
     setHoveredId(null);
-    setPlayingAudio(null);
-    audioElement?.pause();
+    stopSamplePlayback();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, value]);
+
+  useEffect(() => {
+    return () => {
+      sampleAudioRef.current?.pause();
+      sampleAudioRef.current = null;
+      forceRestoreAmbientMusic();
+    };
+  }, []);
 
   const handleSelect = (option: SensoryOption) => {
     setSelectedId(option.id);
     onSelect(option.id);
 
-    if (audioElement) {
-      audioElement.pause();
-      setPlayingAudio(null);
+    if (sampleAudioRef.current) {
+      stopSamplePlayback();
     }
   };
 
@@ -91,15 +109,24 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
     if (!option.audioUrl) return;
 
     if (playingAudio === option.id) {
-      audioElement?.pause();
-      setPlayingAudio(null);
+      stopSamplePlayback();
     } else {
-      audioElement?.pause();
+      sampleAudioRef.current?.pause();
+      duckAmbientMusic();
       const audio = new Audio(option.audioUrl);
       audio.volume = 0.5;
-      setAudioElement(audio);
-      audio.play().catch(err => console.error('Audio play failed:', err));
-      audio.onended = () => setPlayingAudio(null);
+      sampleAudioRef.current = audio;
+      audio.onended = () => {
+        sampleAudioRef.current = null;
+        setPlayingAudio(null);
+        restoreAmbientMusic();
+      };
+      audio.play().catch((err) => {
+        console.error('Audio play failed:', err);
+        sampleAudioRef.current = null;
+        setPlayingAudio(null);
+        restoreAmbientMusic();
+      });
       setPlayingAudio(option.id);
     }
   };

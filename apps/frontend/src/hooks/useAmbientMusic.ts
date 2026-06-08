@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { safeLocalStorage } from '@/lib/gcp-data';
+import { isAmbientMusicSuppressed } from '@/lib/ambient-music-duck';
 
 interface AmbientMusicControls {
   volume: number;
@@ -110,7 +111,7 @@ export const useAmbientMusic = (): AmbientMusicControls => {
       const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
       const userManuallyPaused = typeof window !== 'undefined' && (window as any).ambientMusicUserManuallyPaused === true;
       
-      if (audioElement && audioElement.paused && !userManuallyPaused && volume > 0) {
+      if (audioElement && audioElement.paused && !userManuallyPaused && !isAmbientMusicSuppressed() && volume > 0) {
         console.log('useAmbientMusic: Global interaction, attempting to start music');
         audioElement.play().catch(() => {
           // Cichy błąd - autoplay policy

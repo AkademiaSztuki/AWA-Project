@@ -134,6 +134,17 @@ const MICRO_MODIFICATIONS: ModificationOption[] = [
 /** Macro styles: same list as /flow/style-selection (STYLE_OPTIONS). */
 const MACRO_MODIFICATIONS = MACRO_STYLE_MODIFICATIONS;
 
+/** Session-safe snapshot — omits heavy prompts and inspiration base64. */
+function toSessionSynthesisSnapshot(result: SixPromptSynthesisResult) {
+  return {
+    generatedSources: result.generatedSources,
+    skippedSources: result.skippedSources,
+    displayOrder: result.displayOrder,
+    qualityReports: result.qualityReports,
+    metadata: result.metadata,
+  };
+}
+
 export default function GeneratePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -226,6 +237,41 @@ export default function GeneratePage() {
   const [lastGenerationTime, setLastGenerationTime] = useState<number>(0); // For regeneration tracking
   const [qualityReport, setQualityReport] = useState<any>(null); // Store quality report for feedback
   const [synthesisResult, setSynthesisResult] = useState<SixPromptSynthesisResult | null>(null); // Store synthesis result for skipped sources info
+
+  const sessionSynthesisSnapshot = (sessionData as { synthesisResult?: SixPromptSynthesisResult } | null)
+    ?.synthesisResult;
+
+  /** Survives OAuth redirect — grid matches images to slots via displayOrder. */
+  const effectiveSynthesisResult = useMemo((): SixPromptSynthesisResult | null => {
+    if (synthesisResult?.displayOrder?.length) return synthesisResult;
+    if (sessionSynthesisSnapshot?.displayOrder?.length) {
+      return sessionSynthesisSnapshot as SixPromptSynthesisResult;
+    }
+    const history = (sessionData as { matrixHistory?: { source?: string }[] } | null)?.matrixHistory ?? [];
+    const pending =
+      (sessionData as { matrixAnonPending?: { source: string }[] } | null)?.matrixAnonPending ?? [];
+    const fromHistory = history
+      .map((item) => item.source)
+      .filter((s): s is GenerationSource => !!s);
+    const combined: GenerationSource[] = [...fromHistory];
+    for (const item of pending) {
+      const src = item.source as GenerationSource;
+      if (!combined.includes(src)) combined.push(src);
+    }
+    if (combined.length === 0) return null;
+    return {
+      results: {},
+      generatedSources: combined,
+      skippedSources: [],
+      qualityReports: [],
+      displayOrder: combined,
+      metadata: {
+        totalPrompts: combined.length,
+        synthesisTimestamp: '',
+        roomType: '',
+      },
+    };
+  }, [synthesisResult, sessionSynthesisSnapshot, sessionData]);
   const [imageProgress, setImageProgress] = useState<Record<string, number>>({}); // Track progress for each image source
   const [progressOffsets, setProgressOffsets] = useState<Record<string, number>>({}); // Per-source stagger for loading anims
   const [lastFailedModification, setLastFailedModification] = useState<ModificationOption | null>(null); // Track last failed modification for retry
@@ -374,6 +420,15 @@ export default function GeneratePage() {
       window.removeEventListener('popstate', handlePopState);
     };
   }, []);
+
+  // Restore synthesis metadata after OAuth redirect (grid slot mapping depends on displayOrder)
+  useEffect(() => {
+    if (!isSessionInitialized || !sessionData || synthesisResult) return;
+    const stored = (sessionData as { synthesisResult?: SixPromptSynthesisResult }).synthesisResult;
+    if (stored?.displayOrder?.length) {
+      setSynthesisResult(stored as SixPromptSynthesisResult);
+    }
+  }, [isSessionInitialized, sessionData, synthesisResult]);
 
   // Restore state from sessionData after page refresh
   useEffect(() => {
@@ -1154,8 +1209,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       
       // Store synthesis result for UI display
       setSynthesisResult(synthesisResult);
-      
-      
+      void updateSessionData({
+        synthesisResult: toSessionSynthesisSnapshot(synthesisResult),
+      } as Record<string, unknown>);
+
       console.log("[6-Image Matrix] Synthesis complete:", {
         generatedSources: synthesisResult.generatedSources,
         skippedSources: synthesisResult.skippedSources,
@@ -2458,11 +2515,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
 
   const lightboxNavigableImages = useMemo(() => {
     if (!isMatrixMode || blindSelectionMade) return [];
-    const displayOrder = synthesisResult?.displayOrder ?? [];
+    const displayOrder = effectiveSynthesisResult?.displayOrder ?? [];
     return displayOrder
       .map((src) => matrixImages.find((img) => img.source === src && img.provider === 'google'))
       .filter((img): img is GeneratedImage => Boolean(img));
-  }, [isMatrixMode, blindSelectionMade, synthesisResult?.displayOrder, matrixImages]);
+  }, [isMatrixMode, blindSelectionMade, effectiveSynthesisResult?.displayOrder, matrixImages]);
 
   const navigateLightboxImage = useCallback(
     (direction: 'prev' | 'next') => {
@@ -2876,6 +2933,49 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           source: p.source as GenerationSource,
           prompt: p.prompt,
         }));
+        const resumeSynthesis = (snap.synthesisResult as SixPromptSynthesisResult | undefined) ?? synthesisResult;
+        let displayOrder = resumeSynthesis?.displayOrder ?? [];
+        if (displayOrder.length === 0) {
+          const history = (snap.matrixHistory as { source?: string }[] | undefined) ?? [];
+          const fromHistory = history
+            .map((item) => item.source)
+            .filter((s): s is GenerationSource => !!s);
+          displayOrder = [...fromHistory];
+          for (const item of pending) {
+            const src = item.source as GenerationSource;
+            if (!displayOrder.includes(src)) displayOrder.push(src);
+          }
+        }
+        setImageProgress((prev) => {
+          const next = { ...prev };
+          for (const { source } of prompts) {
+            const key = `google-${source}`;
+            if (next[key] === undefined) next[key] = 2;
+          }
+          return next;
+        });
+
+        const appendResumeImageToSession = async (img: GeneratedImage, source: GenerationSource) => {
+          const sourceLabel = GENERATION_SOURCE_LABELS[source];
+          const stored =
+            typeof window !== 'undefined' ? window.localStorage.getItem('aura_session') : null;
+          const freshSession = stored ? JSON.parse(stored) : {};
+          const currentMatrixHistory = (freshSession?.matrixHistory || []) as Array<{ id: string }>;
+          if (currentMatrixHistory.some((h) => h.id === img.id)) return;
+          const newHistoryItem = {
+            id: img.id,
+            label: (language === 'pl' ? sourceLabel?.pl : sourceLabel?.en) || sourceLabel?.pl || source,
+            timestamp: Date.now(),
+            imageUrl: img.url,
+            base64: img.base64,
+            source,
+            isSelected: false,
+          };
+          await updateSessionData({
+            matrixHistory: [...currentMatrixHistory, newHistoryItem],
+          } as Record<string, unknown>);
+        };
+
         const genRes = await generateSixImagesParallelWithGoogle(
           {
             prompts,
@@ -2888,7 +2988,50 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               strength: parameters.strength ?? 0.55,
             },
           },
-          undefined,
+          (result) => {
+            if (!result.success) return;
+            const displayIndex = displayOrder.indexOf(result.source);
+            const sourceLabel = GENERATION_SOURCE_LABELS[result.source as GenerationSource];
+            const newImage: GeneratedImage = {
+              id: `matrix-resume-${runId}-${result.source}`,
+              url: `data:image/png;base64,${result.image}`,
+              base64: result.image,
+              prompt: result.prompt,
+              parameters: {
+                ...parameters,
+                source: result.source,
+                sourceLabel,
+              },
+              ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
+              isFavorite: false,
+              createdAt: Date.now(),
+              source: result.source,
+              displayIndex: displayIndex >= 0 ? displayIndex : 0,
+              isBlindSelected: false,
+              provider: 'google' as const,
+            };
+            setImageProgress((prev) => ({
+              ...prev,
+              [`google-${result.source}`]: 100,
+            }));
+            setMatrixImages((prev) => {
+              const filtered = prev.filter(
+                (img) => !(img.source === result.source && img.provider === 'google'),
+              );
+              return [...filtered, newImage].sort(
+                (a, b) => (a.displayIndex || 0) - (b.displayIndex || 0),
+              );
+            });
+            setGeneratedImages((prev) => {
+              const filtered = prev.filter(
+                (img) => !(img.source === result.source && img.provider === 'google'),
+              );
+              return [...filtered, newImage].sort(
+                (a, b) => (a.displayIndex || 0) - (b.displayIndex || 0),
+              );
+            });
+            void appendResumeImageToSession(newImage, result.source as GenerationSource);
+          },
         );
         if (!genRes.successful_count) {
           setError(
@@ -2897,17 +3040,17 @@ RESULT: A completely empty, bare room with only architectural structure visible.
           matrixAnonResumeOnce.current = false;
           return;
         }
-        const displayOrder = synthesisResult?.displayOrder || [];
         const newMatrixImages: GeneratedImage[] = genRes.results
           .filter((r) => r.success)
           .map((result) => {
             const displayIndex = displayOrder.indexOf(result.source);
+            const sourceLabel = GENERATION_SOURCE_LABELS[result.source as GenerationSource];
             return {
               id: `matrix-resume-${runId}-${result.source}`,
               url: `data:image/png;base64,${result.image}`,
               base64: result.image,
               prompt: result.prompt,
-              parameters: { ...parameters, source: result.source },
+              parameters: { ...parameters, source: result.source, sourceLabel },
               ratings: { aesthetic_match: 0, character: 0, harmony: 0 },
               isFavorite: false,
               createdAt: Date.now(),
@@ -4220,11 +4363,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 we should require completeness only for the sources that actually generate.
               */}
               {(() => {
-                const targetCount = synthesisResult?.generatedSources?.length || 6;
+                const targetCount = effectiveSynthesisResult?.generatedSources?.length || 6;
                 const readyCount = matrixImages.filter(img => img.provider === 'google').length;
                 const isCompleteForGeneratedSources =
-                  !!synthesisResult?.generatedSources &&
-                  synthesisResult.generatedSources.every(src =>
+                  !!effectiveSynthesisResult?.generatedSources &&
+                  effectiveSynthesisResult.generatedSources.every(src =>
                     matrixImages.some(img => img.provider === 'google' && img.source === src)
                   );
                 // Expose as locals via closure-returned null; used below via duplicated expressions to avoid refactor.
@@ -4235,7 +4378,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 <h1 className="text-2xl font-bold text-graphite mb-2">
                   {isGenerating
                     ? t({ pl: 'Generowanie wizji...', en: 'Generating visions...' })
-                    : t({ pl: `Porównaj wizje (${matrixImages.length}/${synthesisResult?.generatedSources?.length || 6})`, en: `Compare visions (${matrixImages.length}/${synthesisResult?.generatedSources?.length || 6})` })}
+                    : t({ pl: `Porównaj wizje (${matrixImages.length}/${effectiveSynthesisResult?.generatedSources?.length || 6})`, en: `Compare visions (${matrixImages.length}/${effectiveSynthesisResult?.generatedSources?.length || 6})` })}
                 </h1>
                 <p className="text-silver-dark text-sm">
                   {isGenerating 
@@ -4275,11 +4418,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
               <div className="space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
                   {/* Generate slots for the sources that actually generate */}
-                  {Array.from({ length: synthesisResult?.displayOrder?.length || 6 }).map((_, index) => {
-                  const expectedSource = synthesisResult?.displayOrder[index] || null;
+                  {Array.from({ length: effectiveSynthesisResult?.displayOrder?.length || 6 }).map((_, index) => {
+                  const expectedSource = effectiveSynthesisResult?.displayOrder[index] || null;
                   // Only show Google images
                   const image = matrixImages.find(img => img.source === expectedSource && img.provider === 'google');
-                  const firstGeneratedSource = synthesisResult?.generatedSources?.[0] ?? null;
+                  const firstGeneratedSource = effectiveSynthesisResult?.generatedSources?.[0] ?? null;
                   const isLockedAnon =
                     isAnonMatrixPreview &&
                     !image &&
@@ -4291,9 +4434,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     isGenerating && !isLockedAnon && !image && (!error || guestQuotaBlockedWithVision);
                   const offset = progressOffsets[expectedSource || ''] ?? index * 3000;
                   const elapsedForFallback = Math.max(0, Date.now() - ((matrixGenerationStartTime || Date.now()) + offset));
-                  const pendingSources = synthesisResult?.displayOrder.filter(src => !matrixImages.some(img => img.source === src && img.provider === 'google')) || [];
+                  const pendingSources = effectiveSynthesisResult?.displayOrder.filter(src => !matrixImages.some(img => img.source === src && img.provider === 'google')) || [];
                   const activeSource = pendingSources[0];
-                  const qualityInfo = synthesisResult?.qualityReports?.find(r => r.source === expectedSource);
+                  const qualityInfo = effectiveSynthesisResult?.qualityReports?.find(r => r.source === expectedSource);
                   const statusColor = qualityInfo?.status === 'insufficient'
                     ? 'text-red-400'
                     : qualityInfo?.status === 'limited'

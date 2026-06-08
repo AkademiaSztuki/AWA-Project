@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { safeLocalStorage } from '@/lib/gcp-data';
+import { isAmbientMusicSuppressed } from '@/lib/ambient-music-duck';
 
 interface AmbientMusicProps {
   volume?: number; // 0-1, domyślnie 0.3 (30%)
@@ -203,7 +204,7 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     // ALE tylko jeśli użytkownik nie wyłączył jej ręcznie
     const restartInterval = setInterval(() => {
       const userManuallyPaused = typeof window !== 'undefined' && (window as any).ambientMusicUserManuallyPaused === true;
-      if (audioRef.current && isPlaying && audioRef.current.paused && !userManuallyPaused) {
+      if (audioRef.current && isPlaying && audioRef.current.paused && !userManuallyPaused && !isAmbientMusicSuppressed()) {
         // console.log('AmbientMusic: Audio was paused unexpectedly, restarting...');
         audioRef.current.play().catch(error => {
           console.error('AmbientMusic: Failed to restart audio:', error);
@@ -215,7 +216,7 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     // ALE tylko jeśli użytkownik nie wyłączył muzyki ręcznie
     const startMusic = () => {
       const userManuallyPaused = typeof window !== 'undefined' && (window as any).ambientMusicUserManuallyPaused === true;
-      if (userManuallyPaused) {
+      if (userManuallyPaused || isAmbientMusicSuppressed()) {
         return;
       }
       if (audioRef.current) {
@@ -332,11 +333,11 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     };
   };
 
-  // Aktualizuj głośność gdy się zmienia
+  // Aktualizuj głośność gdy się zmienia (pomijaj podczas duckingu próbek sensorycznych)
   useEffect(() => {
+    if (isAmbientMusicSuppressed()) return;
     if (audioRef.current) {
       audioRef.current.volume = currentVolume;
-      // console.log('AmbientMusic: Volume set to:', currentVolume);
     }
   }, [currentVolume]);
 

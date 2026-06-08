@@ -44,6 +44,22 @@ export interface SessionData {
   }>;
   /** After anonymous 1/6: prompts not yet sent to image API; completed after login (GCP session sync) */
   matrixAnonPending?: Array<{ source: string; prompt: string }>;
+  /** Matrix grid metadata (display order, quality) — persisted so OAuth return can render slots */
+  synthesisResult?: {
+    generatedSources: string[];
+    skippedSources: string[];
+    displayOrder: string[];
+    qualityReports: Array<{
+      source: string;
+      status: string;
+      warnings: string[];
+    }>;
+    metadata: {
+      totalPrompts: number;
+      synthesisTimestamp: string;
+      roomType: string;
+    };
+  };
   finalSurvey: SurveyResults;
   // Dashboard data - Spaces with images
   spaces?: Array<{
