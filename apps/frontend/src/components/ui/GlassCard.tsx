@@ -10,7 +10,8 @@ interface GlassCardProps {
   variant?: 'default' | 'interactive' | 'highlighted' | 'flat' | 'flatOnMobile' | 'glass';
   /**
    * Custom overlay scrollbar (no OS arrows / accent). Uses AwaScrollArea variant=auto so it does not
-   * collapse when the card only has min-h/max-h (unbounded flex-1 would yield 0 height).
+   * collapse when the card only has min-h/max-h (unbounded flex-1 would yield 0 height). flexFill
+   * is required here: variant=auto (max-h-full) does not resolve when the card height is auto + max-h.
    */
   scrollable?: boolean;
 }
@@ -47,7 +48,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({
       )}
     >
       {scrollable ? (
-        <AwaScrollArea className="w-full min-w-0" variant="auto" autoHide>
+        <AwaScrollArea className="w-full min-w-0" variant="flexFill" autoHide>
           {children}
         </AwaScrollArea>
       ) : (

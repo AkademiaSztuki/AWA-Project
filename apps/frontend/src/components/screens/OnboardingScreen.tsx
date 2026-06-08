@@ -357,9 +357,9 @@ const OnboardingScreen: React.FC = () => {
   // If pathType is missing, form will still render (user can go back manually if needed)
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
+    <div className="w-full flex flex-col">
       {/* Formularz zgody/demographics */}
-      <div className="flex-1 p-4 lg:p-8 pb-32">
+      <div className="p-3 sm:p-4 lg:p-8 pb-32">
         <div className="w-full max-w-4xl mx-auto pt-8">
           {step === 'consent' && (
             <motion.div

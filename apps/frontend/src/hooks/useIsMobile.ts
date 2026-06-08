@@ -3,13 +3,8 @@
 import { useState, useEffect } from 'react';
 
 export function useIsMobile(breakpoint: number = 1024): boolean {
-  // Start with undefined to avoid SSR mismatch, then set based on actual window size
-  const [isMobile, setIsMobile] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < breakpoint;
-    }
-    return false; // Default to false for SSR
-  });
+  // SSR-safe default — real viewport is applied in useEffect after mount.
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {

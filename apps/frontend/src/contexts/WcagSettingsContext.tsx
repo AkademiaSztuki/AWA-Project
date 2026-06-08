@@ -145,45 +145,41 @@ function persistWcag(settings: WcagSettingsState): void {
 }
 
 export function WcagSettingsProvider({ children }: { children: ReactNode }) {
-  const stored = getStoredWcagSettings();
-  const hasStored = stored !== null;
-
-  const [fontScale, setFontScale] = useState<FontScale>(
-    stored?.fontScale ?? DEFAULT_SETTINGS.fontScale
-  );
+  const [fontScale, setFontScale] = useState<FontScale>(DEFAULT_SETTINGS.fontScale);
   const [contrastMode, setContrastMode] = useState<ContrastMode>(
-    stored?.contrastMode ?? DEFAULT_SETTINGS.contrastMode
+    DEFAULT_SETTINGS.contrastMode
   );
-  const [textSpacing, setTextSpacing] = useState(
-    stored?.textSpacing ?? DEFAULT_SETTINGS.textSpacing
-  );
-  const [readableFont, setReadableFont] = useState(
-    stored?.readableFont ?? DEFAULT_SETTINGS.readableFont
-  );
-  const [underlineLinks, setUnderlineLinks] = useState(
-    stored?.underlineLinks ?? DEFAULT_SETTINGS.underlineLinks
-  );
-  const [bigCursor, setBigCursor] = useState(
-    stored?.bigCursor ?? DEFAULT_SETTINGS.bigCursor
-  );
-  const [reducedMotion, setReducedMotion] = useState(
-    stored?.reducedMotion ?? DEFAULT_SETTINGS.reducedMotion
-  );
-  const [readingGuide, setReadingGuide] = useState(
-    stored?.readingGuide ?? DEFAULT_SETTINGS.readingGuide
-  );
-  const [focusHighlight, setFocusHighlight] = useState(
-    stored?.focusHighlight ?? DEFAULT_SETTINGS.focusHighlight
-  );
+  const [textSpacing, setTextSpacing] = useState(DEFAULT_SETTINGS.textSpacing);
+  const [readableFont, setReadableFont] = useState(DEFAULT_SETTINGS.readableFont);
+  const [underlineLinks, setUnderlineLinks] = useState(DEFAULT_SETTINGS.underlineLinks);
+  const [bigCursor, setBigCursor] = useState(DEFAULT_SETTINGS.bigCursor);
+  const [reducedMotion, setReducedMotion] = useState(DEFAULT_SETTINGS.reducedMotion);
+  const [readingGuide, setReadingGuide] = useState(DEFAULT_SETTINGS.readingGuide);
+  const [focusHighlight, setFocusHighlight] = useState(DEFAULT_SETTINGS.focusHighlight);
+  const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
 
-  // If nothing stored, sync reduced motion with OS preference once (client only)
   useEffect(() => {
-    if (hasStored || typeof window === "undefined") return;
+    const stored = getStoredWcagSettings();
+    if (stored) {
+      setFontScale(stored.fontScale);
+      setContrastMode(stored.contrastMode);
+      setTextSpacing(stored.textSpacing);
+      setReadableFont(stored.readableFont);
+      setUnderlineLinks(stored.underlineLinks);
+      setBigCursor(stored.bigCursor);
+      setReducedMotion(stored.reducedMotion);
+      setReadingGuide(stored.readingGuide);
+      setFocusHighlight(stored.focusHighlight);
+      setHydratedFromStorage(true);
+      return;
+    }
+
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (mq.matches) {
       setReducedMotion(true);
     }
-  }, [hasStored]);
+    setHydratedFromStorage(true);
+  }, []);
 
   const isAdjusted = useMemo(() => {
     return (
@@ -254,6 +250,7 @@ export function WcagSettingsProvider({ children }: { children: ReactNode }) {
   ]);
 
   useEffect(() => {
+    if (!hydratedFromStorage) return;
     persistWcag({
       fontScale,
       contrastMode,
@@ -275,6 +272,7 @@ export function WcagSettingsProvider({ children }: { children: ReactNode }) {
     reducedMotion,
     readingGuide,
     focusHighlight,
+    hydratedFromStorage,
   ]);
 
   const reset = useCallback(() => {

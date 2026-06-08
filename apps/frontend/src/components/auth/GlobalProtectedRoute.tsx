@@ -19,6 +19,7 @@ const PUBLIC_PATHS = [
   '/auth/reset-password', // Password reset form from email link
   '/flow', // Onboarding / funnel without forced login
   '/setup', // Profile wizard without forced login
+  '/subscription/plans', // Pricing — public before checkout
 ];
 
 const isPublicPath = (pathname: string): boolean => {

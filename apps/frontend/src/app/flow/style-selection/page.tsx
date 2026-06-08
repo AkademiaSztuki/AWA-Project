@@ -12,7 +12,7 @@ import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { Check, ArrowLeft } from 'lucide-react';
 import { STYLE_OPTIONS } from '@/lib/questions/style-options';
 import { safeSessionStorage } from '@/lib/gcp-data';
-import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_SCROLL_STEP } from '@/lib/flow/glass-step-layout';
+import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_DESKTOP_GROW_STEP } from '@/lib/flow/glass-step-layout';
 
 /** Tells /flow/fast-generate to ignore any cached fast preview (survives in-memory/GCP merge quirks). */
 const IDA_FAST_TRACK_REQUIRE_FRESH_GEN_KEY = 'awa_fast_track_require_fresh_gen';
@@ -56,7 +56,6 @@ export default function StyleSelectionPage() {
   const { language } = useLanguage();
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
-
   const handleImageError = (styleId: string) => {
     setImageErrors(prev => new Set(prev).add(styleId));
   };
@@ -134,15 +133,18 @@ export default function StyleSelectionPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
-      <div className="flex-1 flex justify-center items-start">
+    <div className="w-full flex flex-col pb-[clamp(5rem,16vh,7.5rem)]">
+      <div className="w-full flex flex-col items-stretch">
         <div className={`${FULL_FLOW_GLASS_SHELL} space-y-6`}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+            <GlassCard
+              variant="flatOnMobile"
+              className={`flex flex-col p-6 md:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}
+            >
           {/* Header */}
           <div className="mb-6">
             <h1 className="font-nasalization text-xl text-graphite md:text-2xl">
@@ -265,12 +267,9 @@ export default function StyleSelectionPage() {
       {/* Dialog IDA na dole */}
       <div className="w-full">
         <AwaDialogue 
-          currentStep="upload" 
+          currentStep="style_selection" 
           fullWidth={true}
           autoHide={true}
-          customMessage={language === 'pl' 
-            ? 'Wybierz styl, który Cię inspiruje. Nie martw się - możesz go później dostosować!'
-            : 'Choose a style that inspires you. Don\'t worry - you can adjust it later!'}
         />
       </div>
     </div>

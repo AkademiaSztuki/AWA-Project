@@ -88,8 +88,8 @@ export function Survey2Screen() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
-      <div className="flex-1 flex justify-center items-start p-3 sm:p-4 lg:p-6">
+    <div className="w-full flex flex-col">
+      <div className="w-full flex flex-col items-stretch p-3 sm:p-4 lg:p-6">
         <div className={`${FULL_FLOW_GLASS_SHELL} w-full`}>
         <GlassCard variant="flatOnMobile" className="w-full p-6 md:p-8 lg:bg-white/10 lg:backdrop-blur-xl lg:border lg:border-white/20 lg:shadow-xl rounded-2xl">
           <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Jasność Twoich Preferencji</h1>

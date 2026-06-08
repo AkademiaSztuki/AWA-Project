@@ -62,9 +62,9 @@ export default function FastTrackPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
+    <div className="w-full flex flex-col">
       {/* Formularz upload - używa tego samego komponentu co /setup/room */}
-      <div className="flex-1 p-4 lg:p-8 pb-32">
+      <div className="p-3 sm:p-4 lg:p-8 pb-32">
         <div className="w-full max-w-4xl mx-auto pt-8">
           <PhotoUploadStep 
             photos={photos}

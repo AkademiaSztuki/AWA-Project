@@ -16,6 +16,7 @@ import { EXAMPLE_IMAGES_METADATA, getExampleImageMetadata, isExampleImage } from
 import { fileToNormalizedBase64 } from '@/lib/utils';
 import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { GLASS_CARD_DESKTOP_GROW_STEP } from '@/lib/flow/glass-step-layout';
 
 // PhotoUploadPage
 export default function PhotoUploadPage() {
@@ -404,10 +405,10 @@ export default function PhotoUploadPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
+    <div className="w-full flex flex-col">
       {/* Formularz upload */}
-      <div className="flex-1 flex items-center justify-center p-4">
-        <GlassCard variant="flatOnMobile" scrollable className="flex min-h-0 w-full max-h-[min(90vh,900px)] flex-col rounded-2xl p-6 md:p-8 lg:border lg:border-white/20 lg:bg-white/10 lg:shadow-xl lg:backdrop-blur-xl">
+      <div className="w-full flex flex-col items-stretch p-4">
+        <GlassCard variant="flatOnMobile" className={`flex w-full flex-col rounded-2xl p-6 md:p-8 lg:border lg:border-white/20 lg:bg-white/10 lg:shadow-xl lg:backdrop-blur-xl ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
           <h1 className="text-2xl md:text-3xl font-exo2 font-bold text-gray-800 mb-3">Dodaj zdjecie przestrzeni</h1>
           <p className="text-base md:text-lg text-gray-700 font-modern mb-3 leading-relaxed">
             Wgraj zdjecie swojego pokoju lub wybierz przykladowe, aby IDA mogla lepiej zrozumiec Twoj kontekst projektowy.

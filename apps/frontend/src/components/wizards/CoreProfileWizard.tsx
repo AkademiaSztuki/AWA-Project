@@ -7,7 +7,6 @@ import Image from 'next/image';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { ScrollYWhenNeeded } from '@/components/ui/ScrollYWhenNeeded';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassAccordion } from '@/components/ui/GlassAccordion';
 import { AwaContainer } from '@/components/awa/AwaContainer';
@@ -42,7 +41,7 @@ import {
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
 import { initAnonSessionAfterConsent } from '@/lib/anon-session-client';
 import Link from 'next/link';
-import { GLASS_CARD_SCROLL_STEP as STEP_CARD_HEIGHT } from '@/lib/flow/glass-step-layout';
+import { GLASS_CARD_DESKTOP_GROW_STEP as STEP_CARD_HEIGHT } from '@/lib/flow/glass-step-layout';
 import { topMaterialsFromSensorySuiteResults } from '@/lib/participants-mapper';
 
 type WizardStep = 
@@ -896,8 +895,8 @@ export function CoreProfileWizard() {
   return (
     <div className="awa-profile-no-scrollbars flex w-full flex-col">
       {/* Main Content */}
-      <div className="flex-1 flex justify-center items-start overflow-x-hidden w-full">
-        <div className="w-full max-w-full lg:max-w-none mx-auto space-y-4 sm:space-y-6">
+      <div className="w-full overflow-x-hidden">
+        <div className="w-full max-w-full lg:max-w-none mx-auto space-y-2 sm:space-y-4 lg:space-y-6">
           
           {/* Step Content */}
           <AnimatePresence mode="wait" initial={false}>
@@ -994,13 +993,11 @@ export function CoreProfileWizard() {
               {currentStep === 'sensory_tests' && (
                 <GlassCard
                   variant="flatOnMobile"
-                  className={`p-3 sm:p-5 md:p-6 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col overflow-hidden !shadow-none w-full`}
+                  className={`p-3 sm:p-5 md:p-6 flex flex-col ${STEP_CARD_HEIGHT} !shadow-none w-full`}
                 >
-                  <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-x-hidden">
-                    <ScrollYWhenNeeded>
                       <SensoryTestSuite
                         ref={sensorySuiteRef}
-                        className="flex min-h-0 w-full min-w-0 max-w-full flex-col"
+                        className="flex w-full min-w-0 max-w-full flex-col"
                         initialSensoryPreferences={{
                           music:
                             profileData.sensoryPreferences?.music ??
@@ -1097,7 +1094,6 @@ export function CoreProfileWizard() {
                           handleNext();
                         }}
                       />
-                    </ScrollYWhenNeeded>
 
                     <div className="mt-6 flex shrink-0 justify-between sm:mt-8">
                       <GlassButton
@@ -1111,7 +1107,6 @@ export function CoreProfileWizard() {
                         {language === 'pl' ? 'Wstecz' : 'Back'}
                       </GlassButton>
                     </div>
-                  </div>
                 </GlassCard>
               )}
 
@@ -1262,9 +1257,8 @@ function ConsentStep({
   const canProceedConsent = consentState.consentResearch && consentState.consentProcessing && consentState.acknowledgedArt13;
 
   return (
-    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col overflow-hidden !shadow-none`}>
-      <ScrollYWhenNeeded>
-      <div className="min-h-0 flex flex-col">
+    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 flex flex-col ${STEP_CARD_HEIGHT} !shadow-none`}>
+      <div className="flex flex-col">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
             {texts.title}
@@ -1489,7 +1483,6 @@ function ConsentStep({
           </GlassButton>
         </div>
       </div>
-      </ScrollYWhenNeeded>
     </GlassCard>
   );
 }
@@ -1528,9 +1521,8 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col overflow-hidden !shadow-none`}>
-        <ScrollYWhenNeeded>
-        <div className="min-h-0 flex flex-col">
+      <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 flex flex-col ${STEP_CARD_HEIGHT} !shadow-none`}>
+        <div className="flex flex-col">
           <div className="flex-1">
             <h2 className="text-xl md:text-2xl font-nasalization text-graphite drop-shadow-sm mb-2">
               {texts.title}
@@ -1625,7 +1617,6 @@ function ProfileDemographicsStep({ data, onUpdate, onBack, onSubmit, canProceed 
             </GlassButton>
           </div>
         </div>
-        </ScrollYWhenNeeded>
       </GlassCard>
     </motion.div>
   );
@@ -1660,9 +1651,8 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
   const canProceed = lifestyleData.livingSituation && lifestyleData.lifeVibe && lifestyleData.goals?.length > 0;
 
   return (
-    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col overflow-hidden !shadow-none`}>
-      <ScrollYWhenNeeded>
-      <div className="min-h-0 flex flex-col">
+    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 flex flex-col ${STEP_CARD_HEIGHT} !shadow-none`}>
+      <div className="flex flex-col">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2">
             {language === 'pl' ? 'Twój Styl Życia' : 'Your Lifestyle'}
@@ -1760,7 +1750,6 @@ function LifestyleStep({ data, onUpdate, onNext, onBack }: any) {
           </GlassButton>
         </div>
       </div>
-      </ScrollYWhenNeeded>
     </GlassCard>
   );
 }
@@ -1924,7 +1913,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
     return (
       <GlassCard
         variant="flatOnMobile"
-        className={`p-6 md:p-8 text-center ${STEP_CARD_HEIGHT} relative flex min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-hidden !shadow-none overscroll-none`}
+        className={`p-6 md:p-8 text-center relative flex w-full max-w-full flex-col ${STEP_CARD_HEIGHT} !shadow-none`}
       >
         <div className="flex w-full min-h-0 flex-1 flex-col items-center touch-none">
           <div className="flex w-full min-h-0 flex-1 flex-col items-center justify-center">
@@ -1969,7 +1958,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
   }
 
   return (
-      <GlassCard variant="flatOnMobile" className={`p-4 sm:p-6 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col overflow-hidden !shadow-none overscroll-none select-none`}>
+      <GlassCard variant="flatOnMobile" className={`px-2 py-4 sm:p-6 flex flex-col ${STEP_CARD_HEIGHT} !shadow-none select-none`}>
       <div className="min-h-full flex flex-col touch-none">
         <div className="flex min-h-0 flex-1 flex-col">
           {isLoading ? (
@@ -1980,7 +1969,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
             <div className="grid min-h-0 w-full flex-1 grid-rows-[auto_auto_minmax(0,1fr)] content-start gap-y-3">
               {/* Swipe card + glass actions inset at bottom of image */}
               <div>
-                <div className="relative h-[380px] sm:h-[450px] md:h-[550px] overflow-hidden rounded-2xl">
+                <div className="relative w-full aspect-[4/3] sm:aspect-[3/2] md:h-[480px] md:aspect-auto lg:h-[520px] overflow-hidden rounded-2xl">
                   {/* Hidden preload of next image for Next.js Image optimization */}
                   {images[currentIndex + 1] && (
                     <div className="absolute opacity-0 pointer-events-none w-1 h-1 overflow-hidden">
@@ -2018,7 +2007,7 @@ function TinderSwipesStep({ onComplete, onBack }: any) {
                               alt="Interior"
                               fill
                               draggable={false}
-                              className="object-cover w-full h-full select-none"
+                              className="object-cover object-center w-full h-full select-none"
                               priority={currentIndex === 0}
                               quality={75}
                               sizes="100vw"
@@ -2225,9 +2214,8 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
   };
 
   return (
-    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 ${STEP_CARD_HEIGHT} flex min-h-0 flex-col justify-center overflow-hidden !shadow-none`}>
-      <ScrollYWhenNeeded>
-      <div className="min-h-0 flex flex-col justify-center">
+    <GlassCard variant="flatOnMobile" className={`p-6 md:p-8 flex flex-col justify-center ${STEP_CARD_HEIGHT} !shadow-none`}>
+      <div className="flex flex-col justify-center">
         <div className="flex-1">
           <h2 className="text-xl md:text-2xl font-nasalization text-graphite mb-2 text-center">
             {currentQ.question[language]}
@@ -2292,7 +2280,6 @@ function SemanticDifferentialStep({ data, onUpdate, onNext, onBack }: any) {
           </GlassButton>
         </div>
       </div>
-      </ScrollYWhenNeeded>
     </GlassCard>
   );
 }

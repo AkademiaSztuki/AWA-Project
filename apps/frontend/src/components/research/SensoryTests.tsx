@@ -153,7 +153,7 @@ export function SensoryTest({ type, onSelect, className = '', value, frameless =
             </p>
           </div>
         </div>
-        <div className="flex max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5">
+        <div className="hidden max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:flex sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5">
           <span
             className={`flex h-3 w-full items-center justify-end text-right text-[8px] uppercase leading-none tracking-wider transition-colors duration-200 sm:text-[9px] ${
               previewName
@@ -354,7 +354,7 @@ function PaletteTest({ options, selectedId, onSelect, frameless = false, classNa
             </p>
           </div>
         </div>
-        <div className="flex max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5 sm:transition-colors sm:duration-200">
+        <div className="hidden max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:flex sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5 sm:transition-colors sm:duration-200">
           <span
             className={`flex h-3 w-full items-center justify-end text-right text-[8px] uppercase leading-none tracking-wider transition-colors duration-200 sm:text-[9px] ${
               previewName
@@ -534,7 +534,7 @@ function StyleTest({ options, selectedId, onSelect, frameless = false, className
             </p>
           </div>
         </div>
-        <div className="flex max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5">
+        <div className="hidden max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:flex sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5">
           <span
             className={`flex h-3 w-full items-center justify-end text-right text-[8px] uppercase leading-none tracking-wider transition-colors duration-200 sm:text-[9px] ${
               previewName
@@ -1045,7 +1045,7 @@ export const SensoryTestSuite = forwardRef<SensoryTestSuiteHandle, SensoryTestSu
   };
 
   return (
-    <div className={`flex min-h-0 flex-col gap-1.5 sm:gap-2 h-full pb-1 w-full max-w-full overflow-x-hidden ${className}`}>
+    <div className={`flex min-h-0 flex-col gap-1 sm:gap-1.5 pb-1 w-full max-w-full overflow-x-hidden xl:h-full ${className}`}>
       {profileContext && (
         <div className="glass-panel rounded-2xl border border-white/10 bg-white/5 p-3 text-[10px] text-silver-dark flex flex-wrap gap-3 w-full mb-1">
           {profileContext.paletteLabel && (
@@ -1070,7 +1070,7 @@ export const SensoryTestSuite = forwardRef<SensoryTestSuiteHandle, SensoryTestSu
       )}
 
       <ol
-        className="grid w-full list-none m-0 p-0 py-2 gap-x-1 gap-y-1.5 items-start"
+        className="grid w-full list-none m-0 p-0 py-1 gap-x-1 gap-y-1 items-start"
         style={{ gridTemplateColumns: `repeat(${tests.length}, minmax(0, 1fr))` }}
         aria-label={language === 'pl' ? 'Kolejność testów sensorycznych' : 'Sensory test sequence'}
       >
@@ -1152,17 +1152,17 @@ export const SensoryTestSuite = forwardRef<SensoryTestSuiteHandle, SensoryTestSu
         })}
       </ol>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 w-full flex-col overflow-hidden xl:flex-1 xl:min-h-0">
         {/* Native scroll: nested SimpleBar (flexFill + h-0) inside CoreProfileWizard's scroll
             collapses palette/style grids to zero height on some viewports. */}
-        <div className="min-h-0 flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden">
+        <div className="min-h-0 w-full min-w-0 overflow-y-auto overflow-x-hidden xl:flex-1">
         {currentTest === 'palette' && hasPalette && paletteOptions ? (
           <PaletteTest
             options={paletteOptions}
             selectedId={selectedPalette}
             onSelect={(value) => handleSelect('palette', value)}
             frameless
-            className="flex h-full min-h-0 flex-col justify-center overflow-x-hidden"
+            className="flex min-h-0 w-full flex-col justify-start overflow-x-hidden xl:h-full xl:justify-center"
             stepCounter={language === 'pl'
               ? `Krok ${currentIndex + 1} z ${tests.length}`
               : `Step ${currentIndex + 1} of ${tests.length}`}
@@ -1173,7 +1173,7 @@ export const SensoryTestSuite = forwardRef<SensoryTestSuiteHandle, SensoryTestSu
             selectedId={selectedStyle}
             onSelect={(value) => handleSelect('style', value)}
             frameless
-            className="flex h-full min-h-0 flex-col justify-center overflow-x-hidden"
+            className="flex min-h-0 w-full flex-col justify-start overflow-x-hidden xl:h-full xl:justify-center"
             stepCounter={language === 'pl'
               ? `Krok ${currentIndex + 1} z ${tests.length}`
               : `Step ${currentIndex + 1} of ${tests.length}`}
@@ -1181,7 +1181,7 @@ export const SensoryTestSuite = forwardRef<SensoryTestSuiteHandle, SensoryTestSu
         ) : currentTest === 'nature' ? (
           <NatureMetaphorTest
             frameless
-            className="flex h-full min-h-0 flex-col justify-center overflow-x-hidden"
+            className="flex min-h-0 w-full flex-col justify-start overflow-x-hidden xl:h-full xl:justify-center"
             onSelect={(value) => handleSelect('nature', value)}
             stepCounter={language === 'pl'
               ? `Krok ${currentIndex + 1} z ${tests.length}`
@@ -1190,7 +1190,7 @@ export const SensoryTestSuite = forwardRef<SensoryTestSuiteHandle, SensoryTestSu
         ) : currentTest === 'biophilia' ? (
           <BiophiliaTest
             frameless
-            className="flex h-full min-h-0 flex-col justify-center overflow-x-hidden"
+            className="flex min-h-0 w-full flex-col justify-start overflow-x-hidden xl:h-full xl:justify-center"
             onSelect={(score) => handleSelect('biophilia', score)}
             stepCounter={language === 'pl'
               ? `Krok ${currentIndex + 1} z ${tests.length}`
@@ -1200,7 +1200,7 @@ export const SensoryTestSuite = forwardRef<SensoryTestSuiteHandle, SensoryTestSu
           <SensoryTest
             type={currentTest as InteractiveTest}
             onSelect={(value) => handleSelect(currentTest, value)}
-            className="flex h-full min-h-0 flex-col justify-center overflow-x-hidden"
+            className="flex min-h-0 w-full flex-col justify-start overflow-x-hidden xl:h-full xl:justify-center"
             value={results[currentTest as InteractiveTest] || null}
             frameless
             stepCounter={language === 'pl'

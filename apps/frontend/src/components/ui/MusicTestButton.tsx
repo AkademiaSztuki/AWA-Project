@@ -195,6 +195,8 @@ export const MusicTestButton: React.FC = () => {
                 exit={{ opacity: 0 }}
                 onClick={() => setIsOpen(false)}
                 className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[9998]"
+                data-app-overlay="true"
+                data-overlay-layer="tool"
                 aria-hidden="true"
               />
               
@@ -207,6 +209,8 @@ export const MusicTestButton: React.FC = () => {
                 exit={{ opacity: 0, y: -20, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
                 className="glass-panel !fixed !z-[9999] rounded-[24px] p-4 sm:p-6 w-[min(320px,90vw)] max-w-[calc(100vw-2rem)] shadow-2xl"
+                data-app-overlay="true"
+                data-overlay-layer="tool"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="music-panel-title"

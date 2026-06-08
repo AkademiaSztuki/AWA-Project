@@ -29,7 +29,7 @@ import {
   ArrowRight,
   ArrowLeft
 } from "lucide-react";
-import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_SCROLL_STEP } from "@/lib/flow/glass-step-layout";
+import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_DESKTOP_GROW_STEP } from "@/lib/flow/glass-step-layout";
 
 interface LocalInspiration {
   id: string;
@@ -629,15 +629,15 @@ export default function InspirationsPage() {
   const canProceed = items.length >= 1 && items.length <= 10;
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
-      <div className="flex-1 flex justify-center items-start">
+    <div className="w-full flex flex-col">
+      <div className="w-full flex flex-col items-stretch">
         <div className={`${FULL_FLOW_GLASS_SHELL} space-y-6`}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+            <GlassCard variant="flatOnMobile" className={`flex flex-col p-6 md:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
               
               {/* Header with Progress Bar */}
               <div className="mb-6">

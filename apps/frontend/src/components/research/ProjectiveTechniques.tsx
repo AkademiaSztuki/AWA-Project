@@ -69,7 +69,7 @@ export function NatureMetaphorTest({ onSelect, className = '', frameless = false
             </p>
           </div>
         </div>
-        <div className="flex max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5">
+        <div className="hidden max-w-[11rem] flex-shrink-0 flex-col items-end justify-center gap-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 sm:flex sm:max-w-[12rem] sm:bg-white/[0.06] sm:px-2 sm:py-1.5">
           <span
             className={`flex h-3 w-full items-center justify-end text-right text-[8px] uppercase leading-none tracking-wider transition-colors duration-200 sm:text-[9px] ${
               previewName

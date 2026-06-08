@@ -10,7 +10,7 @@ import { AwaDialogue } from '@/components/awa/AwaDialogue';
 import { Home, Users, Target, ArrowRight, ArrowLeft } from 'lucide-react';
 import { saveHousehold } from '@/lib/gcp-participant-profile';
 import { useSession } from '@/hooks';
-import { GLASS_CARD_SCROLL_STEP } from '@/lib/flow/glass-step-layout';
+import { GLASS_CARD_DESKTOP_GROW_STEP } from '@/lib/flow/glass-step-layout';
 
 interface HouseholdData {
   name: string;
@@ -100,7 +100,7 @@ export function HouseholdSetup() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative overflow-hidden">
+    <div className="w-full flex flex-col relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
       {/* Dialog IDA na dole - cała szerokość */}
@@ -112,7 +112,7 @@ export function HouseholdSetup() {
         />
       </div>
 
-      <div className="flex-1 p-4 lg:p-8 pb-32">
+      <div className="p-3 sm:p-4 lg:p-8 pb-32">
         <div className="max-w-3xl mx-auto">
           {/* Progress */}
           <div className="mb-8 h-12">
@@ -139,7 +139,7 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard scrollable className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+                <GlassCard className={`flex flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                       <Home size={24} className="text-white" aria-hidden="true" />
@@ -212,7 +212,7 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard scrollable className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+                <GlassCard className={`flex flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                       <Users size={24} className="text-white" aria-hidden="true" />
@@ -267,7 +267,7 @@ export function HouseholdSetup() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard scrollable className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+                <GlassCard className={`flex flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold to-champagne flex items-center justify-center">
                       <Target size={24} className="text-white" aria-hidden="true" />

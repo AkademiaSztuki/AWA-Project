@@ -69,7 +69,7 @@ export const AwaContainer: React.FC<AwaContainerProps> = ({
   autoHide = false
 }) => {
   const [isLoading, setIsLoading] = useState(true);
-  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
+  const [windowWidth, setWindowWidth] = useState(1920);
 
   // Track window width for responsive adjustments
   useEffect(() => {

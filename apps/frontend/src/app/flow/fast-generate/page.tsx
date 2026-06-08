@@ -1729,8 +1729,8 @@ export default function FastGeneratePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
-      <div className="flex-1 p-4 lg:p-8 pb-32">
+    <div className="w-full flex flex-col">
+      <div className="p-3 sm:p-4 lg:p-8 pb-32">
         <div className="w-full max-w-6xl mx-auto pt-8 space-y-6">
           {/* Error — top + sticky so user always sees it (not buried below image/history) */}
           {error && (

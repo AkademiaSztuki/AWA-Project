@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { PartOneProgressBar } from '@/components/flow/PartOneProgressBar';
+import { FLOW_PROGRESS_CONTENT_GAP } from '@/lib/flow/glass-step-layout';
 
 export default function FlowLayout({
   children,
@@ -11,7 +12,7 @@ export default function FlowLayout({
   const pathname = usePathname();
 
   return (
-    <div className="flex flex-col gap-2 sm:gap-4 p-3 sm:p-4 lg:p-8">
+    <div className={`flex flex-col ${FLOW_PROGRESS_CONTENT_GAP} p-3 sm:p-4 lg:p-8`}>
       <PartOneProgressBar currentPath={pathname} />
       <div>
         {children}

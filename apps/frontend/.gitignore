@@ -1,3 +1,4 @@
 # Vercel CLI — ignoruj cache/sekrety; project.json zostaje w repo (jeden projekt → www.project-ida.com)
 .vercel/*
 !.vercel/project.json
+.vercel

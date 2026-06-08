@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { LoginModal } from "@/components/auth/LoginModal";
 import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
 import { RadarChart, DomainDescription, BigFiveAboutTestCard, type BigFiveDomainKey } from '@/components/dashboard/BigFiveDetailed';
-import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_SCROLL_STEP } from "@/lib/flow/glass-step-layout";
+import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_DESKTOP_GROW_STEP } from "@/lib/flow/glass-step-layout";
 import { FREE_GRANT_CREDITS } from "@/lib/credits";
 import { formatPolishUiText } from "@/lib/typography/polish-ui-text";
 import { 
@@ -525,9 +525,9 @@ export default function BigFivePage() {
       goToFirstMissing();
       return (
         <div className="flex flex-col w-full">
-          <div className="flex-1 flex justify-center items-start">
+          <div className="w-full flex flex-col items-stretch">
             <div className={`${FULL_FLOW_GLASS_SHELL} space-y-6`}>
-              <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP} !shadow-none`}>
+              <GlassCard variant="flatOnMobile" className={`flex flex-col p-6 md:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP} !shadow-none`}>
                 <div className="text-center">
                   <p className="text-lg text-graphite font-modern mb-4">
                     {t(
@@ -569,8 +569,8 @@ export default function BigFivePage() {
     }));
 
     return (
-      <div className="min-h-screen flex flex-col w-full">
-        <div className="flex-1 flex justify-center items-start">
+      <div className="w-full flex flex-col">
+        <div className="w-full flex flex-col items-stretch">
           <div className="w-full max-w-6xl mx-auto space-y-6">
             <motion.div
               initial={{ opacity: 0, y: -20 }}
@@ -795,15 +795,15 @@ export default function BigFivePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
-      <div className="flex-1 flex justify-center items-start">
+    <div className="w-full flex flex-col">
+      <div className="w-full flex flex-col items-stretch">
         <div className={`${FULL_FLOW_GLASS_SHELL} space-y-6`}>
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard variant="flatOnMobile" scrollable className={`flex min-h-0 flex-col p-6 md:p-8 ${GLASS_CARD_SCROLL_STEP} !shadow-none`}>
+            <GlassCard variant="flatOnMobile" className={`flex flex-col p-6 md:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP} !shadow-none`}>
               {/* Header */}
               <div className="text-center mb-8">
                 <h1 className="text-3xl md:text-4xl font-nasalization bg-gradient-to-r from-gold via-champagne to-platinum bg-clip-text text-transparent mb-4">

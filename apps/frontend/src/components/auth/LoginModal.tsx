@@ -38,6 +38,7 @@ interface LoginModalProps {
   nudgeLocation?: string;
   nudgeReason?: 'login_required' | 'quota_exceeded';
   softMaybeLaterLabel?: { pl: string; en: string };
+  initialMode?: 'login' | 'register' | 'magic';
 }
 
 export function LoginModal({
@@ -53,6 +54,7 @@ export function LoginModal({
   nudgeLocation,
   nudgeReason,
   softMaybeLaterLabel,
+  initialMode = 'login',
 }: LoginModalProps) {
   const {
     signInWithGoogle,
@@ -92,8 +94,10 @@ export function LoginModal({
   useEffect(() => {
     if (!isOpen) {
       resetModalFormState();
+      return;
     }
-  }, [isOpen]);
+    setMode(initialMode);
+  }, [isOpen, initialMode]);
 
   useEffect(() => {
     setMounted(true);
@@ -336,7 +340,11 @@ export function LoginModal({
 
   const modalContent = (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+        data-app-overlay="true"
+        data-overlay-layer="tool"
+      >
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}

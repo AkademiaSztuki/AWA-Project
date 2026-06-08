@@ -4121,11 +4121,11 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   }, [isAuthenticated]);
 
   return (
-    <div className="min-h-screen flex flex-col w-full relative">
+    <div className="w-full flex flex-col relative">
       
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       {/* Ensure navigation is always accessible - no blocking overlays */}
-      <div className="flex-1 px-8 pb-8 pt-2 relative z-10">
+      <div className="w-full px-4 sm:px-8 pb-8 pt-2 relative z-10 xl:flex-1 xl:min-h-0">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

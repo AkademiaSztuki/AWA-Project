@@ -19,6 +19,7 @@ const MINIMAL_MAIN_BOTTOM_ROUTES = new Set(['/']);
 
 export function AppContentFrame({ children }: AppContentFrameProps) {
   const pathname = usePathname();
+  /** 1024px — home hero pointer-events only; header mobile nav uses Tailwind `md` (768px). */
   const isMobile = useIsMobile();
   const edgeToEdgeTop = EDGE_TO_EDGE_TOP_ROUTES.has(pathname);
   const minimalMainBottom = MINIMAL_MAIN_BOTTOM_ROUTES.has(pathname);

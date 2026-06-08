@@ -43,7 +43,7 @@ import {
   TEXTURE_PREFERENCES,
   LIGHT_PREFERENCES
 } from '@/lib/questions/validated-scales';
-import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_SCROLL_STEP } from '@/lib/flow/glass-step-layout';
+import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_DESKTOP_GROW_STEP } from '@/lib/flow/glass-step-layout';
 import { useFullFlowProgress } from '@/contexts/FullFlowProgressContext';
 import {
   FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY,
@@ -699,7 +699,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   }, [ttsAudioUrl]);
 
   return (
-    <div className="relative flex min-h-screen w-full min-w-0 flex-col">
+    <div className="relative flex w-full min-w-0 flex-col">
       <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
       
       {/* Dialog IDA na dole - dynamiczny dla każdego kroku, pokazuje komentarz IDA jeśli dostępny */}
@@ -822,7 +822,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         />
       )}
 
-      <div className="flex min-w-0 w-full flex-1 flex-col px-0 pb-32 pt-6 sm:pt-8 lg:pt-10">
+      <div className="flex min-w-0 w-full flex-col px-0 pb-32 pt-2 sm:pt-4 lg:pt-10">
         <div className={FULL_FLOW_GLASS_SHELL}>
           <AnimatePresence mode="wait">
             {currentStep === 'photo_upload' && (
@@ -888,7 +888,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+                <GlassCard className={`flex flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
                   <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
                     {tp("Jak czujesz się obecnie w tym pomieszczeniu?", "How do you feel right now in this space?")}
                   </h1>
@@ -961,7 +961,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+                <GlassCard className={`flex flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
                   <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
                     {tp("Jak chcesz się czuć w tym pomieszczeniu po zmianach?", "How do you want this space to feel after the redesign?")}
                   </h1>
@@ -1055,7 +1055,7 @@ function UsageContextStep({ usageType, onUpdate, onNext, onBack }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+      <GlassCard className={`flex flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
         <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
           {tp("Kto korzysta z tego pomieszczenia?", "Who uses this space?")}
         </h1>
@@ -1516,7 +1516,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+      <GlassCard className={`flex flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
         {!selectedImage && (
           <>
             <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
@@ -1895,7 +1895,7 @@ function PreferenceSourceStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+      <GlassCard className={`flex flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
         <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
           {tp("Skąd weźmiemy preferencje do tego pomieszczenia?", "Where should preferences for this space come from?")}
         </h1>
@@ -2104,10 +2104,9 @@ function PreferenceQuestionsStep({
       exit={{ opacity: 0, x: -20 }}
     >
       <GlassCard
-        className={`flex min-h-0 w-full flex-col overflow-hidden p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}
+        className={`flex w-full flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}
       >
-        <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
-          {/* Single scroll: SensoryTestSuite scrolls internally — avoid nested overflow-y-auto (double scrollbar on card edge). */}
+        <div className="flex w-full flex-col">
           <AnimatePresence mode="wait">
             {visualQuestionIndex < visualQuestions.length ? (
             // Step 1: Visual Questions
@@ -2116,7 +2115,7 @@ function PreferenceQuestionsStep({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden"
+              className="flex flex-col overflow-x-hidden"
             >
               <h3 className="mb-2 w-full max-w-3xl self-center text-center font-nasalization text-xl text-graphite md:text-2xl">
                 {joinCopy(visualQuestions[visualQuestionIndex].question[language])}
@@ -2183,11 +2182,11 @@ function PreferenceQuestionsStep({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="flex min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-hidden"
+              className="flex w-full max-w-full flex-col"
             >
               <SensoryTestSuite
                 ref={sensorySuiteRef}
-                className="flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col"
+                className="flex w-full min-w-0 max-w-full flex-col"
                 paletteOptions={COLOR_PALETTE_OPTIONS}
                 selectedPalette={localPrefs.colorsAndMaterials?.selectedPalette}
                 onPaletteSelect={(paletteId) => handlePaletteSelect(paletteId)}
@@ -2343,7 +2342,7 @@ function PainPointsStep({ selected, onUpdate, onNext, onBack }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+      <GlassCard className={`flex flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
         <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
           {tp("Co w tym pomieszczeniu Ci przeszkadza?", "What’s getting in your way in this space?")}
         </h1>
@@ -2468,7 +2467,7 @@ function ActivitiesStep({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className={`flex min-h-0 flex-col p-6 lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+      <GlassCard className={`flex flex-col p-6 lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
         <h1 className="mb-6 text-center text-2xl font-nasalization text-graphite lg:text-3xl">
           {tp("Co robisz w tym pomieszczeniu?", "What do you do in this space?")}
         </h1>
@@ -2623,7 +2622,7 @@ function RoomSummaryStep({ data, onComplete, onBack, isSaving }: any) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <GlassCard className={`flex min-h-0 flex-col items-center p-6 text-center lg:p-8 ${GLASS_CARD_SCROLL_STEP}`}>
+      <GlassCard className={`flex flex-col items-center p-6 text-center lg:p-8 ${GLASS_CARD_DESKTOP_GROW_STEP}`}>
         <h1 className="mb-6 text-2xl font-nasalization text-graphite lg:text-3xl">
           {tp("To pomieszczenie jest gotowe!", "This space is ready!")}
         </h1>

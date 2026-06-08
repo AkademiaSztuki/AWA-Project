@@ -398,8 +398,8 @@ export default function Survey1Page() {
   const expAllAnswered = AGENCY_SAT_QUESTIONS.every((q) => expAnswers[q.key] !== undefined);
 
   return (
-    <div className="min-h-screen flex flex-col w-full">
-      <div className="flex-1 flex justify-center items-start p-3 sm:p-4 lg:p-6">
+    <div className="w-full flex flex-col">
+      <div className="w-full flex flex-col items-stretch p-3 sm:p-4 lg:p-6">
         <div className={`${FULL_FLOW_GLASS_SHELL} w-full`}>
           <GlassCard
             variant="flatOnMobile"

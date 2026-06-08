@@ -763,118 +763,6 @@ const fadeUp = {
   transition: { duration: 0.75, ease: 'easeOut' },
 };
 
-const BEFORE_ROOM_THEME: RoomTheme = {
-  wall: 'from-[#cfc8bc] via-[#b8aea1] to-[#8c8277]',
-  floor: 'bg-[#4b433e]/30',
-  sofa: 'bg-graphite/40',
-  pillowA: 'bg-silver-400/55',
-  pillowB: 'bg-white/30',
-  art: 'bg-white/16',
-  glow: 'bg-white/20',
-  accent: 'bg-silver-400/50',
-};
-
-const AFTER_ROOM_THEMES: RoomTheme[] = [
-  {
-    wall: 'from-[#f9f8ef] via-[#f7e7ce] to-[#d7b56d]',
-    floor: 'bg-[#6f5438]/22',
-    sofa: 'bg-graphite/78',
-    pillowA: 'bg-gold-400/75',
-    pillowB: 'bg-champagne/90',
-    art: 'bg-white/38',
-    glow: 'bg-gold-400/35',
-    accent: 'bg-gold-500/75',
-  },
-  {
-    wall: 'from-[#fffaf0] via-[#f2d5b5] to-[#b8794d]',
-    floor: 'bg-[#8b5e3c]/24',
-    sofa: 'bg-[#5d4638]/75',
-    pillowA: 'bg-[#e8b86d]/80',
-    pillowB: 'bg-white/70',
-    art: 'bg-[#fff6de]/45',
-    glow: 'bg-[#f4b66a]/40',
-    accent: 'bg-[#c7773a]/75',
-  },
-  {
-    wall: 'from-[#f6fbff] via-[#dceaf1] to-[#8ea6b5]',
-    floor: 'bg-[#455a64]/22',
-    sofa: 'bg-[#263238]/72',
-    pillowA: 'bg-[#6ec6ca]/65',
-    pillowB: 'bg-[#f6f1df]/80',
-    art: 'bg-white/40',
-    glow: 'bg-[#9dd6d9]/38',
-    accent: 'bg-[#2f7f84]/70',
-  },
-];
-
-type RoomTheme = {
-  wall: string;
-  floor: string;
-  sofa: string;
-  pillowA: string;
-  pillowB: string;
-  art: string;
-  glow: string;
-  accent: string;
-};
-
-type RoomPlaceholderProps = {
-  theme: RoomTheme;
-  mode: 'before' | 'after';
-  label?: string;
-  /** Cancels parent `scaleY` on the in-room label pill (marketing hero settle). */
-  labelScaleY?: MotionValue<number>;
-};
-
-const RoomPlaceholder = ({ theme, mode, label, labelScaleY }: RoomPlaceholderProps) => (
-  <div
-    className={cn(
-      'absolute inset-0 overflow-hidden bg-gradient-to-br',
-      theme.wall
-    )}
-    aria-hidden="true"
-  >
-    <div className={cn('absolute inset-x-0 bottom-0 h-[36%]', theme.floor)} />
-    <div className="absolute left-[6%] top-[10%] h-[55%] w-[26%] rounded-t-full border border-white/45 bg-white/18 backdrop-blur-[2px]" />
-    <motion.div
-      animate={mode === 'after' ? { opacity: [0.4, 0.75, 0.4], scale: [1, 1.08, 1] } : undefined}
-      transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-      className={cn('absolute right-[14%] top-[12%] h-32 w-32 rounded-full blur-3xl', theme.glow)}
-    />
-    <div className={cn('absolute right-[9%] top-[16%] h-[30%] w-[35%] rounded-[2rem] border border-white/35 shadow-xl', theme.art)}>
-      <div className="absolute inset-4 rounded-[1.5rem] border border-white/30" />
-      <div className={cn('absolute bottom-5 left-5 h-2 w-20 rounded-full', theme.accent)} />
-    </div>
-    <div className={cn('absolute bottom-[15%] left-[20%] h-[23%] w-[58%] rounded-[2.2rem] border border-white/35 shadow-2xl', theme.sofa)} />
-    <div className={cn('absolute bottom-[29%] left-[29%] h-[12%] w-[18%] rounded-2xl border border-white/30', theme.pillowA)} />
-    <div className={cn('absolute bottom-[29%] right-[25%] h-[12%] w-[18%] rounded-2xl border border-white/30', theme.pillowB)} />
-    <div className={cn('absolute bottom-[8%] right-[11%] h-[30%] w-[8%] rounded-full border border-white/35', mode === 'after' ? 'bg-white/68' : 'bg-white/26')} />
-    <div className={cn('absolute bottom-[9%] left-[11%] h-[22%] w-[11%] rounded-t-full border border-white/30', mode === 'after' ? theme.accent : 'bg-silver-400/36')} />
-    {mode === 'after' && (
-      <>
-        <div className={cn('absolute left-[13%] bottom-[18%] h-20 w-1 rounded-full', theme.accent)} />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.35),transparent_36%)]" />
-      </>
-    )}
-    {label &&
-      (labelScaleY ? (
-        <motion.div
-          className="absolute bottom-5 left-5 rounded-full border border-white/35 bg-black/35 px-4 py-2 font-modern text-xs text-white backdrop-blur"
-          style={{
-            scaleY: labelScaleY,
-            transformOrigin: '50% 100%',
-          }}
-        >
-          {label}
-        </motion.div>
-      ) : (
-        <div className="absolute bottom-5 left-5 rounded-full border border-white/35 bg-black/35 px-4 py-2 font-modern text-xs text-white backdrop-blur">
-          {label}
-        </div>
-      ))}
-  </div>
-);
-
 type HeroPhotoLayerProps = {
   src: string;
   label?: string;
@@ -1068,7 +956,7 @@ const MarketingEntryScreen: React.FC = () => {
     target: heroRef,
     offset: ['start start', 'end start'],
   });
-  const [viewportWidth, setViewportWidth] = useState(() => getLayoutViewportWidth());
+  const [viewportWidth, setViewportWidth] = useState(0);
   /** One shared 0→1 curve for the hero “settle” window — header timing still reads this raw value. */
   const heroSettle = useTransform(scrollYProgress, (p) =>
     Math.min(1, Math.max(0, p / HERO_SETTLE_SCROLL_END))
@@ -2014,7 +1902,7 @@ const MarketingEntryScreen: React.FC = () => {
         {...fadeUp}
       >
         <h2 className="mb-6 max-w-4xl text-3xl leading-tight text-graphite sm:text-5xl">{t.pathsTitle}</h2>
-        <div className="grid gap-4 lg:grid-cols-2 lg:gap-x-4 lg:gap-y-6 lg:[grid-template-rows:auto_auto_auto_1fr_auto]">
+        <div className="grid gap-4 lg:grid-cols-2 lg:gap-x-4 lg:gap-y-6 lg:[grid-template-rows:auto_auto_auto_auto]">
           <PathCard
             icon={Clock}
             title={t.fast.title}
@@ -2334,8 +2222,8 @@ const PathCard = ({
       'flex h-full flex-col overflow-hidden p-6 sm:p-7',
       MOBILE_FLAT_CARD_FRAME,
       highlighted ? 'bg-gold-400/5 xl:border xl:border-gold-400/60' : 'xl:border xl:border-white/20',
-      // Desktop: share row heights with sibling so headers, copy, lists, art, and CTAs line up (CSS subgrid).
-      'lg:row-span-5 lg:grid lg:min-h-0 lg:grid-cols-1 lg:[grid-template-rows:subgrid]',
+      // Desktop: share row heights with sibling so headers, copy, lists, and CTAs line up (CSS subgrid).
+      'lg:row-span-4 lg:grid lg:min-h-0 lg:grid-cols-1 lg:[grid-template-rows:subgrid]',
       highlighted ? 'lg:col-start-2 lg:row-start-1' : 'lg:col-start-1 lg:row-start-1'
     )}
   >
@@ -2367,9 +2255,6 @@ const PathCard = ({
         </li>
       ))}
     </ul>
-    <div className="relative mb-6 h-44 overflow-hidden rounded-2xl border border-white/30 lg:mb-0 lg:h-full lg:min-h-0">
-      <RoomPlaceholder theme={highlighted ? AFTER_ROOM_THEMES[1] : AFTER_ROOM_THEMES[0]} mode="after" />
-    </div>
     <GlassButton
       variant={highlighted ? 'primary' : 'secondary'}
       onClick={onClick}

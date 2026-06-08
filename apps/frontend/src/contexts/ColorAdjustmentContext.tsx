@@ -64,14 +64,22 @@ const persistColorSettings = (settings: StoredColorSettings): void => {
 };
 
 export function ColorAdjustmentProvider({ children }: { children: ReactNode }) {
-  // Load initial values from localStorage or use defaults
-  const storedSettings = getStoredColorSettings();
-  const initialSettings = storedSettings || DEFAULT_SETTINGS;
-  
-  const [saturation, setSaturation] = useState(initialSettings.saturation);
-  const [hue, setHue] = useState(initialSettings.hue);
-  const [contrast, setContrast] = useState(initialSettings.contrast);
-  const [hideModel3D, setHideModel3D] = useState(initialSettings.hideModel3D);
+  const [saturation, setSaturation] = useState(DEFAULT_SETTINGS.saturation);
+  const [hue, setHue] = useState(DEFAULT_SETTINGS.hue);
+  const [contrast, setContrast] = useState(DEFAULT_SETTINGS.contrast);
+  const [hideModel3D, setHideModel3D] = useState(DEFAULT_SETTINGS.hideModel3D);
+  const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
+
+  useEffect(() => {
+    const storedSettings = getStoredColorSettings();
+    if (storedSettings) {
+      setSaturation(storedSettings.saturation);
+      setHue(storedSettings.hue);
+      setContrast(storedSettings.contrast);
+      setHideModel3D(storedSettings.hideModel3D);
+    }
+    setHydratedFromStorage(true);
+  }, []);
 
   const isAdjusted = saturation !== 100 || hue !== 0 || contrast !== 100 || hideModel3D;
 
@@ -110,15 +118,15 @@ export function ColorAdjustmentProvider({ children }: { children: ReactNode }) {
     };
   }, [saturation, hue, contrast]);
 
-  // Persist settings to localStorage whenever they change
   useEffect(() => {
+    if (!hydratedFromStorage) return;
     persistColorSettings({
       saturation,
       hue,
       contrast,
       hideModel3D,
     });
-  }, [saturation, hue, contrast, hideModel3D]);
+  }, [saturation, hue, contrast, hideModel3D, hydratedFromStorage]);
 
   const reset = () => {
     setSaturation(DEFAULT_SETTINGS.saturation);

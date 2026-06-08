@@ -75,7 +75,7 @@ export function BiophiliaTest({ onSelect, className = '', frameless = false, ste
             </p>
           </div>
         </div>
-        <div className="flex min-h-[2.75rem] max-w-[14rem] flex-shrink-0 flex-row items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-2 sm:min-h-0 sm:max-w-[18rem] sm:flex-col sm:items-end sm:gap-0.5 sm:bg-white/[0.06] sm:p-2">
+        <div className="hidden min-h-[2.75rem] max-w-[14rem] flex-shrink-0 flex-row items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-2 sm:flex sm:min-h-0 sm:max-w-[18rem] sm:flex-col sm:items-end sm:gap-0.5 sm:bg-white/[0.06] sm:p-2">
           {previewName && badgeUpper ? (
             <>
               <span
