@@ -15,6 +15,10 @@ import { LoginModal } from "@/components/auth/LoginModal";
 import { IPIP_120_ITEMS, calculateIPIPNEO120Scores, IPIP_DOMAIN_LABELS, type IPIPNEOScores } from "@/lib/questions/ipip-neo-120";
 import { RadarChart, DomainDescription, BigFiveAboutTestCard, type BigFiveDomainKey } from '@/components/dashboard/BigFiveDetailed';
 import { FULL_FLOW_GLASS_SHELL, GLASS_CARD_DESKTOP_GROW_STEP } from "@/lib/flow/glass-step-layout";
+import {
+  FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY,
+  FULL_FLOW_PROFILE_STEP_QUERY_KEY,
+} from "@/lib/flow/full-flow-progress";
 import { FREE_GRANT_CREDITS } from "@/lib/credits";
 import { formatPolishUiText } from "@/lib/typography/polish-ui-text";
 import { 
@@ -34,7 +38,8 @@ export default function BigFivePage() {
   const fromDashboard = searchParams?.get('from') === 'dashboard';
   const retake = searchParams?.get('retake') === 'true';
   const shouldGoDashboard = fromDashboard || retake;
-  
+  const postBigFiveNoLoginPath = `/setup/room?${FULL_FLOW_PROFILE_STEP_QUERY_KEY}=photo_upload`;
+
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [responses, setResponses] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -344,7 +349,7 @@ export default function BigFivePage() {
 
   const handleSave = async () => {
     if (isLegacyResult) {
-      router.push(shouldGoDashboard ? "/dashboard" : "/setup/room");
+      router.push(shouldGoDashboard ? "/dashboard" : postBigFiveNoLoginPath);
       return;
     }
 
@@ -410,7 +415,7 @@ export default function BigFivePage() {
         return;
       }
 
-      router.push("/setup/room");
+      router.push(postBigFiveNoLoginPath);
     } finally {
       setIsSubmitting(false);
     }
@@ -468,13 +473,28 @@ export default function BigFivePage() {
     void runAutoSave();
   }, [showResults, scores, responses, updateSessionData, sessionData?.userHash]); // Only depend on userHash, not entire sessionData
 
-  const postBigFiveNoLoginPath = "/setup/room";
-
   const handleSkip = () => {
     if (shouldGoDashboard) {
       router.push("/dashboard");
       return;
     }
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY, "6");
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith("awa-room-setup-step:")) {
+          sessionStorage.removeItem(key);
+        }
+      }
+    }
+    void updateSessionData({
+      currentStep: "onboarding",
+      matrixHistory: [],
+      generatedImages: [],
+      generations: [],
+      blindSelectionMade: false,
+      selectedImage: null,
+    } as Record<string, unknown>);
     router.push(postBigFiveNoLoginPath);
   };
 
@@ -784,7 +804,7 @@ export default function BigFivePage() {
               ? `Zaloguj się, żeby wynik profilu trafił bezpiecznie na konto i nie przepadł. Zyskaj ${String(FREE_GRANT_CREDITS)} darmowych kredytów do generowania twoich wnętrz.`
               : `Sign in so your profile is saved to your account and you don’t lose it. Get ${String(FREE_GRANT_CREDITS)} free credits to generate your interior designs.`
           }
-          redirectPath="/setup/room"
+          redirectPath={postBigFiveNoLoginPath}
           softMaybeLaterLabel={{
             pl: "Kontynuuj bez konta",
             en: "Continue without account",
@@ -851,10 +871,20 @@ export default function BigFivePage() {
                 </div>
 
                 {/* Response Options — min-w-0 + break-normal avoids mid-word breaks from break-words */}
-                <div className="grid grid-cols-5 gap-1.5 sm:gap-2 md:gap-3 w-full max-w-3xl xl:max-w-4xl mx-auto flex-shrink-0">
+                <div className="grid grid-cols-5 gap-1 sm:gap-2 md:gap-3 w-full max-w-3xl xl:max-w-4xl mx-auto flex-shrink-0">
                   {[1, 2, 3, 4, 5].map((value) => {
                     const isSelected = currentItem && responses[currentItem.id] === value;
                     const isFlashWhite = likertFlashValue === value;
+                    const likertLabel =
+                      value === 1
+                        ? { short: t("Zdec.\nnie", "Strongly\ndisagree"), full: t("Zdecydowanie nie", "Strongly disagree") }
+                        : value === 2
+                          ? { short: t("Nie", "Disagree"), full: t("Nie", "Disagree") }
+                          : value === 3
+                            ? { short: t("Neutral", "Neutral"), full: t("Neutralnie", "Neutral") }
+                            : value === 4
+                              ? { short: t("Zgadzam\nsię", "Agree"), full: t("Zgadzam się", "Agree") }
+                              : { short: t("Zdec.\ntak", "Strongly\nagree"), full: t("Zdecydowanie tak", "Strongly agree") };
                     const likertTextTransition = prefersReducedMotion
                       ? 'motion-reduce:transition-none motion-reduce:duration-0'
                       : 'transition-colors duration-[460ms] ease-in group-active:duration-[260ms] group-active:ease-out motion-reduce:transition-none motion-reduce:duration-0';
@@ -872,31 +902,24 @@ export default function BigFivePage() {
                       key={value}
                       type="button"
                       onClick={() => handleResponse(value)}
-                      aria-label={value === 1 ? t("Zdecydowanie nie", "Strongly disagree") :
-                                 value === 2 ? t("Nie", "Disagree") :
-                                 value === 3 ? t("Neutralnie", "Neutral") :
-                                 value === 4 ? t("Zgadzam się", "Agree") :
-                                 t("Zdecydowanie tak", "Strongly agree")}
+                      aria-label={likertLabel.full}
                       aria-pressed={isSelected}
-                      className={`group relative min-w-0 touch-manipulation px-1.5 py-2 sm:px-2 sm:py-2.5 md:px-3 md:py-3 rounded-xl font-modern transition-[transform,background-color,box-shadow,border-color] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-1 hover:scale-[1.02] active:scale-[0.96] motion-reduce:hover:scale-100 motion-reduce:active:scale-100 ${
+                      className={`group relative min-w-0 touch-manipulation px-0.5 py-2 sm:px-2 sm:py-2.5 md:px-3 md:py-3 rounded-xl font-modern transition-[transform,background-color,box-shadow,border-color] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-1 hover:scale-[1.02] active:scale-[0.96] motion-reduce:hover:scale-100 motion-reduce:active:scale-100 ${
                         isSelected
                           ? 'bg-gradient-to-br from-gold to-champagne text-white shadow-lg ring-2 ring-white/50 active:brightness-110'
                           : 'bg-white/50 backdrop-blur-sm border border-white/60 hover:bg-white/60 active:bg-white/85 active:border-white/70'
                       }`}
                     >
                       <div
-                        className={`relative z-10 text-lg sm:text-xl md:text-2xl font-bold mb-0.5 sm:mb-1 ${likertTextClass}`}
+                        className={`relative z-10 text-base sm:text-xl md:text-2xl font-bold mb-0.5 sm:mb-1 ${likertTextClass}`}
                       >
                         {value}
                       </div>
                       <div
-                        className={`relative z-10 text-[10px] sm:text-[11px] md:text-xs leading-snug text-center hyphens-none break-normal ${likertTextClass}`}
+                        className={`relative z-10 text-[8px] sm:text-[11px] md:text-xs leading-[1.15] text-center whitespace-pre-line hyphens-none break-normal max-w-full px-0.5 ${likertTextClass}`}
                       >
-                        {value === 1 ? t("Zdecydowanie nie", "Strongly disagree") :
-                         value === 2 ? t("Nie", "Disagree") :
-                         value === 3 ? t("Neutralnie", "Neutral") :
-                         value === 4 ? t("Zgadzam się", "Agree") :
-                         t("Zdecydowanie tak", "Strongly agree")}
+                        <span className="sm:hidden">{likertLabel.short}</span>
+                        <span className="hidden sm:inline">{likertLabel.full}</span>
                       </div>
                     </motion.button>
                     );

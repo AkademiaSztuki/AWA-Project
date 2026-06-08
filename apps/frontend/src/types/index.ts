@@ -79,6 +79,8 @@ export interface SessionData {
     updatedAt: string;
   }>;
   currentSpaceId?: string;
+  /** Links active participant space to the current `/setup/room/[householdId]` draft. */
+  householdSpaceId?: string;
   // Legacy households data (for backward compatibility)
   households?: Array<{
     id: string;

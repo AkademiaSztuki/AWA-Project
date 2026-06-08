@@ -537,14 +537,19 @@ export function UserDashboard() {
         const defaultId =
           (spacesSource || []).find((s) => s.isDefault)?.id ||
           (spacesSource || [])[0]?.id ||
-          'default-space';
+          null;
 
         const knownSpaceIds = new Set((spacesSource || []).map((s) => s.id));
         const bySpaceId = new Map<string, SpaceImage[]>();
         for (const img of participantImages || []) {
           if (img.type !== 'generated' && img.type !== 'inspiration') continue;
           const rawSid = (img as { spaceId?: string | null }).spaceId;
-          const sid = rawSid && knownSpaceIds.has(rawSid) ? rawSid : defaultId;
+          let sid: string | null =
+            rawSid && knownSpaceIds.has(rawSid) ? rawSid : null;
+          if (!sid && !rawSid && defaultId && (spacesSource || []).length === 1) {
+            sid = defaultId;
+          }
+          if (!sid) continue;
           if (!bySpaceId.has(sid)) bySpaceId.set(sid, []);
           bySpaceId.get(sid)!.push({
             id: img.id,
@@ -557,13 +562,6 @@ export function UserDashboard() {
               ? (Object.values(img.tags).flat().filter((t): t is string => typeof t === 'string'))
               : [],
           });
-          if (rawSid && rawSid !== sid && rawSid !== defaultId) {
-            void updateParticipantImageMetadata(userHash, img.id, {
-              space_id: defaultId,
-            }).catch((e) => {
-              console.warn('[Dashboard] Failed to reconcile orphan image space_id:', e);
-            });
-          }
         }
 
         const mappedSpaces: Space[] = (spacesSource || []).map((s) => {

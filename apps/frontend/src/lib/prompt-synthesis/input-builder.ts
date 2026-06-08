@@ -174,13 +174,15 @@ export function buildPromptInputsFromSession(sessionData: SessionData): PromptIn
     roomType: sessionData.roomType || 'living_room',
     socialContext: sessionData.roomUsageType || 'solo',
     sharedWith: sessionData.roomSharedWith,
-    activities: sessionData.roomActivities?.map((activity) => ({
-      type: activity.type,
-      frequency: activity.frequency,
-      satisfaction: activity.satisfaction,
-      timeOfDay: activity.timeOfDay,
-      withWhom: activity.withWhom
-    })) || [],
+    activities: (Array.isArray(sessionData.roomActivities) ? sessionData.roomActivities : []).map(
+      (activity) => ({
+        type: activity.type,
+        frequency: activity.frequency,
+        satisfaction: activity.satisfaction,
+        timeOfDay: activity.timeOfDay,
+        withWhom: activity.withWhom,
+      }),
+    ),
     painPoints: sessionData.roomPainPoints || [],
     prsCurrent: sessionData.prsCurrent || sessionData.prsIdeal || defaultPRS,
     prsTarget: sessionData.prsTarget || sessionData.prsIdeal || defaultPRS,

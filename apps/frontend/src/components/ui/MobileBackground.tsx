@@ -1,12 +1,11 @@
 "use client";
 
-import { useIsMobile } from '@/hooks/useIsMobile';
 import Image from 'next/image';
 
 export function MobileBackground() {
   return (
-    <div 
-      className="fixed z-[1] pointer-events-none relative"
+    <div
+      className="fixed z-[1] pointer-events-none"
       style={{
         /* Cover largest mobile viewport + safe-area — avoids white/gray strips when Safari UI resizes */
         top: 'calc(-1 * env(safe-area-inset-top, 0px))',

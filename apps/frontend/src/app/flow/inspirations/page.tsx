@@ -401,6 +401,7 @@ export default function InspirationsPage() {
           const spaceId = await getOrCreateSpaceId(userHash, {
             spaceId: (sessionData as any)?.currentSpaceId,
             name: (sessionData as any)?.roomName || "Moja Przestrzeń",
+            reuseExistingDefault: true,
           });
           if (spaceId) {
             await updateSessionData({ currentSpaceId: spaceId } as any);

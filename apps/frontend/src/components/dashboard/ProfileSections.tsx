@@ -211,6 +211,9 @@ export function PreferencesOverviewSection({
     );
   };
 
+  const chipClassName =
+    'inline-block max-w-full px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-xs font-modern leading-snug bg-white/15 text-graphite border border-white/10 break-words';
+
   const renderChips = (
     values?: string[],
     dimensionId?: string,
@@ -219,15 +222,19 @@ export function PreferencesOverviewSection({
       return <span className="text-silver-dark text-sm font-modern">—</span>;
     }
     return (
-      <div className="flex gap-2 flex-wrap">
-        {values.slice(0, 6).map((item, idx) => (
-          <span
-            key={`${item}-${idx}`}
-            className="px-3 py-1 rounded-full text-xs font-modern bg-white/15 text-graphite border border-white/10"
-          >
-            {translateCanonicalPreferenceToken(item, language, dimensionId)}
-          </span>
-        ))}
+      <div className="flex gap-1.5 sm:gap-2 flex-wrap min-w-0">
+        {values.slice(0, 6).map((item, idx) => {
+          const label = translateCanonicalPreferenceToken(item, language, dimensionId);
+          return (
+            <span
+              key={`${item}-${idx}`}
+              title={label}
+              className={chipClassName}
+            >
+              {label}
+            </span>
+          );
+        })}
       </div>
     );
   };
@@ -266,9 +273,31 @@ export function PreferencesOverviewSection({
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-          <div className="grid grid-cols-3 gap-3 px-4 py-3 text-xs uppercase tracking-[0.2em] text-silver-dark font-modern border-b border-white/10">
-            <span>{t('Kategoria', 'Category')}</span>
-            <div className="flex flex-wrap items-center gap-2">
+          {(onRetakeImplicit || onRetakeExplicit) && (
+            <div className="flex flex-wrap gap-2 px-3 py-2.5 border-b border-white/10 md:hidden">
+              {onRetakeImplicit && (
+                <button
+                  type="button"
+                  onClick={onRetakeImplicit}
+                  className="rounded-full border border-gold/25 bg-white/10 px-2.5 py-1 font-modern text-[10px] normal-case tracking-normal text-graphite transition hover:border-gold/50 hover:bg-gold/10"
+                >
+                  {t('Ponów test (ukryte)', 'Retake test (implicit)')}
+                </button>
+              )}
+              {onRetakeExplicit && (
+                <button
+                  type="button"
+                  onClick={onRetakeExplicit}
+                  className="rounded-full border border-gold/25 bg-white/10 px-2.5 py-1 font-modern text-[10px] normal-case tracking-normal text-graphite transition hover:border-gold/50 hover:bg-gold/10"
+                >
+                  {t('Ponów test (jawne)', 'Retake test (explicit)')}
+                </button>
+              )}
+            </div>
+          )}
+          <div className="hidden md:grid grid-cols-3 gap-3 px-4 py-3 text-xs uppercase tracking-[0.2em] text-silver-dark font-modern border-b border-white/10">
+            <span className="min-w-0">{t('Kategoria', 'Category')}</span>
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
               <span>{t('Ukryte', 'Implicit')}</span>
               {onRetakeImplicit && (
                 <button
@@ -280,7 +309,7 @@ export function PreferencesOverviewSection({
                 </button>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
               <span>{t('Jawne', 'Explicit')}</span>
               {onRetakeExplicit && (
                 <button
@@ -295,26 +324,52 @@ export function PreferencesOverviewSection({
           </div>
           <div className="divide-y divide-white/10">
             {comparisonDimensions.map((dim) => (
-              <div
-                key={dim.id}
-                className="grid grid-cols-3 gap-3 px-4 py-3 items-center"
-              >
-                <span className="text-sm font-modern text-silver-dark">
-                  {dimensionLabel(dim.id)}
-                </span>
-                <div className="min-h-[24px] flex items-center">
-                  {dim.implicitCanonical.length > 0
-                    ? renderChips(dim.implicitCanonical, dim.id)
-                    : (
-                      <span className="text-silver-dark text-sm font-modern">—</span>
-                    )}
+              <div key={dim.id}>
+                <div className="md:hidden px-3 py-3 space-y-2.5">
+                  <span className="block text-xs font-semibold uppercase tracking-wide text-silver-dark font-modern">
+                    {dimensionLabel(dim.id)}
+                  </span>
+                  <div className="grid grid-cols-[minmax(3.5rem,auto)_1fr] gap-x-2 gap-y-2 items-start">
+                    <span className="pt-0.5 text-[10px] uppercase tracking-wide text-silver-dark font-modern shrink-0">
+                      {t('Ukryte', 'Implicit')}
+                    </span>
+                    <div className="min-w-0">
+                      {dim.implicitCanonical.length > 0
+                        ? renderChips(dim.implicitCanonical, dim.id)
+                        : (
+                          <span className="text-silver-dark text-sm font-modern">—</span>
+                        )}
+                    </div>
+                    <span className="pt-0.5 text-[10px] uppercase tracking-wide text-silver-dark font-modern shrink-0">
+                      {t('Jawne', 'Explicit')}
+                    </span>
+                    <div className="min-w-0">
+                      {dim.explicitCanonical.length > 0
+                        ? renderChips(dim.explicitCanonical, dim.id)
+                        : (
+                          <span className="text-silver-dark text-sm font-modern">—</span>
+                        )}
+                    </div>
+                  </div>
                 </div>
-                <div className="min-h-[24px] flex items-center">
-                  {dim.explicitCanonical.length > 0
-                    ? renderChips(dim.explicitCanonical, dim.id)
-                    : (
-                      <span className="text-silver-dark text-sm font-modern">—</span>
-                    )}
+                <div className="hidden md:grid grid-cols-3 gap-3 px-4 py-3 items-start">
+                  <span className="text-sm font-modern text-silver-dark min-w-0 break-words">
+                    {dimensionLabel(dim.id)}
+                  </span>
+                  <div className="min-h-[24px] min-w-0 flex items-start">
+                    {dim.implicitCanonical.length > 0
+                      ? renderChips(dim.implicitCanonical, dim.id)
+                      : (
+                        <span className="text-silver-dark text-sm font-modern">—</span>
+                      )}
+                  </div>
+                  <div className="min-h-[24px] min-w-0 flex items-start">
+                    {dim.explicitCanonical.length > 0
+                      ? renderChips(dim.explicitCanonical, dim.id)
+                      : (
+                        <span className="text-silver-dark text-sm font-modern">—</span>
+                      )}
+                  </div>
                 </div>
               </div>
             ))}

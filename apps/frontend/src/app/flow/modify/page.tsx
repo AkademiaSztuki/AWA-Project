@@ -662,7 +662,8 @@ export default function ModifyPage() {
       const spaceId = userHash
         ? await getOrCreateSpaceId(userHash, {
             spaceId: activeSpaceId,
-            name: activeSpaceName || 'Moja Przestrzeń'
+            name: activeSpaceName || 'Moja Przestrzeń',
+            reuseExistingDefault: true,
           })
         : null;
       if (spaceId) {
@@ -1439,7 +1440,7 @@ export default function ModifyPage() {
                           <p className="text-sm text-silver-dark mb-4">
                             {t({ pl: 'Zmiana całego stylu mebli i aranżacji', en: 'Change the entire style of furniture and arrangement' })}
                           </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[min(50vh,480px)] overflow-y-auto overscroll-contain pr-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[min(50vh,480px)] overflow-y-auto overscroll-contain scrollbar-hide">
                             {MACRO_MODIFICATIONS.map((mod) => (
                               <GlassButton
                                 key={mod.id}

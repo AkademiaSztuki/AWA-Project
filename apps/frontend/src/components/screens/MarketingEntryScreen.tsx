@@ -1271,8 +1271,20 @@ const MarketingEntryScreen: React.FC = () => {
   );
   const marketingShowcaseFrame = useMarketingShowcaseFrame(emotionProfileCycles.length);
 
+  /** Compact viewports: header visible on load (no scroll-to-reveal). Desktop keeps cinematic reveal on hero shrink. */
+  const isCompactMarketingViewport = useCallback(
+    () => getLayoutViewportWidth() < 1280,
+    []
+  );
+
   /** Must read the same MotionValues as the hero shrink (`heroSettle`); manual DOM progress can stay at 0 while Framer still animates (sticky layout). */
   const syncMarketingHeaderVisibility = useCallback(() => {
+    if (isCompactMarketingViewport()) {
+      marketingHeaderRevealedRef.current = true;
+      setHeaderVisible(true);
+      return;
+    }
+
     if (marketingHeaderRevealedRef.current) {
       setHeaderVisible(true);
       return;
@@ -1295,7 +1307,7 @@ const MarketingEntryScreen: React.FC = () => {
     } else {
       setHeaderVisible(false);
     }
-  }, [heroSettle, scrollYProgress, setHeaderVisible]);
+  }, [heroSettle, scrollYProgress, setHeaderVisible, isCompactMarketingViewport]);
 
   /** Align with `useIsMobile(1280)` — set split once before paint (SSR default is desktop). */
   useLayoutEffect(() => {
@@ -1303,14 +1315,23 @@ const MarketingEntryScreen: React.FC = () => {
     setSliderPosition(
       mobile ? HERO_COMPARISON_INITIAL_MOBILE : HERO_COMPARISON_INITIAL_DESKTOP
     );
-  }, []);
+    if (mobile) {
+      marketingHeaderRevealedRef.current = true;
+      setHeaderVisible(true);
+    }
+  }, [setHeaderVisible]);
 
   useLayoutEffect(() => {
+    if (isCompactMarketingViewport()) {
+      marketingHeaderRevealedRef.current = true;
+      setHeaderVisible(true);
+      return;
+    }
     if (typeof window !== 'undefined' && window.scrollY >= MARKETING_HEADER_WINDOW_SCROLL_REVEAL) {
       marketingHeaderRevealedRef.current = true;
     }
     syncMarketingHeaderVisibility();
-  }, [syncMarketingHeaderVisibility]);
+  }, [syncMarketingHeaderVisibility, isCompactMarketingViewport, setHeaderVisible]);
 
   useMotionValueEvent(scrollYProgress, 'change', () => {
     syncMarketingHeaderVisibility();

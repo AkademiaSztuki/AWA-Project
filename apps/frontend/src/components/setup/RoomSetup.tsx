@@ -54,6 +54,7 @@ import {
 } from '@/lib/flow/full-flow-progress';
 import { mapActivitiesToRecommendations } from '@/lib/preferences/activity-mapping';
 import { normalizeSemanticTo01 } from '@/lib/semantic-scale';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 // Helper function to generate a room name based on its type
 
@@ -150,7 +151,8 @@ export function RoomSetup({ householdId }: { householdId: string }) {
   const { sessionData, updateSessionData } = useSessionData();
   const { setRoomStep } = useFullFlowProgress();
   const { volume: voiceVolume, isEnabled: voiceEnabled } = useDialogueVoice();
-  
+  const isMobile = useIsMobile();
+
   const [currentStep, setCurrentStep] = useState<SetupStep>('photo_upload');
   const hasRestoredStepRef = useRef(false);
   const [roomData, setRoomData] = useState<RoomData>({
@@ -369,13 +371,15 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         prsCurrent: roomData.prsCurrent || { x: 0, y: 0 },
         prsTarget: roomData.prsTarget || { x: 0, y: 0 },
         painPoints: roomData.painPoints,
-        activities: (roomData.activities || []).map((activity) => ({
-          type: activity.type,
-          frequency: activity.frequency,
-          satisfaction: activity.satisfaction,
-          timeOfDay: activity.timeOfDay,
-          withWhom: activity.withWhom
-        })),
+        activities: (Array.isArray(roomData.activities) ? roomData.activities : []).map(
+          (activity) => ({
+            type: activity.type,
+            frequency: activity.frequency,
+            satisfaction: activity.satisfaction,
+            timeOfDay: activity.timeOfDay,
+            withWhom: activity.withWhom,
+          }),
+        ),
         activityContext
       } as Parameters<typeof saveRoom>[0];
       try {
@@ -450,18 +454,25 @@ export function RoomSetup({ householdId }: { householdId: string }) {
       const spaceType = roomData.roomType || 'personal';
 
       const userHash = (sessionData as any)?.userHash as string | undefined;
-      let targetSpaceId: string | null = isParticipantSpaceUuid(
-        (sessionData as any)?.currentSpaceId,
-      )
-        ? ((sessionData as any).currentSpaceId as string)
-        : null;
+      const fromDashboard = isFullFlowFromDashboard(searchParams);
+      const sessionHouseholdSpaceId = (sessionData as { householdSpaceId?: string } | undefined)
+        ?.householdSpaceId;
+      const reuseSpaceForHousehold =
+        fromDashboard &&
+        sessionHouseholdSpaceId === householdId &&
+        isParticipantSpaceUuid((sessionData as any)?.currentSpaceId)
+          ? ((sessionData as any).currentSpaceId as string)
+          : undefined;
+
+      let targetSpaceId: string | null = reuseSpaceForHousehold ?? null;
 
       if (userHash) {
         targetSpaceId = await getOrCreateSpaceId(userHash, {
-          spaceId: targetSpaceId ?? undefined,
+          spaceId: reuseSpaceForHousehold,
           name: spaceName,
           type: spaceType,
-          is_default: true,
+          is_default: !fromDashboard && !(sessionData as { spaces?: unknown[] })?.spaces?.length,
+          reuseExistingDefault: false,
         });
       }
 
@@ -529,6 +540,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         prsCurrent: roomData.prsCurrent,
         prsTarget: roomData.prsTarget,
         currentSpaceId: targetSpaceId,
+        householdSpaceId: householdId,
         spaces: updatedSpaces,
         // Clear old generation data for new room
         matrixHistory: [],
@@ -700,11 +712,11 @@ export function RoomSetup({ householdId }: { householdId: string }) {
 
   return (
     <div className="relative flex w-full min-w-0 flex-col">
-      <div className="absolute inset-0 bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 -z-10" />
+      <div className="absolute inset-0 -z-10 hidden bg-gradient-radial from-pearl-50 via-platinum-50 to-silver-100 md:block" />
       
       {/* Dialog IDA na dole - dynamiczny dla każdego kroku, pokazuje komentarz IDA jeśli dostępny */}
       {showInitialAnalysisDialog ? (
-        <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+        <div className="fixed bottom-0 left-0 right-0 z-50 w-full pointer-events-none">
           <AwaDialogue 
             key="initial-analysis"
             currentStep="room_analysis" 
@@ -728,7 +740,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
           />
         </div>
       ) : analysisDialogActive && analysisDialogId && analysisDialogMessages ? (
-        <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+        <div className="fixed bottom-0 left-0 right-0 z-50 w-full pointer-events-none">
           <AwaDialogue 
             key={analysisDialogId}
             currentStep="room_analysis_ready" 
@@ -765,7 +777,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
           />
         </div>
       ) : furnitureSuggestionDialogActive ? (
-        <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+        <div className="fixed bottom-0 left-0 right-0 z-50 w-full pointer-events-none">
           <AwaDialogue 
             key="furniture-suggestion"
             currentStep="room_furniture_suggestion" 
@@ -779,9 +791,10 @@ export function RoomSetup({ householdId }: { householdId: string }) {
           />
         </div>
       ) : (
-        // Nie pokazuj dialogu "upload" jeśli już pokazaliśmy analizę (użytkownik już dodał zdjęcie)
+        // Mobile: step cards already show the question — skip bottom IDA to avoid duplicate/leaking subtitles.
+        !isMobile &&
         !(currentStep === 'photo_upload' && hasPhotos && (analysisCompleted || initialDialogShownRef.current)) && (
-          <div className="fixed bottom-0 left-0 right-0 w-full z-50">
+          <div className="fixed bottom-0 left-0 right-0 z-50 w-full pointer-events-none">
             <AwaDialogue 
               key={`step-${currentStep}`}
               currentStep={STEP_TO_DIALOGUE[currentStep]} 
@@ -822,7 +835,7 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         />
       )}
 
-      <div className="flex min-w-0 w-full flex-col px-0 pb-32 pt-2 sm:pt-4 lg:pt-10">
+      <div className="flex min-w-0 w-full flex-col px-0 pb-6 pt-2 sm:pt-4 md:pb-32 lg:pt-10">
         <div className={FULL_FLOW_GLASS_SHELL}>
           <AnimatePresence mode="wait">
             {currentStep === 'photo_upload' && (

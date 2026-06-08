@@ -2129,7 +2129,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         let updatedSpaces: any[] = [];
         const spaceId = await getOrCreateSpaceId(userHash, {
           spaceId: (sessionData as any)?.currentSpaceId,
-          name: (sessionData as any)?.roomName || t({ pl: 'Moja Przestrzeń', en: 'My Space' })
+          name: (sessionData as any)?.roomName || t({ pl: 'Moja Przestrzeń', en: 'My Space' }),
+          reuseExistingDefault: true,
         });
 
         if (spaceId) {
@@ -2866,7 +2867,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     const pending = snap.matrixAnonPending;
     if (!Array.isArray(pending) || pending.length === 0) return;
     if (matrixAnonResumeOnce.current) return;
-    if (isGeneratingRef.current) return;
+    if (isGeneratingRef.current || isGenerating) return;
 
     void (async () => {
       const userHash = snap.userHash;
@@ -3108,7 +3109,13 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         setIsGenerating(false);
       }
     })();
-  }, [isAuthenticated, isApiReady, sessionData?.matrixAnonPending, sessionData?.userHash]);
+  }, [
+    isAuthenticated,
+    isApiReady,
+    isGenerating,
+    sessionData?.matrixAnonPending,
+    sessionData?.userHash,
+  ]);
 
   const handleInitialGeneration = async (force = false) => {
     console.log('[Generate] handleInitialGeneration called', { 
@@ -3353,7 +3360,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Save generated images to spaces (Supabase) - używamy już zdefiniowanego userHash z linii 1745
       const spaceId = await getOrCreateSpaceId(userHash, {
         spaceId: (sessionData as any)?.currentSpaceId,
-        name: (sessionData as any)?.roomName || 'Moja Przestrzeń'
+        name: (sessionData as any)?.roomName || 'Moja Przestrzeń',
+        reuseExistingDefault: true,
       });
 
       if (spaceId) {
@@ -3719,7 +3727,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       const spaceId = userHash
         ? await getOrCreateSpaceId(userHash, {
             spaceId: activeSpaceId,
-            name: activeSpaceName || 'Moja Przestrzeń'
+            name: activeSpaceName || 'Moja Przestrzeń',
+            reuseExistingDefault: true,
           })
         : null;
       if (spaceId) {
@@ -4708,7 +4717,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 const hasAtLeastOneImage = readyCount >= 1;
                 return hasAtLeastOneImage;
               })() && (
-                <div className="md:static sticky bottom-0 z-20 -mx-2 px-2 pt-2 pb-3 md:pb-0 md:mx-0 md:pt-0 bg-gradient-to-t from-black/25 via-black/10 to-transparent backdrop-blur-md md:bg-transparent md:from-transparent md:backdrop-blur-none border-t border-white/20 md:border-t-0 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] md:shadow-none rounded-t-xl md:rounded-none">
+                <div className="md:static sticky bottom-0 z-20 px-2 pt-2 pb-3 md:pb-0 md:px-0 md:pt-0 bg-transparent">
                   {!selectedImage && !isUpscaling && (
                     <p className="text-center text-xs text-silver-dark mb-2 md:mb-3">
                       {t({
@@ -4725,7 +4734,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         }
                       }}
                       disabled={!selectedImage || isUpscaling}
-                      className="px-8 py-3 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal break-words w-full max-w-md sm:w-auto"
+                      className="px-8 py-3 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal break-words w-full max-w-md sm:w-auto !shadow-none hover:!shadow-none backdrop-blur-none bg-gold-400/80 hover:bg-gold-400/90"
                     >
                       {isUpscaling ? (
                         <>
@@ -4751,7 +4760,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                         type="button"
                         variant="secondary"
                         onClick={() => openAnonUnlockLoginModal()}
-                        className="px-6 py-2.5 text-sm whitespace-normal break-words w-full max-w-md sm:w-auto"
+                        className="px-6 py-2.5 text-sm whitespace-normal break-words w-full max-w-md sm:w-auto !shadow-none hover:!shadow-none backdrop-blur-none"
                       >
                         {t({
                           pl: 'Załóż konto i zobacz wszystkie obrazy',
@@ -5189,7 +5198,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                               <p className="text-sm text-silver-dark mb-4">
                                 {t({ pl: 'Zmiana całego stylu mebli i aranżacji', en: 'Change the entire style of furniture and arrangement' })}
                               </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[min(50vh,480px)] overflow-y-auto overscroll-contain pr-1">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[min(50vh,480px)] overflow-y-auto overscroll-contain scrollbar-hide">
                                 {MACRO_MODIFICATIONS.map((mod) => (
                                   <GlassButton
                                     key={mod.id}
@@ -5513,7 +5522,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                           <p className="text-sm text-silver-dark mb-4">
                             Zmiana całego stylu mebli i aranżacji
                           </p>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[min(50vh,480px)] overflow-y-auto overscroll-contain pr-1">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[min(50vh,480px)] overflow-y-auto overscroll-contain scrollbar-hide">
                             {MACRO_MODIFICATIONS.map((mod) => (
                               <GlassButton
                                 key={mod.id}
@@ -5634,6 +5643,10 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       <LoginModal
         isOpen={postAnonGenLoginOpen}
         onClose={() => setPostAnonGenLoginOpen(false)}
+        onSuccess={() => {
+          matrixAnonResumeOnce.current = false;
+          setPostAnonGenLoginOpen(false);
+        }}
         gateMode="soft"
         onMaybeLater={() => {}}
         softMaybeLaterLabel={{

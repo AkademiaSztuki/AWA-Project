@@ -665,7 +665,8 @@ export default function FastGeneratePage() {
       // Save to spaces (używamy już zdefiniowanego userHash z linii 183)
       const spaceId = await getOrCreateSpaceId(userHash, {
         spaceId: typedSessionData?.currentSpaceId,
-        name: typedSessionData?.roomName || 'Moja Przestrzeń'
+        name: typedSessionData?.roomName || 'Moja Przestrzeń',
+        reuseExistingDefault: true,
       });
 
       if (spaceId) {
@@ -1190,6 +1191,7 @@ export default function FastGeneratePage() {
           const modSpaceId = await getOrCreateSpaceId(persistUserHash, {
             spaceId: typedSessionData?.currentSpaceId,
             name: typedSessionData?.roomName || 'Moja Przestrzeń',
+            reuseExistingDefault: true,
           });
           if (modSpaceId) {
             const saveModResult = await saveParticipantImages(persistUserHash, [
@@ -1537,6 +1539,7 @@ export default function FastGeneratePage() {
           const modSpaceId = await getOrCreateSpaceId(persistUserHash, {
             spaceId: typedSessionData?.currentSpaceId,
             name: typedSessionData?.roomName || 'Moja Przestrzeń',
+            reuseExistingDefault: true,
           });
           if (modSpaceId) {
             const saveModResult = await saveParticipantImages(persistUserHash, [
@@ -1935,7 +1938,7 @@ export default function FastGeneratePage() {
                                   <RefreshCw size={20} className="mr-3" />
                                   {language === 'pl' ? 'Zupełnie inny kierunek' : 'Completely new direction'}
                                 </h4>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-[min(60vh,560px)] overflow-y-auto overscroll-contain pr-1">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-[min(60vh,560px)] overflow-y-auto overscroll-contain scrollbar-hide">
                                   {MACRO_MODIFICATIONS.map((mod) => (
                                     <GlassButton
                                       key={mod.id}

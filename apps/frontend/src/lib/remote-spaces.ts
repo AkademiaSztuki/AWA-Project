@@ -39,7 +39,14 @@ async function pickExistingParticipantSpaceId(
 
 export async function getOrCreateSpaceId(
   userHash: string,
-  opts?: { spaceId?: string; name?: string; type?: string; is_default?: boolean },
+  opts?: {
+    spaceId?: string;
+    name?: string;
+    type?: string;
+    is_default?: boolean;
+    /** When true, reuse default/first remote space if no valid spaceId hint. Default: false (create new). */
+    reuseExistingDefault?: boolean;
+  },
 ): Promise<string | null> {
   if (!userHash) return null;
 
@@ -52,9 +59,11 @@ export async function getOrCreateSpaceId(
     }
   }
 
-  const existingId =
-    spaces.find((s) => s.isDefault)?.id ?? spaces[0]?.id ?? null;
-  if (existingId) return existingId;
+  if (opts?.reuseExistingDefault) {
+    const existingId =
+      spaces.find((s) => s.isDefault)?.id ?? spaces[0]?.id ?? null;
+    if (existingId) return existingId;
+  }
 
   const name = opts?.name || 'Moja Przestrzeń';
   const type = opts?.type || 'personal';
@@ -62,7 +71,7 @@ export async function getOrCreateSpaceId(
   const created = await gcpApi.spaces.create(userHash, {
     name,
     type,
-    is_default: opts?.is_default ?? true,
+    is_default: opts?.is_default ?? spaces.length === 0,
   });
   return created.ok ? ((created.data?.space as any)?.id ?? null) : null;
 }

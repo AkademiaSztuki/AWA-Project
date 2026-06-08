@@ -230,6 +230,11 @@ export function PartOneProgressBar({ currentPath, className = '' }: PartOneProgr
   const [furthestIndex, setFurthestIndex] = useState(0);
 
   useLayoutEffect(() => {
+    setTouchPreviewIndex(null);
+    setHoveredIndex(null);
+  }, [path, ctx.profileStep, ctx.roomStep]);
+
+  useLayoutEffect(() => {
     if (typeof window === 'undefined' || journeyMode === null) return;
     const idx = isFast ? getFastFlowProgressIndex(path) : getFullFlowProgressIndex(path, ctx);
     const storageKey = isFast
