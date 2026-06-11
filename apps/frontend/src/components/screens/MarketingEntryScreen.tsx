@@ -19,6 +19,7 @@ import {
   ArrowRight,
   Brain,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -26,7 +27,6 @@ import {
   Home,
   Layers,
   PlayCircle,
-  SlidersHorizontal,
   Sparkles,
   Upload,
   Wand2,
@@ -117,6 +117,7 @@ const copy = {
       'Wariant po lewej zmienia się automatycznie. Przeciągnij suwak, żeby zestawić go z jasnym punktem wyjścia.',
     heroPrevVariantAria: 'Poprzedni wariant wnętrza',
     heroNextVariantAria: 'Następny wariant wnętrza',
+    scrollDownHint: 'Przewiń w dół',
     profileTitle: 'Twój profil wnętrza',
     assistant:
       'Pokaż mi swoją przestrzeń, a pomogę Ci odkryć styl, który pasuje do Ciebie - nie tylko do trendów.',
@@ -272,6 +273,7 @@ const copy = {
       'The left-hand variant cycles automatically. Drag the slider to compare it with the bright starting space.',
     heroPrevVariantAria: 'Previous interior variant',
     heroNextVariantAria: 'Next interior variant',
+    scrollDownHint: 'Scroll down',
     profileTitle: 'Your interior profile',
     assistant:
       'Show me your space and I will help you discover a style that fits you - not just the trends.',
@@ -836,6 +838,104 @@ function localizedHeroSlide(slide: HeroInteriorSlide, lang: 'pl' | 'en') {
   return lang === 'pl' ? slide.pl : slide.en;
 }
 
+const HeroScrollDownHint = ({
+  label,
+  opacity,
+  preferReducedMotion,
+}: {
+  label: string;
+  opacity: MotionValue<number>;
+  preferReducedMotion: boolean | null;
+}) => (
+  <motion.div
+    className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] flex flex-col items-center gap-0.5 pb-[max(0.65rem,env(safe-area-inset-bottom,0px))] sm:gap-1 sm:pb-3"
+    style={{ opacity }}
+    aria-hidden="true"
+  >
+    <span className="font-modern text-[10px] font-medium uppercase tracking-[0.14em] text-white/55 sm:text-[11px] sm:tracking-[0.16em]">
+      {label}
+    </span>
+    <motion.div
+      animate={preferReducedMotion ? undefined : { y: [0, 3, 0] }}
+      transition={
+        preferReducedMotion
+          ? undefined
+          : { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }
+      }
+    >
+      <ChevronDown
+        size={18}
+        strokeWidth={2.25}
+        className="text-gold-400/80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]"
+        aria-hidden="true"
+      />
+    </motion.div>
+  </motion.div>
+);
+
+const HERO_COMPARISON_CHEVRON_CLASS =
+  'shrink-0 text-gold-500 drop-shadow-[0_1px_0_rgba(255,255,255,0.55),0_0_8px_rgba(0,0,0,0.35)] sm:h-5 sm:w-5';
+
+/** Idle chevrons scale up from the final 18px / sm:20px footprint (~28px / ~31px). */
+const HERO_COMPARISON_CHEVRON_IDLE_SCALE = 28 / 18;
+const HERO_COMPARISON_CHEVRON_SHRINK_DURATION_S = 0.65;
+
+const HeroComparisonHandle = ({
+  showIdleHint,
+  preferReducedMotion,
+}: {
+  showIdleHint: boolean;
+  preferReducedMotion: boolean | null;
+}) => {
+  const shouldAnimate = showIdleHint && !preferReducedMotion;
+  const chevronScale = showIdleHint ? HERO_COMPARISON_CHEVRON_IDLE_SCALE : 1;
+  const chevronScaleTransition = preferReducedMotion
+    ? { duration: 0 }
+    : { duration: HERO_COMPARISON_CHEVRON_SHRINK_DURATION_S, ease: 'easeOut' as const };
+
+  return (
+    <div
+      className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 touch-none sm:gap-2.5"
+      aria-hidden="true"
+    >
+      <motion.div
+        initial={{ scale: HERO_COMPARISON_CHEVRON_IDLE_SCALE }}
+        animate={{ scale: chevronScale }}
+        transition={{ scale: chevronScaleTransition }}
+        className="origin-center"
+      >
+        <motion.div
+          animate={shouldAnimate ? { x: [0, -5, 0] } : { x: 0 }}
+          transition={
+            shouldAnimate
+              ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }
+              : { duration: 0.2, ease: 'easeOut' }
+          }
+        >
+          <ChevronLeft size={18} strokeWidth={2.5} className={HERO_COMPARISON_CHEVRON_CLASS} aria-hidden="true" />
+        </motion.div>
+      </motion.div>
+      <motion.div
+        initial={{ scale: HERO_COMPARISON_CHEVRON_IDLE_SCALE }}
+        animate={{ scale: chevronScale }}
+        transition={{ scale: chevronScaleTransition }}
+        className="origin-center"
+      >
+        <motion.div
+          animate={shouldAnimate ? { x: [0, 5, 0] } : { x: 0 }}
+          transition={
+            shouldAnimate
+              ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut', delay: 0.12 }
+              : { duration: 0.2, ease: 'easeOut' }
+          }
+        >
+          <ChevronRight size={18} strokeWidth={2.5} className={HERO_COMPARISON_CHEVRON_CLASS} aria-hidden="true" />
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+};
+
 const HERO_VARIANT_RAIL_MAX_WIDTH_PX = 340;
 
 /** Delicate gold outline on flat cards below xl (aligned with highlighted path card). */
@@ -929,9 +1029,11 @@ const MarketingEntryScreen: React.FC = () => {
     fontScale === 'lg' || fontScale === 'xl' || textSpacing;
   const reduceHeroCarousel = useReducedMotion();
   const [sliderPosition, setSliderPosition] = useState(HERO_COMPARISON_INITIAL_DESKTOP);
+  const [hasUsedComparisonSlider, setHasUsedComparisonSlider] = useState(false);
   const [activeVariant, setActiveVariant] = useState(0);
   const comparisonRef = useRef<HTMLDivElement | null>(null);
   const comparisonDraggingRef = useRef(false);
+  const comparisonInitialPositionRef = useRef(HERO_COMPARISON_INITIAL_DESKTOP);
   const heroStickyFrameRef = useRef<HTMLDivElement | null>(null);
   const heroCopyGlassPanelRef = useRef<HTMLDivElement | null>(null);
   const heroStyleRailAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -961,6 +1063,7 @@ const MarketingEntryScreen: React.FC = () => {
   const heroSettle = useTransform(scrollYProgress, (p) =>
     Math.min(1, Math.max(0, p / HERO_SETTLE_SCROLL_END))
   );
+  const heroScrollHintOpacity = useTransform(heroSettle, (s) => Math.max(0, 1 - s / 0.16));
   const { introPortal, scrollToHowItWorksWithIntro } = useMarketingIdaIntro({
     heroSettle,
     settleAdvanceEps: MARKETING_HEADER_SETTLE_ADVANCE_EPS,
@@ -1312,14 +1415,21 @@ const MarketingEntryScreen: React.FC = () => {
   /** Align with `useIsMobile(1280)` — set split once before paint (SSR default is desktop). */
   useLayoutEffect(() => {
     const mobile = getLayoutViewportWidth() < 1280;
-    setSliderPosition(
-      mobile ? HERO_COMPARISON_INITIAL_MOBILE : HERO_COMPARISON_INITIAL_DESKTOP
-    );
+    const initial = mobile ? HERO_COMPARISON_INITIAL_MOBILE : HERO_COMPARISON_INITIAL_DESKTOP;
+    comparisonInitialPositionRef.current = initial;
+    setSliderPosition(initial);
     if (mobile) {
       marketingHeaderRevealedRef.current = true;
       setHeaderVisible(true);
     }
   }, [setHeaderVisible]);
+
+  useEffect(() => {
+    if (hasUsedComparisonSlider) return;
+    if (Math.abs(sliderPosition - comparisonInitialPositionRef.current) > 0.5) {
+      setHasUsedComparisonSlider(true);
+    }
+  }, [sliderPosition, hasUsedComparisonSlider]);
 
   useLayoutEffect(() => {
     if (isCompactMarketingViewport()) {
@@ -1602,6 +1712,7 @@ const MarketingEntryScreen: React.FC = () => {
             tabIndex={0}
             className="absolute inset-0 z-[1] cursor-ew-resize touch-none select-none overflow-hidden bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             onPointerDown={(event) => {
+              setHasUsedComparisonSlider(true);
               comparisonDraggingRef.current = true;
               event.currentTarget.setPointerCapture(event.pointerId);
               updateSliderFromClientX(event.clientX);
@@ -1628,6 +1739,16 @@ const MarketingEntryScreen: React.FC = () => {
             }}
             onKeyDown={(event) => {
               const step = 5;
+              if (
+                event.key === 'ArrowLeft' ||
+                event.key === 'ArrowDown' ||
+                event.key === 'ArrowRight' ||
+                event.key === 'ArrowUp' ||
+                event.key === 'Home' ||
+                event.key === 'End'
+              ) {
+                setHasUsedComparisonSlider(true);
+              }
               if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
                 event.preventDefault();
                 setSliderPosition((p) => Math.max(8, p - step));
@@ -1701,19 +1822,20 @@ const MarketingEntryScreen: React.FC = () => {
                   style={{ left: `${sliderPosition}%` }}
                   aria-hidden="true"
                 >
-                  <div
-                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 touch-none"
-                    aria-hidden="true"
-                  >
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/55 bg-white/20 backdrop-blur-[2px] sm:h-20 sm:w-20">
-                      <SlidersHorizontal size={28} className="text-gold-500" />
-                    </div>
-                  </div>
+                  <HeroComparisonHandle
+                    showIdleHint={!hasUsedComparisonSlider}
+                    preferReducedMotion={reduceHeroCarousel}
+                  />
                 </div>
             </motion.div>
 
             <motion.div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/24 via-graphite/6 to-transparent max-xl:from-graphite/20 max-xl:via-transparent lg:from-graphite/46 lg:via-graphite/12 xl:from-graphite/38 xl:via-graphite/8" />
             <motion.div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[34%] bg-gradient-to-t from-black/22 via-black/6 to-transparent max-xl:from-black/18 xl:h-[40%] xl:from-black/44 xl:via-black/14 xl:from-black/36" />
+            <HeroScrollDownHint
+              label={t.scrollDownHint}
+              opacity={heroScrollHintOpacity}
+              preferReducedMotion={reduceHeroCarousel}
+            />
           </motion.div>
 
           <motion.div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between pt-0 pb-[max(2rem,calc(1.25rem+env(safe-area-inset-bottom,0px)))] max-xl:pb-[max(2.5rem,calc(1.75rem+env(safe-area-inset-bottom,0px)))] sm:pb-4 lg:pb-6">
