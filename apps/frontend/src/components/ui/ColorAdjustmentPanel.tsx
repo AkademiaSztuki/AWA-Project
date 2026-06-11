@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useColorAdjustment } from "@/contexts/ColorAdjustmentContext";
@@ -13,7 +13,6 @@ import { getA11yPanelUi } from "@/lib/a11y-panel-ui";
 import {
   isMobileGlassSheetViewport,
   MOBILE_GLASS_SHEET_BACKDROP,
-  MOBILE_GLASS_SHEET_BREAKPOINT,
   MOBILE_GLASS_SHEET_CLOSE_BUTTON,
   MOBILE_GLASS_SHEET_CLOSE_ICON_SIZE,
   MOBILE_GLASS_SHEET_HEADER,
@@ -21,7 +20,11 @@ import {
   MOBILE_GLASS_SHEET_SCROLL,
   MOBILE_GLASS_SHEET_SHELL,
 } from "@/lib/mobile-glass-sheet";
-import { useIsMobile } from "@/hooks/useIsMobile";
+import {
+  getA11yAnchoredPanelHeight,
+  getA11yAnchoredPanelWidth,
+  resolveAnchoredPanelPosition,
+} from "@/lib/floating-panel-position";
 import { cn } from "@/lib/utils";
 
 type PanelTab = "wcag" | "advanced";
@@ -45,36 +48,31 @@ type PanelLayoutMode = "sheet" | "anchored";
 
 function resolvePanelLayout(
   rect: DOMRect,
-  options?: { forceSheet?: boolean }
+  options?: {
+    forceSheet?: boolean;
+    panelSize?: { width: number; height: number };
+  }
 ): {
   mode: PanelLayoutMode;
-  position: { top: number; right: number };
+  position: { top: number; left: number };
 } {
+  if (options?.forceSheet || isMobileGlassSheetViewport()) {
+    return { mode: "sheet", position: { top: 0, left: 0 } };
+  }
+
   const viewportW = window.innerWidth;
   const viewportH = window.innerHeight;
-  const margin = 16;
-  const panelW = Math.min(360, viewportW * 0.92);
-  const panelH = Math.min(viewportH * 0.85, viewportH - margin * 2);
+  const panelSize = options?.panelSize ?? {
+    width: getA11yAnchoredPanelWidth(viewportW),
+    height: getA11yAnchoredPanelHeight(viewportH),
+  };
 
-  if (options?.forceSheet || isMobileGlassSheetViewport()) {
-    return { mode: "sheet", position: { top: 0, right: 0 } };
+  const anchored = resolveAnchoredPanelPosition(rect, panelSize);
+  if (!anchored) {
+    return { mode: "sheet", position: { top: 0, left: 0 } };
   }
 
-  const topBelow = rect.bottom + 8;
-  const topAbove = rect.top - 8 - panelH;
-  const fitsBelow = topBelow + panelH <= viewportH - margin;
-  const fitsAbove = topAbove >= margin;
-
-  if (!fitsBelow && !fitsAbove) {
-    return { mode: "sheet", position: { top: 0, right: 0 } };
-  }
-
-  const top = fitsBelow ? topBelow : topAbove;
-  const idealRight = viewportW - rect.right;
-  const maxRight = Math.max(0, viewportW - panelW - margin);
-  const right = Math.max(0, Math.min(idealRight, maxRight));
-
-  return { mode: "anchored", position: { top, right } };
+  return { mode: "anchored", position: anchored };
 }
 
 type ColorAdjustmentPanelProps = {
@@ -129,14 +127,25 @@ export function ColorAdjustmentPanel({
   const wcagTabRef = useRef<HTMLButtonElement>(null);
   const advancedTabRef = useRef<HTMLButtonElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const isMobileSheetViewport = useIsMobile(MOBILE_GLASS_SHEET_BREAKPOINT);
   const [panelLayout, setPanelLayout] = useState<PanelLayoutMode>("anchored");
-  const [panelPosition, setPanelPosition] = useState({ top: 0, right: 0 });
+  const [panelPosition, setPanelPosition] = useState({ top: 0, left: 0 });
 
   const applyPanelLayout = useCallback(() => {
     if (!buttonRef.current) return;
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const panelSize = panelRef.current
+      ? {
+          width: panelRef.current.offsetWidth,
+          height: panelRef.current.offsetHeight,
+        }
+      : {
+          width: getA11yAnchoredPanelWidth(viewportW),
+          height: getA11yAnchoredPanelHeight(viewportH),
+        };
     const { mode, position } = resolvePanelLayout(buttonRef.current.getBoundingClientRect(), {
       forceSheet: preferSheetLayout,
+      panelSize,
     });
     setPanelLayout(mode);
     setPanelPosition(position);
@@ -152,26 +161,28 @@ export function ColorAdjustmentPanel({
 
     if (preferSheetLayout || isMobileGlassSheetViewport()) {
       setPanelLayout("sheet");
-      setPanelPosition({ top: 0, right: 0 });
+      setPanelPosition({ top: 0, left: 0 });
       return;
     }
 
-    applyPanelLayout();
-    const timer = setTimeout(applyPanelLayout, 100);
     window.addEventListener("scroll", applyPanelLayout, true);
     window.addEventListener("resize", applyPanelLayout);
     return () => {
-      clearTimeout(timer);
       window.removeEventListener("scroll", applyPanelLayout, true);
       window.removeEventListener("resize", applyPanelLayout);
     };
   }, [isOpen, preferSheetLayout, applyPanelLayout]);
 
+  useLayoutEffect(() => {
+    if (!isOpen || preferSheetLayout || isMobileGlassSheetViewport()) return;
+    applyPanelLayout();
+  }, [isOpen, preferSheetLayout, applyPanelLayout, panelLayout]);
+
   const handleToggle = () => {
     if (!isOpen) {
       if (preferSheetLayout || isMobileGlassSheetViewport()) {
         setPanelLayout("sheet");
-        setPanelPosition({ top: 0, right: 0 });
+        setPanelPosition({ top: 0, left: 0 });
       } else {
         applyPanelLayout();
       }
@@ -322,7 +333,7 @@ export function ColorAdjustmentPanel({
 
   const isSheet =
     preferSheetLayout ||
-    (mounted && isMobileSheetViewport) ||
+    isMobileGlassSheetViewport() ||
     panelLayout === "sheet";
   const ui = getA11yPanelUi(isSheet);
 
@@ -386,8 +397,8 @@ export function ColorAdjustmentPanel({
                   isSheet
                     ? undefined
                     : {
-                        top: panelPosition.top > 0 ? `${panelPosition.top}px` : "80px",
-                        right: panelPosition.right > 0 ? `${panelPosition.right}px` : "16px",
+                        top: `${panelPosition.top}px`,
+                        left: `${panelPosition.left}px`,
                       }
                 }
               >
