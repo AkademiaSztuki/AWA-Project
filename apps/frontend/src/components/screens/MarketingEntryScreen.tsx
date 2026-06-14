@@ -2025,16 +2025,14 @@ const MarketingEntryScreen: React.FC<{ compactHeroHint?: boolean }> = ({
                     <motion.div
                       key={activeVariant}
                       className="absolute inset-0"
-                      initial={
-                        reduceHeroCarousel || compactHero ? { opacity: 1 } : { opacity: 0 }
-                      }
+                      initial={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      exit={reduceHeroCarousel || compactHero ? { opacity: 1 } : { opacity: 0 }}
+                      exit={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
                       transition={{
                         duration: reduceHeroCarousel
                           ? 0
                           : compactHero
-                            ? 0.35
+                            ? 1.15
                             : HERO_INTERIOR_CROSSFADE_SEC,
                         ease: HERO_INTERIOR_CROSSFADE_EASE,
                       }}
