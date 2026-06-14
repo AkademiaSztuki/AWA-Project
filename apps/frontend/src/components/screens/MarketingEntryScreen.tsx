@@ -751,6 +751,11 @@ const HERO_INTERIOR_AUTO_ADVANCE_MS = 11_000;
 const HERO_COMPARISON_INITIAL_DESKTOP = 56;
 const HERO_COMPARISON_INITIAL_MOBILE = 38;
 
+/** Touch gesture lock — vertical scroll vs horizontal slider drag (mobile hero). */
+const COMPARISON_GESTURE_THRESHOLD_PX = 10;
+
+type ComparisonGestureMode = 'undecided' | 'scroll' | 'drag';
+
 /** Crossfade duration when swapping hero slides (seconds; exit + enter overlap in `sync` mode). */
 const HERO_INTERIOR_CROSSFADE_SEC = 2.55;
 
@@ -1033,6 +1038,9 @@ const MarketingEntryScreen: React.FC = () => {
   const [activeVariant, setActiveVariant] = useState(0);
   const comparisonRef = useRef<HTMLDivElement | null>(null);
   const comparisonDraggingRef = useRef(false);
+  const comparisonGestureModeRef = useRef<ComparisonGestureMode>('undecided');
+  const comparisonPointerOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const comparisonActivePointerIdRef = useRef<number | null>(null);
   const comparisonInitialPositionRef = useRef(HERO_COMPARISON_INITIAL_DESKTOP);
   const heroStickyFrameRef = useRef<HTMLDivElement | null>(null);
   const heroCopyGlassPanelRef = useRef<HTMLDivElement | null>(null);
@@ -1678,6 +1686,51 @@ const MarketingEntryScreen: React.FC = () => {
     setSliderPosition(Math.max(8, Math.min(92, next)));
   };
 
+  const resetComparisonGesture = () => {
+    comparisonDraggingRef.current = false;
+    comparisonGestureModeRef.current = 'undecided';
+    comparisonPointerOriginRef.current = null;
+    comparisonActivePointerIdRef.current = null;
+  };
+
+  const beginComparisonDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    setHasUsedComparisonSlider(true);
+    comparisonDraggingRef.current = true;
+    comparisonGestureModeRef.current = 'drag';
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateSliderFromClientX(event.clientX);
+  };
+
+  const resolveComparisonGestureOnMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const origin = comparisonPointerOriginRef.current;
+    if (!origin) return;
+
+    const dx = event.clientX - origin.x;
+    const dy = event.clientY - origin.y;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    if (absDx < COMPARISON_GESTURE_THRESHOLD_PX && absDy < COMPARISON_GESTURE_THRESHOLD_PX) return;
+
+    if (absDy > absDx) {
+      comparisonGestureModeRef.current = 'scroll';
+      comparisonActivePointerIdRef.current = null;
+      comparisonPointerOriginRef.current = null;
+      return;
+    }
+
+    beginComparisonDrag(event);
+  };
+
+  const releaseComparisonPointerCapture = (
+    target: HTMLDivElement,
+    pointerId: number
+  ) => {
+    if (target.hasPointerCapture(pointerId)) {
+      target.releasePointerCapture(pointerId);
+    }
+  };
+
   return (
     <>
     <div ref={marketingRootRef} className={cn('relative w-full pb-0', useMarqueePortal && 'pointer-events-none')}>
@@ -1710,32 +1763,48 @@ const MarketingEntryScreen: React.FC = () => {
           <motion.div
             ref={comparisonRef}
             tabIndex={0}
-            className="absolute inset-0 z-[1] cursor-ew-resize touch-none select-none overflow-hidden bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+            className="absolute inset-0 z-[1] cursor-ew-resize max-xl:touch-pan-y xl:touch-none select-none overflow-hidden bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-gold-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             onPointerDown={(event) => {
-              setHasUsedComparisonSlider(true);
-              comparisonDraggingRef.current = true;
-              event.currentTarget.setPointerCapture(event.pointerId);
-              updateSliderFromClientX(event.clientX);
+              if (event.pointerType === 'touch') {
+                comparisonGestureModeRef.current = 'undecided';
+                comparisonPointerOriginRef.current = {
+                  x: event.clientX,
+                  y: event.clientY,
+                };
+                comparisonActivePointerIdRef.current = event.pointerId;
+                return;
+              }
+
+              beginComparisonDrag(event);
             }}
             onPointerMove={(event) => {
+              if (event.pointerType === 'touch') {
+                if (comparisonActivePointerIdRef.current !== event.pointerId) return;
+
+                if (comparisonGestureModeRef.current === 'scroll') return;
+
+                if (comparisonGestureModeRef.current === 'undecided') {
+                  resolveComparisonGestureOnMove(event);
+                  if (!comparisonDraggingRef.current) return;
+                }
+              } else {
+                if (!comparisonDraggingRef.current) return;
+                if (event.buttons !== 1) return;
+              }
+
               if (!comparisonDraggingRef.current) return;
-              if (event.pointerType !== 'touch' && event.buttons !== 1) return;
               updateSliderFromClientX(event.clientX);
             }}
             onPointerUp={(event) => {
-              comparisonDraggingRef.current = false;
-              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                event.currentTarget.releasePointerCapture(event.pointerId);
-              }
+              releaseComparisonPointerCapture(event.currentTarget, event.pointerId);
+              resetComparisonGesture();
             }}
             onPointerCancel={(event) => {
-              comparisonDraggingRef.current = false;
-              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                event.currentTarget.releasePointerCapture(event.pointerId);
-              }
+              releaseComparisonPointerCapture(event.currentTarget, event.pointerId);
+              resetComparisonGesture();
             }}
             onLostPointerCapture={() => {
-              comparisonDraggingRef.current = false;
+              resetComparisonGesture();
             }}
             onKeyDown={(event) => {
               const step = 5;
