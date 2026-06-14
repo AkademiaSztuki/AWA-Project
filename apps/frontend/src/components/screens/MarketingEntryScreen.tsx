@@ -755,6 +755,8 @@ const HERO_COMPARISON_INITIAL_MOBILE = 38;
 const COMPARISON_GESTURE_SLOP_PX = 6;
 /** Vertical movement must clearly dominate before yielding to page scroll. */
 const COMPARISON_GESTURE_SCROLL_BIAS = 1.35;
+/** Short tap on the photo repositions the split (pointerup, little movement). */
+const COMPARISON_TAP_MAX_MOVEMENT_PX = 16;
 
 type ComparisonGestureMode = 'undecided' | 'scroll' | 'drag';
 
@@ -1685,29 +1687,29 @@ const MarketingEntryScreen: React.FC = () => {
     width: layoutVw ? `${layoutVw}px` : '100%',
   } as const;
 
-  const updateSliderFromClientX = (clientX: number) => {
+  const updateSliderFromClientX = useCallback((clientX: number) => {
     const rect = comparisonRef.current?.getBoundingClientRect();
     if (!rect) return;
 
     const next = ((clientX - rect.left) / rect.width) * 100;
     sliderPositionMv.set(Math.max(8, Math.min(92, next)));
-  };
+  }, [sliderPositionMv]);
 
-  const syncComparisonTouchAction = (dragging: boolean) => {
+  const syncComparisonTouchAction = useCallback((dragging: boolean) => {
     const el = comparisonRef.current;
     if (!el) return;
     el.style.touchAction = dragging ? 'none' : '';
-  };
+  }, []);
 
-  const resetComparisonGesture = () => {
+  const resetComparisonGesture = useCallback(() => {
     comparisonDraggingRef.current = false;
     comparisonGestureModeRef.current = 'undecided';
     comparisonPointerOriginRef.current = null;
     comparisonActivePointerIdRef.current = null;
     syncComparisonTouchAction(false);
-  };
+  }, [syncComparisonTouchAction]);
 
-  const beginComparisonDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+  const beginComparisonDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (comparisonDraggingRef.current) {
       if (event.pointerType === 'touch') event.preventDefault();
       updateSliderFromClientX(event.clientX);
@@ -1721,33 +1723,59 @@ const MarketingEntryScreen: React.FC = () => {
     event.currentTarget.setPointerCapture(event.pointerId);
     if (event.pointerType === 'touch') event.preventDefault();
     updateSliderFromClientX(event.clientX);
-  };
+  }, [syncComparisonTouchAction, updateSliderFromClientX]);
 
-  const resolveComparisonGestureOnMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const origin = comparisonPointerOriginRef.current;
-    if (!origin) return;
+  const resolveComparisonGestureOnMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const origin = comparisonPointerOriginRef.current;
+      if (!origin) return;
 
-    const dx = event.clientX - origin.x;
-    const dy = event.clientY - origin.y;
-    const absDx = Math.abs(dx);
-    const absDy = Math.abs(dy);
+      const dx = event.clientX - origin.x;
+      const dy = event.clientY - origin.y;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
 
-    if (absDx < COMPARISON_GESTURE_SLOP_PX && absDy < COMPARISON_GESTURE_SLOP_PX) return;
+      if (
+        absDy >= COMPARISON_GESTURE_SLOP_PX &&
+        absDy > absDx * COMPARISON_GESTURE_SCROLL_BIAS
+      ) {
+        comparisonGestureModeRef.current = 'scroll';
+        comparisonActivePointerIdRef.current = null;
+        comparisonPointerOriginRef.current = null;
+        return;
+      }
 
-    if (
-      absDy >= COMPARISON_GESTURE_SLOP_PX &&
-      absDy > absDx * COMPARISON_GESTURE_SCROLL_BIAS
-    ) {
-      comparisonGestureModeRef.current = 'scroll';
-      comparisonActivePointerIdRef.current = null;
-      comparisonPointerOriginRef.current = null;
-      return;
-    }
+      if (absDx >= absDy) {
+        updateSliderFromClientX(event.clientX);
+        setHasUsedComparisonSlider(true);
+      }
 
-    if (absDx >= COMPARISON_GESTURE_SLOP_PX && absDx >= absDy) {
-      beginComparisonDrag(event);
-    }
-  };
+      if (absDx >= COMPARISON_GESTURE_SLOP_PX && absDx >= absDy) {
+        beginComparisonDrag(event);
+      }
+    },
+    [beginComparisonDrag, updateSliderFromClientX]
+  );
+
+  /** iOS: non-passive touchmove keeps horizontal drag smooth once locked. */
+  useEffect(() => {
+    if (!isMobile) return;
+    const el = comparisonRef.current;
+    if (!el) return;
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (comparisonGestureModeRef.current !== 'drag') return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      if (event.cancelable) event.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const next = ((touch.clientX - rect.left) / rect.width) * 100;
+      sliderPositionMv.set(Math.max(8, Math.min(92, next)));
+    };
+
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, [isMobile, sliderPositionMv]);
 
   const releaseComparisonPointerCapture = (
     target: HTMLDivElement,
@@ -1799,6 +1827,8 @@ const MarketingEntryScreen: React.FC = () => {
                   y: event.clientY,
                 };
                 comparisonActivePointerIdRef.current = event.pointerId;
+                updateSliderFromClientX(event.clientX);
+                setHasUsedComparisonSlider(true);
                 return;
               }
 
@@ -1807,23 +1837,38 @@ const MarketingEntryScreen: React.FC = () => {
             onPointerMove={(event) => {
               if (event.pointerType === 'touch') {
                 if (comparisonActivePointerIdRef.current !== event.pointerId) return;
-
                 if (comparisonGestureModeRef.current === 'scroll') return;
 
                 if (comparisonGestureModeRef.current === 'undecided') {
                   resolveComparisonGestureOnMove(event);
-                  if (!comparisonDraggingRef.current) return;
+                  return;
                 }
-              } else {
-                if (!comparisonDraggingRef.current) return;
-                if (event.buttons !== 1) return;
+
+                event.preventDefault();
+                updateSliderFromClientX(event.clientX);
+                return;
               }
 
               if (!comparisonDraggingRef.current) return;
-              if (event.pointerType === 'touch') event.preventDefault();
+              if (event.buttons !== 1) return;
               updateSliderFromClientX(event.clientX);
             }}
             onPointerUp={(event) => {
+              if (event.pointerType === 'touch') {
+                const origin = comparisonPointerOriginRef.current;
+                if (
+                  origin &&
+                  comparisonGestureModeRef.current === 'undecided'
+                ) {
+                  const dx = event.clientX - origin.x;
+                  const dy = event.clientY - origin.y;
+                  if (Math.hypot(dx, dy) <= COMPARISON_TAP_MAX_MOVEMENT_PX) {
+                    updateSliderFromClientX(event.clientX);
+                    setHasUsedComparisonSlider(true);
+                  }
+                }
+              }
+
               releaseComparisonPointerCapture(event.currentTarget, event.pointerId);
               resetComparisonGesture();
             }}
