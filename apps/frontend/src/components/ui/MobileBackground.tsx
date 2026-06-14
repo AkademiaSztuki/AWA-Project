@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 
-export function MobileBackground() {
+export function MobileBackground({ priority = true }: { priority?: boolean }) {
   return (
     <div
       className="fixed z-[1] pointer-events-none"
@@ -28,7 +28,7 @@ export function MobileBackground() {
           src="/images/background-mobile-720.jpg"
           alt=""
           fill
-          priority
+          priority={priority}
           quality={85}
           className="object-cover bg-image min-h-[100lvh]"
           sizes="100vw"

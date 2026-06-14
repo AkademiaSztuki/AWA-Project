@@ -19,6 +19,11 @@ const nextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
   swcMinify: true,
+  compiler: {
+    // Strip debug console noise in production builds; keep console.error for diagnostics.
+    removeConsole:
+      process.env.NODE_ENV === 'production' ? { exclude: ['error'] } : false,
+  },
   
   // Headers dla plików binarnych i GLTF
   async headers() {

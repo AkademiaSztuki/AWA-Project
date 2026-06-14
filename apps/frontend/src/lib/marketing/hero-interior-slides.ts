@@ -429,3 +429,6 @@ const HERO_INTERIOR_SLIDES_RAW: readonly HeroInteriorSlide[] = [
 
 export const HERO_INTERIOR_SLIDES: readonly HeroInteriorSlide[] =
   orderSlidesAvoidingAdjacentStyle([...HERO_INTERIOR_SLIDES_RAW]);
+
+/** First carousel slide after style de-dupe ordering — used for LCP preload on `/`. */
+export const HERO_LCP_INTERIOR_SLIDE = HERO_INTERIOR_SLIDES[0];

@@ -53,10 +53,12 @@ export function GlassHeader() {
     pathname === '/' || (pathname != null && MARKETING_NAV_PATHS.has(pathname));
   const showFlowControls = showPathSelection || showDashboard;
 
-  const shouldShow = pathname !== '/' || isHeaderVisible;
+  const marketingHome = pathname === '/';
+
+  const shouldShow = !marketingHome || isHeaderVisible;
 
   /** Fixed overlay on `/`; `useIsMobile(1024)` in AppContentFrame is separate (home hero pointer-events). */
-  const edgeToEdgeHome = pathname === '/';
+  const edgeToEdgeHome = marketingHome;
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -157,10 +159,10 @@ export function GlassHeader() {
     <AnimatePresence>
       {shouldShow && (
         <motion.nav
-          initial={{ opacity: 0, y: -20 }}
+          initial={marketingHome ? false : { opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
+          transition={{ duration: marketingHome ? 0.15 : 0.8, ease: 'easeOut' }}
           className={cn(
             'w-full z-[100]',
             edgeToEdgeHome

@@ -1,0 +1,5 @@
+/**
+ * Runs synchronously after marketing hero markup — before React hydrates layout.
+ * Sets measured breakout margin (asymmetric xl grid) and hero copy panel anchor.
+ */
+export const MARKETING_HERO_BLEED_INLINE_SCRIPT = `(function(){function a(){try{var vw=window.innerWidth,m=vw<1280;if(m)document.documentElement.setAttribute("data-marketing-header-visible","");if(m)return;var p=document.querySelector("[data-hero-bleed-probe]"),f=document.querySelector("[data-hero-sticky-frame]"),c=document.querySelector("[data-hero-copy-panel]");if(!p||!f)return;var r=p.getBoundingClientRect(),l=Math.round(r.left),w=Math.round(r.width);if(w<=0||vw<=0)return;var ax=l+w-vw;f.style.marginLeft=-l+"px";f.style.width=vw+"px";f.setAttribute("data-hero-bleed-measured","");document.documentElement.style.setProperty("--awa-layout-vw",vw+"px");document.documentElement.style.setProperty("--hero-column-left",l+"px");document.documentElement.style.setProperty("--hero-column-width",w+"px");if(c){c.style.bottom="80px";c.style.transform="translateX("+ax+"px) translateZ(0)";c.setAttribute("data-hero-copy-positioned","")}}catch(e){}}a();})();`;

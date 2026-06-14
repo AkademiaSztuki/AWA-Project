@@ -29,6 +29,7 @@ export const DISABLE_SESSION_SYNC =
  * W `.env.local`: `NEXT_PUBLIC_DEBUG_SESSION_SYNC=1` (wymaga restartu dev server / przebudowy).
  */
 export const isSessionSyncDebugEnabled = (): boolean =>
+  process.env.NODE_ENV !== 'production' &&
   process.env.NEXT_PUBLIC_DEBUG_SESSION_SYNC === '1';
 
 /** Always true – GCP is the only backend now. */

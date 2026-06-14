@@ -38,7 +38,8 @@ export function AppContentFrame({ children }: AppContentFrameProps) {
     <main
       id="main-content"
       className={cn(
-        'relative z-10 min-h-[100dvh] w-full px-1.5 sm:px-4 md:px-8',
+        'relative z-10 min-h-[100dvh] w-full',
+        edgeToEdgeTop ? 'max-xl:px-0 xl:px-8' : 'px-1.5 sm:px-4 md:px-8',
         homeDesktopPointerPassThrough && 'pointer-events-none'
       )}
       role="main"

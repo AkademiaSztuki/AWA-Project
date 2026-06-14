@@ -770,3 +770,17 @@ html.a11y-contrast-grayscale {
 body {
   text-wrap: pretty;
 }
+
+/**
+ * Marketing hero — hidden until bleed is measured (inline script or useLayoutEffect).
+ * Never use width-only 100vw here: asymmetric AppContentFrame grid needs -columnBox.left.
+ */
+@media (min-width: 1280px) {
+  [data-hero-sticky-frame]:not([data-hero-bleed-measured]) {
+    visibility: hidden;
+  }
+
+  [data-hero-copy-panel]:not([data-hero-copy-positioned]) {
+    bottom: 80px;
+  }
+}

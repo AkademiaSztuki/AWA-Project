@@ -18,6 +18,7 @@ import { DialogueVoiceProvider } from '@/contexts/DialogueVoiceContext';
 import { GlobalProtectedRoute } from '@/components/auth/GlobalProtectedRoute';
 import { FullFlowProgressProviderGate } from '@/components/flow/FullFlowProgressProviderGate';
 import { AppContentFrame } from '@/components/layout/AppContentFrame';
+import { ChunkLoadRecovery } from '@/components/navigation/ChunkLoadRecovery';
 import type { Language } from '@/lib/questions/validated-scales';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -117,6 +118,7 @@ export default function RootLayout({
                   <DialogueVoiceProvider>
                   <LandscapeGuard>
                   <ResponsiveLayoutWrapper>
+                    <ChunkLoadRecovery />
                     <AmbientMusic volume={0.3} audioFile="/audio/ambient.mp3" />
                     
                     <GlobalProtectedRoute>

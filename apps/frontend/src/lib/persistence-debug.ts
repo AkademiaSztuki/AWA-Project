@@ -13,7 +13,10 @@
 
 import type { SessionData } from '@/types';
 
+const isNonProduction = (): boolean => process.env.NODE_ENV !== 'production';
+
 export const isPersistenceDebugEnabled = (): boolean =>
+  isNonProduction() &&
   typeof process !== 'undefined' &&
   (process.env.NEXT_PUBLIC_DEBUG_PERSISTENCE === '1' ||
     process.env.NEXT_PUBLIC_DEBUG_SESSION_SYNC === '1');
@@ -35,6 +38,7 @@ export function ingestPersistenceTrace855(payload: {
   data?: Record<string, unknown>;
   runId?: string;
 }): void {
+  if (!isNonProduction()) return;
   try {
     void fetch(PERSIST_TRACE_INGEST, {
       method: 'POST',

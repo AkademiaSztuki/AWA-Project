@@ -15,6 +15,7 @@ import {
   type MotionValue,
 } from 'framer-motion';
 import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   ArrowRight,
   Brain,
@@ -40,6 +41,8 @@ import { GOOGLE_AUTH_USER_ID_STORAGE_KEY } from '@/lib/auth-storage-keys';
 import { useLayout } from '@/contexts/LayoutContext';
 import { useWcagSettings } from '@/contexts/WcagSettingsContext';
 import { getLayoutViewportWidth } from '@/lib/layout-viewport';
+import { navigateWithChunkFallback } from '@/lib/navigation/chunk-safe-navigation';
+import { navigateToFlowPath } from '@/lib/flow/path-navigation';
 import { cn } from '@/lib/utils';
 import { BODY_TEXT_CLASS, joinContentOrphans } from '@/lib/typography';
 import Image from 'next/image';
@@ -48,6 +51,7 @@ import {
   type LivingRoomMarketingCard,
 } from '@/lib/tinder-livingroom-marketing-strip';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { usePreferHardNavigation } from '@/hooks/useSlowNetwork';
 import { useSessionData } from '@/hooks/useSessionData';
 import { stopAllDialogueAudio } from '@/hooks/useAudioManager';
 import { MarketingHowItWorksIllustration } from '@/components/marketing/MarketingHowItWorksIllustration';
@@ -750,6 +754,10 @@ const HERO_INTERIOR_AUTO_ADVANCE_MS = 11_000;
 /** Before/after split on load — lower % = more empty “before” room visible (better behind hero copy on mobile). */
 const HERO_COMPARISON_INITIAL_DESKTOP = 56;
 const HERO_COMPARISON_INITIAL_MOBILE = 38;
+/** Fixed hero photo corner radius on compact viewports (no scroll-linked settle animation). */
+const HERO_MOBILE_BORDER_RADIUS_PX = 22;
+/** Desktop hero copy `bottom` at scroll settle=0 (16px base + 64px raised inset). */
+const HERO_COPY_BOTTOM_DESKTOP_UNSETTLED_PX = 80;
 
 /** Touch gesture lock — vertical scroll vs horizontal slider drag (mobile hero). */
 const COMPARISON_GESTURE_SLOP_PX = 6;
@@ -782,6 +790,11 @@ type HeroPhotoLayerProps = {
   /** Rounded corners on the photo stack only (animated with hero settle). */
   photoCornerRadius?: MotionValue<string>;
   priority?: boolean;
+  /** When false, original `/public/hero` bytes (desktop fidelity). Mobile uses Next resize. */
+  optimizeDelivery?: boolean;
+  fetchPriority?: 'high' | 'low' | 'auto';
+  loading?: 'lazy' | 'eager' | undefined;
+  onLoadingComplete?: () => void;
   afterGlow?: boolean;
 };
 
@@ -791,6 +804,10 @@ const HeroPhotoLayer = ({
   labelScale,
   photoCornerRadius,
   priority,
+  optimizeDelivery = false,
+  fetchPriority,
+  loading,
+  onLoadingComplete,
   afterGlow,
 }: HeroPhotoLayerProps) => (
   <motion.div
@@ -802,20 +819,21 @@ const HeroPhotoLayer = ({
         : undefined
     }
   >
-    <motion.div className="absolute inset-0">
-      {/*
-        Hero files in /public/hero are already WebP — skip Next re-encode (AVIF @ ~75) which softens detail on mobile.
-      */}
+    <motion.div className="absolute inset-0 bg-transparent">
       <Image
         src={src}
         alt=""
         fill
         priority={priority}
+        fetchPriority={fetchPriority}
+        loading={loading}
+        quality={optimizeDelivery ? 72 : undefined}
         sizes="(max-width: 1280px) 100vw, 1280px"
-        unoptimized
+        unoptimized={!optimizeDelivery}
         className="object-cover"
+        onLoadingComplete={onLoadingComplete}
       />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/22 via-black/4 to-black/12 xl:from-black/30 xl:via-black/5 xl:to-black/15" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/18 via-transparent to-transparent xl:from-black/30 xl:via-black/5 xl:to-black/15" />
       {afterGlow ? (
         <motion.div
           animate={{ opacity: [0.35, 0.62, 0.35] }}
@@ -1022,13 +1040,17 @@ function HeroVariantStyleRail({
   );
 }
 
-const MarketingEntryScreen: React.FC = () => {
+const MarketingEntryScreen: React.FC<{ compactHeroHint?: boolean }> = ({
+  compactHeroHint = false,
+}) => {
   const router = useRouter();
   const { user } = useAuth();
   const { updateSessionData } = useSessionData();
   const pathname = usePathname();
   /** Align with GlassCard `flatOnMobile` / AppContentFrame compact layout (1280px). */
   const isMobile = useIsMobile(1280);
+  const preferHardNavigation = usePreferHardNavigation();
+  const compactHero = isMobile || compactHeroHint;
   const useMarqueePortal = pathname === '/' && !isMobile;
   const { language } = useLanguage();
   const { setHeaderVisible } = useLayout();
@@ -1053,6 +1075,7 @@ const MarketingEntryScreen: React.FC = () => {
   const comparisonInitialPositionRef = useRef(HERO_COMPARISON_INITIAL_DESKTOP);
   const heroStickyFrameRef = useRef<HTMLDivElement | null>(null);
   const heroCopyGlassPanelRef = useRef<HTMLDivElement | null>(null);
+  const heroCopyPanelRef = useRef<HTMLDivElement | null>(null);
   const heroStyleRailAnchorRef = useRef<HTMLDivElement | null>(null);
   const heroStyleRailPortalLayerRef = useRef<HTMLDivElement | null>(null);
   const [heroStyleRailPortalHost, setHeroStyleRailPortalHost] = useState<HTMLElement | null>(null);
@@ -1076,6 +1099,8 @@ const MarketingEntryScreen: React.FC = () => {
     offset: ['start start', 'end start'],
   });
   const [viewportWidth, setViewportWidth] = useState(0);
+  /** Avoid mobile-first motion defaults (bottom 14px) before column measure on desktop. */
+  const heroCopyUseDesktopFallback = !compactHero && !isMobile && columnBox.width === 0;
   /** One shared 0→1 curve for the hero “settle” window — header timing still reads this raw value. */
   const heroSettle = useTransform(scrollYProgress, (p) =>
     Math.min(1, Math.max(0, p / HERO_SETTLE_SCROLL_END))
@@ -1106,11 +1131,6 @@ const MarketingEntryScreen: React.FC = () => {
     const breakout = 1 - s;
     if (!columnBox.width) return '0px';
     return `${(-columnBox.left * breakout).toFixed(2)}px`;
-  });
-  /** Photo-only corner radius (20px → 36px when settled). */
-  const heroBorderRadius = useTransform(effectiveHeroSettle, (s) => {
-    const t = Math.min(1, Math.max(0, s));
-    return `${Math.round(20 + 16 * t)}px`;
   });
   /** Same ratio as old `calc(100dvh * measured/vw)` but via transform — no per-frame layout height changes. */
   const heroVisualScaleY = useTransform(
@@ -1157,6 +1177,18 @@ const MarketingEntryScreen: React.FC = () => {
     heroPanelDesktopMv,
   ]);
 
+  /** Photo-only corner radius (20px → 36px when settled). Frozen on mobile. */
+  const heroBorderRadius = useTransform(
+    [effectiveHeroSettle, heroPanelDesktopMv],
+    ([s, desktop]) => {
+      if (typeof desktop === 'number' && desktop < 0.5) {
+        return `${HERO_MOBILE_BORDER_RADIUS_PX}px`;
+      }
+      const t = Math.min(1, Math.max(0, typeof s === 'number' ? s : 0));
+      return `${Math.round(20 + 16 * t)}px`;
+    }
+  );
+
   const heroPanelAnchorX = useTransform(
     [effectiveHeroSettle, columnLeftMv, columnWidthMv, viewportWidthMv, heroPanelDesktopMv],
     ([s, left, cw, vw, desktop]) => {
@@ -1171,14 +1203,15 @@ const MarketingEntryScreen: React.FC = () => {
     }
   );
 
-  /** Raised bottom only while hero is unsettled (s→0); ends at original bottom-2.5 / sm:bottom-4 when s→1. */
+  /** Raised bottom only while hero is unsettled (s→0); frozen on mobile. */
   const heroCopyBottomMotion = useTransform(
     [effectiveHeroSettle, heroPanelDesktopMv],
     ([s, desktop]) => {
-      const t = Math.min(1, Math.max(0, typeof s === 'number' ? s : 0));
       const isDesktop = typeof desktop === 'number' && desktop > 0.5;
-      const basePx = isDesktop ? 16 : 14;
-      const extraPx = (1 - t) * (isDesktop ? 64 : 28);
+      if (!isDesktop) return '14px';
+      const t = Math.min(1, Math.max(0, typeof s === 'number' ? s : 0));
+      const basePx = 16;
+      const extraPx = (1 - t) * 64;
       return `${(basePx + extraPx).toFixed(1)}px`;
     }
   );
@@ -1385,6 +1418,16 @@ const MarketingEntryScreen: React.FC = () => {
   const emptyRoomImageSrc = heroInteriorImageSrc(HERO_EMPTY_ROOM_FILE);
   const activeAfterImageSrc = heroInteriorImageSrc(activeHeroSlide.file);
 
+  useEffect(() => {
+    const urls = [emptyRoomImageSrc, heroInteriorImageSrc(HERO_INTERIOR_SLIDES[0]?.file ?? '')];
+    for (const src of urls) {
+      if (!src) continue;
+      const img = new window.Image();
+      img.fetchPriority = 'high';
+      img.src = src;
+    }
+  }, [emptyRoomImageSrc]);
+
   const emotionProfileCycles = useMemo(
     () => (language === 'pl' ? EMOTION_PROFILE_CYCLES_PL : EMOTION_PROFILE_CYCLES_EN),
     [language]
@@ -1484,6 +1527,15 @@ const MarketingEntryScreen: React.FC = () => {
     return () => setHeaderVisible(false);
   }, [setHeaderVisible]);
 
+  /** Preload next hero slide after the active pair starts loading. */
+  useEffect(() => {
+    const nextIndex = (activeVariant + 1) % Math.max(heroSlideCount, 1);
+    const nextSlide = HERO_INTERIOR_SLIDES[nextIndex];
+    if (!nextSlide) return;
+    const preload = new window.Image();
+    preload.src = heroInteriorImageSrc(nextSlide.file);
+  }, [activeVariant, heroSlideCount]);
+
   /** Reduce horizontal scrollbar flicker while the marketing hero animates width toward full layout viewport (desktop home only). */
   useEffect(() => {
     if (!useMarqueePortal) return;
@@ -1507,12 +1559,38 @@ const MarketingEntryScreen: React.FC = () => {
       const left = Math.round(rect.left);
       const width = Math.round(rect.width);
       const vw = getLayoutViewportWidth();
+      const mobile = vw < 1280;
+      heroPanelDesktopMv.set(mobile ? 0 : 1);
+      columnLeftMv.set(left);
+      columnWidthMv.set(width);
+      viewportWidthMv.set(vw);
       setColumnBox((prev) => {
         if (Math.abs(prev.left - left) < 1 && Math.abs(prev.width - width) < 1) return prev;
         return { left, width };
       });
       setViewportWidth((prev) => (prev === vw ? prev : vw));
       document.documentElement.style.setProperty('--awa-layout-vw', `${vw}px`);
+
+      /** Patch bleed before React re-render — avoids one frame of narrow column / wrong margin. */
+      const frame = heroStickyFrameRef.current;
+      if (frame && width > 0 && vw > 0) {
+        if (vw >= 1280) {
+          frame.style.marginLeft = `${-left}px`;
+          frame.style.width = `${vw}px`;
+          frame.setAttribute('data-hero-bleed-measured', '');
+          const copyPanel = heroCopyPanelRef.current;
+          if (copyPanel) {
+            const anchorX = left + width - vw;
+            copyPanel.style.bottom = `${HERO_COPY_BOTTOM_DESKTOP_UNSETTLED_PX}px`;
+            copyPanel.style.transform = `translateX(${anchorX}px) translateZ(0)`;
+            copyPanel.setAttribute('data-hero-copy-positioned', '');
+          }
+        } else {
+          frame.removeAttribute('data-hero-bleed-measured');
+          frame.style.marginLeft = '';
+          frame.style.width = '';
+        }
+      }
     };
 
     measureBleed();
@@ -1525,7 +1603,7 @@ const MarketingEntryScreen: React.FC = () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', measureBleed);
     };
-  }, []);
+  }, [columnLeftMv, columnWidthMv, viewportWidthMv, heroPanelDesktopMv]);
 
   useLayoutEffect(() => {
     if (!useMarqueePortal) {
@@ -1543,9 +1621,11 @@ const MarketingEntryScreen: React.FC = () => {
     const vh = window.innerHeight;
     /** Skip while the strip is far off-screen — avoids fixed-layer layout writes during hero-only scroll (common jitter source). */
     if (!force && (r.top > vh + 280 || r.bottom < -160)) return;
+    const vw = viewportWidth || getLayoutViewportWidth();
+    const useColumnBreakout = columnBox.left > 0 && vw > 0;
     const top = Math.round(r.top);
-    const left = Math.round(r.left);
-    const w = Math.round(r.width);
+    const left = useColumnBreakout ? 0 : Math.round(r.left);
+    const w = useColumnBreakout ? Math.round(vw) : Math.round(r.width);
     const h = Math.max(1, Math.round(r.height));
     const key = `${top}|${left}|${w}|${h}`;
     const prev = layer.dataset.marqueeGeomKey;
@@ -1555,10 +1635,12 @@ const MarketingEntryScreen: React.FC = () => {
     layer.style.setProperty('left', `${left}px`);
     layer.style.setProperty('width', `${w}px`);
     layer.style.setProperty('height', `${h}px`);
-  }, []);
+  }, [columnBox.left, viewportWidth]);
 
   useLayoutEffect(() => {
     if (!useMarqueePortal || !marqueePortalHost) return;
+
+    applyMarqueePortalGeometry(true);
 
     let rafId = 0;
     const scheduleSync = () => {
@@ -1590,7 +1672,7 @@ const MarketingEntryScreen: React.FC = () => {
       window.removeEventListener('resize', handleResize);
       ro?.disconnect();
     };
-  }, [useMarqueePortal, marqueePortalHost, applyMarqueePortalGeometry]);
+  }, [useMarqueePortal, marqueePortalHost, columnBox.left, viewportWidth, applyMarqueePortalGeometry]);
 
   useEffect(() => {
     if (reduceHeroCarousel || heroSlideCount === 0) return;
@@ -1612,21 +1694,19 @@ const MarketingEntryScreen: React.FC = () => {
   /** Marquee — slow drift; one full loop takes longer on more cards. */
   const carouselDurationSec = Math.max(120, marketingCarouselCards.length * 4.2);
 
-  const goToFastPath = useCallback(async () => {
+  const goToFastPath = useCallback(() => {
     stopAllDialogueAudio();
-    await updateSessionData({ pathType: 'fast', currentStep: 'onboarding' });
-    router.push('/flow/onboarding');
+    navigateToFlowPath(router, 'fast', updateSessionData);
   }, [router, updateSessionData]);
 
-  const goToFullPath = useCallback(async () => {
+  const goToFullPath = useCallback(() => {
     stopAllDialogueAudio();
-    await updateSessionData({ pathType: 'full' });
-    router.push('/setup/profile');
+    navigateToFlowPath(router, 'full', updateSessionData);
   }, [router, updateSessionData]);
 
   const goToPathSelection = useCallback(() => {
     stopAllDialogueAudio();
-    router.push('/flow/path-selection');
+    navigateWithChunkFallback(router, '/flow/path-selection');
   }, [router]);
 
   const openLoginForFreeTry = useCallback(() => {
@@ -1636,7 +1716,7 @@ const MarketingEntryScreen: React.FC = () => {
   const handleTryBasicFree = useCallback(() => {
     stopAllDialogueAudio();
     if (user?.id || resolveClientAuthUserId(undefined)) {
-      router.push(PATH_AFTER_FREE_TRY);
+      navigateWithChunkFallback(router, PATH_AFTER_FREE_TRY);
       return;
     }
     openLoginForFreeTry();
@@ -1644,7 +1724,7 @@ const MarketingEntryScreen: React.FC = () => {
 
   const handleLoginSuccess = useCallback(() => {
     setLoginOpen(false);
-    router.push(PATH_AFTER_FREE_TRY);
+    navigateWithChunkFallback(router, PATH_AFTER_FREE_TRY);
   }, [router]);
 
   const livingRoomMarqueeInner = (
@@ -1682,10 +1762,15 @@ const MarketingEntryScreen: React.FC = () => {
   );
 
   const layoutVw = viewportWidth || getLayoutViewportWidth();
-  const marqueeBreakoutStyle = {
-    marginLeft: columnBox.left ? `${-columnBox.left}px` : '0px',
-    width: layoutVw ? `${layoutVw}px` : '100%',
-  } as const;
+  const marqueeBreakoutReady = columnBox.left > 0 && layoutVw > 0;
+  const marqueeBreakoutStyle = marqueeBreakoutReady
+    ? ({
+        marginLeft: `${-columnBox.left}px`,
+        width: `${layoutVw}px`,
+      } as const)
+    : layoutVw > 0
+      ? ({ width: `${layoutVw}px` } as const)
+      : undefined;
 
   const updateSliderFromClientX = useCallback((clientX: number) => {
     const rect = comparisonRef.current?.getBoundingClientRect();
@@ -1790,14 +1875,15 @@ const MarketingEntryScreen: React.FC = () => {
     <>
     <div ref={marketingRootRef} className={cn('relative w-full pb-0', useMarqueePortal && 'pointer-events-none')}>
       {/* Width probe — must not use overflow-hidden or sticky will not behave reliably */}
-      <div ref={heroBleedMeasureRef} className="pointer-events-none h-0 w-full" aria-hidden="true" />
+      <div ref={heroBleedMeasureRef} data-hero-bleed-probe className="pointer-events-none h-0 w-full" aria-hidden="true" />
       <div className={cn(useMarqueePortal && 'pointer-events-auto')}>
       <section
         ref={heroRef}
-        className="relative min-h-[calc(100dvh-env(safe-area-inset-top,0px))] bg-transparent max-xl:-mt-[env(safe-area-inset-top,0px)] xl:min-h-[128dvh]"
+        className="relative w-full min-h-[calc(100dvh-env(safe-area-inset-top,0px))] bg-transparent max-xl:-mt-[env(safe-area-inset-top,0px)] xl:min-h-[128dvh]"
       >
         <motion.div
           ref={heroStickyFrameRef}
+          data-hero-sticky-frame
           style={
             isMobile
               ? undefined
@@ -1808,6 +1894,7 @@ const MarketingEntryScreen: React.FC = () => {
           }
           className={cn(
             'sticky top-0 z-[5] h-[calc(100dvh-env(safe-area-inset-top,0px))] overflow-hidden max-xl:pt-[env(safe-area-inset-top,0px)]',
+            'max-xl:!w-full max-xl:!max-w-none max-xl:!ml-0',
             !isMobile && 'will-change-[width,margin-left]'
           )}
         >
@@ -1927,7 +2014,8 @@ const MarketingEntryScreen: React.FC = () => {
                 <HeroPhotoLayer
                   src={emptyRoomImageSrc}
                   photoCornerRadius={heroBorderRadius}
-                  priority
+                  priority={compactHero}
+                  fetchPriority="high"
                 />
                 <motion.div
                   className="absolute inset-0 overflow-hidden"
@@ -1937,14 +2025,16 @@ const MarketingEntryScreen: React.FC = () => {
                     <motion.div
                       key={activeVariant}
                       className="absolute inset-0"
-                      initial={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
+                      initial={
+                        reduceHeroCarousel || compactHero ? { opacity: 1 } : { opacity: 0 }
+                      }
                       animate={{ opacity: 1 }}
-                      exit={reduceHeroCarousel ? { opacity: 1 } : { opacity: 0 }}
+                      exit={reduceHeroCarousel || compactHero ? { opacity: 1 } : { opacity: 0 }}
                       transition={{
                         duration: reduceHeroCarousel
                           ? 0
-                          : isMobile
-                            ? 1.15
+                          : compactHero
+                            ? 0.35
                             : HERO_INTERIOR_CROSSFADE_SEC,
                         ease: HERO_INTERIOR_CROSSFADE_EASE,
                       }}
@@ -1953,7 +2043,8 @@ const MarketingEntryScreen: React.FC = () => {
                         src={activeAfterImageSrc}
                         photoCornerRadius={heroBorderRadius}
                         afterGlow
-                        priority={activeVariant === 0}
+                        priority={compactHero && activeVariant === 0}
+                        fetchPriority={compactHero ? 'high' : undefined}
                       />
                     </motion.div>
                   </AnimatePresence>
@@ -1971,8 +2062,8 @@ const MarketingEntryScreen: React.FC = () => {
                 </motion.div>
             </motion.div>
 
-            <motion.div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/24 via-graphite/6 to-transparent max-xl:from-graphite/20 max-xl:via-transparent lg:from-graphite/46 lg:via-graphite/12 xl:from-graphite/38 xl:via-graphite/8" />
-            <motion.div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[34%] bg-gradient-to-t from-black/22 via-black/6 to-transparent max-xl:from-black/18 xl:h-[40%] xl:from-black/44 xl:via-black/14 xl:from-black/36" />
+            <motion.div className="pointer-events-none absolute inset-0 z-[2] hidden bg-gradient-to-r from-graphite/24 via-graphite/6 to-transparent lg:from-graphite/46 lg:via-graphite/12 xl:block xl:from-graphite/38 xl:via-graphite/8" />
+            <motion.div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[28%] bg-gradient-to-t from-black/28 via-black/8 to-transparent max-xl:h-[32%] max-xl:from-black/32 xl:h-[40%] xl:from-black/44 xl:via-black/14" />
             <HeroScrollDownHint
               label={t.scrollDownHint}
               opacity={heroScrollHintOpacity}
@@ -1980,22 +2071,30 @@ const MarketingEntryScreen: React.FC = () => {
             />
           </motion.div>
 
-          <motion.div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between pt-0 pb-[max(2rem,calc(1.25rem+env(safe-area-inset-bottom,0px)))] max-xl:pb-[max(2.5rem,calc(1.75rem+env(safe-area-inset-bottom,0px)))] sm:pb-4 lg:pb-6">
+          <motion.div
+            className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between pt-0 pb-[max(2rem,calc(1.25rem+env(safe-area-inset-bottom,0px)))] max-xl:pb-[max(2.5rem,calc(1.75rem+env(safe-area-inset-bottom,0px)))] sm:pb-4 lg:pb-6"
+          >
             {/*
               Anchor copy to the sticky frame’s right edge (absolute right-*), not ml-auto — otherwise when width
               grows during hero settle, margin-left:auto absorbs the delta and the glass panel drifts left.
             */}
-            <div className="pointer-events-none relative min-h-0 flex-1 px-4 pb-0 max-xl:pb-0 sm:px-6 sm:pb-3 lg:px-10 lg:pb-4">
+            <div className="pointer-events-none relative min-h-0 flex-1 max-xl:px-0 pb-0 xl:px-10 xl:pb-4">
               <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.65, delay: 0.08, ease: 'easeOut' }}
-                style={{ x: heroPanelAnchorX, bottom: heroCopyBottomMotion }}
+                ref={heroCopyPanelRef}
+                data-hero-copy-panel
+                initial={false}
+                style={
+                  heroCopyUseDesktopFallback
+                    ? { x: 0, bottom: `${HERO_COPY_BOTTOM_DESKTOP_UNSETTLED_PX}px` }
+                    : { x: heroPanelAnchorX, bottom: heroCopyBottomMotion }
+                }
                 className={cn(
-                  'pointer-events-none absolute inset-x-4 w-auto max-w-[min(100%,34rem)]',
-                  'sm:inset-x-auto sm:left-auto sm:right-6 sm:w-[min(100%,38rem)]',
-                  'lg:right-10 lg:w-[min(40rem,min(46vw,100%))]',
-                  'xl:w-[min(42rem,min(44vw,100%))]'
+                  'pointer-events-none absolute w-auto',
+                  'max-xl:inset-x-4 max-xl:bottom-3.5 max-xl:max-w-none',
+                  'xl:inset-x-auto xl:left-auto xl:right-10',
+                  'xl:max-w-[min(100%,34rem)]',
+                  'xl:w-[min(40rem,min(42vw,100%))]',
+                  '2xl:w-[min(42rem,min(44vw,100%))]'
                 )}
               >
                 <div
@@ -2034,23 +2133,25 @@ const MarketingEntryScreen: React.FC = () => {
                     {t.subheadline}
                   </p>
                   <div className="pointer-events-auto flex w-full flex-col gap-2 max-xl:gap-2 max-xl:pb-1 pb-2 sm:gap-2.5 sm:pb-0">
-                    <GlassButton
-                      size="lg"
-                      onClick={goToPathSelection}
-                      className="glass-button-emphasis group w-full min-w-0 justify-start text-left"
+                    <Link
+                      href="/flow/path-selection"
+                      prefetch={!preferHardNavigation}
+                      onClick={() => stopAllDialogueAudio()}
+                      className="glass-button glass-button-emphasis group flex h-14 min-h-14 max-h-14 w-full min-w-0 items-center justify-start gap-2 rounded-[32px] px-5 text-left text-base font-medium leading-tight text-graphite max-xl:h-14 max-xl:min-h-14 max-xl:max-h-14 max-xl:px-5 max-xl:py-0 max-xl:text-base max-xl:leading-tight lg:px-8 lg:py-4 lg:text-lg lg:min-h-[56px]"
                     >
                       <ArrowRight size={20} className="shrink-0 text-gold-500 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                      {t.primaryCta}
-                    </GlassButton>
-                    <GlassButton
-                      size="lg"
-                      variant="secondary"
-                      onClick={scrollToHowItWorksWithIntro}
-                      className="w-full min-w-0 justify-start text-left"
+                      <span className="text-left">{t.primaryCta}</span>
+                    </Link>
+                    <Link
+                      href="#how-it-works"
+                      onClick={() => {
+                        if (!preferHardNavigation) scrollToHowItWorksWithIntro();
+                      }}
+                      className="flex h-12 min-h-12 max-h-12 w-full min-w-0 items-center justify-start gap-2 rounded-[32px] border border-white/20 bg-silver-400/20 px-5 text-left text-base leading-tight text-gray-700 backdrop-blur-xl transition-all duration-300 ease-out hover:scale-[1.02] hover:bg-silver-300/35 hover:border-white/35 max-xl:h-12 max-xl:min-h-12 max-xl:max-h-12 max-xl:px-5 max-xl:py-0 max-xl:text-base max-xl:leading-tight lg:px-8 lg:py-4 lg:text-lg lg:min-h-[56px]"
                     >
                       <PlayCircle size={20} className="shrink-0 text-gold-500" aria-hidden="true" />
-                      {t.secondaryCta}
-                    </GlassButton>
+                      <span className="text-left">{t.secondaryCta}</span>
+                    </Link>
                   </div>
                 </div>
               </motion.div>

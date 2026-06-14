@@ -94,7 +94,7 @@ const ParticlesBackground: React.FC = () => {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed z-[4] pointer-events-none"
+      className="fixed z-[6] pointer-events-none"
       style={{ 
         mixBlendMode: 'screen',
         /* Pokrywa cały ekran włącznie z safe-area (notch) na iOS */

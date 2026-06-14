@@ -3,6 +3,7 @@
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { navigateWithChunkFallback } from '@/lib/navigation/chunk-safe-navigation';
 import { ArrowLeft } from 'lucide-react';
 type PathSelectionButtonProps = {
   variant?: 'default' | 'menuRow';
@@ -22,7 +23,7 @@ export function PathSelectionButton({ variant = 'default', onNavigate }: PathSel
 
   const handleClick = () => {
     onNavigate?.();
-    router.push('/flow/path-selection');
+    navigateWithChunkFallback(router, '/flow/path-selection');
   };
 
   if (variant === 'menuRow') {

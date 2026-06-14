@@ -23,17 +23,11 @@ const AwaBackground: React.FC = () => {
     if (!isMobile || !isLandingPage) return;
 
     const handleWyjsciewlewoComplete = () => {
-      setTimeout(() => {
-        console.log('[AwaBackground] Wyłączanie renderowania modelu po animacji wyjsciewlewo');
-        setShouldRender(false);
-      }, 500);
+      setTimeout(() => setShouldRender(false), 500);
     };
 
     window.addEventListener('awa-wyjsciewlewo-complete', handleWyjsciewlewoComplete);
-
-    return () => {
-      window.removeEventListener('awa-wyjsciewlewo-complete', handleWyjsciewlewoComplete);
-    };
+    return () => window.removeEventListener('awa-wyjsciewlewo-complete', handleWyjsciewlewoComplete);
   }, [isMobile, isLandingPage]);
 
   useEffect(() => {
@@ -42,10 +36,6 @@ const AwaBackground: React.FC = () => {
     }
   }, [isMarketingPage]);
 
-  /**
-   * R3F may mount a canvas with pointer-events:auto. Do not walk the entire subtree on every
-   * DOM mutation — that caused layout thrash/jitter while scrolling the marketing hero.
-   */
   useLayoutEffect(() => {
     const root = hostRef.current;
     if (!root) return;
@@ -81,7 +71,7 @@ const AwaBackground: React.FC = () => {
   return (
     <div
       ref={hostRef}
-      className={cn('fixed z-[3] pointer-events-none [&_canvas]:pointer-events-none')}
+      className={cn('fixed z-[6] pointer-events-none [&_canvas]:pointer-events-none')}
       style={{
         top: 'calc(-1 * env(safe-area-inset-top, 0))',
         left: 'calc(-1 * env(safe-area-inset-left, 0))',
@@ -96,10 +86,10 @@ const AwaBackground: React.FC = () => {
         className="pointer-events-none h-screen w-screen bg-transparent"
         style={{ pointerEvents: 'none' }}
       >
-        <ambientLight intensity={0.3} color="#2A2A2A" />
+        <ambientLight intensity={0.6} color="#FFE5B4" />
         <directionalLight
           position={[2, 2, 2]}
-          intensity={0.4}
+          intensity={0.5}
           color="#FFD700"
           castShadow
         />
