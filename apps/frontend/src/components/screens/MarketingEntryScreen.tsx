@@ -752,7 +752,9 @@ const HERO_COMPARISON_INITIAL_DESKTOP = 56;
 const HERO_COMPARISON_INITIAL_MOBILE = 38;
 
 /** Touch gesture lock — vertical scroll vs horizontal slider drag (mobile hero). */
-const COMPARISON_GESTURE_THRESHOLD_PX = 10;
+const COMPARISON_GESTURE_SLOP_PX = 6;
+/** Vertical movement must clearly dominate before yielding to page scroll. */
+const COMPARISON_GESTURE_SCROLL_BIAS = 1.35;
 
 type ComparisonGestureMode = 'undecided' | 'scroll' | 'drag';
 
@@ -1033,7 +1035,12 @@ const MarketingEntryScreen: React.FC = () => {
   const heroCopyRelaxedOverflow =
     fontScale === 'lg' || fontScale === 'xl' || textSpacing;
   const reduceHeroCarousel = useReducedMotion();
-  const [sliderPosition, setSliderPosition] = useState(HERO_COMPARISON_INITIAL_DESKTOP);
+  const sliderPositionMv = useMotionValue(HERO_COMPARISON_INITIAL_DESKTOP);
+  const sliderClipPath = useTransform(
+    sliderPositionMv,
+    (p) => `inset(0 ${100 - p}% 0 0)`
+  );
+  const sliderHandleLeft = useTransform(sliderPositionMv, (p) => `${p}%`);
   const [hasUsedComparisonSlider, setHasUsedComparisonSlider] = useState(false);
   const [activeVariant, setActiveVariant] = useState(0);
   const comparisonRef = useRef<HTMLDivElement | null>(null);
@@ -1425,19 +1432,19 @@ const MarketingEntryScreen: React.FC = () => {
     const mobile = getLayoutViewportWidth() < 1280;
     const initial = mobile ? HERO_COMPARISON_INITIAL_MOBILE : HERO_COMPARISON_INITIAL_DESKTOP;
     comparisonInitialPositionRef.current = initial;
-    setSliderPosition(initial);
+    sliderPositionMv.set(initial);
     if (mobile) {
       marketingHeaderRevealedRef.current = true;
       setHeaderVisible(true);
     }
-  }, [setHeaderVisible]);
+  }, [setHeaderVisible, sliderPositionMv]);
 
-  useEffect(() => {
+  useMotionValueEvent(sliderPositionMv, 'change', (value) => {
     if (hasUsedComparisonSlider) return;
-    if (Math.abs(sliderPosition - comparisonInitialPositionRef.current) > 0.5) {
+    if (Math.abs(value - comparisonInitialPositionRef.current) > 0.5) {
       setHasUsedComparisonSlider(true);
     }
-  }, [sliderPosition, hasUsedComparisonSlider]);
+  });
 
   useLayoutEffect(() => {
     if (isCompactMarketingViewport()) {
@@ -1683,7 +1690,13 @@ const MarketingEntryScreen: React.FC = () => {
     if (!rect) return;
 
     const next = ((clientX - rect.left) / rect.width) * 100;
-    setSliderPosition(Math.max(8, Math.min(92, next)));
+    sliderPositionMv.set(Math.max(8, Math.min(92, next)));
+  };
+
+  const syncComparisonTouchAction = (dragging: boolean) => {
+    const el = comparisonRef.current;
+    if (!el) return;
+    el.style.touchAction = dragging ? 'none' : '';
   };
 
   const resetComparisonGesture = () => {
@@ -1691,13 +1704,22 @@ const MarketingEntryScreen: React.FC = () => {
     comparisonGestureModeRef.current = 'undecided';
     comparisonPointerOriginRef.current = null;
     comparisonActivePointerIdRef.current = null;
+    syncComparisonTouchAction(false);
   };
 
   const beginComparisonDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (comparisonDraggingRef.current) {
+      if (event.pointerType === 'touch') event.preventDefault();
+      updateSliderFromClientX(event.clientX);
+      return;
+    }
+
     setHasUsedComparisonSlider(true);
     comparisonDraggingRef.current = true;
     comparisonGestureModeRef.current = 'drag';
+    syncComparisonTouchAction(true);
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.pointerType === 'touch') event.preventDefault();
     updateSliderFromClientX(event.clientX);
   };
 
@@ -1710,16 +1732,21 @@ const MarketingEntryScreen: React.FC = () => {
     const absDx = Math.abs(dx);
     const absDy = Math.abs(dy);
 
-    if (absDx < COMPARISON_GESTURE_THRESHOLD_PX && absDy < COMPARISON_GESTURE_THRESHOLD_PX) return;
+    if (absDx < COMPARISON_GESTURE_SLOP_PX && absDy < COMPARISON_GESTURE_SLOP_PX) return;
 
-    if (absDy > absDx) {
+    if (
+      absDy >= COMPARISON_GESTURE_SLOP_PX &&
+      absDy > absDx * COMPARISON_GESTURE_SCROLL_BIAS
+    ) {
       comparisonGestureModeRef.current = 'scroll';
       comparisonActivePointerIdRef.current = null;
       comparisonPointerOriginRef.current = null;
       return;
     }
 
-    beginComparisonDrag(event);
+    if (absDx >= COMPARISON_GESTURE_SLOP_PX && absDx >= absDy) {
+      beginComparisonDrag(event);
+    }
   };
 
   const releaseComparisonPointerCapture = (
@@ -1793,6 +1820,7 @@ const MarketingEntryScreen: React.FC = () => {
               }
 
               if (!comparisonDraggingRef.current) return;
+              if (event.pointerType === 'touch') event.preventDefault();
               updateSliderFromClientX(event.clientX);
             }}
             onPointerUp={(event) => {
@@ -1820,16 +1848,16 @@ const MarketingEntryScreen: React.FC = () => {
               }
               if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
                 event.preventDefault();
-                setSliderPosition((p) => Math.max(8, p - step));
+                sliderPositionMv.set(Math.max(8, sliderPositionMv.get() - step));
               } else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
                 event.preventDefault();
-                setSliderPosition((p) => Math.min(92, p + step));
+                sliderPositionMv.set(Math.min(92, sliderPositionMv.get() + step));
               } else if (event.key === 'Home') {
                 event.preventDefault();
-                setSliderPosition(8);
+                sliderPositionMv.set(8);
               } else if (event.key === 'End') {
                 event.preventDefault();
-                setSliderPosition(92);
+                sliderPositionMv.set(92);
               }
             }}
             role="group"
@@ -1856,9 +1884,9 @@ const MarketingEntryScreen: React.FC = () => {
                   photoCornerRadius={heroBorderRadius}
                   priority
                 />
-                <div
+                <motion.div
                   className="absolute inset-0 overflow-hidden"
-                  style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+                  style={{ clipPath: sliderClipPath }}
                 >
                   <AnimatePresence initial={false} mode="sync">
                     <motion.div
@@ -1884,18 +1912,18 @@ const MarketingEntryScreen: React.FC = () => {
                       />
                     </motion.div>
                   </AnimatePresence>
-                </div>
+                </motion.div>
 
-                <div
+                <motion.div
                   className="absolute inset-y-0 z-[2] w-px bg-white/45"
-                  style={{ left: `${sliderPosition}%` }}
+                  style={{ left: sliderHandleLeft }}
                   aria-hidden="true"
                 >
                   <HeroComparisonHandle
                     showIdleHint={!hasUsedComparisonSlider}
                     preferReducedMotion={reduceHeroCarousel}
                   />
-                </div>
+                </motion.div>
             </motion.div>
 
             <motion.div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-r from-graphite/24 via-graphite/6 to-transparent max-xl:from-graphite/20 max-xl:via-transparent lg:from-graphite/46 lg:via-graphite/12 xl:from-graphite/38 xl:via-graphite/8" />
