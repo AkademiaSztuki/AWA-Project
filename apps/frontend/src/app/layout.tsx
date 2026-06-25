@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
+import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Inter, Audiowide, Exo_2, Atkinson_Hyperlegible } from 'next/font/google';
 import './globals.css';
@@ -126,6 +127,7 @@ export default function RootLayout({
                       <AppContentFrame>{children}</AppContentFrame>
                       </FullFlowProgressProviderGate>
                     </GlobalProtectedRoute>
+                    <Analytics />
                     <SpeedInsights />
                   </ResponsiveLayoutWrapper>
                 </LandscapeGuard>
