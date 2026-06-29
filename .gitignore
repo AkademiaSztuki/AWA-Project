@@ -72,3 +72,8 @@ coverage/
 # Exported data (may contain personal data)
 **/exports/
 .vercel
+
+# Thesis drafts (sources live in docs/thesis/chapters/ as .md/.tex)
+docs/thesis/**/*.docx
+docs/thesis/**/*.doc
+docs/thesis/**/~$*
