@@ -15,9 +15,10 @@ Materiały pisemne do pracy doktorskiej / naukowej — oddzielone od kodu aplika
 
 ```
 docs/thesis/
+  notes/
+    SPIS_TRESCI_ROBOCZY.md   # roboczy spis treści + uzasadnienie rozdziałów
   chapters/      # rozdziały (.md, .tex)
   figures/       # wykresy, diagramy, screeny do pracy
-  notes/         # outline, notatki, komentarze promotora
   bibliography/  # bibtex, źródła
   exports/       # PDF / Word do oddania (gitignore — lokalnie)
 ```
