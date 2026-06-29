@@ -1,3 +1,4 @@
+﻿> OUTDATED — do not use for thesis. See docs/canon/ and thesis/CANONICAL_SOURCES.md
 # Analiza: Wiele Kontenerów vs Większy GPU
 
 ## Obecna Konfiguracja (Po Naprawie)

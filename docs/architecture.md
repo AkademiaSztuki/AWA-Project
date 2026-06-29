@@ -1,15 +1,18 @@
-# Architektura Projektu Aura
+# Architektura projektu IDA
 
-## Przegląd Systemu
+> For thesis writing, prefer [`docs/canon/system-overview.md`](canon/system-overview.md).
 
-Aura wykorzystuje hybrydową architekturę łączącą:
+## Przegląd systemu
+
+IDA wykorzystuje architekturę opartą o Google Cloud:
+
 - **Frontend**: Next.js 14 + Three.js (Vercel)
 - **Backend**: Google Cloud Run ([`apps/backend-gcp`](../apps/backend-gcp))
 - **Database**: Cloud SQL (PostgreSQL); schema w [`infra/gcp/sql`](../infra/gcp/sql)
 - **Image generation**: Google (Vertex / Gemini) z Next.js `/api/google/*`
-- **Legacy Modal backend**: [`docs/archive/modal-backend`](../docs/archive/modal-backend)
+- **Legacy Modal backend**: [`docs/archive/modal-backend`](../docs/archive/modal-backend) (archived, not production)
 
-## Przepływ Danych
+## Przepływ danych
 
 ```
 User → Frontend (Vercel) → /api/google/* → Google image APIs
@@ -17,112 +20,64 @@ User → Frontend (Vercel) → /api/google/* → Google image APIs
   Research Data → Cloud Run (backend-gcp) → Cloud SQL / Storage
 ```
 
-## Komponenty Systemu
+Persystencja po stronie klienta: `apps/frontend/src/lib/gcp-data.ts` (brak Supabase w runtime).
 
-### Frontend Architecture
+## Komponenty systemu
+
+### Frontend
 
 ```
-src/
+apps/frontend/src/
 ├── app/                 # Next.js App Router
-│   ├── (flow)/         # Routed screens
-│   ├── api/            # API routes
-│   └── layout.tsx      # Global layout
+│   ├── flow/           # User funnel screens
+│   ├── setup/          # Profile and room wizards
+│   ├── api/            # API routes (incl. /api/google/*)
+│   └── layout.tsx
 ├── components/
-│   ├── awa/            # 3D character system
-│   ├── screens/        # Flow screens
-│   └── ui/             # Glassmorphism components
-├── hooks/              # React hooks
-├── lib/                # Utilities
-└── types/              # TypeScript definitions
+│   ├── awa/            # 3D IDA character (legacy folder name)
+│   ├── screens/
+│   └── ui/
+├── lib/
+│   ├── gcp-data.ts     # Persistence client
+│   ├── flow/           # fast/full flow progress
+│   └── prompt-synthesis/
+└── types/
 ```
 
-### Backend Architecture
+### Backend
 
 ```
 apps/backend-gcp/
 ├── src/server.ts       # Express API
-├── src/routes/         # participants, research, swipes, …
+├── src/routes/         # participants, research, swipes, generations, images, …
 └── …
 ```
-Archiwum Modal: `docs/archive/modal-backend/`.
 
-## Kluczowe Technologie
+## Kluczowe technologie
 
-### Three.js Integration
-- GLTFLoader dla modelu Quinn
-- Mouse tracking system
-- Real-time head movement
-- Performance optimization
+### Three.js
 
-### FLUX 1 Kontext
-- State-of-the-art image editing
-- Context preservation across iterations
-- Unified generation/editing pipeline
-- GPU-accelerated processing
+- GLTFLoader dla modelu postaci IDA
+- Mouse tracking, animacje głowy
+
+### Generacja obrazów
+
+- Google Vertex / Gemini via `/api/google/*`
+- Prompt synthesis: `apps/frontend/src/lib/prompt-synthesis/`
 
 ### Research Through Design
-- Triangulated data collection
-- Behavioral analytics
-- Session management
-- GDPR compliance
 
-## Data Flow
+- Dane deklaratywne, behawioralne i wynikowe
+- `user_hash` — anonimizacja
+- Zgoda RODO przed zbieraniem danych badawczych
 
-### 1. User Onboarding
-```
-Landing → Consent → Session Creation → User Hash Generation
-```
+## User flow
 
-### 2. Visual Preferences Discovery
-```
-Tinder Test → Swipe Data → Visual DNA Analysis → Preference Extraction
-```
+Aktualny flow (fast 4 kroki, full 12 kroków): [`docs/canon/user-flow.md`](canon/user-flow.md).
 
-### 3. Need Assessment
-```
-Ladder Method → Progressive Questions → Core Need Identification
-```
+## Bezpieczeństwo i prywatność
 
-### 4. AI Generation
-```
-Visual DNA + Core Need → Prompt Building → FLUX Generation → Image Display
-```
-
-### 5. Iterative Refinement
-```
-User Feedback → Modification Selection → FLUX Editing → Updated Images
-```
-
-## Performance Considerations
-
-### Frontend Optimization
-- Three.js model lazy loading
-- Image optimization with Next.js
-- Progressive enhancement
-- Mobile-first design
-
-### Backend Scaling
-- Modal auto-scaling
-- GPU resource management
-- Request queuing
-- Cost optimization
-
-### Database Design
-- Efficient indexing
-- Real-time subscriptions
-- Bulk data operations
-- Analytics aggregations
-
-## Security & Privacy
-
-### Data Protection
-- Anonymous user hashing
-- GDPR-compliant data handling
-- Secure API endpoints
-- Encrypted data transmission
-
-### Research Ethics
-- Informed consent process
-- Data anonymization
-- Academic use restrictions
-- Participant withdrawal rights
+- Anonimowy `user_hash`
+- Zgoda świadoma (consent)
+- Prawo do wycofania zgody
+- Szczegóły: polityka prywatności aplikacji

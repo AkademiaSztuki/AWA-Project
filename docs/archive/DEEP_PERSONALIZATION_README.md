@@ -1,3 +1,4 @@
+﻿> OUTDATED — do not use for thesis. See docs/canon/ and thesis/CANONICAL_SOURCES.md
 # 🏠 Deep Personalization Architecture - Implementation Summary
 
 Branch: `deep-personalization-architecture`  

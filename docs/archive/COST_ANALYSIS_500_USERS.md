@@ -1,3 +1,4 @@
+﻿> OUTDATED — do not use for thesis. See docs/canon/ and thesis/CANONICAL_SOURCES.md
 # Analiza Kosztów dla 500 Użytkowników (Zaktualizowana)
 
 ## ⚠️ WAŻNE: Uwzględniono Cold Starts i Regeneracje

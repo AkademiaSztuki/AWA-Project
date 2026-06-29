@@ -1,0 +1,20 @@
+---
+description: Academic writing style for doctoral thesis chapters in thesis/
+globs: thesis/**/*.md
+alwaysApply: false
+---
+
+# Thesis writing style
+
+When editing `thesis/**/*.md`:
+
+- Write in Polish academic style; match terminology in `thesis/GLOSSARY.md`
+- Use paragraphs of 3–6 sentences; avoid bullet-only sections in final prose
+- No marketing tone; describe IDA as a research prototype
+- Institution: **Akademia Sztuki w Szczecinie** (never „Akademia Sztuk Pięknych”)
+- Product name: **IDA** (Aura/AWA only as legacy code folder names, not product name)
+- Stack: GCP for persistence and generation (not Supabase/Modal as production)
+- Do not invent citations; use `[Autor, rok — DO UZUPEŁNIENIA]` placeholders
+- Mark unverified implementation claims `[WERYFIKACJA_KOD]` until fact-checked
+- Prefer `docs/canon/` and code over old README files for facts
+- Output drafts for author revision — not publish-ready chapters without human edit

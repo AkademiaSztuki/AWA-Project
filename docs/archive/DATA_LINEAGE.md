@@ -1,3 +1,4 @@
+﻿> OUTDATED — do not use for thesis. See docs/canon/ and thesis/CANONICAL_SOURCES.md
 # IDA Project - Data Lineage Diagram
 
 This document visualizes the complete data flow and lineage throughout the IDA (Aura) project, showing how data moves from user input through various transformations to final storage and display.

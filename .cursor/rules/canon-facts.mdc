@@ -1,0 +1,26 @@
+---
+description: Canonical project facts for IDA — resolve conflicts in favor of canon and code
+alwaysApply: true
+---
+
+# IDA canonical facts
+
+When documentation conflicts, use this order:
+
+1. `thesis/GLOSSARY.md` and `docs/canon/**`
+2. Source code (`gcp-data.ts`, flow progress files, `infra/gcp/sql/`)
+3. Verified helpers (`RESEARCH_DATA_DICTIONARY.md`, `GENERATION_MATRIX_5_IMAGES.md`)
+
+Never treat as current truth without verification:
+
+- `docs/archive/**`, `docs/audit/**`, `docs/migration/**`
+- Root files moved to archive (PODSUMOWANIE, DATA_LINEAGE, COST_ANALYSIS, etc.)
+
+Fixed facts:
+
+- **University:** Akademia Sztuki w Szczecinie
+- **Supervisor:** prof. dr hab. Andreas Guskos
+- **Author:** Jakub Palka
+- **Product:** IDA (AI Interior Design Dialogue Research Platform)
+- **Persistence:** Google Cloud — Cloud Run + Cloud SQL + GCS via `gcp-data.ts`
+- **User paths:** `fast` (4 steps) and `full` (12 steps) — see `docs/canon/user-flow.md`

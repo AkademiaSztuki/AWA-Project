@@ -1,0 +1,35 @@
+﻿# Legacy / archived docs
+docs/archive/**
+docs/audit/**
+docs/migration/**
+
+# Supabase (archived reference only)
+apps/frontend/supabase/**
+apps/frontend/scripts/archive/**
+
+# One-off ops / fixes
+OAUTH_FIX_NOW.md
+VERCEL_CONFIG_INSTRUCTIONS.md
+COST_ANALYSIS_*.md
+LOCAL_SETUP.md
+
+# Outdated thesis-unfriendly summaries (use docs/canon instead)
+PODSUMOWANIE_PROJEKTU.md
+DATA_LINEAGE.md
+DEEP_PERSONALIZATION_README.md
+docs/supabase-auth-setup.md
+
+# Dev/ops (not for thesis context)
+docs/gcp-data-verification/**
+docs/billing-promo.md
+docs/installation.md
+infra/gcp/RESEND_SETUP.md
+apps/frontend/STRIPE_*.md
+apps/frontend/VERCEL_*.md
+apps/frontend/GOOGLE_CREDENTIALS*.md
+apps/frontend/FIX_GOOGLE_CREDENTIALS.md
+
+# Build artifacts
+**/.next/**
+**/node_modules/**
+**/*.tsbuildinfo

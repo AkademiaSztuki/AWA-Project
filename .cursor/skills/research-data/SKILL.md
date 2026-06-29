@@ -5,6 +5,26 @@ description: Research data collection and handling patterns for IDA project. Use
 
 # Research Data Handling for IDA Project
 
+## Canonical documentation (thesis / facts)
+
+For accurate descriptions of data model, variables, and flow, prefer:
+
+- `docs/canon/data-model.md` — Cloud SQL tables and layers
+- `docs/canon/research-variables.md` — operational definitions for exports
+- `docs/canon/user-flow.md` — when data is collected in fast vs full path
+- `thesis/GLOSSARY.md` — terminology
+
+**Legacy (do not use as source of truth):**
+
+- `apps/frontend/supabase/**` — archived Supabase schema; production uses GCP
+- `docs/archive/**` — outdated stack documentation
+
+**QA only (not methodology text):**
+
+- `docs/gcp-data-verification/README.md` — persistence smoke-test checklist
+
+Runtime persistence: `apps/frontend/src/lib/gcp-data.ts` → Cloud Run → Cloud SQL.
+
 ## Data Architecture
 
 4-layer data model:
@@ -70,8 +90,8 @@ await saveResearchConsent(userId, {
 
 - `user_hash` - Anonymized user identifier
 - No PII in research tables
-- Separate `auth.users` table for authentication
-- Optional link via `auth_user_id` (only if user consents)
+- Optional link via `auth_user_id` (Google OAuth sub, only if user consents)
+- Legacy Supabase `auth.users` — removed; auth is Google native via GCP backend
 
 ### Right to Withdrawal
 

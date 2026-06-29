@@ -1,5 +1,7 @@
 # IDA Project - Master Plan
 
+> **Note:** Technical stack and flow sections in this document may be partially outdated (Supabase/Modal references). For thesis writing and current architecture, use [`docs/canon/system-overview.md`](canon/system-overview.md) and [`docs/canon/user-flow.md`](canon/user-flow.md).
+
 **Status**: In Development  
 **Last Updated**: October 2025  
 **Philosophy**: Product-First, Research-Embedded, Minimalist Glass Design

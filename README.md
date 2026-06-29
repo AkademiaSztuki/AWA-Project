@@ -29,6 +29,8 @@ pnpm run deploy:frontend   # Vercel
 - `apps/frontend/` - Next.js app (IDA character, flows, GCP client)
 - `apps/backend-gcp/` - Cloud Run API (Postgres, research routes, auth helpers)
 - `infra/gcp/sql/` - **Source of truth** for Cloud SQL schema
+- `docs/canon/` - Verified documentation for thesis writing
+- `thesis/` - Doctoral dissertation drafts (Markdown)
 - `docs/archive/modal-backend/` - Legacy Modal.com Python backend (archived)
 
 ## Configuration
@@ -54,6 +56,8 @@ The app collects data per Research Through Design:
 
 Persistence verification checklists: [docs/gcp-data-verification/README.md](docs/gcp-data-verification/README.md).
 
-## Akademia Sztuk Pięknych - Doktorat
+## Doktorat — Akademia Sztuki w Szczecinie
 
-Project within research on human–AI collaboration in interior design.
+Doctoral research project (IDA) on human–AI collaboration in interior design and environmental psychology.
+
+Canonical facts for thesis writing: [`docs/canon/`](docs/canon/) and [`thesis/GLOSSARY.md`](thesis/GLOSSARY.md).

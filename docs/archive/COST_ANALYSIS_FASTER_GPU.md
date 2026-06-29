@@ -1,3 +1,4 @@
+﻿> OUTDATED — do not use for thesis. See docs/canon/ and thesis/CANONICAL_SOURCES.md
 # Analiza Kosztów z Szybszymi GPU (H100, H200, B200)
 
 ## Obecna Konfiguracja
