@@ -1,7 +1,9 @@
-import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { buildRootJsonLd } from '@/lib/seo/json-ld';
+import { buildRootMetadata } from '@/lib/seo/metadata';
 import { Inter, Audiowide, Exo_2, Atkinson_Hyperlegible } from 'next/font/google';
 import './globals.css';
 import 'simplebar-react/dist/simplebar.min.css';
@@ -39,12 +41,7 @@ const atkinson = Atkinson_Hyperlegible({
   variable: '--font-atkinson',
 });
 
-export const metadata: Metadata = {
-  title: 'IDA - Interior Design Assistant',
-  description:
-    'Projekt doktorski — asystent AI do projektowania wnętrz i badań preferencji (Akademia Sztuki w Szczecinie)',
-  keywords: ['AI', 'Interior Design', 'Research', 'Akademia Sztuki w Szczecinie'],
-};
+export const metadata = buildRootMetadata();
 
 export const viewport = {
   width: 'device-width',
@@ -101,6 +98,7 @@ export default function RootLayout({
   return (
     <html lang={initialLanguage.language} className={`${inter.variable} ${atkinson.variable} ${audiowide.variable} ${exo2.variable}`}>
       <body className="min-h-[100dvh] font-nasalization">
+        <JsonLd data={buildRootJsonLd()} />
         {/* Skip to main content link for accessibility */}
         <a 
           href="#main-content" 

@@ -1,5 +1,7 @@
 import { headers } from 'next/headers';
 import dynamic from 'next/dynamic';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { HOME_SEO } from '@/lib/seo/routes';
 import { FlowRoutePrefetch } from '@/components/navigation/FlowRoutePrefetch';
 import { HomeMobileHeaderInit } from '@/components/marketing/HomeMobileHeaderInit';
 import {
@@ -9,6 +11,8 @@ import {
 } from '@/lib/marketing/hero-interior-slides';
 import { isLikelyMobileUserAgent } from '@/lib/marketing/detect-mobile-ua';
 import { MARKETING_HERO_BLEED_INLINE_SCRIPT } from '@/lib/marketing/hero-bleed-inline-script';
+
+export const metadata = buildPageMetadata(HOME_SEO);
 
 const MarketingEntryScreen = dynamic(
   () => import('@/components/screens/MarketingEntryScreen'),

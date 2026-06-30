@@ -17,10 +17,13 @@
 ## ✅ PUBLICZNE (NEXT_PUBLIC_*)
 
 ```
+✅ NEXT_PUBLIC_SITE_URL=https://www.project-ida.com
 ✅ NEXT_PUBLIC_MODAL_API_URL
 ✅ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ✅ NEXT_PUBLIC_APP_URL
 ```
+
+`NEXT_PUBLIC_SITE_URL` — canonical URL dla SEO (sitemap, Open Graph, JSON-LD). Ustaw na produkcji na `https://www.project-ida.com`.
 
 ## 🔐 WRAŻLIWE ALE POTRZEBNE (Secret Keys)
 
