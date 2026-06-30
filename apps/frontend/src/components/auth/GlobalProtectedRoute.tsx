@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   '/', // Marketing home
   '/start', // Legacy redirect to /
   '/contact',
+  '/faq',
   '/o-projecie',
   '/privacy',
   '/terms',

@@ -104,3 +104,27 @@ export function buildResearchProjectJsonLd(): JsonLdObject {
 export function buildRootJsonLd(): JsonLdObject[] {
   return [buildWebsiteJsonLd(), buildOrganizationJsonLd(), buildSoftwareApplicationJsonLd()];
 }
+
+type FaqJsonLdItem = {
+  question: string;
+  answer: string;
+};
+
+export function buildFaqPageJsonLd(items: FaqJsonLdItem[]): JsonLdObject {
+  const url = absoluteUrl('/faq');
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    '@id': `${url}#faq`,
+    url,
+    mainEntity: items.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: item.answer,
+      },
+    })),
+  };
+}

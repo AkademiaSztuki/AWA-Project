@@ -79,10 +79,26 @@ export const PLANS_SEO: PageSeoConfig = {
   priority: 0.7,
 };
 
+export const FAQ_SEO: PageSeoConfig = {
+  path: '/faq',
+  title: 'FAQ — często zadawane pytania',
+  description:
+    'Odpowiedzi na pytania o IDA: jak działa personalizacja wnętrz z AI, tryb szybki i pełny, kredyty, dane badawcze i prywatność.',
+  keywords: [
+    'IDA FAQ',
+    'generator wnętrz AI pytania',
+    'personalizacja wnętrz AI',
+    'badanie preferencji wnętrz',
+  ],
+  changeFrequency: 'monthly',
+  priority: 0.75,
+};
+
 /** Public pages worth indexing in Google. App flows and dashboards are excluded. */
 export const INDEXABLE_ROUTES: PageSeoConfig[] = [
   HOME_SEO,
   ABOUT_SEO,
+  FAQ_SEO,
   CONTACT_SEO,
   PRIVACY_SEO,
   TERMS_SEO,

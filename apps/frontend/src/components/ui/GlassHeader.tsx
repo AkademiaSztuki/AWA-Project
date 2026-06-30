@@ -26,6 +26,7 @@ import {
 /** Legal / marketing pages — show Cennik + Kontakt without cluttering in-app flows. */
 const MARKETING_NAV_PATHS = new Set([
   '/contact',
+  '/faq',
   '/o-projecie',
   '/privacy',
   '/terms',

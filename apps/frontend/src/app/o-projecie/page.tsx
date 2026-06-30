@@ -358,6 +358,12 @@ export default function AboutProjectPage() {
               <p className={`mb-4 ${BODY_TEXT_JUSTIFY_CLASS}`}>{text(t.sections.contact.body)}</p>
               <div className="flex flex-wrap gap-4">
                 <Link
+                  href="/faq"
+                  className="font-modern text-graphite underline-offset-4 transition-colors hover:text-gold hover:underline"
+                >
+                  {language === 'pl' ? 'Często zadawane pytania' : 'Frequently asked questions'} →
+                </Link>
+                <Link
                   href="/contact"
                   className="font-modern text-graphite underline-offset-4 transition-colors hover:text-gold hover:underline"
                 >

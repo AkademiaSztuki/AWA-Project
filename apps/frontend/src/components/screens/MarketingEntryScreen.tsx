@@ -247,6 +247,7 @@ const copy = {
       tagline:
         'IDA · projekt doktorski · Autor: Jakub Palka · Akademia Sztuki w Szczecinie.',
       about: 'O projekcie',
+      faq: 'FAQ',
       contact: 'Kontakt',
       privacy: 'Prywatność',
       terms: 'Regulamin',
@@ -403,6 +404,7 @@ const copy = {
       tagline:
         'IDA · doctoral research project · Author: Jakub Palka · Academy of Art in Szczecin.',
       about: 'About the project',
+      faq: 'FAQ',
       contact: 'Contact',
       privacy: 'Privacy',
       terms: 'Terms',
@@ -2506,6 +2508,7 @@ const MarketingEntryScreen: React.FC<{ compactHeroHint?: boolean }> = ({
       <SiteFooter
         tagline={t.footer.tagline}
         aboutLabel={t.footer.about}
+        faqLabel={t.footer.faq}
         contactLabel={t.footer.contact}
         privacyLabel={t.footer.privacy}
         termsLabel={t.footer.terms}
@@ -2655,6 +2658,7 @@ const PathCard = ({
 type SiteFooterProps = {
   tagline: string;
   aboutLabel: string;
+  faqLabel: string;
   contactLabel: string;
   privacyLabel: string;
   termsLabel: string;
@@ -2667,6 +2671,7 @@ type SiteFooterProps = {
 const SiteFooter = ({
   tagline,
   aboutLabel,
+  faqLabel,
   contactLabel,
   privacyLabel,
   termsLabel,
@@ -2702,6 +2707,7 @@ const SiteFooter = ({
           <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2 sm:gap-x-0">
             {[
               { href: '/o-projecie', label: aboutLabel },
+              { href: '/faq', label: faqLabel },
               { href: '/contact', label: contactLabel },
               { href: '/privacy', label: privacyLabel },
               { href: '/terms', label: termsLabel },
