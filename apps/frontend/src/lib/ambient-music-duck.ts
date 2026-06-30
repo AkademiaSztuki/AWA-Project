@@ -1,4 +1,5 @@
 import { safeLocalStorage } from '@/lib/gcp-data';
+import { AMBIENT_MUSIC_VOLUME_KEY, shouldAutoPlayAmbientMusic } from '@/lib/ambient-music-prefs';
 
 const DEFAULT_DUCK_VOLUME = 0;
 const DEFAULT_FADE_MS = 300;
@@ -24,7 +25,7 @@ function getAmbientAudio(): HTMLAudioElement | null {
 }
 
 function readSavedAmbientVolume(): number {
-  const stored = safeLocalStorage.getItem('ambient-music-volume');
+  const stored = safeLocalStorage.getItem(AMBIENT_MUSIC_VOLUME_KEY);
   if (stored !== null) {
     const parsed = parseFloat(stored);
     if (!Number.isNaN(parsed)) {
@@ -142,7 +143,7 @@ export function restoreAmbientMusic(options?: AmbientMusicRestoreOptions): void 
   setDuckFlag(false);
 
   const restoreTo = savedVolume ?? readSavedAmbientVolume();
-  const shouldResume = wasPlayingBeforeDuck;
+  const shouldResume = wasPlayingBeforeDuck && shouldAutoPlayAmbientMusic(restoreTo);
   savedVolume = null;
   wasPlayingBeforeDuck = false;
 
@@ -168,7 +169,7 @@ export function forceRestoreAmbientMusic(): void {
   if (!isDucked) return;
 
   const restoreTo = savedVolume ?? readSavedAmbientVolume();
-  const shouldResume = wasPlayingBeforeDuck;
+  const shouldResume = wasPlayingBeforeDuck && shouldAutoPlayAmbientMusic(restoreTo);
   isDucked = false;
   setDuckFlag(false);
   savedVolume = null;

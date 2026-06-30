@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAmbientMusic } from '@/hooks/useAmbientMusic';
+import { setAmbientMusicUserPaused } from '@/lib/ambient-music-prefs';
 import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { GlassSlider } from './GlassSlider';
 import { Volume2, VolumeX, Volume1, MessageCircle, MessageCircleOff, X } from 'lucide-react';
@@ -258,14 +259,12 @@ export const MusicTestButton: React.FC = () => {
                           e.stopPropagation();
                           if (musicVolume === 0) {
                             setMusicVolume(0.3);
-                            if (typeof window !== 'undefined') {
-                              (window as any).ambientMusicUserManuallyPaused = false;
-                            }
+                            setAmbientMusicUserPaused(false);
                             const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
                             if (audioElement) {
                               try {
                                 await audioElement.play();
-                              } catch (error) {
+                              } catch {
                                 togglePlay();
                               }
                             } else {
@@ -276,10 +275,8 @@ export const MusicTestButton: React.FC = () => {
                             const audioElement = document.querySelector('audio[data-type="ambient"]') as HTMLAudioElement;
                             if (audioElement && !audioElement.paused) {
                               audioElement.pause();
-                              if (typeof window !== 'undefined') {
-                                (window as any).ambientMusicUserManuallyPaused = true;
-                              }
                             }
+                            setAmbientMusicUserPaused(true);
                           }
                         }}
                         className="w-8 h-8 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 transition-all focus:ring-2 focus:ring-gold-400 focus:outline-none"
