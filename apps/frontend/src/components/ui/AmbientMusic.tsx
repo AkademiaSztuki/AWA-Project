@@ -111,16 +111,11 @@ export const AmbientMusic: React.FC<AmbientMusicProps> = ({
     const removeInteractionListeners = () => {
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('keydown', handleUserInteraction);
-      document.removeEventListener('touchstart', handleUserInteraction);
-      document.removeEventListener('touchend', handleUserInteraction);
-      document.removeEventListener('mousedown', handleUserInteraction);
     };
 
+    // Only deliberate activations — touchstart/touchend fire during scroll on mobile.
     document.addEventListener('click', handleUserInteraction, { passive: true });
     document.addEventListener('keydown', handleUserInteraction, { passive: true });
-    document.addEventListener('touchstart', handleUserInteraction, { passive: true });
-    document.addEventListener('touchend', handleUserInteraction, { passive: true });
-    document.addEventListener('mousedown', handleUserInteraction, { passive: true });
 
     if (autoStart && canStartPlayback()) {
       setTimeout(tryPlay, 500);

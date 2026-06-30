@@ -89,14 +89,12 @@ export const useAmbientMusic = (): AmbientMusicControls => {
     };
 
     document.addEventListener('click', handleGlobalInteraction, { passive: true });
-    document.addEventListener('touchstart', handleGlobalInteraction, { passive: true });
 
     return () => {
       if (retryTimeout) clearTimeout(retryTimeout);
       cleanup?.();
       clearInterval(syncInterval);
       document.removeEventListener('click', handleGlobalInteraction);
-      document.removeEventListener('touchstart', handleGlobalInteraction);
     };
   }, [volume]);
 
