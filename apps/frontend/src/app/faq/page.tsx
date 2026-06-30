@@ -54,7 +54,7 @@ export default function FaqPage() {
       eyebrow: 'Pomoc',
       title: 'Często zadawane pytania',
       subtitle:
-        'Odpowiedzi o działaniu IDA, personalizacji wnętrz z AI, kredytach oraz udziale w badaniu naukowym.',
+        'Szczegółowe odpowiedzi o działaniu platformy IDA, personalizacji wnętrz wspomaganej sztuczną inteligencją, modelu kredytów oraz zasadach udziału w badaniu naukowym.',
       moreAbout: 'Więcej o projekcie badawczym',
       contact: 'Nie znalazłeś odpowiedzi? Napisz do nas',
       back: 'Wstecz',
@@ -63,7 +63,7 @@ export default function FaqPage() {
       eyebrow: 'Help',
       title: 'Frequently asked questions',
       subtitle:
-        'Answers about how IDA works, AI interior personalization, credits, and participation in the research project.',
+        'Detailed answers about the IDA platform, AI-assisted interior personalization, the credit model, and participation in the research study.',
       moreAbout: 'More about the research project',
       contact: 'Did not find an answer? Get in touch',
       back: 'Back',

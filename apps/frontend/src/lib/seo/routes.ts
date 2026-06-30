@@ -83,7 +83,7 @@ export const FAQ_SEO: PageSeoConfig = {
   path: '/faq',
   title: 'FAQ — często zadawane pytania',
   description:
-    'Odpowiedzi na pytania o IDA: jak działa personalizacja wnętrz z AI, tryb szybki i pełny, kredyty, dane badawcze i prywatność.',
+    'Szczegółowe odpowiedzi o platformie IDA: personalizacja wnętrz wspomagana AI, tryby szybki i pełny, model kredytów, dane badawcze, zgody i prywatność uczestników.',
   keywords: [
     'IDA FAQ',
     'generator wnętrz AI pytania',
