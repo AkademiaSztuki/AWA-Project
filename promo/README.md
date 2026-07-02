@@ -13,6 +13,8 @@ Pakiet do pozyskiwania pierwszych użytkowników **project-ida.com** (wczesny do
 | [outreach-influencers.md](./outreach-influencers.md) | Lista mikro-influencerów + szablony DM |
 | [reels-brief.md](./reels-brief.md) | Storyboard 3 Reelsów / TikToków |
 | [analytics-template.md](./analytics-template.md) | Szablon śledzenia konwersji per kanał |
+| [IDA-press-release-pl.pdf](./IDA-press-release-pl.pdf) | 1-stronicowa nota prasowa (PL) — załącznik do maili PR |
+| [press-release-pl.md](./press-release-pl.md) | Źródło tekstowe noty · [HTML](./press-release-pl.html) do edycji layoutu |
 
 ## Wspólne komunikaty (nie zmieniaj bez potrzeby)
 
