@@ -167,6 +167,8 @@ We're in early access and looking for beta users — but more importantly, I'd l
 
 I can provide: 60s demo video, before/after screenshots, founder interview, methodology summary.
 
+**Press release (PDF):** [IDA-press-release-en.pdf](../IDA-press-release-en.pdf) · source: [press-release-en.md](../press-release-en.md)
+
 Would this be interesting for a short feature or interview?
 
 Best,

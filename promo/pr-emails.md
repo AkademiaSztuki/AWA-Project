@@ -4,11 +4,11 @@
 **Temat bazowy:** `[IDA] Wczesny dostęp — AI do koncepcji wnętrz z badań doktorskich (ASP Szczecin)`
 
 Załączniki do przygotowania przed wysyłką:
-- **Nota prasowa (PDF):** [IDA-press-release-pl.pdf](./IDA-press-release-pl.pdf) — gotowa, 1 strona A4
+- **Nota prasowa (PDF):** [IDA-press-release-pl.pdf](./IDA-press-release-pl.pdf) (PL) · [IDA-press-release-en.pdf](./IDA-press-release-en.pdf) (EN)
 - 3 screenshoty before/after (to samo zdjęcie pokoju, różne kierunki)
 - 60s demo video (screen recording flow)
 
-Regeneracja PDF po edycji treści: `./promo/generate-press-release-pdf.sh`
+Regeneracja PDF po edycji treści: `./promo/generate-press-release-pdf.sh` (generuje PL + EN)
 
 ---
 

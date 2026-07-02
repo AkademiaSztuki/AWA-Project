@@ -14,7 +14,9 @@ Pakiet do pozyskiwania pierwszych użytkowników **project-ida.com** (wczesny do
 | [reels-brief.md](./reels-brief.md) | Storyboard 3 Reelsów / TikToków |
 | [analytics-template.md](./analytics-template.md) | Szablon śledzenia konwersji per kanał |
 | [IDA-press-release-pl.pdf](./IDA-press-release-pl.pdf) | 1-stronicowa nota prasowa (PL) — załącznik do maili PR |
-| [press-release-pl.md](./press-release-pl.md) | Źródło tekstowe noty · [HTML](./press-release-pl.html) do edycji layoutu |
+| [IDA-press-release-en.pdf](./IDA-press-release-en.pdf) | 1-page press release (EN) — Reddit, Product Hunt, international media |
+| [press-release-pl.md](./press-release-pl.md) | Źródło tekstowe noty PL · [HTML](./press-release-pl.html) |
+| [press-release-en.md](./press-release-en.md) | Źródło tekstowe noty EN · [HTML](./press-release-en.html) |
 
 ## Wspólne komunikaty (nie zmieniaj bez potrzeby)
 
