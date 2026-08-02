@@ -1,6 +1,10 @@
-% main.tex — dissertation root (coordinator / framing agent)
+% main.tex — dissertation root (coordinator)
 % Chapter agents edit only files under chapters/, frontmatter/, backmatter/.
 % Build: make pdf   OR   latexmk -pdflua main.tex
+%
+% ASP chapter map (Phase 0):
+%   01 framing | 02-03 theory-a | 04 media-lab | 05 theory-b
+%   06 methods | 07 artifact | 08-10 empirical
 %
 % Partial parallel build example:
 %   latexmk -pdflua -pretex="\includeonly{chapters/06-metodologia}" -usepretex main.tex
@@ -21,20 +25,13 @@
 % ----- Body -----
 \mainmatter
 
-% Theory lane A
 \include{chapters/01-wprowadzenie}
 \include{chapters/02-psychologia-srodowiskowa}
 \include{chapters/03-preferencje-estetyczne}
-
-% Theory lane B
-\include{chapters/04-osobowosc}
-\include{chapters/05-ai-hci}
-
-% Methods + artifact
+\include{chapters/04-medium-dyfuzyjne-comfyui}
+\include{chapters/05-osobowosc}
 \include{chapters/06-metodologia}
 \include{chapters/07-artefakt-ida}
-
-% Empirical
 \include{chapters/08-wyniki}
 \include{chapters/09-dyskusja}
 \include{chapters/10-wnioski}
@@ -47,6 +44,8 @@
 \include{backmatter/appendix-d-prompts}
 \include{backmatter/appendix-e-variables}
 \include{backmatter/appendix-f-consent}
+\include{backmatter/appendix-g-comfyui}
+\include{backmatter/appendix-h-ida-flows}
 
 \printbibliography[heading=bibintoc,title={Bibliografia}]
 

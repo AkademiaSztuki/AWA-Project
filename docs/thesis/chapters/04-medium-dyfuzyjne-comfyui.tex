@@ -1,0 +1,72 @@
+% OWNER: media-lab
+% STATUS: outline
+% SOURCES: notes/SPIS_TRESCI_SZCZEGOLOWY.md §4; GLOSSARY.md §8.3
+\chapter{Sztuczna inteligencja dyfuzyjna dla architektury wnętrz --- medium i praktyka}
+\label{ch04:top}
+\ChapterStatus{outline}{media-lab}
+
+\begin{quote}
+Eksperymenty w ComfyUI (w tym kontrola geometrii przez mapy głębokości, conditioning oraz segmentację SAM/SAM2) stanowią warstwę praktyki autora; produkcyjny artefakt IDA realizuje generację przez syntezę promptu i image-to-image w środowisku Vertex~AI / Gemini Image (wcześniej FLUX na Modal).
+\end{quote}
+
+\section{Generatywne modele obrazu jako medium wizualizacji wnętrz}
+\label{ch04:sec:genai-medium}
+\Todo{Survey / kluczowe papers 2022--2026 o diffusion w architekturze i designie --- tylko zweryfikowane DOI.}
+
+\section{Od text-to-image do image-to-image: geometria pokoju}
+\label{ch04:sec:t2i-i2i}
+\Todo{Zachowanie layoutu, perspektyw, otworów; typowe failure modes.}
+
+% \begin{figure}[htbp]
+%   \centering
+%   \includegraphics[width=0.9\textwidth]{comfyui/ch04-geometry-fail-success.png}
+%   \caption{Porównanie udanej i nieudanej geometrii pomieszczenia po restylizacji (opracowanie własne autora --- pracownia generatywna).}
+%   \label{fig:ch04:geometry}
+% \end{figure}
+
+\section{Pracownia ComfyUI}
+\label{ch04:sec:comfyui}
+
+\subsection{Dobór i porównanie modeli}
+\label{ch04:sec:modele}
+\Todo{Tabela kryteriów: wierność geometrii, styl, czas, kontrola (SDXL / FLUX / warianty edycyjne).}
+
+\subsection{LoRA i style adapters}
+\label{ch04:sec:lora}
+\Todo{Kontrola charakteru wizualizacji vs wierność zdjęciu bazowemu.}
+
+\subsection{Workflow img2img i multi-reference}
+\label{ch04:sec:img2img}
+\Todo{Grafy ComfyUI; inspiracje jako referencje.}
+
+\section{Kontrola struktury przestrzeni}
+\label{ch04:sec:struktura}
+
+\subsection{Mapy głębokości (depth)}
+\label{ch04:sec:depth}
+\Todo{Znaczenie depth dla układu pomieszczenia; typowe błędy.}
+
+\subsection{ControlNet i conditioningi (canny, normals)}
+\label{ch04:sec:controlnet}
+\Todo{Conditioning struktury obrazu w kontekście wnętrz.}
+
+\subsection{Segmentacja SAM / SAM2}
+\label{ch04:sec:sam}
+\Todo{Maski mebli, ścian, stref; restylizacja selektywna.}
+\NeedsCite{Papers SAM (Kirillov et al.) oraz SAM~2 --- zweryfikować DOI przed cytowaniem.}
+
+\section{Inpainting, empty shell i usuwanie wyposażenia}
+\label{ch04:sec:inpaint}
+\Todo{Od maski w pracowni do produktowego empty shell w IDA (prompt systemowy, bez pełnego ControlNet w runtime).}
+
+\section{VLM i opis przestrzeni jako brief projektowy}
+\label{ch04:sec:vlm}
+\Todo{Od zrozumienia zdjęcia do briefu; most do analizy pokoju/inspiracji w IDA (Gemini Flash Lite).}
+
+\section{Krytyka medium}
+\label{ch04:sec:krytyka}
+\Todo{Halucynacje geometrii; estetyka AI look; autorstwo i odpowiedzialność projektanta.}
+
+\section{Checklista jakości wizualizacji koncepcyjnej}
+\label{ch04:sec:checklista}
+\Todo{Autorskie kryteria: geometria, światło, materiał, zgodność z briefem, czytelność funkcji.}

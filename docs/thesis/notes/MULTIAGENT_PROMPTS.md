@@ -140,8 +140,7 @@ Zakres plików:
 Zadanie — POGŁĘBIONY RESEARCH + DRAFT:
 Rozdział 2 (całość 2.1–2.6): ART/SRT, PRS, biophilia, funkcja/nastrój, implikacje dla personalizacji obrazu.
 Rozdział 3 (3.1–3.4 i szkielet 3.7): explicit, IAT→Tinder, rozbieżność, laddering, mapa do 6 źródeł.
-Sekcje Big Five 3.5–3.6: napisz solidny draft ALBO zostaw spójny most do pliku 04-osobowosc.tex
-(OWNER theory-b) — nie dubluj sprzecznych definicji.
+Sekcje Big Five: odesłanie do chapters/05-osobowosc.tex (OWNER theory-b) — nie dubluj sprzecznych definicji.
 
 Wymagane tabele/ryciny:
 - tab: wymiary PRS ↔ IDA mood grid (z zaznaczeniem ideal/current/target)
@@ -161,14 +160,13 @@ greenwald1998iat, kahneman2011thinking — popraw metadane jeśli błędne.
 OWNER: theory-b
 
 Zakres plików:
-- docs/thesis/chapters/04-osobowosc.tex  (Big Five / IPIP-NEO-120 / krytyka determinizmu)
-- docs/thesis/chapters/05-ai-hci.tex     (RtD, XAI, etyka, gamifikacja, pozycjonowanie — BEZ udawania że to rozdz. ComfyUI)
+- docs/thesis/chapters/05-osobowosc.tex  (Big Five / IPIP-NEO-120 / krytyka determinizmu)
 - bibliography/references.bib
 
 Uwaga strukturalna:
-Docelowy „rozdział 4 ComfyUI” w spisie ASP to INNY temat (pas media-lab).
-Ty rozwijasz osobowość + metodologiczno-etyczny kontekst GenAI/HCI pod artefakt.
-Nie opisuj ComfyUI/SAM/depth jako części swojego zakresu poza krótkim odesłaniem.
+Rozdział 4 ComfyUI = pas media-lab (`04-medium-dyfuzyjne-comfyui.tex`).
+Ty rozwijasz osobowość (rozdz. 5) + most etyczny do metodologii.
+Nie opisuj ComfyUI/SAM/depth poza krótkim odesłaniem.
 
 Zadanie:
 1) Research: Big Five + preferencje środowiskowe/estetyczne; IPIP-NEO; ryzyka determinizmu;
@@ -186,8 +184,8 @@ Zadanie:
 OWNER: media-lab
 
 Zakres:
-- Utwórz/edytuj docs/thesis/notes/drafts/04-medium-dyfuzyjne.md jako pełny szkic merytoryczny
-  OR (jeśli istnieje) docs/thesis/chapters/04-medium-dyfuzyjne-comfyui.tex
+- docs/thesis/chapters/04-medium-dyfuzyjne-comfyui.tex
+- docs/thesis/backmatter/appendix-g-comfyui.tex
 - docs/thesis/figures/comfyui/ (ryciny)
 - docs/thesis/bibliography/references.bib
 - Nie twierdź, że ComfyUI/SAM2/ControlNet są w runtime produkcyjnym IDA.
@@ -251,11 +249,12 @@ OWNER: artifact
 
 Zakres plików:
 - docs/thesis/chapters/07-artefakt-ida.tex
-- docs/thesis/chapters/05-ai-hci.tex (tylko jeśli przenosisz/czyszczysz opis techniczny — nie dubluj media-lab)
 - docs/thesis/backmatter/appendix-c-mappings.tex
 - docs/thesis/backmatter/appendix-d-prompts.tex
+- docs/thesis/backmatter/appendix-h-ida-flows.tex
 - docs/thesis/figures/ida/
 - bibliography/references.bib
+- seed (read-only): chapters/_archive-05-ai-hci.tex
 Źródła wewnętrzne do przeczytania (to NIE są publikacje, ale kanon opisu artefaktu):
 - apps/frontend/src/lib/prompt-synthesis/modes.ts (przez search w repo)
 - docs/MASTER_PLAN.md, docs/IDA_DIALOGUE_SCRIPT.md

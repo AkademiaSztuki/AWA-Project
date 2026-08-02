@@ -30,20 +30,22 @@ make clean
 
 Wymagania lokalne: TeX Live (LuaLaTeX), `latexmk`, `biber`, fonty Latin Modern.
 
-## Pasy agentów (ownership)
+## Pasy agentów (ownership) — mapa po Fazie 0
 
 | Pas (`OWNER`) | Pliki | Fokus |
 |---------------|-------|-------|
 | `framing` | `frontmatter/*`, `chapters/01-wprowadzenie.tex`, `metadata.tex`\* | Tytuł, streszczenia, wprowadzenie |
-| `theory-a` | `chapters/02-*.tex`, `chapters/03-*.tex` | Psychologia środowiskowa, preferencje |
-| `theory-b` | `chapters/04-*.tex`, `chapters/05-*.tex` | Osobowość, AI/HCI/RtD |
-| `methods` | `chapters/06-*.tex`, `backmatter/appendix-{a,b,e,f}-*.tex` | Metodologia, etyka, zmienne |
-| `artifact` | `chapters/07-*.tex`, `backmatter/appendix-{c,d}-*.tex` | Platforma IDA, prompty, mapowania |
-| `empirical` | `chapters/08-*.tex`, `chapters/09-*.tex`, `chapters/10-*.tex` | Wyniki, dyskusja, wnioski |
-| `media-lab` | przyszły rozdz. o ComfyUI/SAM/depth + `figures/comfyui/` | Pracownia generatywna (poza runtime IDA) |
-| `coordinator` | `main.tex`, `preamble.tex`, `metadata.tex`, `GLOSSARY.md`, `latexmkrc`, `Makefile`, `AGENTS.md` | Struktura, słownik, pakiety, konflikty |
+| `theory-a` | `chapters/02-psychologia-srodowiskowa.tex`, `chapters/03-preferencje-estetyczne.tex` | Przestrzeń, PRS, preferencje |
+| `media-lab` | `chapters/04-medium-dyfuzyjne-comfyui.tex`, `backmatter/appendix-g-comfyui.tex`, `figures/comfyui/` | ComfyUI, depth, SAM, dyfuzja |
+| `theory-b` | `chapters/05-osobowosc.tex` | Big Five, IPIP-NEO-120, krytyka determinizmu |
+| `methods` | `chapters/06-metodologia.tex`, `backmatter/appendix-{a,b,e,f}-*.tex` | Metodologia, etyka, RQ, zmienne |
+| `artifact` | `chapters/07-artefakt-ida.tex`, `backmatter/appendix-{c,d,h}-*.tex`, `figures/ida/` | Platforma IDA, pipeline, macierz |
+| `empirical` | `chapters/08-wyniki.tex`, `chapters/09-dyskusja.tex`, `chapters/10-wnioski.tex` | Wyniki, dyskusja, wnioski |
+| `coordinator` | `main.tex`, `preamble.tex`, `metadata.tex`, `GLOSSARY.md`, `latexmkrc`, `Makefile`, `AGENTS.md` | Struktura, słownik, pakiety |
 
 \* `metadata.tex` — tylko `coordinator` / `framing` po uzgodnieniu.
+
+Zarchiwizowane (nie `\include`): `chapters/_archive-05-ai-hci.tex`.
 
 ## Zasady konfliktu (obowiązkowe)
 
@@ -72,7 +74,7 @@ Wymagania lokalne: TeX Live (LuaLaTeX), `latexmk`, `biber`, fonty Latin Modern.
 ## Równoległy workflow (rekomendowany)
 
 1. Użytkownik odpala N agentów z jasnym `OWNER` (np. „jesteś theory-a”).
-2. Każdy agent czyta: `GLOSSARY.md` → ten plik → `skills/latex-thesis/SKILL.md` → spis ASP → swój rozdział.
+2. Każdy agent czyta: `GLOSSARY.md` → ten plik → `skills/latex-thesis/SKILL.md` → spis szczegółowy → swój rozdział.
 3. Agent pisze tylko w swoich `.tex`; dopina bib; kompiluje `make chapter C=...` lub pełne `make pdf`.
 4. `coordinator` scala konflikty w `GLOSSARY.md` / `references.bib` / preambule i pilnuje buildu.
 
@@ -85,9 +87,9 @@ Nie ustawiaj `final`, dopóki nie znikną `\Todo` / `\NeedsCite` w pliku.
 ## Źródła wewnętrzne (nie cytować jako publikacje)
 
 - `GLOSSARY.md` — kanon terminów
-- `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` — spis pod ASP (aktualny)
-- `notes/SPIS_TRESCI_ROBOCZY.md` — starszy spis (archiwum robocze)
-- `notes/HIPOTEZY_REWIZJA.md` — aktualne RQ / operacjonalizacja
+- `notes/SPIS_TRESCI_SZCZEGOLOWY.md` — spis do pisania
+- `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` — narracja ASP
+- `notes/HIPOTEZY_REWIZJA.md` — RQ1–RQ6
 - kod / SQL projektu — opisuj w rozdziałach o artefakcie i załącznikach; do bibliografii tylko gdy formalnie publikowane
 
 ## Czego nie robić

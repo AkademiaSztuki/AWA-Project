@@ -103,8 +103,8 @@ Każdy podrozdział ma: cel → treść → źródła (kierunki researchu) → r
 
 ## Rozdział 3. Preferencje estetyczne i osobowość jako tworzywo projektu
 
-**OWNER:** `theory-a` (+ wsparcie `theory-b` przy Big Five)  
-**Plik roboczy dziś:** `chapters/03-preferencje-estetyczne.tex` + treści z `04-osobowosc.tex` (docelowo scalenie — coordinator)  
+**OWNER:** `theory-a` (+ `theory-b` dla Big Five w rozdz. 5)  
+**Plik:** `chapters/03-preferencje-estetyczne.tex`  
 **Cel:** operacjonalizacja dla projektanta; model wieloźródłowy.
 
 ### 3.1. Preferencje jawne (explicit)
@@ -143,7 +143,7 @@ Każdy podrozdział ma: cel → treść → źródła (kierunki researchu) → r
 
 ## Rozdział 4. AI dyfuzyjna dla architektury wnętrz — medium i praktyka
 
-**OWNER:** `media-lab` · **Plik docelowy:** `chapters/04-osobowosc.tex` jest zajęty — *tymczasowo pisać szkic do* `notes/drafts/04-medium-dyfuzyjne.md` *albo po przebudowie coordinatora do* `chapters/04-medium-dyfuzyjne-comfyui.tex`  
+**OWNER:** `media-lab` · **Plik:** `chapters/04-medium-dyfuzyjne-comfyui.tex` + zał. G  
 **Cel:** rozdział ze sztuki mediów; ComfyUI; depth; SAM2; krytyka medium.
 
 ### 4.1. GenAI jako medium wizualizacji wnętrz
@@ -243,7 +243,7 @@ Każdy podrozdział ma: cel → treść → źródła (kierunki researchu) → r
 
 ## Rozdział 7. Budowa artefaktu — pipeline i macierz
 
-**OWNER:** `artifact` · **Plik:** `chapters/07-artefakt-ida.tex` + `05-ai-hci.tex` (fragmenty techniczne do przeniesienia)  
+**OWNER:** `artifact` · **Plik:** `chapters/07-artefakt-ida.tex` (+ seed z `_archive-05-ai-hci.tex`)  
 **Cel:** opis projektu z uzasadnieniem; zgodność z kodem.
 
 ### 7.1. Architektura systemu (koncepcyjnie)
@@ -328,20 +328,22 @@ Każdy podrozdział ma: cel → treść → źródła (kierunki researchu) → r
 
 ---
 
-## Mapowanie plików LaTeX (stan obecny → treść)
+## Mapowanie plików LaTeX (po Fazie 0 — kanon)
 
-Numeracja plików w `chapters/` jest jeszcze ze starego spisu. Przy pisaniu:
-
-| Treść merytoryczna | Plik tymczasowy | Uwaga |
-|--------------------|-----------------|-------|
-| Rozdz. 1 | `01-wprowadzenie.tex` | OK |
-| Rozdz. 2 | `02-psychologia-srodowiskowa.tex` | OK |
-| Rozdz. 3 | `03` + `04-osobowosc.tex` | scalać pod coordinator |
-| Rozdz. 4 (ComfyUI) | nowy plik / `notes/drafts/` | **coordinator musi dodać do `main.tex`** |
-| Rozdz. 5 metod. | `06-metodologia.tex` | treść = §5 |
-| Rozdz. 6–8 artefakt | `07-artefakt-ida.tex` (+ `05-ai-hci.tex`) | dzielić sekcjami |
-| Rozdz. 9 wyniki | `08-wyniki.tex` | |
-| Rozdz. 10 dyskusja/wnioski | `09` + `10` | |
+| Treść merytoryczna | Plik | OWNER |
+|--------------------|------|-------|
+| Rozdz. 1 | `chapters/01-wprowadzenie.tex` | framing |
+| Rozdz. 2 | `chapters/02-psychologia-srodowiskowa.tex` | theory-a |
+| Rozdz. 3 | `chapters/03-preferencje-estetyczne.tex` | theory-a |
+| Rozdz. 4 medium/ComfyUI | `chapters/04-medium-dyfuzyjne-comfyui.tex` | media-lab |
+| Rozdz. 5 osobowość | `chapters/05-osobowosc.tex` | theory-b |
+| Rozdz. 6 metodologia | `chapters/06-metodologia.tex` | methods |
+| Rozdz. 7–8 artefakt | `chapters/07-artefakt-ida.tex` | artifact |
+| Rozdz. 9 wyniki | `chapters/08-wyniki.tex` | empirical |
+| Rozdz. 10 dyskusja/wnioski | `09-dyskusja.tex` + `10-wnioski.tex` | empirical |
+| Zał. G ComfyUI | `backmatter/appendix-g-comfyui.tex` | media-lab |
+| Zał. H przebiegi IDA | `backmatter/appendix-h-ida-flows.tex` | artifact |
+| Archiwum | `chapters/_archive-05-ai-hci.tex` | nie w `\include` |
 
 ---
 
