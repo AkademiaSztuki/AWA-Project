@@ -1,9 +1,110 @@
 % OWNER: media-lab
-% STATUS: outline
+% STATUS: draft
+% SOURCES: notes/SPIS_TRESCI_SZCZEGOLOWY.md § zał. G; chapters/04-medium-dyfuzyjne-comfyui.tex
 \chapter{Portfolio pracowni ComfyUI}
 \label{app:g:top}
-\ChapterStatus{outline}{media-lab}
+\ChapterStatus{draft}{media-lab}
 
-\Todo{Wybrane grafy ComfyUI, porównania modeli, depth/SAM, przykłady nieudanej geometrii --- pliki w \texttt{figures/comfyui/}.}
+Załącznik zbiera materiał wizualny z~autorskiej pracowni generatywnej (ComfyUI): grafy, porównania modeli, mapy głębokości, maski SAM/SAM2 oraz przykłady nieudanej geometrii. Materiał dokumentuje \emph{praktykę eksperymentalną} opisaną w~rozdz.~\ref{ch04:top}; nie stanowi dowodu, że wymienione techniki działają w~runtime produkcyjnym IDA.
 
-Każda rycina: podpis + źródło „Opracowanie własne autora --- pracownia generatywna”.
+Każda rycina opatrzona jest podpisem ze źródłem: „Opracowanie własne autora --- pracownia generatywna”. Pliki docelowe: katalog \texttt{figures/comfyui/}.
+
+\section{Grafy ComfyUI}
+\label{app:g:sec:graphs}
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.26\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-comfyui-graph.png}\\[0.4em]
+      \footnotesize Ten sam graf co na ryc.~\ref{fig:ch04:comfyui-graph} --- tu w~kontekście portfolio.
+    }%
+  }
+  \caption{Graf ComfyUI: łańcuch img2img z~conditioningiem strukturalnym.
+  Opracowanie własne autora --- pracownia generatywna.}
+  \label{app:g:fig:graph}
+\end{figure}
+
+\Todo{Opcjonalnie: drugi graf (np.\ ścieżka empty-shell / inpainting) --- plik \texttt{figures/comfyui/app-g-comfyui-graph-inpaint.png}.}
+
+\section{Porównania modeli}
+\label{app:g:sec:models}
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.26\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-model-comparison.png}\\[0.4em]
+      \footnotesize Siatka: to samo zdjęcie pokoju, wspólny brief, różne modele / konfiguracje.
+    }%
+  }
+  \caption{Porównanie modeli na wspólnym zdjęciu pomieszczenia.
+  Opracowanie własne autora --- pracownia generatywna.}
+  \label{app:g:fig:models}
+\end{figure}
+
+\section{Depth, SAM i restylizacja stref}
+\label{app:g:sec:structure}
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.26\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-depth-overlay.png}\\[0.4em]
+      \footnotesize Nakładka depth na fotografię bazową.
+    }%
+  }
+  \caption{Mapa głębokości jako warstwa kontroli struktury.
+  Opracowanie własne autora --- pracownia generatywna.}
+  \label{app:g:fig:depth}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.26\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-sam-mask.png}\\[0.4em]
+      \footnotesize Maska strefy + wynik restylizacji selektywnej.
+    }%
+  }
+  \caption{Segmentacja SAM/SAM2 i~efekt restylizacji wybranej strefy.
+  Opracowanie własne autora --- pracownia generatywna.}
+  \label{app:g:fig:sam}
+\end{figure}
+
+\section{Porażki geometrii}
+\label{app:g:sec:failures}
+
+Dokumentacja niepowodzeń jest tu równie ważna jak przykłady udane: pokazuje limity medium i~uzasadnia checklistę jakości z~podrozdz.~\ref{ch04:sec:checklista}.
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.26\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-geometry-fail-success.png}\\[0.4em]
+      \footnotesize Para lub tryptyk: sukces / typowe złamanie otworów / utrata perspektywy.
+    }%
+  }
+  \caption{Przykłady udanej i~nieudanej geometrii po restylizacji.
+  Opracowanie własne autora --- pracownia generatywna.}
+  \label{app:g:fig:geometry}
+\end{figure}
+
+\section{Checklista plików do dostarczenia przez autora}
+\label{app:g:sec:checklist-files}
+
+\begin{enumerate}
+  \item \texttt{figures/comfyui/ch04-comfyui-graph.png} --- screenshot grafu ComfyUI.
+  \item \texttt{figures/comfyui/ch04-model-comparison.png} --- siatka porównań modeli (to samo room photo).
+  \item \texttt{figures/comfyui/ch04-depth-overlay.png} --- zdjęcie + nakładka depth.
+  \item \texttt{figures/comfyui/ch04-sam-mask.png} --- maska SAM/SAM2 (+ opcjonalnie wynik strefy).
+  \item \texttt{figures/comfyui/ch04-geometry-fail-success.png} --- para/udana vs nieudana geometria.
+  \item \emph{Opcjonalnie:} \texttt{app-g-comfyui-graph-inpaint.png} --- graf ścieżki empty shell / inpainting.
+\end{enumerate}
+
+Po wstawieniu plików należy zastąpić placeholdery \texttt{\textbackslash includegraphics} i~usunąć otaczające \texttt{\textbackslash Todo\{wstaw plik:\ldots\}}.
