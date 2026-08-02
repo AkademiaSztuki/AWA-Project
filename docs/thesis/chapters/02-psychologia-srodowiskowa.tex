@@ -1,33 +1,158 @@
 % OWNER: theory-a
-% STATUS: outline
-% SOURCES: notes/SPIS_TRESCI_ROBOCZY.md § Rozdz. 2
-\chapter{Psychologia środowiskowa i percepcja wnętrz}
+% STATUS: draft
+% SOURCES: notes/SPIS_TRESCI_SZCZEGOLOWY.md §2; GLOSSARY.md; notes/HIPOTEZY_REWIZJA.md
+\chapter{Projektowanie wnętrz, psychologia środowiskowa i doświadczenie przestrzeni}
 \label{ch02:top}
-\ChapterStatus{outline}{theory-a}
+\ChapterStatus{draft}{theory-a}
 
-\section{Teoria środowisk regeneracyjnych}
+Rozdział buduje ramę projektową dla artefaktu badawczego IDA (\emph{AI Interior Design Dialogue Research Platform}): postrzeganą regeneracyjność, biofilię oraz funkcję przestrzeni traktuje się tu jako kategorie projektowe, a nie wyłącznie konstrukty psychometryczne.
+Celem nie jest podręcznik psychologii środowiskowej, lecz uzasadnienie decyzji, które w ścieżce pełnej (Full) platformy prowadzą od Room Setup do źródła \texttt{mixed\_functional} w macierzy generacji \parencite{idaPlatform2026}.
+
+\section{Środowiska regeneracyjne: ART i SRT wobec wnętrza mieszkalnego}
 \label{ch02:sec:art}
-\NeedsCite{Attention Restoration Theory; Stress Reduction Theory}
-Przegląd ram ART/SRT w kontekście wnętrz mieszkalnych \parencite{kaplan1995restorative}.
 
-\section{Skala postrzeganej regeneracyjności PRS}
+Wizualizacja wnętrza -- także generatywna -- jest w praktyce architektury wnętrz mediacyjnym obrazem koncepcji, a nie dokumentacją wykonawczą.
+W kontekście badań przez projektowanie (RtD) obraz ten może jednak przenosić hipotezy o jakości doświadczenia przestrzennego: czy proponowana atmosfera przybliża użytkownika do stanu regeneracyjnego, czy jedynie „ładnie wygląda”.
+
+Teoria regeneracji uwagi (\emph{Attention Restoration Theory}, ART) opisuje warunki, w których środowisko wspiera odzyskiwanie zdolności uwagi ukierunkowanej: fascynację (\emph{fascination}), poczucie oderwania (\emph{being away}), spójność i „rozległość” doświadczenia (\emph{extent}/\emph{coherence}) \parencite{kaplan1995restorative}.
+Teoria redukcji stresu (\emph{Stress Reduction Theory}, SRT) akcentuje natomiast szybką, afektywną odpowiedź na bodźce wizualne -- klasycznie: widok natury -- i jej związek z regeneracją fizjologiczną \parencite{ulrich1984window}.
+\NeedsCite{Ulrich 1991 affective aesthetics of natural scenes; przeglądy restorative environments 2000--2020}
+
+Dla projektanta wnętrz mieszkalnych obie ramy mają wspólny sens operacyjny: regeneracyjność nie jest „dodatkiem estetycznym”, lecz jakością relacji człowiek--przestrzeń, którą da się adresować światłem, materiałem, stopniem złożności wizualnej, obecnością natury i czytelnością układu.
+W IDA te intuicje nie służą twierdzeniu, że generacja obrazu „leczy” regeneracyjność; służą temu, by przed syntezą promptu zebrać deklarację stanu obecnego i docelowego nastroju przestrzeni (zob.\ rozdz.~\ref{ch02:sec:prs}).
+
+\begin{figure}[htbp]
+  \centering
+  \Todo{wstaw plik: figures/ch02/ch02-restorative-framework.pdf --- schemat ART/SRT $\rightarrow$ kategorie projektowe wnętrza (światło, materiał, natura, złożoność, układ)}
+  \caption{Od teorii środowisk regeneracyjnych do kategorii projektowych wnętrza.
+    Opracowanie własne na podstawie \textcite{kaplan1995restorative} oraz \textcite{ulrich1984window}.}
+  \label{fig:ch02:restorative-framework}
+\end{figure}
+
+\section{Postrzegana regeneracyjność (PRS) jako kategoria projektowa}
 \label{ch02:sec:prs}
-\Todo{Konstrukt PRS-11 i operacjonalizacja w IDA (ideal/current/target).}
-\NeedsCite{hartig1997prs}
+
+Skala postrzeganej regeneracyjności (\emph{Perceived Restorativeness Scale}, PRS) operacjonalizuje jakość regeneracyjną środowiska jako konstrukt mierzalny \parencite{hartig1997prs}.
+W klasycznej literaturze wymiary PRS odpowiadają składowym ART: \emph{being away}, \emph{fascination}, \emph{coherence}, \emph{extent}.
+\NeedsCite{Pasini i~in.\ 2014 -- PRS-11 (skrócona forma); weryfikacja DOI przed cytowaniem}
+
+W artefakcie IDA PRS nie występuje jako pełna ankieta pozycji Likertowskich, lecz jako zgamifikowana mapa nastroju (\emph{mood grid}): uczestnik umieszcza punkt w przestrzeni dwuwymiarowej.
+Oś~$X$ opisuje spektrum \emph{energetyzujący}~$\leftrightarrow$~\emph{uspokajający}; oś~$Y$ -- \emph{nudny}~$\leftrightarrow$~\emph{inspirujący}.
+Mapowanie na wymiary PRS/ART jest zaprojektowane jako uproszczenie projektowe (tab.~\ref{tab:ch02:prs-mood-grid}): oś~$X$ przybliża \emph{being away} (w stronę uspokojenia / odpoczynku), oś~$Y$ -- \emph{fascination}; \emph{coherence} i \emph{extent} są w tej formie uchwycone jedynie pośrednio, jako wzorzec położenia i narracja Room Setup \parencite{idaPlatform2026}.
+
+Kluczowa precyzja empiryczna: w obecnej platformie PRS to trzy stany -- \textbf{ideal}, \textbf{current}, \textbf{target} -- a nie klasyczny pomiar pre/post po ekspozycji na wizualizację AI.
+\begin{itemize}
+  \item \texttt{prs\_ideal\_*} -- preferowany nastrój przestrzeni „w ogóle” (profil);
+  \item \texttt{prs\_current\_*} -- odczuwany stan obecnego pokoju (Room Setup);
+  \item \texttt{prs\_target\_*} -- pożądany stan tego samego pokoju (Room Setup).
+\end{itemize}
+Odległość euklidesowa \texttt{prs\_current}~$\rightarrow$~\texttt{prs\_target} stanowi lukę nastrojową, którą synteza promptu może adresować funkcjonalnie (pytanie~\RQ{5}).
+Nie twierdzi się tu o poprawie PRS po generacji: brak kroku \texttt{prs\_post\_*} w aktualnym flow.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Wymiary PRS/ART a operacjonalizacja mood grid w IDA (ideal / current / target).}
+  \label{tab:ch02:prs-mood-grid}
+  \begin{tabular}{@{}p{0.22\textwidth}p{0.28\textwidth}p{0.38\textwidth}@{}}
+    \toprule
+    Wymiar PRS / ART & Forma w mood grid IDA & Moment pomiaru w flow \\
+    \midrule
+    \emph{Being away} (oderwanie / wypoczynek)
+      & Oś~$X$: energetyzujący~$\leftrightarrow$~uspokajający
+      & \texttt{prs\_ideal}, \texttt{prs\_current}, \texttt{prs\_target} \\
+    \emph{Fascination} (fascynacja)
+      & Oś~$Y$: nudny~$\leftrightarrow$~inspirujący
+      & j.w. \\
+    \emph{Coherence} (spójność)
+      & Pośrednio: wzorzec punktu + narracja funkcji
+      & Room Setup (aktywności, pain points) \\
+    \emph{Extent} (rozległość doświadczenia)
+      & Pośrednio: nie jako osobna oś
+      & uzupełniane kontekstem pokoju \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \Todo{wstaw plik: figures/ch02/ch02-prs-mood-grid.png --- zrzut / diagram mood grid z osiami X/Y oraz trzema punktami ideal, current, target}
+  \caption{Mood grid PRS w IDA: trzy stany (ideal, current, target), bez pomiaru post-AI.
+    Opracowanie własne na podstawie artefaktu \parencite{idaPlatform2026}; rama konstruktu: \textcite{hartig1997prs}.}
+  \label{fig:ch02:prs-mood-grid}
+\end{figure}
 
 \section{Biophilia w projektowaniu wnętrz}
 \label{ch02:sec:biophilia}
-\Todo{Kellert i implikacje dla parametrów projektowych.}
-\NeedsCite{kellert2008biophilic}
 
-\section{Relacja człowiek--środowisko}
+Projektowanie biofiliczne ujmuje potrzebę kontaktu z naturą jako zasadę kształtowania środowiska zbudowanego: poprzez bezpośrednią obecność roślin i widoków, materiały naturalne, światło dzienne oraz wzorce formalne inspirowane przyrodą \parencite{kellert2008biophilic}.
+W IDA biophilia jest operacjonalizowana jako dawka wizualna -- wybór spośród czterech poziomów orientacji biofilicznej (od wnętrza bez elementów natury do wysokiej obecności zieleni, światła i materiałów naturalnych).
+
+Dla syntezy obrazu ma to konsekwencje konkretne: parametr dawki wpływa na brief (gęstość roślinności, temperatura światła, obecność faktur organicznych), a nie na dekoracyjny „filtr zieleni”.
+Eksperymenty autora w ComfyUI (m.in.\ kontrola geometrii i segmentacja) stanowią warstwę praktyki studyjnej; produkcyjny artefakt IDA realizuje generację przez Gemini Image / Vertex AI, przyjmując biofilię jako jeden z cytowalnych wejść explainable pipeline \parencite{idaPlatform2026}.
+
+\begin{figure}[htbp]
+  \centering
+  \Todo{wstaw plik: figures/ch02/ch02-biophilia-dosage.png --- cztery poziomy dawki biofilicznej (0--3) jako wybór wizualny}
+  \caption{Dawka biophilii jako gest projektowy w IDA (cztery poziomy).
+    Opracowanie własne; rama teoretyczna: \textcite{kellert2008biophilic}.}
+  \label{fig:ch02:biophilia}
+\end{figure}
+
+\section{Relacja człowiek--środowisko a Room Setup}
 \label{ch02:sec:peo}
-\Todo{Model PEO / pokrewne ramy; znaczenie dla Room Setup.}
+
+Projektowanie wnętrza mieszkalnego jest negocjacją między osobą, aktywnością a właściwościami środowiska.
+\NeedsCite{model Person--Environment--Occupation (PEO) lub pokrewne ramy person--environment fit -- tylko peer-review z DOI}
+
+W IDA tę relację zbiera się w Room Setup: typ pokoju, aktywności (\texttt{room\_activities}), punkty tarcia (\texttt{room\_pain\_points}) oraz laddering wartości (rozdz.~\ref{ch03:sec:laddering}).
+PRS current/target lokalizuje \emph{jak ma się czuć} przestrzeń; laddering i aktywności mówią \emph{do czego} ma służyć.
+Bez tego połączenia personalizacja obrazu pozostaje stylizacją pustej scenografii.
 
 \section{Nastrój, funkcja i kontekst użytkowania}
 \label{ch02:sec:nastroj}
-\Todo{Mood grid, aktywności, pain points.}
 
-\section{Implikacje dla personalizacji}
+Nastrój w znaczeniu mood grid nie zastępuje programu funkcjonalnego.
+Wręcz przeciwnie: ta sama współrzędna „uspokajający / inspirujący” oznacza coś innego w sypialni, domowym biurze i salonie wielofunkcyjnym.
+Dlatego w ścieżce pełnej pomiar PRS dla pokoju jest osadzony wśród deklaracji rytuałów domowych i barier użytkowania.
+
+Z perspektywy pytań badawczych rozprawy luka nastrojowa current$\rightarrow$target jest kandydatem na predyktor preferencji wariantów uwzględniających funkcję (\texttt{mixed\_functional};~\RQ{5}), a nie miarą „sukcesu regeneracyjnego” generacji AI.
+To rozróżnienie chroni przed powrotem do zarzuconej operacjonalizacji pre/post.
+
+\section{Implikacje dla personalizacji obrazu}
 \label{ch02:sec:implikacje}
-\Todo{Od potrzeb psychologicznych do parametrów projektowych i źródła \texttt{mixed\_functional}.}
+
+Z ram ART/SRT, PRS i biophilii wynika checklist wejść, które explainable pipeline IDA powinien znać przed syntezą koncepcji (tab.~\ref{tab:ch02:inputs-brief}).
+Mapowanie to łączy psychologię środowiskową z macierzą sześciu źródeł generacji (szczegóły preferencji -- rozdz.~\ref{ch03:top}; artefakt -- rozdz.~\ref{ch07:top}).
+
+\begin{table}[htbp]
+  \centering
+  \caption{Od potrzeb psychologiczno-przestrzennych do wejść briefu i źródeł macierzy w IDA.}
+  \label{tab:ch02:inputs-brief}
+  \begin{tabular}{@{}p{0.24\textwidth}p{0.28\textwidth}p{0.36\textwidth}@{}}
+    \toprule
+    Wejście projektowe & Parametr / zmienna w IDA & Powiązane źródło macierzy \\
+    \midrule
+    Nastrój idealny / luka current$\rightarrow$target
+      & \texttt{prs\_ideal\_*}, \texttt{prs\_current\_*}, \texttt{prs\_target\_*}
+      & przede wszystkim \texttt{mixed\_functional}; wspiera też \texttt{mixed} \\
+    Dawka biophilii
+      & poziom 0--3 (wybór wizualny)
+      & \texttt{mixed}, \texttt{mixed\_functional}, \texttt{explicit} \\
+    Funkcja i rytuały
+      & aktywności, pain points, ladder
+      & \texttt{mixed\_functional} \\
+    Preferencje jawne / ukryte
+      & semantic differential, swipe IAT-like
+      & \texttt{explicit}, \texttt{implicit} \\
+    Osobowość (most)
+      & IPIP-NEO-120 (rozdz.~\ref{ch05:top})
+      & \texttt{personality} \\
+    Referencja inspiracji
+      & upload + analiza VLM
+      & \texttt{inspiration\_reference} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Podsumowując: psychologia środowiskowa w tej rozprawie nie domyka się na pomiarze skal, lecz otwiera się na projektowanie dialogu -- od regeneracyjności i biofilii, przez funkcję pokoju, do kontrolowanej syntezy obrazu.
+Warstwa medium dyfuzyjnego (praktyka ComfyUI autora versus produkcja Gemini/Vertex) jest rozwijana osobno (rozdz.~\ref{ch04:top}); tu ustalono, \emph{co} system musi wiedzieć o doświadczeniu przestrzeni, zanim wygeneruje wariant.
