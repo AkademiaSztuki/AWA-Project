@@ -11,7 +11,9 @@ Powiązane pliki (nie dubluj definicji — tu jest źródło prawdy):
 | `GLOSSARY.md` | **ten plik** — terminy, nazwy własne, zakazane warianty |
 | `AGENTS.md` | ownership plików, workflow multi-agent |
 | `metadata.tex` | tytuł, autor, promotor, uczelnia |
-| `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` | aktualny spis treści (ASP) |
+| `notes/SPIS_TRESCI_SZCZEGOLOWY.md` | szczegółowy spis do pisania |
+| `notes/MULTIAGENT_PROMPTS.md` | prompty multi-agent |
+| `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` | narracja spisu ASP (skrót) |
 | `notes/HIPOTEZY_REWIZJA.md` | RQ1–RQ6 (nie stare H1–H5 jako oś) |
 | `frontmatter/abbreviations.tex` | skróty w PDF — **musi być zgodny z tym glossary** |
 | `bibliography/references.bib` | klucze cytowań |

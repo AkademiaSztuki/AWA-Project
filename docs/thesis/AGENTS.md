@@ -10,9 +10,11 @@ Równoległe pisanie rozprawy w LaTeX: każdy agent ma własny zakres plików, *
 
 1. **`GLOSSARY.md`** — obowiązkowy. Terminy, nazwy własne, RQ, 6 źródeł, FLUX vs Gemini, ComfyUI = pracownia.  
 2. **`AGENTS.md`** (ten plik) — ownership i zasady edycji.  
-3. **`notes/SPIS_TRESCI_PROPOZYCJA_ASP.md`** — aktualny spis / narracja ASP.  
-4. **`notes/HIPOTEZY_REWIZJA.md`** — RQ1–RQ6.  
-5. **`metadata.tex`** — tytuł, promotor, uczelnia.  
+3. **`notes/SPIS_TRESCI_SZCZEGOLOWY.md`** — szczegółowy spis (sekcje, research, ryciny).  
+4. **`notes/MULTIAGENT_PROMPTS.md`** — prompty do wklejenia (bazowy + pas).  
+5. **`notes/SPIS_TRESCI_PROPOZYCJA_ASP.md`** — narracja ASP (skrót).  
+6. **`notes/HIPOTEZY_REWIZJA.md`** — RQ1–RQ6.  
+7. **`metadata.tex`** — tytuł, promotor, uczelnia.  
 
 Nowy termin / skrót / nazwa modelu → najpierw wpis w `GLOSSARY.md`, potem proza w `.tex` i ewentualnie `frontmatter/abbreviations.tex`.
 

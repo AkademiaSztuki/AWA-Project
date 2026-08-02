@@ -73,8 +73,11 @@ git push -u origin pisemna
 
 ## Notatki robocze (Markdown)
 
-- `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` — **aktualna propozycja spisu** pod ASP (ComfyUI, medium dyfuzyjne, artefakt IDA)
-- `notes/SPIS_TRESCI_ROBOCZY.md` — wcześniejszy spis (psychologia/HCI) — archiwum robocze
-- `notes/HIPOTEZY_REWIZJA.md` — rewizja H1–H5 → RQ1–RQ6
+- `notes/SPIS_TRESCI_SZCZEGOLOWY.md` — **szczegółowy spis** (sekcje, research, ryciny, OWNER)
+- `notes/MULTIAGENT_PROMPTS.md` — **gotowe prompty** (bazowy + pasy) z anty-halucynacją i cytowaniami
+- `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` — propozycja spisu ASP (skrót narracji)
+- `notes/SPIS_TRESCI_ROBOCZY.md` — wcześniejszy spis (archiwum)
+- `notes/HIPOTEZY_REWIZJA.md` — RQ1–RQ6
+- `GLOSSARY.md` — kanon terminów
 
-Źródła wersjonuj w `.tex` (rozdziały) + `.bib`. Szkice `.docx` trzymaj w `exports/` (ignorowane).
+Źródła wersjonuj w `.tex` + `.bib`. Ryciny: `figures/` (m.in. `comfyui/`, `ida/`).
