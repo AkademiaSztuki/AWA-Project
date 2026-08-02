@@ -1,34 +1,238 @@
 % OWNER: empirical
-% STATUS: outline
-% SOURCES: notes/HIPOTEZY_REWIZJA.md; dane pilotażowe
+% STATUS: draft
+% SOURCES: notes/HIPOTEZY_REWIZJA.md; plan analiz rozdz. 6; eksport danych (do wstawienia)
 \chapter{Wyniki badań}
 \label{ch08:top}
-\ChapterStatus{outline}{empirical}
+\ChapterStatus{draft}{empirical}
+
+Niniejszy rozdział raportuje ewaluację terenową artefaktu IDA (warstwa~C dowodu; por.\ rozdz.~\ref{ch06:sec:warstwy}, \ref{ch07:top}) według pytań \RQ{1}--\RQ{6}.
+Struktura odpowiada planowi analiz z~\cref{tab:ch06:rq}: najpierw charakterystyka próby i jakość danych, następnie wyniki per pytanie, na końcu synteza tabelaryczna.
+\textbf{Wszystkie wielkości liczbowe, rozkłady i testy pochodzą wyłącznie z eksportu badawczego} --- poniżej pozostawiono jawne znaczniki \texttt{TODO} do uzupełnienia po agregacji; rozdział nie przesądza efektów wielkości.
+
+Przy małej próbie pilotażowej dominuje opis (lejek, częstości, case studies); modele konfirmacyjne i claimy psychometryczne odkładane są do większego~$N$ (por.\ rozdz.~\ref{ch06:sec:statystyka}).
 
 \section{Charakterystyka próby i jakość danych}
 \label{ch08:sec:proba}
-\Todo{N, completion rate, attrition; kryteria włączenia do analiz.}
 
-\section{RQ1 / zaangażowanie w flow}
+\paragraph{Kryteria włączenia do analiz.}
+Do zbioru analitycznego planuje się włączać rekordy z ważną zgodą badawczą (\texttt{consent\_timestamp} niepusty; por.\ rozdz.~\ref{ch06:sec:etyka}) oraz --- zależnie od pytania --- z kompletem pól wymaganych przez dane RQ (np.\ \texttt{blind\_selection\_made} dla~\RQ{3}).
+Ścieżki \texttt{full} i \texttt{fast} raportuje się osobno, gdy porównanie jest merytorycznie uzasadnione (\RQ{1},~\RQ{6}).
+
+\paragraph{Wielkość próby i attrition.}
+\Todo{wstaw wynik z eksportu: $N$ startujących (onboarding / zgoda); $N$ z \texttt{core\_profile\_complete}; $N$ z Big Five kompletnym; $N$ z Room Setup; $N$ z macierzą i \texttt{blind\_selection\_made}; $N$ z ankietami UX; completion rate i attrition między krokami.}
+
+\paragraph{Lejek ukończenia.}
+Lejek (ryc.~\ref{fig:ch08:funnel}) obrazuje przejście: zgoda $\rightarrow$ profil $\rightarrow$ Big Five $\rightarrow$ room $\rightarrow$ macierz / ślepy wybór $\rightarrow$ ankiety.
+Jest to główny materiał pod~\RQ{1} (feasibility flow RtD).
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{\begin{minipage}{0.88\linewidth}\centering\vspace{1.2em}
+      \Todo{wstaw wynik z eksportu: rycina lejka ukończenia --- plik \texttt{figures/ch08/ch08-completion-funnel.pdf} (lub \texttt{.png}); osie: kroki flow vs liczba / \% uczestników}\\[0.4em]
+      \textit{Placeholder --- brak danych liczbowych w draftcie.}
+      \vspace{1.2em}
+  \end{minipage}}
+  \caption{Lejek ukończenia ścieżki badawczej IDA (opracowanie własne na podstawie eksportu).
+  \Todo{wstaw wynik z eksportu: podpis z $N$ na każdym stopniu lejka.}}
+  \label{fig:ch08:funnel}
+\end{figure}
+
+\paragraph{Jakość danych behawioralnych i profilu.}
+\Todo{wstaw wynik z eksportu: \% swipów z niepustym \texttt{reaction\_time\_ms}; mediana / IQR liczby swipów per uczestnik; odsetek profili z \texttt{preference\_comparison\_json}; outliery (\texttt{core\_profile\_complete} bez macierzy --- bug vs dropout).}
+
+\section{RQ1 --- zaangażowanie w flow i kompletność profilu}
 \label{ch08:sec:rq1}
-\Todo{Ukończenie profilu i kompletność wymiarów danych.}
 
-\section{RQ — wybór źródła w macierzy (implicit/explicit/personality)}
+\textbf{Pytanie:} czy zintegrowany flow badawczy umożliwia zebranie wielowymiarowego profilu bez katastrofalnego dropoutu? (rozdz.~\ref{ch01:sec:cel}, \ref{ch06:sec:rq}).
+
+\paragraph{Operacjonalizacja.}
+Wskaźniki: \texttt{core\_profile\_complete}, \texttt{current\_step}, czas między \texttt{created\_at} a \texttt{updated\_at}, kompletność wymiarów (implicit, explicit, big5, room, macierz), eventy \texttt{page\_view}.
+
+\paragraph{Hipoteza robocza (pilotaż).}
+Uczestnicy ścieżki Full z \texttt{core\_profile\_complete} dostarczają komplet danych w kluczowych wymiarach --- bez twierdzenia o walidacji konstruktu skal zgamifikowanych (to nie jest cel~\RQ{1}; por.\ rewizja H1 w notatkach metodologicznych).
+
+\paragraph{Wynik.}
+\Todo{wstaw wynik z eksportu: tabela / tekst --- odsetek kompletności per wymiar; porównanie opisowe Full vs Fast (jeśli $n$ Fast wystarczające); komentarz do lejka (ryc.~\ref{fig:ch08:funnel}).}
+
+\paragraph{Status interpretacyjny.}
+Do uzupełnienia po eksporcie: odpowiedź na~\RQ{1} pozostaje \emph{otwarta} --- draft nie rozstrzyga, czy dropout jest „katastrofalny”.
+
+\section{RQ2 --- rozbieżność implicit vs explicit a zachowanie w macierzy}
+\label{ch08:sec:rq2}
+
+\textbf{Pytanie:} czy i w jakim stopniu preferencje ukryte i jawne się rozchodzą, oraz czy ta rozbieżność wiąże się z zachowaniem w macierzy generacji?
+
+Ramę teoretyczną stanowią procesy dualne i pomiar asocjacji ukrytych \parencite{kahneman2011thinking,greenwald1998iat} oraz model wieloźródłowy z rozdz.~\ref{ch03:top}; operacjonalizacja mismatch --- rozdz.~\ref{ch06:sec:instrumenty}, \ref{ch07:sec:macierz}.
+
+\paragraph{Operacjonalizacja.}
+Zmienne: \texttt{preference\_comparison\_json}, \texttt{style\_match}, \texttt{color\_tokens\_match\_score}, \texttt{selected\_source}, \texttt{selection\_time\_ms}, \texttt{conflict\_analysis}, wpisy \texttt{participant\_matrix\_entries}.
+
+\paragraph{Hipotezy robocze.}
+\begin{itemize}
+  \item \Hyp{2a}: wyższy mismatch $\rightarrow$ dłuższy \texttt{selection\_time\_ms} lub częstszy wybór \texttt{mixed} / \texttt{mixed\_functional};
+  \item \Hyp{2b}: przy \texttt{style\_match = false} rzadszy wybór źródła \texttt{explicit}.
+\end{itemize}
+
+\paragraph{Wynik (pilotaż: opis rozkładów; nie regresja jako główny wniosek).}
+\Todo{wstaw wynik z eksportu: rozkład \texttt{style\_match}; opis mismatch / \texttt{matchScore}; związek (jeśli w ogóle) z \texttt{selection\_time\_ms} i \texttt{selected\_source}; 1--2 case studies zanonimizowane.}
+
+\paragraph{Status interpretacyjny.}
+Odpowiedź na~\RQ{2} --- otwarta do danych; przy małym~$N$ dopuszczalne wielkości efektu \emph{do planowania} większej próby, bez konfirmacyjnych claimów.
+
+\section{RQ3 --- wybór źródła w ślepej macierzy (rdzeń empiryczny)}
+\label{ch08:sec:rq3}
 \label{ch08:sec:macierz}
-\Todo{Główny wynik empiryczny: \texttt{selected\_source} vs profile preferencji.}
 
-\section{Osobowość a wybór wariantu}
+\textbf{Pytanie:} które źródło w ślepej macierzy sześciu wariantów użytkownicy wybierają i czy wybór zależy od profilu?
+
+To oś empiryczna rozprawy (por.\ rozdz.~\ref{ch01:sec:teza}, \ref{ch07:sec:slepy-wybor}): zmienna zależna to \texttt{generation\_feedback.selected\_source}, nie ogólna satysfakcja.
+
+\paragraph{Operacjonalizacja.}
+\texttt{selected\_source}, \texttt{generated\_sources}, \texttt{has\_complete\_bigfive}, \texttt{inspirations\_count}, \texttt{blind\_selection\_made}.
+
+\paragraph{Hipotezy robocze (confirmatory po większym~$N$).}
+\begin{itemize}
+  \item \Hyp{3a}: \texttt{mixed} lub \texttt{mixed\_functional} częściej niż źródła „czyste”;
+  \item \Hyp{3b}: kompletne Big Five $\leftrightarrow$ częstszy wybór \texttt{personality} lub \texttt{mixed};
+  \item \Hyp{3c}: $\geq 1$ inspiracja $\leftrightarrow$ częstszy wybór \texttt{inspiration\_reference}.
+\end{itemize}
+
+\paragraph{Wynik.}
+\Todo{wstaw wynik z eksportu: tabela częstości \texttt{selected\_source} (liczba i \%); ewentualne crosstab z \texttt{has\_complete\_bigfive} / \texttt{inspirations\_count}; bez zmyślonych procentów.}
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{\begin{minipage}{0.88\linewidth}\centering\vspace{1.2em}
+      \Todo{wstaw wynik z eksportu: wykres słupkowy rozkładu \texttt{selected\_source} --- plik \texttt{figures/ch08/ch08-selected-source-bars.pdf}; kategorie: implicit, explicit, personality, mixed, mixed\_functional, inspiration\_reference}\\[0.4em]
+      \textit{Placeholder --- brak danych liczbowych w draftcie.}
+      \vspace{1.2em}
+  \end{minipage}}
+  \caption{Rozkład wyborów źródła w ślepej macierzy (\texttt{selected\_source}; opracowanie własne na podstawie eksportu).
+  \Todo{wstaw wynik z eksportu: $N$ osób z \texttt{blind\_selection\_made}; etykiety słupków z częstościami.}}
+  \label{fig:ch08:selected-source}
+\end{figure}
+
+\paragraph{Status interpretacyjny.}
+Odpowiedź na~\RQ{3} --- otwarta; ryc.~\ref{fig:ch08:selected-source} i tabela częstości stanowią minimalny, już wartościowy wynik pilotażu po uzupełnieniu eksportu.
+
+\section{RQ4 --- osobowość a wybór wariantu i parametry estetyczne}
+\label{ch08:sec:rq4}
 \label{ch08:sec:personality}
-\Todo{Asocjacje eksploracyjne Big Five / facety (ostrożnie przy małym N).}
 
-\section{Wskaźniki behawioralne}
+\textbf{Pytanie:} czy cechy i facety Big Five wiążą się z parametrami estetycznymi profilu oraz z preferencją źródła \texttt{personality}?
+
+Rama: taksonomia OCEAN i IPIP-NEO-120 w IDA (rozdz.~\ref{ch05:top}; \cite{john2008bigfive}); status analiz --- \emph{eksploracyjny} przy małym~$N$.
+
+\paragraph{Hipotezy robocze (H4a--c).}
+Asocjacje \texttt{big5\_openness} z~\texttt{implicit\_complexity} / stylem; \texttt{big5\_conscientiousness} z~\texttt{explicit\_*}; wybór \texttt{personality} przy ekstremalnych wartościach domen --- bez progu $r\!>\!0{,}4$ jako claimu potwierdzającego.
+
+\paragraph{Wynik.}
+\Todo{wstaw wynik z eksportu: heatmapy / korelacje domen i facetów z \texttt{implicit\_*}, \texttt{explicit\_*}; częstość wyboru \texttt{personality}; szerokie przedziały ufności; jasna etykieta „eksploracja pilotażowa”.}
+
+\paragraph{Status interpretacyjny.}
+Odpowiedź na~\RQ{4} --- otwarta; zakaz overclaimu psychometrycznego w tej fazie.
+
+\section{RQ5 --- luka PRS (current$\rightarrow$target) a wybór mixed\_functional}
+\label{ch08:sec:rq5}
+
+\textbf{Pytanie:} czy odległość PRS \texttt{current}$\rightarrow$\texttt{target} wiąże się z preferencją wariantu \texttt{mixed\_functional}?
+
+To \textbf{nie} jest klasyczny pre/post regeneracyjności po AI (stary H2 odrzucony przy braku \texttt{prs\_post\_*}; por.\ rozdz.~\ref{ch02:top}, \ref{ch06:sec:ograniczenia}).
+Konstrukt luki nastrojowej łączy się z ART / mapowaniem mood grid \parencite{kaplan1995restorative}.
+
+\paragraph{Operacjonalizacja.}
+Odległość euklidesowa z~\texttt{prs\_current\_*} i~\texttt{prs\_target\_*}; DV: \texttt{selected\_source} (w szczególności \texttt{mixed\_functional}).
+
+\paragraph{Hipoteza robocza \Hyp{5a}.}
+Większa luka PRS $\rightarrow$ częstszy wybór \texttt{mixed\_functional}.
+
+\paragraph{Wynik.}
+\Todo{wstaw wynik z eksportu: rozkład odległości PRS; crosstab / opis vs \texttt{selected\_source}; bez twierdzeń o „leczeniu regeneracyjności” przez AI.}
+
+\paragraph{Status interpretacyjny.}
+Odpowiedź na~\RQ{5} --- otwarta; ewentualny pomiar post-ekspozycyjny wymaga osobnej decyzji projektowej (rozdz.~\ref{ch09:sec:dalsze}).
+
+\section{RQ6 --- doświadczenie użytkownika (agency, clarity, satisfaction)}
+\label{ch08:sec:rq6}
+
+\textbf{Pytanie:} czy uczestnicy postrzegają proces jako zrozumiały i dający sprawczość przy jednoczesnym zbieraniu danych badawczych?
+
+\paragraph{Operacjonalizacja.}
+Skale \texttt{agency\_*}, \texttt{clarity\_*}, \texttt{satisfaction\_*}, \texttt{sus\_*}; \texttt{path\_type} (Full vs Fast).
+
+\paragraph{Hipotezy robocze.}
+\Hyp{6a}: dodatnia korelacja agency/clarity z satisfaction; \Hyp{6b}: Full vs Fast --- tylko przy wystarczającej liczbie ścieżek Fast.
+
+\paragraph{Wynik.}
+\Todo{wstaw wynik z eksportu: rozklady skal UX; korelacje (jeśli $N$ pozwala); porównanie opisowe ścieżek; bez uogólniania na populację.}
+
+\paragraph{Status interpretacyjny.}
+Odpowiedź na~\RQ{6} --- otwarta; wynik wspiera (lub nie) tezę RtD o Research-Embedded UX (rozdz.~\ref{ch07:sec:filozofia}).
+
+\section{Wskaźniki behawioralne (ograniczenie względem dawnego H5)}
 \label{ch08:sec:behavioral}
-\Todo{Analiza \texttt{reaction\_time\_ms}; ograniczenia względem dawnego H5.}
+
+Dawna hipoteza o wyższości dwell/hesitation nad samym gestem swipe \textbf{nie jest operacjonalizowana} w obecnym schemacie --- w bazie persystowane jest przede wszystkim \texttt{reaction\_time\_ms} (por.\ rozdz.~\ref{ch03:top}, \ref{ch06:sec:trafnosc}).
+
+\paragraph{Zakres dopuszczalnej analizy.}
+\Todo{wstaw wynik z eksportu: opisowa charakterystyka \texttt{reaction\_time\_ms} (per swipe / agregaty); ewentualny związek z mismatch lub \texttt{selection\_time\_ms}; bez claimów o dwell/hesitation.}
 
 \section{Analizy dodatkowe}
 \label{ch08:sec:dodatkowe}
-\Todo{Konflikty preferencji; Fast vs Full.}
+
+\paragraph{Konflikty preferencji.}
+\Todo{wstaw wynik z eksportu: częstość / treść \texttt{conflict\_analysis}; związek z wyborem źródła (opisowo).}
+
+\paragraph{Ścieżka Fast vs Full.}
+\Todo{wstaw wynik z eksportu: $n$ per \texttt{path\_type}; porównanie completion i skal UX --- z zastrzeżeniem ograniczonej porównywalności macierzy w Fast (rozdz.~\ref{ch06:sec:procedura}, \ref{ch07:sec:sciezki}).}
 
 \section{Podsumowanie wyników}
 \label{ch08:sec:podsumowanie}
-\Todo{Tabela: pytanie | wynik | istotność | ograniczenie.}
+
+Tabela~\ref{tab:ch08:rq-summary} zbiera stan odpowiedzi na pytania badawcze.
+Kolumny „wynik” i „istotność” wypełnia się wyłącznie po eksporcie; do tego czasu status pozostaje \emph{otwarty / pilotaż}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Synteza wyników \RQ{1}--\RQ{6} (szkielet --- uzupełnić po eksporcie).}
+  \label{tab:ch08:rq-summary}
+  \begin{tabular}{@{}p{1.2cm}p{3.4cm}p{3.6cm}p{2.4cm}p{2.6cm}@{}}
+    \toprule
+    RQ & Pytanie (skrót) & Wynik & Istotność / siła & Ograniczenie \\
+    \midrule
+    \RQ{1} & Feasibility flow / kompletność &
+      \Todo{eksport} &
+      \Todo{eksport} &
+      opisowy pilotaż; self-selection \\
+    \addlinespace
+    \RQ{2} & Mismatch imp./exp.\ $\leftrightarrow$ macierz &
+      \Todo{eksport} &
+      \Todo{eksport} &
+      małe~$N$; nie regresja jako rdzeń \\
+    \addlinespace
+    \RQ{3} & Rozkład \texttt{selected\_source} &
+      \Todo{eksport} &
+      \Todo{eksport} &
+      confounds jakość renderu \\
+    \addlinespace
+    \RQ{4} & Big Five $\leftrightarrow$ estetyka / \texttt{personality} &
+      \Todo{eksport} &
+      eksploracja &
+      brak claimów $r\!>\!0{,}4$ \\
+    \addlinespace
+    \RQ{5} & Luka PRS $\leftrightarrow$ \texttt{mixed\_functional} &
+      \Todo{eksport} &
+      \Todo{eksport} &
+      brak PRS post-AI \\
+    \addlinespace
+    \RQ{6} & Agency / clarity / satisfaction &
+      \Todo{eksport} &
+      \Todo{eksport} &
+      satysfakcja nie per source \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Czego rozdział świadomie nie raportuje.}
+Walidacji zgamifikowanego PRS względem papierowego PRS-11; testów mediacji wielopoziomowych; „poprawy regeneracyjności o~$X$ punktów” po ekspozycji na AI --- zgodnie z ograniczeniami schematu i rewizją hipotez (rozdz.~\ref{ch06:sec:statystyka}).
