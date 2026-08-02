@@ -1,10 +1,20 @@
 # Multi-agent writing guide — praca doktorska IDA
 
-Branch: **`pisemna`**. Edytuj wyłącznie `docs/thesis/`.
+Branch: **`pisemna`**. Edytuj wyłącznie **`docs/thesis/`** (to jest kanoniczny folder pracy — nie ma osobnego `/thesis` w rootcie repo).
 
 ## Cel
 
-Równoległe pisanie rozprawy w LaTeX: każdy agent ma własny zakres plików, wspólny build i wspólną bibliografię.
+Równoległe pisanie rozprawy w LaTeX: każdy agent ma własny zakres plików, **wspólny słownik**, wspólny build i wspólną bibliografię — żeby narracja się nie rozsypała.
+
+## Kanon spójności (czytaj w tej kolejności)
+
+1. **`GLOSSARY.md`** — obowiązkowy. Terminy, nazwy własne, RQ, 6 źródeł, FLUX vs Gemini, ComfyUI = pracownia.  
+2. **`AGENTS.md`** (ten plik) — ownership i zasady edycji.  
+3. **`notes/SPIS_TRESCI_PROPOZYCJA_ASP.md`** — aktualny spis / narracja ASP.  
+4. **`notes/HIPOTEZY_REWIZJA.md`** — RQ1–RQ6.  
+5. **`metadata.tex`** — tytuł, promotor, uczelnia.  
+
+Nowy termin / skrót / nazwa modelu → najpierw wpis w `GLOSSARY.md`, potem proza w `.tex` i ewentualnie `frontmatter/abbreviations.tex`.
 
 ## Build
 
@@ -28,7 +38,8 @@ Wymagania lokalne: TeX Live (LuaLaTeX), `latexmk`, `biber`, fonty Latin Modern.
 | `methods` | `chapters/06-*.tex`, `backmatter/appendix-{a,b,e,f}-*.tex` | Metodologia, etyka, zmienne |
 | `artifact` | `chapters/07-*.tex`, `backmatter/appendix-{c,d}-*.tex` | Platforma IDA, prompty, mapowania |
 | `empirical` | `chapters/08-*.tex`, `chapters/09-*.tex`, `chapters/10-*.tex` | Wyniki, dyskusja, wnioski |
-| `coordinator` | `main.tex`, `preamble.tex`, `metadata.tex`, `latexmkrc`, `Makefile`, `AGENTS.md` | Struktura, pakiety, konflikty |
+| `media-lab` | przyszły rozdz. o ComfyUI/SAM/depth + `figures/comfyui/` | Pracownia generatywna (poza runtime IDA) |
+| `coordinator` | `main.tex`, `preamble.tex`, `metadata.tex`, `GLOSSARY.md`, `latexmkrc`, `Makefile`, `AGENTS.md` | Struktura, słownik, pakiety, konflikty |
 
 \* `metadata.tex` — tylko `coordinator` / `framing` po uzgodnieniu.
 
@@ -59,9 +70,9 @@ Wymagania lokalne: TeX Live (LuaLaTeX), `latexmk`, `biber`, fonty Latin Modern.
 ## Równoległy workflow (rekomendowany)
 
 1. Użytkownik odpala N agentów z jasnym `OWNER` (np. „jesteś theory-a”).
-2. Każdy agent czyta ten plik + `skills/latex-thesis/SKILL.md` + swój rozdział + `notes/SPIS_TRESCI_ROBOCZY.md`.
+2. Każdy agent czyta: `GLOSSARY.md` → ten plik → `skills/latex-thesis/SKILL.md` → spis ASP → swój rozdział.
 3. Agent pisze tylko w swoich `.tex`; dopina bib; kompiluje `make chapter C=...` lub pełne `make pdf`.
-4. `coordinator` scala konflikty w `references.bib` / preambule i pilnuje buildu.
+4. `coordinator` scala konflikty w `GLOSSARY.md` / `references.bib` / preambule i pilnuje buildu.
 
 ## STATUS lifecycle
 
@@ -71,9 +82,11 @@ Nie ustawiaj `final`, dopóki nie znikną `\Todo` / `\NeedsCite` w pliku.
 
 ## Źródła wewnętrzne (nie cytować jako publikacje)
 
-- `notes/SPIS_TRESCI_ROBOCZY.md` — spis i uzasadnienia
+- `GLOSSARY.md` — kanon terminów
+- `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` — spis pod ASP (aktualny)
+- `notes/SPIS_TRESCI_ROBOCZY.md` — starszy spis (archiwum robocze)
 - `notes/HIPOTEZY_REWIZJA.md` — aktualne RQ / operacjonalizacja
-- kod / SQL projektu — opisuj w rozdz. 6–7 i załącznikach; do bibliografii tylko gdy formalnie publikowane
+- kod / SQL projektu — opisuj w rozdziałach o artefakcie i załącznikach; do bibliografii tylko gdy formalnie publikowane
 
 ## Czego nie robić
 

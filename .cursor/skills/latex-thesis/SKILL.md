@@ -7,9 +7,11 @@ description: LaTeX multi-agent writing for the IDA doctoral dissertation on bran
 
 Canonical guide lives in the dissertation tree:
 
-1. Read and follow `docs/thesis/AGENTS.md` (ownership, labels, bib rules).
-2. Follow `docs/thesis/skills/latex-thesis/SKILL.md` for writing/build checklist.
-3. Content sources: `docs/thesis/notes/SPIS_TRESCI_ROBOCZY.md`, `docs/thesis/notes/HIPOTEZY_REWIZJA.md`.
+1. Read **`docs/thesis/GLOSSARY.md`** first (shared terminology — prevents multi-agent drift).
+2. Read and follow `docs/thesis/AGENTS.md` (ownership, labels, bib rules).
+3. Follow `docs/thesis/skills/latex-thesis/SKILL.md` for writing/build checklist.
+4. Content sources: `docs/thesis/notes/SPIS_TRESCI_PROPOZYCJA_ASP.md`, `docs/thesis/notes/HIPOTEZY_REWIZJA.md`.
+5. Canonical folder is **`docs/thesis/`** (not a separate root `thesis/`).
 
 ```bash
 cd docs/thesis && make pdf

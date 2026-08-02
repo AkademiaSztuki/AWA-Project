@@ -11,28 +11,35 @@ Materiały pisemne do rozprawy doktorskiej IDA — **LaTeX**, oddzielone od kodu
 
 **Zasada:** na `pisemna` edytuj wyłącznie pliki w `docs/thesis/`. Nie zmieniaj `apps/`, `infra/` ani konfiguracji deployu.
 
-## Multi-agent
+## Multi-agent (żeby się nie rozsypało)
 
-Zasady równoległego pisania: **[AGENTS.md](./AGENTS.md)**  
-Skill dla agentów Cursor: **[skills/latex-thesis/SKILL.md](./skills/latex-thesis/SKILL.md)**
+Wszystko żyje w **`docs/thesis/`** — to jest folder pracy (nie osobny `/thesis` w rootcie).
 
-## Struktura LaTeX
+| Plik | Po co |
+|------|--------|
+| **[GLOSSARY.md](./GLOSSARY.md)** | **Kanon terminów** — czytają wszyscy agenci przed pisaniem |
+| **[AGENTS.md](./AGENTS.md)** | Ownership plików, zakazy konfliktów |
+| **[skills/latex-thesis/SKILL.md](./skills/latex-thesis/SKILL.md)** | Checklist build/write |
+
+Kolejność startu agenta: `GLOSSARY.md` → `AGENTS.md` → spis ASP → własny `.tex`.
+
+## Struktura
 
 ```
-docs/thesis/
-  main.tex              # dokument główny
-  preamble.tex          # pakiety, makra
-  metadata.tex          # tytuł, autor, promotor
-  latexmkrc / Makefile  # build (LuaLaTeX + biber)
-  AGENTS.md             # ownership pasów agentów
-  frontmatter/          # tytuł, abstrakty, skróty
-  chapters/             # rozdz. 01–10 (jeden plik = jeden agent-scope)
-  backmatter/           # załączniki A–F
-  bibliography/         # references.bib
-  figures/              # ryciny (PDF/PNG)
-  notes/                # konspekt MD (nie wchodzi do PDF)
-  exports/              # lokalne PDF do promotora (gitignored)
-  skills/latex-thesis/  # skill multi-agent
+docs/thesis/                 ← kanoniczny folder rozprawy
+  GLOSSARY.md                # wspólny słownik (spójność multi-agent)
+  AGENTS.md                  # ownership pasów
+  main.tex                   # dokument główny
+  preamble.tex / metadata.tex
+  latexmkrc / Makefile
+  frontmatter/               # tytuł, abstrakty, skróty (← sync z GLOSSARY)
+  chapters/                  # rozdz. 01–10
+  backmatter/                # załączniki A–F
+  bibliography/references.bib
+  figures/
+  notes/                     # konspekty MD (nie w PDF)
+  exports/                   # lokalne PDF (gitignored)
+  skills/latex-thesis/
 ```
 
 ## Build

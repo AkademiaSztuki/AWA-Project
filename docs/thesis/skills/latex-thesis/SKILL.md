@@ -7,9 +7,11 @@ description: LaTeX multi-agent writing for the IDA doctoral dissertation on bran
 
 ## Before editing
 
-1. Confirm branch is `pisemna` (or only touch `docs/thesis/`).
-2. Read `docs/thesis/AGENTS.md` and respect `OWNER` for the target file.
-3. Read the chapter file header (`OWNER`, `STATUS`) and matching notes in `docs/thesis/notes/`.
+1. Confirm work stays under **`docs/thesis/`** (canonical thesis folder on branch `pisemna`).
+2. Read **`docs/thesis/GLOSSARY.md`** first — terminology canon (IDA vs Aura, RQ1–6, six sources, Gemini vs FLUX, ComfyUI = lab).
+3. Read `docs/thesis/AGENTS.md` and respect `OWNER` for the target file.
+4. Read the chapter file header (`OWNER`, `STATUS`) and `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` / `HIPOTEZY_REWIZJA.md` as needed.
+5. New term/acronym/model name → add to `GLOSSARY.md` before using it in prose; sync `frontmatter/abbreviations.tex` if it is an acronym.
 
 ## Writing rules
 
@@ -34,7 +36,8 @@ Fix LaTeX errors in **your** files first. If the error is in shared preamble, st
 
 | Topic | File |
 |-------|------|
-| TOC / chapter rationale | `notes/SPIS_TRESCI_ROBOCZY.md` |
+| Terminology (must match) | `GLOSSARY.md` |
+| TOC / ASP narrative | `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` |
 | Hypotheses / RQs | `notes/HIPOTEZY_REWIZJA.md` |
 | Ownership / workflow | `AGENTS.md` |
 | Metadata (title, promotor) | `metadata.tex` |
