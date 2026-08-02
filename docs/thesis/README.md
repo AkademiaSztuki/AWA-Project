@@ -66,7 +66,8 @@ git push -u origin pisemna
 
 ## Notatki robocze (Markdown)
 
-- `notes/SPIS_TRESCI_ROBOCZY.md` — spis treści + uzasadnienia
-- `notes/HIPOTEZY_REWIZJA.md` — rewizja H1–H5 → RQ
+- `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` — **aktualna propozycja spisu** pod ASP (ComfyUI, medium dyfuzyjne, artefakt IDA)
+- `notes/SPIS_TRESCI_ROBOCZY.md` — wcześniejszy spis (psychologia/HCI) — archiwum robocze
+- `notes/HIPOTEZY_REWIZJA.md` — rewizja H1–H5 → RQ1–RQ6
 
 Źródła wersjonuj w `.tex` (rozdziały) + `.bib`. Szkice `.docx` trzymaj w `exports/` (ignorowane).
