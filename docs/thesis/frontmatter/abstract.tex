@@ -1,20 +1,29 @@
 % OWNER: framing
-% STATUS: outline
+% STATUS: draft
+% SOURCES: notes/SPIS_TRESCI_PROPOZYCJA_ASP.md, notes/HIPOTEZY_REWIZJA.md, GLOSSARY.md, metadata.tex
 \chapter*{Streszczenie}
 \addcontentsline{toc}{chapter}{Streszczenie}
-\ChapterStatus{outline}{framing}
+\ChapterStatus{draft}{framing}
 
-\Todo{Streszczenie PL do 300 slow: problem → cel → metoda → artefakt → wyniki → wnioski.}
+Rozprawa dotyczy projektowania personalizacji koncepcji wnętrz mieszkalnych wspomaganej sztuczną inteligencją --- nie jako kolejnego generatora stylu, lecz jako dialogu estetycznego osadzonego w praktyce badawczo-projektowej Akademii Sztuki w Szczecinie (dyscyplina: sztuki plastyczne i konserwacja dzieł sztuki).
 
-Praca przedstawia projekt i ewaluację platformy badawczej IDA łączącej psychologię środowiskową, pomiar preferencji (implicit/explicit), model Big Five oraz generatywną personalizację koncepcji wnętrz. Przyjęto paradygmat Research through Design: artefakt jest jednocześnie produktem i instrumentem badawczym.
+Problem wyjściowy jest dwojaki. Po pierwsze, konsumenckie narzędzia generatywne zwykle pomijają wieloźródłowy profil preferencji (jawne, ukryte, nastrój regeneracyjny, funkcja przestrzeni, osobowość) oraz nie pozwalają sprawdzić, który kanał danych faktycznie kieruje wyborem użytkownika. Po drugie, deklaracje estetyczne i zachowanie wyboru często się rozchodzą, co czyni ,,czarną skrzynkę'' generatora metodologicznie i projektowo niewystarczającą.
+
+Celem pracy jest zaprojektowanie, zbudowanie i ewaluacja eksperymentalnej platformy IDA (\emph{AI Interior Design Dialogue Research Platform}) w paradygmacie Research through Design (badania przez projektowanie). Artefakt operacjonalizuje instrumentarium preferencji w explainable pipeline syntezy briefu i generacji image-to-image; produkcyjnie wykorzystuje Gemini Image / Vertex~AI oraz macierz \textbf{sześciu} źródeł personalizacji ze ślepym wyborem wariantu.
+
+Dowód składa się z trzech warstw: (A)~praktyki pracowni autora w ComfyUI (kontrola geometrii, segmentacja --- \emph{nie} runtime IDA); (B)~działającego artefaktu terenowego; (C)~ewaluacji użytkowników online pod pytaniami \RQ{1}--\RQ{6} (feasibility flow, rozbieżność implicit/explicit, wybór źródła w macierzy, eksploracje Big Five i PRS, agency/clarity/satisfaction). Teza głosi, że personalizacja wnętrz może być projektowana jako dialog estetyczny przełożony na kontrolowaną syntezę obrazu, łączący projektowanie wnętrz, psychologię środowiskową i media generatywne. Wyniki empiryczne zależą od zebranej próby i są przedmiotem dalszych rozdziałów; streszczenie nie przesądza efektów wielkości.
 
 \vspace{1.5em}
 \begin{otherlanguage}{english}
 \chapter*{Abstract}
 \addcontentsline{toc}{chapter}{Abstract}
-\ChapterStatus{outline}{framing}
+\ChapterStatus{draft}{framing}
 
-\Todo{English abstract mirroring the Polish summary.}
+This dissertation addresses the design of AI-assisted personalization of residential interior concepts --- not as another style generator, but as an aesthetic dialogue situated in research-through-design practice at the Academy of Art in Szczecin (discipline: fine arts and conservation of works of art).
 
-This dissertation presents the design and evaluation of the IDA research platform, which integrates environmental psychology, preference measurement (implicit/explicit), the Big Five model, and generative personalization of interior concepts within a Research through Design paradigm.
+The starting problem is twofold. First, consumer generative tools typically omit a multi-source preference profile (explicit and implicit preferences, restorative mood, room function, personality) and offer no way to test which data channel actually drives user choice. Second, aesthetic self-reports and choice behaviour often diverge, which makes a black-box generator methodologically and design-wise insufficient.
+
+The aim is to design, build, and evaluate the experimental IDA platform (\emph{AI Interior Design Dialogue Research Platform}) within a Research through Design paradigm. The artefact operationalizes preference instruments in an explainable brief-synthesis and image-to-image pipeline; production generation uses Gemini Image / Vertex~AI and a blind matrix of \textbf{six} personalization sources.
+
+Evidence comprises three layers: (A)~the author's ComfyUI studio practice (geometry control, segmentation --- \emph{not} the IDA runtime); (B)~the field-deployed artefact; (C)~online user evaluation under research questions RQ1--RQ6 (flow feasibility, implicit/explicit mismatch, source selection in the matrix, exploratory Big Five and PRS links, agency/clarity/satisfaction). The thesis argues that interior personalization can be designed as an aesthetic dialogue translated into controlled image synthesis, bridging interior design, environmental psychology, and generative media. Empirical outcomes depend on the collected sample and are reported in later chapters; this abstract does not claim effect sizes.
 \end{otherlanguage}
