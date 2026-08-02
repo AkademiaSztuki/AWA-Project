@@ -1,0 +1,53 @@
+% main.tex — dissertation root (coordinator / framing agent)
+% Chapter agents edit only files under chapters/, frontmatter/, backmatter/.
+% Build: make pdf   OR   latexmk -pdflua main.tex
+%
+% Partial parallel build example:
+%   latexmk -pdflua -pretex="\includeonly{chapters/06-metodologia}" -usepretex main.tex
+
+\input{preamble}
+
+\begin{document}
+
+% ----- Front matter -----
+\frontmatter
+\input{frontmatter/title}
+\input{frontmatter/abstract}
+\tableofcontents
+\listoffigures
+\listoftables
+\input{frontmatter/abbreviations}
+
+% ----- Body -----
+\mainmatter
+
+% Theory lane A
+\include{chapters/01-wprowadzenie}
+\include{chapters/02-psychologia-srodowiskowa}
+\include{chapters/03-preferencje-estetyczne}
+
+% Theory lane B
+\include{chapters/04-osobowosc}
+\include{chapters/05-ai-hci}
+
+% Methods + artifact
+\include{chapters/06-metodologia}
+\include{chapters/07-artefakt-ida}
+
+% Empirical
+\include{chapters/08-wyniki}
+\include{chapters/09-dyskusja}
+\include{chapters/10-wnioski}
+
+% ----- Back matter -----
+\appendix
+\include{backmatter/appendix-a-schema}
+\include{backmatter/appendix-b-instruments}
+\include{backmatter/appendix-c-mappings}
+\include{backmatter/appendix-d-prompts}
+\include{backmatter/appendix-e-variables}
+\include{backmatter/appendix-f-consent}
+
+\printbibliography[heading=bibintoc,title={Bibliografia}]
+
+\end{document}

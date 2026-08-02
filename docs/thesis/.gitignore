@@ -1,0 +1,30 @@
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.lof
+*.lot
+*.lol
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.nav
+*.snm
+*.vrb
+*.xdv
+main.pdf
+build/
+
+# Chapter aux from \include
+chapters/*.aux
+frontmatter/*.aux
+backmatter/*.aux
+
+# Local export dumps
+exports/**
+!exports/.gitkeep

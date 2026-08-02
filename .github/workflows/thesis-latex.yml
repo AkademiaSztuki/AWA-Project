@@ -1,0 +1,45 @@
+name: Thesis LaTeX
+
+on:
+  push:
+    branches: [pisemna]
+    paths:
+      - 'docs/thesis/**'
+      - '.github/workflows/thesis-latex.yml'
+  pull_request:
+    branches: [pisemna]
+    paths:
+      - 'docs/thesis/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs/thesis
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install TeX Live
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            latexmk \
+            texlive-latex-base \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            texlive-luatex \
+            texlive-lang-polish \
+            texlive-fonts-recommended \
+            texlive-bibtex-extra \
+            biber
+
+      - name: Build PDF
+        run: make pdf
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dissertation-pdf
+          path: docs/thesis/main.pdf
+          if-no-files-found: error

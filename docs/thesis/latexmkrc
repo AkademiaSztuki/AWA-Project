@@ -1,0 +1,6 @@
+# latexmkrc — build dissertation with LuaLaTeX + biber
+# Run from docs/thesis/:  latexmk -pdflua main.tex
+$pdf_mode = 4;              # 4 = LuaLaTeX
+$bibtex_use = 2;
+$biber = 'biber %O %S';
+$clean_ext .= ' run.xml bbl bcf fdb_latexmk fls synctex.gz nav snm vrb loa';

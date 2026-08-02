@@ -73,7 +73,22 @@ coverage/
 **/exports/
 .vercel
 
-# Thesis drafts (sources live in docs/thesis/chapters/ as .md/.tex)
+# Thesis drafts (sources live in docs/thesis/ as .tex/.md)
 docs/thesis/**/*.docx
 docs/thesis/**/*.doc
 docs/thesis/**/~$*
+docs/thesis/main.pdf
+docs/thesis/**/*.aux
+docs/thesis/**/*.bbl
+docs/thesis/**/*.bcf
+docs/thesis/**/*.blg
+docs/thesis/**/*.fdb_latexmk
+docs/thesis/**/*.fls
+docs/thesis/**/*.log
+docs/thesis/**/*.lof
+docs/thesis/**/*.lot
+docs/thesis/**/*.out
+docs/thesis/**/*.run.xml
+docs/thesis/**/*.synctex.gz
+docs/thesis/**/*.toc
+docs/thesis/build/

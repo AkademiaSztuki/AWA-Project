@@ -1,6 +1,6 @@
 # Praca pisemna (branch `pisemna`)
 
-Materiały pisemne do pracy doktorskiej / naukowej — oddzielone od kodu aplikacji.
+Materiały pisemne do rozprawy doktorskiej IDA — **LaTeX**, oddzielone od kodu aplikacji.
 
 ## Branch
 
@@ -11,38 +11,62 @@ Materiały pisemne do pracy doktorskiej / naukowej — oddzielone od kodu aplika
 
 **Zasada:** na `pisemna` edytuj wyłącznie pliki w `docs/thesis/`. Nie zmieniaj `apps/`, `infra/` ani konfiguracji deployu.
 
-## Struktura
+## Multi-agent
+
+Zasady równoległego pisania: **[AGENTS.md](./AGENTS.md)**  
+Skill dla agentów Cursor: **[skills/latex-thesis/SKILL.md](./skills/latex-thesis/SKILL.md)**
+
+## Struktura LaTeX
 
 ```
 docs/thesis/
-  notes/
-    SPIS_TRESCI_ROBOCZY.md   # roboczy spis treści + uzasadnienie rozdziałów
-  chapters/      # rozdziały (.md, .tex)
-  figures/       # wykresy, diagramy, screeny do pracy
-  bibliography/  # bibtex, źródła
-  exports/       # PDF / Word do oddania (gitignore — lokalnie)
+  main.tex              # dokument główny
+  preamble.tex          # pakiety, makra
+  metadata.tex          # tytuł, autor, promotor
+  latexmkrc / Makefile  # build (LuaLaTeX + biber)
+  AGENTS.md             # ownership pasów agentów
+  frontmatter/          # tytuł, abstrakty, skróty
+  chapters/             # rozdz. 01–10 (jeden plik = jeden agent-scope)
+  backmatter/           # załączniki A–F
+  bibliography/         # references.bib
+  figures/              # ryciny (PDF/PNG)
+  notes/                # konspekt MD (nie wchodzi do PDF)
+  exports/              # lokalne PDF do promotora (gitignored)
+  skills/latex-thesis/  # skill multi-agent
 ```
 
-## Workflow
+## Build
+
+Wymagania: TeX Live z LuaLaTeX, `latexmk`, `biber`.
+
+```bash
+cd docs/thesis
+make pdf       # → main.pdf
+make watch
+make chapter C=07-artefakt-ida
+```
+
+Albo:
+
+```bash
+latexmk -pdflua main.tex
+```
+
+## Workflow git
 
 ```powershell
-# Pisanie pracy
 git checkout pisemna
-git merge main    # opcjonalnie: aktualny opis projektu
-
-# Tylko materiały pisemne
+# …edycja wyłącznie docs/thesis/…
 git add docs/thesis/
-git commit -m "thesis: ..."
-
-# Powrót do kodu
-git checkout main
+git commit -m "thesis(ch06): outline methodology instruments"
+git push -u origin pisemna
 ```
 
-Merge `pisemna` → `main` tylko świadomie (np. gdy metodologia ma być w głównym repo).
+`main` się nie zmienia, dopóki świadomie nie zrobisz merge/PR.
 
-## Pliki poza git
+## Notatki robocze (Markdown)
 
-- Szkice `.docx` / `.doc` — trzymaj lokalnie lub w `exports/` (ignorowane przez git)
-- Duże PDF-y do promotora — folder `exports/`
+- `notes/SPIS_TRESCI_ROBOCZY.md` — spis treści + uzasadnienia
+- `notes/HIPOTEZY_REWIZJA.md` — rewizja H1–H5 → RQ
 
-Źródła wersjonuj w `chapters/` (Markdown lub LaTeX).
+Źródła wersjonuj w `.tex` (rozdziały) + `.bib`. Szkice `.docx` trzymaj w `exports/` (ignorowane).
