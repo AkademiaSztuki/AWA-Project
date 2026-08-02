@@ -1,7 +1,78 @@
 % OWNER: methods
-% STATUS: outline
+% STATUS: draft
+% SOURCES: infra/gcp/sql/01_research_schema.sql (+ extensions); GLOSSARY.md §11; HIPOTEZY_REWIZJA.md
 \chapter{Schemat bazy danych badawczych}
 \label{app:a:top}
-\ChapterStatus{outline}{methods}
+\ChapterStatus{draft}{methods}
 
-\Todo{Uproszczony schemat Cloud SQL (tabele research) — bez sekretów i PII.}
+Załącznik przedstawia \textbf{uproszczony} schemat persystencji danych badawczych IDA (Cloud SQL / PostgreSQL). Pominięto sekrety infrastrukturalne, pełne definicje indeksów oraz pola nieistotne dla \RQ{1}--\RQ{6}. Identyfikator analityczny: \texttt{user\_hash} (bez PII).
+
+\section{Warstwy konceptualne}
+\label{app:a:sec:warstwy}
+
+Model logiczny: \textbf{USER $\rightarrow$ HOUSEHOLD $\rightarrow$ ROOM $\rightarrow$ SESSION}. W schemacie fizycznym rdzeniem jest tabela \texttt{participants} (profil + agregaty); zdarzenia i artefakty obrazowe są w tabelach powiązanych.
+
+\section{Tabele kluczowe}
+\label{app:a:sec:tabele}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Uproszczony przegląd tabel research (szkic).}
+  \label{tab:app:a:tables}
+  \begin{tabular}{@{}llp{6.5cm}@{}}
+    \toprule
+    Tabela & Klucz / FK & Rola badawcza \\
+    \midrule
+    \texttt{participants} &
+      \texttt{user\_hash} (PK) &
+      Profil, Big Five, implicit/explicit, PRS, room, skale UX, flagi ukończenia \\
+    \texttt{participant\_swipes} &
+      FK $\rightarrow$ \texttt{user\_hash} &
+      Surowa sekwencja Tinder (\texttt{reaction\_time\_ms}, kierunek, meta obrazu) \\
+    \texttt{participant\_images} &
+      id; FK user &
+      Inspiracje, zdjęcia pokoju, wygenerowane wizualizacje (ścieżki storage) \\
+    \texttt{participant\_generations} &
+      job id; FK user &
+      Zadania generacji: status, latencja, parametry (bez sekretów API) \\
+    \texttt{participant\_matrix\_entries} &
+      FK user; \texttt{step\_index} &
+      Long-format macierzy: \texttt{source}, \texttt{is\_selected}, URL \\
+    \texttt{generation\_feedback} &
+      FK user / sesja &
+      \texttt{selected\_source}, \texttt{selection\_time\_ms}, oceny \\
+    \texttt{participant\_research\_events} &
+      FK user &
+      page\_view, \texttt{matrix\_blind\_selection} itp. \\
+    \texttt{research\_consents} &
+      FK user &
+      Wersja zgody, znaczniki czasu, locale, zakres zgód \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Wybrane kolumny \texttt{participants} (grupy)}
+\label{app:a:sec:participants}
+
+\begin{itemize}
+  \item \textbf{Meta:} \texttt{path\_type} ($\in\{\texttt{fast},\texttt{full}\}$), \texttt{current\_step}, \texttt{consent\_timestamp}, \texttt{core\_profile\_complete} (oraz pokrewne flagi ukończenia, jeśli obecne w migracjach).
+  \item \textbf{Big Five:} \texttt{big5\_openness} \ldots \texttt{big5\_neuroticism}, \texttt{big5\_facets}, \texttt{big5\_responses}, \texttt{big5\_completed\_at}.
+  \item \textbf{Implicit / explicit:} \texttt{implicit\_*}, \texttt{explicit\_*}, agregaty Tinder.
+  \item \textbf{Porównanie:} \texttt{preference\_comparison\_json}, \texttt{style\_match}, \texttt{color\_tokens\_match\_score}, \texttt{biophilia\_match}.
+  \item \textbf{PRS:} \texttt{prs\_ideal\_x/y}, \texttt{prs\_current\_x/y}, \texttt{prs\_target\_x/y} --- \emph{bez} \texttt{prs\_post\_*} w obecnym schemacie.
+  \item \textbf{Room / ladder:} \texttt{room\_type}, \texttt{room\_activities}, \texttt{room\_pain\_points}, \texttt{ladder\_path}, \texttt{ladder\_core\_need}.
+  \item \textbf{Macierz / ślepota:} \texttt{blind\_selection\_made}; szczegóły wyboru także w \texttt{generation\_feedback}.
+  \item \textbf{UX:} \texttt{sus\_score}, \texttt{agency\_score}, \texttt{clarity\_score}, \texttt{satisfaction\_score} (+ JSON odpowiedzi).
+\end{itemize}
+
+\section{Czego schemat nie modeluje (istotne dla RQ)}
+\label{app:a:sec:luki}
+
+\begin{itemize}
+  \item Pomiaru PRS po ekspozycji na wizualizację AI (\texttt{prs\_post\_*}).
+  \item Osobnych kolumn \texttt{dwell\_time\_ms} / \texttt{hesitation\_count} w \texttt{participant\_swipes}.
+  \item Satysfakcji przypisanej per \texttt{selected\_source} (satysfakcja jest na poziomie uczestnika).
+\end{itemize}
+
+\AgentNote{Pełny dump SQL nie trafia do PDF --- tylko ten szkic. Pas empirical korzysta z eksportu CSV poza rozprawą.}

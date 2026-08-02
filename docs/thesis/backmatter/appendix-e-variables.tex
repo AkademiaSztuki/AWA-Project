@@ -1,7 +1,74 @@
 % OWNER: methods
-% STATUS: outline
+% STATUS: draft
+% SOURCES: HIPOTEZY_REWIZJA.md; infra/gcp/sql/01_research_schema.sql; GLOSSARY.md
 \chapter{Wykaz zmiennych eksportowanych do analizy}
 \label{app:e:top}
-\ChapterStatus{outline}{methods}
+\ChapterStatus{draft}{methods}
 
-\Todo{Słownik zmiennych: nazwa | typ | źródło | RQ.}
+Słownik poniżej obejmuje zmienne wykorzystywane w planie \RQ{1}--\RQ{6}. Typy są orientacyjne (SQL / JSON). Pełny eksport CSV powstaje poza tekstem rozprawy i nie jest dołączany (ochrona danych).
+
+\begin{longtable}{@{}p{3.6cm}p{1.8cm}p{2.4cm}p{1.4cm}p{3.2cm}@{}}
+  \caption{Słownik zmiennych badawczych (szkic).}
+  \label{tab:app:e:vars}\\
+  \toprule
+  Nazwa & Typ & Źródło / tabela & RQ & Opis krótki \\
+  \midrule
+  \endfirsthead
+  \caption[]{Słownik zmiennych badawczych (szkic). c.d.}\\
+  \toprule
+  Nazwa & Typ & Źródło / tabela & RQ & Opis krótki \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endfoot
+
+  \texttt{user\_hash} & text & participants & --- & Anonimowy ID; bez PII \\
+  \texttt{path\_type} & text & participants & 1, 6 & \texttt{fast} / \texttt{full} \\
+  \texttt{consent\_timestamp} & timestamptz & participants & etyka & Wymagany znacznik zgody \\
+  \texttt{core\_profile\_complete} & bool/flag & participants & 1 & Ukończenie profilu rdzeniowego \\
+  \texttt{current\_step} & text & participants & 1 & Ostatni krok flow \\
+  \texttt{created\_at} / \texttt{updated\_at} & timestamptz & participants & 1 & Proxy czasu w sesji \\
+  \addlinespace
+  \texttt{reaction\_time\_ms} & int & participant\_swipes & 2 & Czas reakcji swipe \\
+  \texttt{implicit\_*} & mixed & participants & 2, 4 & Agregaty preferencji ukrytych \\
+  \texttt{explicit\_*} & mixed & participants & 2, 4 & Preferencje jawne \\
+  \texttt{preference\_comparison\_json} & jsonb & participants & 2 & Porównanie imp.\ vs exp. \\
+  \texttt{style\_match} & bool & participants & 2 & Zgodność stylu (flaga) \\
+  \texttt{color\_tokens\_match\_score} & numeric & participants & 2 & Score dopasowania kolorów \\
+  \texttt{biophilia\_match} & mixed & participants & 2 & Match biophilii (porównanie) \\
+  \addlinespace
+  \texttt{big5\_openness} \ldots \texttt{neuroticism} & numeric & participants & 3, 4 & Domeny OCEAN \\
+  \texttt{big5\_facets} & jsonb & participants & 4 & 30 facetów \\
+  \texttt{big5\_responses} & jsonb & participants & 4 & Surowiec odpowiedzi \\
+  \texttt{has\_complete\_bigfive} & bool/derived & participants / derived & 3, 4 & Kompletność Big Five \\
+  \addlinespace
+  \texttt{prs\_ideal\_x/y} & numeric & participants & 5 & PRS ideal (profil) \\
+  \texttt{prs\_current\_x/y} & numeric & participants & 5 & PRS stan obecny \\
+  \texttt{prs\_target\_x/y} & numeric & participants & 5 & PRS stan docelowy \\
+  \texttt{prs\_gap} (derived) & numeric & derived & 5 & Odległość euklidesowa current$\rightarrow$target \\
+  \addlinespace
+  \texttt{room\_activities} & jsonb & participants & 3, 5 & Aktywności w pokoju \\
+  \texttt{room\_pain\_points} & text[] & participants & 3, 5 & Problemy przestrzeni \\
+  \texttt{ladder\_path} / \texttt{ladder\_core\_need} & mixed & participants & 5 & Laddering \\
+  \texttt{inspirations\_count} & int/derived & images / participants & 3 & Liczba inspiracji \\
+  \addlinespace
+  \texttt{blind\_selection\_made} & bool & participants & 2, 3 & Czy dokonano ślepego wyboru \\
+  \texttt{selected\_source} & text & generation\_feedback & 2--5 & Wybrane źródło macierzy \\
+  \texttt{selection\_time\_ms} & int & generation\_feedback & 2 & Czas wyboru w macierzy \\
+  \texttt{generated\_sources} & mixed & generations / matrix & 3 & Które źródła wygenerowano \\
+  \texttt{source} / \texttt{is\_selected} & text/bool & participant\_matrix\_entries & 2, 3 & Long-format macierzy \\
+  \addlinespace
+  \texttt{sus\_score} & numeric & participants & 6 & Agregat SUS \\
+  \texttt{agency\_score} & numeric & participants & 6 & Poczucie sprawczości \\
+  \texttt{clarity\_score} & numeric & participants & 6 & Jasność procesu \\
+  \texttt{satisfaction\_score} & numeric & participants & 6 & Satysfakcja (poziom uczestnika) \\
+  \texttt{sus\_answers} \ldots & jsonb & participants & 6 & Surowiec ankiet UX \\
+  \addlinespace
+  \texttt{event\_type} & text & participant\_research\_events & 1 & np.\ page\_view, matrix\_blind\_selection \\
+\end{longtable}
+
+\paragraph{Zmienne pochodne (derived).}
+Liczone w skryptach analitycznych, niekoniecznie jako kolumny SQL: lejek kroków, \% braków pól, \texttt{prs\_gap}, wskaźniki kompletności wymiarów profilu, mismatch score z JSON porównania.
+
+\paragraph{Świadomie nieeksportowane do analizy RQ.}
+Pola uwierzytelniania, ewentualne identyfikatory konta, treści mogące zawierać PII w wolnym tekście (jeśli wystąpią --- redakcja przed analizą), sekrety i URL-e podpisane czasowo.

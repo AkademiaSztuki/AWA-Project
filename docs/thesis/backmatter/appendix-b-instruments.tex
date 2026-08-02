@@ -1,7 +1,87 @@
 % OWNER: methods
-% STATUS: outline
+% STATUS: draft
+% SOURCES: GLOSSARY.md §5; HIPOTEZY_REWIZJA.md; CoreProfileWizard / survey flows (opis parafrazowany)
 \chapter{Treść instrumentów i ekranów}
 \label{app:b:top}
-\ChapterStatus{outline}{methods}
+\ChapterStatus{draft}{methods}
 
-\Todo{PRS grid, przykładowe itemy IPIP, opis Tinder — wersje skrócone / parafrazowane zgodnie z licencjami.}
+Załącznik uzupełnia tabelę master z~\cref{tab:ch06:instruments}. Teksty poniżej są \textbf{parafrazami / skrótami} na potrzeby dokumentacji metody --- nie stanowią pełnej reprodukcji pozycji chronionych licencją instrumentów (w szczególności IPIP). Ekrany UI opisano funkcjonalnie, bez zrzutów zawierających dane uczestników.
+
+\section{PRS --- mood grid}
+\label{app:b:sec:prs}
+
+\begin{itemize}
+  \item \textbf{Cel:} uchwycenie postrzeganej regeneracyjności / nastroju przestrzeni na uproszczonej płaszczyźnie (adaptacja kategorii znanych ze skali PRS; \cite{hartig1997prs}).
+  \item \textbf{Forma:} interaktywna siatka (mood grid) zamiast pełnej baterii itemów papierowych.
+  \item \textbf{Pomiary w IDA:} \texttt{prs\_ideal\_*} (profil), \texttt{prs\_current\_*} i \texttt{prs\_target\_*} (Room Setup).
+  \item \textbf{Czego nie ma:} pomiaru \emph{post} po wyborze wizualizacji AI.
+\end{itemize}
+
+\section{Tinder / IAT-like}
+\label{app:b:sec:tinder}
+
+\begin{itemize}
+  \item \textbf{Cel:} preferencje ukryte wobec stylów / materiałów / nastrojów wizualnych poprzez szybkie decyzje binarne (inspiracja logiką IAT; \cite{greenwald1998iat}).
+  \item \textbf{Forma:} gest swipe (akceptacja / odrzucenie) na zestawie bodźców obrazowych.
+  \item \textbf{Zapis:} \texttt{participant\_swipes} (m.in.\ kierunek, \texttt{reaction\_time\_ms}); agregaty \texttt{implicit\_*} w \texttt{participants}.
+  \item \textbf{Limit:} brak osobnego pomiaru dwell/hesitation w bazie.
+\end{itemize}
+
+\section{Preferencje jawne (semantic differential i pokrewne)}
+\label{app:b:sec:explicit}
+
+\begin{itemize}
+  \item Slidery / skale (ciepło, jasność, złożoność, faktura), wybór palety i materiałów.
+  \item Zmienne: \texttt{explicit\_warmth}, \texttt{explicit\_brightness}, \texttt{explicit\_complexity}, \texttt{explicit\_palette}, \texttt{explicit\_material\_*} itd.
+  \item Po profilu system może zapisać porównanie z implicit (\texttt{preference\_comparison\_json}).
+\end{itemize}
+
+\section{Biophilia i inspiracje}
+\label{app:b:sec:biophilia}
+
+\begin{itemize}
+  \item Wybór dawki biophilii (uproszczone poziomy) $\rightarrow$ \texttt{biophilia\_score}.
+  \item Upload / wybór inspiracji (1--$n$) $\rightarrow$ tagi i agregaty \texttt{inspiration\_*}; wspierają źródło \texttt{inspiration\_reference}.
+\end{itemize}
+
+\section{IPIP-NEO-120 (Big Five)}
+\label{app:b:sec:ipip}
+
+\begin{itemize}
+  \item \textbf{Instrument:} IPIP-NEO-120 (120 pozycji; 5 domen + 30 facetów). Rama taksonomiczna Big Five: \cite{john2008bigfive}.
+  \item \textbf{Forma w IDA:} dedykowany krok \texttt{/flow/big-five} (ścieżka Full).
+  \item \textbf{Zapis:} domeny \texttt{big5\_*}, \texttt{big5\_facets}, surowiec \texttt{big5\_responses} (JSONB).
+  \item \textbf{Licencja / reprodukcja:} w rozprawie \emph{nie} publikuje się pełnej listy itemów IPIP; dokumentuje się wersję instrumentu i sposób scoringu. Przykładowa parafraza formatu odpowiedzi: skala Likerta zgody z twierdzeniem o zachowaniu / preferencji (treść itemu wg oficjalnego IPIP).
+\end{itemize}
+
+\section{Room Setup i laddering}
+\label{app:b:sec:room}
+
+\begin{itemize}
+  \item Zdjęcie pomieszczenia + kontekst użycia (solo/shared), aktywności, pain points.
+  \item Laddering: od atrybutów przestrzeni przez konsekwencje do potrzeby rdzeniowej (\texttt{ladder\_path}, \texttt{ladder\_core\_need}).
+  \item Wspiera źródło macierzy \texttt{mixed\_functional}.
+\end{itemize}
+
+\section{Ślepa macierz sześciu źródeł}
+\label{app:b:sec:macierz}
+
+Uczestnik widzi sześć wizualizacji bez etykiet. Po wyborze system zapisuje źródło odpowiadające wybranej komórce. Źródła (kanon kodu):
+
+\begin{enumerate}
+  \item \texttt{implicit} --- wariant preferencji ukrytych,
+  \item \texttt{explicit} --- wariant preferencji jawnych,
+  \item \texttt{personality} --- wariant osobowościowy,
+  \item \texttt{mixed} --- wariant mieszany,
+  \item \texttt{mixed\_functional} --- wariant mieszany z funkcją przestrzeni,
+  \item \texttt{inspiration\_reference} --- wariant referencji inspiracji.
+\end{enumerate}
+
+\section{Ankiety UX po flow}
+\label{app:b:sec:ux}
+
+\begin{itemize}
+  \item \textbf{SUS:} bateria stwierdzeń o użyteczności (klucze \texttt{sus\_1}\ldots\texttt{sus\_10} w UI); agregat \texttt{sus\_score}.
+  \item \textbf{Agency / clarity / satisfaction:} krótkie skale własne (poczucie sprawczości, jasność procesu, satysfakcja); agregaty \texttt{agency\_score}, \texttt{clarity\_score}, \texttt{satisfaction\_score}.
+  \item Satysfakcja jest mierzona na poziomie uczestnika, nie per wybrany \texttt{selected\_source}.
+\end{itemize}

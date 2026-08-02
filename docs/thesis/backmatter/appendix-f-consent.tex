@@ -1,7 +1,72 @@
 % OWNER: methods
-% STATUS: outline
+% STATUS: draft
+% SOURCES: RODO art.\ 13 \cite{eu2016gdpr}; flow zgód w onboardingu IDA (parafraza)
 \chapter{Zgoda badawcza i klauzula informacyjna}
 \label{app:f:top}
-\ChapterStatus{outline}{methods}
+\ChapterStatus{draft}{methods}
 
-\Todo{Skrócona wersja zgody research + processing + art.\ 13 RODO (PL/EN).}
+Poniżej zamieszczono \textbf{skróconą, dokumentacyjną} wersję informacji i zgód stosowanych w onboardingu IDA. Tekst nie zastępuje pełnej klauzuli wyświetlanej w produkcie (wersjonowanej w systemie); służy transparentności metody w rozprawie. Podstawa prawna ochrony danych: rozporządzenie RODO \parencite{eu2016gdpr}.
+
+\section{Zakres zgód (checkboxy)}
+\label{app:f:sec:zgody}
+
+Uczestnik musi zaznaczyć łącznie:
+
+\begin{enumerate}
+  \item \textbf{Zgoda na udział w badaniu} (\texttt{consentResearch}) --- dobrowolny udział w badaniu naukowym związanym z platformą IDA, w tym zbieranie odpowiedzi, interakcji i preferencji w ramach flow.
+  \item \textbf{Zgoda na przetwarzanie danych} (\texttt{consentProcessing}) --- przetwarzanie danych badawczych w celu realizacji badania, utrzymania platformy badawczej i analiz naukowych.
+  \item \textbf{Potwierdzenie zapoznania się z informacją art.~13 RODO} (\texttt{acknowledgedArt13}).
+\end{enumerate}
+
+Bez wszystkich trzech zaznaczeń przejście dalej jest zablokowane. System zapisuje wersję zgody (\texttt{CONSENT\_VERSION} / tabela \texttt{research\_consents}), locale (PL/EN) oraz \texttt{consent\_timestamp}.
+
+\section{Klauzula informacyjna (art.~13 RODO) --- skrót PL}
+\label{app:f:sec:art13-pl}
+
+\begin{description}[style=nextline]
+  \item[Administrator]
+  Administrator danych wskazany w klauzuli produktowej (dane kontaktowe --- w UI / dokumentacji prawnej serwisu; \emph{nie powielane tutaj jako dane prywatne autora w formie nieoficjalnej}).
+
+  \item[Cele]
+  Przeprowadzenie badania naukowego nad personalizacją wizualizacji wnętrz i doświadczeniem użytkownika artefaktu IDA; zapewnienie działania serwisu badawczego.
+
+  \item[Podstawa]
+  Zgoda osoby, której dane dotyczą (art.~6 ust.~1 lit.~a RODO) oraz --- w zakresie niezbędnym do świadczenia usługi --- odpowiednie podstawy wskazane w pełnej klauzuli.
+
+  \item[Kategorie danych]
+  Identyfikator badawczy (\texttt{user\_hash}); odpowiedzi ankietowe i psychometryczne; interakcje (np.\ swipe, wybór w macierzy); metadane techniczne sesji; opcjonalnie dane konta w module uwierzytelniania (oddzielone od analityki research). \textbf{W eksportach analitycznych unika się PII.}
+
+  \item[Odbiorcy]
+  Dostawcy infrastruktury chmurowej przetwarzający dane na zlecenie (powierzenie), w zakresie niezbędnym do hostingu; osoby upoważnione w projekcie badawczym.
+
+  \item[Przekazanie poza EOG]
+  Jeżeli dotyczy --- zgodnie z pełną klauzulą produktową (standardowe klauzule umowne / inne mechanizmy RODO).
+
+  \item[Okres przechowywania]
+  Przez czas trwania projektu badawczego i okres wymagany do weryfikacji wyników / obowiązków prawnych; szczegóły w klauzuli wersjonowanej.
+
+  \item[Prawa osoby]
+  Dostęp, sprostowanie, usunięcie, ograniczenie, przenoszenie, sprzeciw, cofnięcie zgody --- w granicach RODO. Cofnięcie zgody nie wpływa na zgodność z prawem przetwarzania przed cofnięciem.
+
+  \item[Dobrowolność]
+  Udział jest dobrowolny; odmowa zgody oznacza brak udziału w badaniu (korzystanie z części serwisu może być ograniczone).
+\end{description}
+
+\section{Skrót EN (Abstract of notice)}
+\label{app:f:sec:art13-en}
+
+\emph{Research participation in IDA requires separate consents for research and data processing, plus acknowledgement of the Article~13 GDPR information notice. Analytical datasets use \texttt{user\_hash} and avoid unnecessary personal identifiers. Participants may withdraw consent; further collection then stops. The on-screen, versioned notice prevails over this appendix summary.}
+
+\section{Wycofanie i konsekwencje dla zbioru}
+\label{app:f:sec:wycofanie}
+
+\begin{itemize}
+  \item Wycofanie zgody kończy dalsze zbieranie danych badawczych dla danego \texttt{user\_hash}.
+  \item Dane już zapisane mogą zostać oznaczone jako wycofane / wyłączone z kolejnych analiz zgodnie z procedurą projektu (integralność pilotażu vs prawo do usunięcia --- rozstrzygane według pełnej klauzuli i uzgodnień etycznych).
+  \item W rozprawie nie publikuje się list uczestników ani danych kontaktowych.
+\end{itemize}
+
+\section{Czego załącznik nie zawiera}
+\label{app:f:sec:braki}
+
+Pełnego tekstu regulaminu serwisu, kluczy API, logów dostępowych ani przykładowych rekordów z bazy. Wszelkie cytaty dosłowne z UI należy przy finalizacji zsynchronizować z aktualną \texttt{CONSENT\_VERSION} w kodzie.
