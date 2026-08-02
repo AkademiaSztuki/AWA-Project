@@ -1,7 +1,204 @@
 % OWNER: artifact
-% STATUS: outline
+% STATUS: draft
+% SOURCES: prompt-synthesis/builder.ts (JSON v3); modes.ts; GLOSSARY.md §7--8
 \chapter{Przykładowe prompty i warianty macierzy}
 \label{app:d:top}
-\ChapterStatus{outline}{artifact}
+\ChapterStatus{draft}{artifact}
 
-\Todo{Po jednym przykładzie na źródło generacji (6 wariantów).}
+Poniżej zamieszczono \textbf{schematyczne}, zanonimizowane przykłady briefów JSON~v3 dla sześciu źródeł macierzy --- jeden wariant na źródło. Wartości są ilustracyjne (fikcyjny profil „P”), nie pochodzą z eksportu uczestnika. Wspólne dla wszystkich źródeł pozostają: \texttt{schema\_version}, rdzeń pól stylu oraz blok geometrii \texttt{preserve} \parencite{idaPlatform2026}. Nazwa kodowa modelu w infrastrukturze („Nano Banana”) nie pojawia się w prozie głównej; silnik to Gemini Image / Vertex~AI.
+
+\section{Rdzeń wspólny (schemat v3)}
+\label{app:d:sec:rdzen}
+
+\begin{lstlisting}[caption={Wspólny szkielet briefu JSON v3 (pola geometrii identyczne we wszystkich źródłach).},label={lst:app:d:core}]
+{
+  "schema_version": "v3",
+  "room_type": "living room",
+  "restyle_surfaces": true,
+  "preserve": [
+    "windows", "doors", "camera_angle",
+    "perspective", "ceiling_height", "room_footprint"
+  ],
+  "architectural_lock": true
+}
+\end{lstlisting}
+
+\section{Sześć wariantów --- przykłady różnicujące}
+\label{app:d:sec:szesc}
+
+\subsection{\texttt{implicit} --- wariant preferencji ukrytych}
+\label{app:d:sec:implicit}
+
+\begin{lstlisting}
+{
+  "schema_version": "v3",
+  "room_type": "living room",
+  "primary_style": "japandi",
+  "secondary_styles": ["wabi-sabi"],
+  "colors": ["#E8E0D5", "#A67C52", "#6B7F6A", "#F5F1EA"],
+  "materials": ["light oak", "linen", "raw ceramic"],
+  "complexity": "low-moderate",
+  "brightness": "soft daylight",
+  "lighting_mood": "calm diffuse",
+  "nature_metaphor": "forest clearing",
+  "texture": "matte natural",
+  "mood": "serene, grounding",
+  "plants": 2,
+  "restyle_surfaces": true,
+  "preserve": ["windows", "doors", "camera_angle",
+               "perspective", "ceiling_height", "room_footprint"],
+  "architectural_lock": true
+}
+\end{lstlisting}
+
+\noindent\textit{Źródło danych:} wyłącznie sygnały behawioralne (Tinder / implicit DNA); bez slidery explicit i bez Big Five.
+
+\subsection{\texttt{explicit} --- wariant preferencji jawnych}
+\label{app:d:sec:explicit}
+
+\begin{lstlisting}
+{
+  "schema_version": "v3",
+  "room_type": "living room",
+  "primary_style": "modern classic",
+  "secondary_styles": ["transitional"],
+  "colors": ["#F7F5F2", "#2C2C2C", "#C4A484", "#8A9A8A"],
+  "materials": ["marble", "brass", "velvet"],
+  "complexity": "moderate",
+  "brightness": "bright balanced",
+  "lighting_mood": "layered ambient",
+  "nature_metaphor": "formal garden",
+  "texture": "polished soft",
+  "mood": "composed, elegant",
+  "plants": 1,
+  "restyle_surfaces": true,
+  "preserve": ["windows", "doors", "camera_angle",
+               "perspective", "ceiling_height", "room_footprint"],
+  "architectural_lock": true
+}
+\end{lstlisting}
+
+\noindent\textit{Źródło danych:} deklaracje (semantic differential, paleta, materiały, lifestyle).
+
+\subsection{\texttt{personality} --- wariant osobowościowy}
+\label{app:d:sec:personality}
+
+\begin{lstlisting}
+{
+  "schema_version": "v3",
+  "room_type": "living room",
+  "primary_style": "minimalist clean",
+  "secondary_styles": [],
+  "colors": ["#F5F5F5", "#D0D0D0", "#9AA3A7", "#FFFFFF"],
+  "materials": ["glass", "polished surfaces", "clean lines"],
+  "complexity": "low",
+  "brightness": "even bright",
+  "lighting_mood": "clear neutral",
+  "nature_metaphor": "still water",
+  "texture": "smooth sparse",
+  "mood": "orderly, calm",
+  "plants": 0,
+  "restyle_surfaces": true,
+  "preserve": ["windows", "doors", "camera_angle",
+               "perspective", "ceiling_height", "room_footprint"],
+  "architectural_lock": true
+}
+\end{lstlisting}
+
+\noindent\textit{Źródło danych:} mapowanie IPIP-NEO-120 (przykład: wysoka sumienność / porządek $\rightarrow$ \texttt{minimalist\_clean}; zał.~\ref{app:c:top}).
+
+\subsection{\texttt{mixed} --- wariant mieszany}
+\label{app:d:sec:mixed}
+
+\begin{lstlisting}
+{
+  "schema_version": "v3",
+  "room_type": "living room",
+  "primary_style": "japandi with modern classic influences",
+  "secondary_styles": ["minimalist clean"],
+  "colors": ["#E8E0D5", "#2C2C2C", "#A67C52", "#F7F5F2"],
+  "materials": ["light oak", "linen", "brass accents"],
+  "complexity": "moderate",
+  "brightness": "soft-bright",
+  "lighting_mood": "calm layered",
+  "nature_metaphor": "forest clearing",
+  "texture": "matte with polished accents",
+  "mood": "balanced, serene",
+  "plants": 2,
+  "restyle_surfaces": true,
+  "preserve": ["windows", "doors", "camera_angle",
+               "perspective", "ceiling_height", "room_footprint"],
+  "architectural_lock": true
+}
+\end{lstlisting}
+
+\noindent\textit{Źródło danych:} wagi $0{,}40$ / $0{,}30$ / $0{,}30$ (implicit / explicit / personality); bez warstwy funkcjonalnej pokoju.
+
+\subsection{\texttt{mixed\_functional} --- wariant mieszany z funkcją przestrzeni}
+\label{app:d:sec:mixed-functional}
+
+\begin{lstlisting}
+{
+  "schema_version": "v3",
+  "room_type": "living room",
+  "primary_style": "japandi with modern classic influences",
+  "secondary_styles": ["minimalist clean"],
+  "colors": ["#E8E0D5", "#2C2C2C", "#A67C52", "#F7F5F2"],
+  "materials": ["light oak", "linen", "performance fabric"],
+  "complexity": "moderate",
+  "brightness": "soft-bright",
+  "lighting_mood": "calm layered",
+  "nature_metaphor": "forest clearing",
+  "texture": "matte durable",
+  "mood": "grounded, functional calm",
+  "plants": 2,
+  "functional_requirements": [
+    "evening wind-down zone",
+    "storage for clutter pain-point",
+    "flexible seating for guests"
+  ],
+  "restyle_surfaces": true,
+  "preserve": ["windows", "doors", "camera_angle",
+               "perspective", "ceiling_height", "room_footprint"],
+  "architectural_lock": true
+}
+\end{lstlisting}
+
+\noindent\textit{Źródło danych:} mixed + aktywności, pain points, kontekst PRS current$\rightarrow$target (Room Setup).
+
+\subsection{\texttt{inspiration\_reference} --- wariant referencji inspiracji}
+\label{app:d:sec:inspiration}
+
+\begin{lstlisting}
+{
+  "schema_version": "v3",
+  "room_type": "living room",
+  "primary_style": "warm contemporary",
+  "secondary_styles": ["japandi"],
+  "colors": ["#D4B89A", "#F3EDE4", "#5C6B5A", "#1F1F1F"],
+  "materials": ["walnut", "boucle", "travertine"],
+  "complexity": "moderate-high",
+  "brightness": "golden hour",
+  "lighting_mood": "editorial warm",
+  "nature_metaphor": "sunlit terrace",
+  "texture": "tactile layered",
+  "mood": "inviting, curated",
+  "plants": 3,
+  "vision_references": ["inspiration_01", "inspiration_02"],
+  "restyle_surfaces": true,
+  "preserve": ["windows", "doors", "camera_angle",
+               "perspective", "ceiling_height", "room_footprint"],
+  "architectural_lock": true
+}
+\end{lstlisting}
+
+\noindent\textit{Źródło danych:} brief estetyczny + obrazy inspiracji dołączane do żądania multi-image (bez publikowania samych plików użytkownika w rozprawie).
+
+\section{Uwagi metodologiczne}
+\label{app:d:sec:uwagi}
+
+\begin{itemize}
+  \item Identyczny blok \texttt{preserve} we wszystkich wariantach umożliwia porównywalność geometrii wejściowej przy różnicy stylu --- warunek ślepej macierzy (rozdz.~\ref{ch07:sec:macierz}).
+  \item Empty shell realizuje się instrukcją systemową modelu (usunięcie wyposażenia), nie dodatkowym polem JSON w powyższych przykładach.
+  \item W budowie PDF przykłady służą transparentności pipeline’u; wyniki wyborów \texttt{selected\_source} raportuje rozdział empiryczny --- bez zmyślonych częstości.
+\end{itemize}

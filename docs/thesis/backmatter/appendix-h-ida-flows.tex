@@ -1,7 +1,67 @@
 % OWNER: artifact
-% STATUS: outline
+% STATUS: draft
+% SOURCES: full-flow-progress.ts; IDA_DIALOGUE_SCRIPT.md; GLOSSARY.md; ch07
 \chapter{Wybrane przebiegi platformy IDA}
 \label{app:h:top}
-\ChapterStatus{outline}{artifact}
+\ChapterStatus{draft}{artifact}
 
-\Todo{Zanonimizowane sekwencje ekranów: onboarding $\rightarrow$ profil $\rightarrow$ pokój $\rightarrow$ macierz $\rightarrow$ wybór --- pliki w \texttt{figures/ida/}.}
+Załącznik zbiera zanonimizowaną dokumentację przebiegów UI artefaktu IDA --- uzupełnienie rycin rozdz.~\ref{ch07:top}. Pliki docelowe: \texttt{figures/ida/}. Żadne PII, adresy e-mail ani surowe identyfikatory sesji nie są publikowane; w podpisach obowiązuje formuła „screen z platformy IDA --- opracowanie własne” \parencite{idaPlatform2026}.
+
+\section{Sekwencja kanoniczna (ścieżka pełna)}
+\label{app:h:sec:full}
+
+\begin{enumerate}
+  \item Onboarding i zgoda --- ton dialogu awatara, wybór ścieżki Full.
+  \item Profil gustu --- Tinder (preferencje ukryte), mood / semantic differential, zmysły, upload inspiracji.
+  \item Osobowość --- IPIP-NEO-120 (\texttt{/flow/big-five}).
+  \item Przestrzeń --- zdjęcie pokoju, analiza VLM, potrzeby (aktywności, pain points, ladder), PRS current/target; opcjonalny empty shell.
+  \item Generacja --- ślepa macierz sześciu źródeł; wybór bez etykiet.
+  \item Domknięcie --- feedback (agency / clarity / satisfaction) i podsumowanie projektu.
+\end{enumerate}
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{\parbox{0.85\textwidth}{\centering\vspace{2.0cm}
+  \textit{[Placeholder] Sekwencja onboarding $\rightarrow$ profil ---\\
+  \texttt{figures/ida/ch07-flow-onboarding-profile.pdf}}
+  \vspace{2.0cm}}}
+  \caption{Przebieg IDA: onboarding i budowa profilu gustu (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:app:h:onboarding}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{\parbox{0.85\textwidth}{\centering\vspace{2.0cm}
+  \textit{[Placeholder] Sekwencja pokój $\rightarrow$ macierz $\rightarrow$ wybór ---\\
+  \texttt{figures/ida/ch07-flow-room-matrix.pdf}}
+  \vspace{2.0cm}}}
+  \caption{Przebieg IDA: Room Setup, ślepa macierz sześciu wariantów i wybór (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:app:h:matrix-seq}
+\end{figure}
+
+\section{Ścieżka szybka (Fast) --- skrót}
+\label{app:h:sec:fast}
+
+Ścieżka szybka skraca instrumentarium (m.in.\ bez pełnego IPIP-NEO-120 i części ladderingu), zachowując upload przestrzeni i generację koncepcji. Służy Product-First i lejkowi wejścia; nie zastępuje kompletności danych ścieżki pełnej pod RQ2--RQ5. Placeholdery screenshotów Fast: \texttt{figures/ida/ch07-flow-fast.pdf}.
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{\parbox{0.85\textwidth}{\centering\vspace{2.0cm}
+  \textit{[Placeholder] Skrót ścieżki Fast ---\\
+  \texttt{figures/ida/ch07-flow-fast.pdf}}
+  \vspace{2.0cm}}}
+  \caption{Przebieg IDA: ścieżka szybka (Fast) jako skrócony rytm produktowy (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:app:h:fast}
+\end{figure}
+
+\section{Checklist materiałów do wstawienia}
+\label{app:h:sec:checklist}
+
+\begin{itemize}
+  \item Still awatara w kontekście glass UI (spójny z ryc.~\ref{fig:ch07:avatar}).
+  \item Landing / wybór Full vs Fast.
+  \item Ekran Tinder oraz mood grid (bez danych osobowych na paskach).
+  \item Room Setup z widocznym zdjęciem przykładowym (stock / własne studio --- nie mieszkanie uczestnika).
+  \item Macierz 6 kafelków przed i po ujawnieniu źródła (jeśli UI ujawnia po wyborze).
+  \item Ekran feedbacku UX (skale agency / clarity / satisfaction) --- wartości zasłonięte lub zerowe w publikacji.
+\end{itemize}

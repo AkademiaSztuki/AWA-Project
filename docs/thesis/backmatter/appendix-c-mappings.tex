@@ -1,7 +1,73 @@
 % OWNER: artifact
-% STATUS: outline
+% STATUS: draft
+% SOURCES: apps/frontend/src/lib/prompt-synthesis/research-mappings.ts;
+%          facet-derivation.ts; GLOSSARY.md
 \chapter{Mapowanie facetów na parametry promptu}
 \label{app:c:top}
-\ChapterStatus{outline}{artifact}
+\ChapterStatus{draft}{artifact}
 
-\Todo{Tabela z \texttt{research-mappings} / facet-derivation — cytowalna, powtarzalna.}
+Załącznik dokumentuje cytowalną, regułową warstwę \emph{explainable personalization} w IDA: przejście od wyników IPIP-NEO-120 (domeny i 30 facetów) do parametrów briefu JSON~v3 używanych przez źródło \texttt{personality} oraz --- z wagami --- przez \texttt{mixed} / \texttt{mixed\_functional}. Implementacja wzorcowa znajduje się w module \texttt{prompt-synthesis} (\texttt{research-mappings.ts}, \texttt{facet-derivation.ts}); poniżej podano skrót operacyjny bez sekretów ani danych uczestników \parencite{idaPlatform2026}.
+
+\section{Zasada działania}
+\label{app:c:sec:zasada}
+
+\begin{enumerate}
+  \item Wyniki IPIP-NEO-120 normalizowane są do przedziału $[0,1]$ (domeny oraz facety, gdy dostępne).
+  \item Zbiór mapowań stylu (\texttt{BIGFIVE\_STYLE\_MAPPINGS}) definiuje warunki na domenach/facetach, listę materiałów, złożoność wizualną oraz odnośnik do tradycji badawczej (np.\ obserwacje środowisk osobowościowych).
+  \item Dopasowanie wybiera dominantę stylu i pewność (\texttt{confidence}); przy braku facetów stosuje się fallback do wyniku domeny.
+  \item Wynik wchodzi do scoringu jako wejście źródła \texttt{personality} (pozostałe kanały estetyczne są zerowane --- por.\ rozdz.~\ref{ch07:sec:macierz}).
+\end{enumerate}
+
+Mapowania traktuje się jako \textbf{hipotezy projektowe}, nie jako deterministyczne prawa estetyki (krytyka determinizmu: rozdz.~o osobowości / preferencjach).
+
+\section{Przykładowe reguły stylu (skrót)}
+\label{app:c:sec:reguly}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Wybrane mapowania Big Five / facetów na styl i materiały w pipeline IDA (skrót z \texttt{research-mappings}).}
+  \label{tab:app:c:mappings}
+  \begin{tabular}{@{}p{0.18\textwidth}p{0.28\textwidth}p{0.22\textwidth}p{0.22\textwidth}@{}}
+    \toprule
+    ID reguły & Warunki (skrót) & Styl (brief) & Materiały / złożoność \\
+    \midrule
+    \texttt{eclectic\_artistic} &
+    $O>0{,}65$; facet estetyki $O2>0{,}7$ &
+    eclectic artistic &
+    mixed textures, artisanal; złożoność $\approx 0{,}8$ \\
+    \addlinespace
+    \texttt{bohemian\_eclectic} &
+    $O>0{,}7$; $C<0{,}4$; fantazja $O1>0{,}6$ &
+    bohemian eclectic &
+    natural fibers, handcrafted; $\approx 0{,}75$ \\
+    \addlinespace
+    \texttt{maximalist\_bold} &
+    $O>0{,}6$; $E>0{,}6$; excitement $E5>0{,}65$ &
+    maximalist artistic &
+    bold patterns, brass; $\approx 0{,}85$ \\
+    \addlinespace
+    \texttt{minimalist\_clean} &
+    $C>0{,}7$; $O<0{,}4$; order $C2>0{,}75$ &
+    minimalist clean &
+    glass, clean lines; $\approx 0{,}2$ \\
+    \addlinespace
+    \texttt{scandinavian\_harmonious} &
+    $C>0{,}6$; $A>0{,}6$; $N<0{,}4$ &
+    Scandinavian &
+    light wood, natural textiles; $\approx 0{,}4$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Pełny katalog reguł i kluczy \texttt{researchBasis} pozostaje w kodzie źródłowym artefaktu; w ewaluacji terenowej zapisuje się identyfikatory dopasowania, co umożliwia audyt, \emph{która} reguła wpłynęła na brief źródła \texttt{personality}.
+
+\section{Wagi źródła mixed}
+\label{app:c:sec:wagi}
+
+Dla źródeł łączących kanały estetyczne obowiązują wagi kanoniczne (kod \texttt{MIXED\_SOURCE\_WEIGHTS}):
+
+\begin{center}
+implicit $0{,}40$ \quad/\quad explicit $0{,}30$ \quad/\quad personality $0{,}30$.
+\end{center}
+
+Źródło \texttt{mixed\_functional} zachowuje tę syntezę estetyczną i dokłada warstwę funkcji przestrzeni (aktywności, pain points, kontekst PRS), opisaną w rozdz.~\ref{ch07:sec:macierz}.
