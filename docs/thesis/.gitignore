@@ -28,3 +28,4 @@ backmatter/*.aux
 # Local export dumps
 exports/**
 !exports/.gitkeep
+main.bbl-SAVE-ERROR
