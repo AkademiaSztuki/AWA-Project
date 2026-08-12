@@ -68,7 +68,12 @@ export function ShareResultBar({
   const ensureCard = useCallback(async (): Promise<CreatedCard | null> => {
     if (card) return card;
     if (!userHash) {
-      setError(t('Zaloguj się, aby udostępnić kartę.', 'Sign in to share your card.'));
+      setError(
+        t(
+          'Sesja jeszcze się ładuje — spróbuj za chwilę.',
+          'Session is still loading — try again in a moment.',
+        ),
+      );
       return null;
     }
     const payload = toBase64Payload(imageUrl, imageBase64);
@@ -93,7 +98,17 @@ export function ShareResultBar({
       });
       const json = (await res.json()) as CreatedCard & { error?: string };
       if (!res.ok || !json.slug) {
-        setError(json.error || t('Nie udało się utworzyć karty.', 'Could not create the share card.'));
+        const raw = json.error || '';
+        if (raw === 'participant_not_found') {
+          setError(
+            t(
+              'Sesja nie jest jeszcze zapisana. Odśwież stronę i spróbuj ponownie.',
+              'Session is not saved yet. Refresh and try again.',
+            ),
+          );
+        } else {
+          setError(raw || t('Nie udało się utworzyć karty.', 'Could not create the share card.'));
+        }
         return null;
       }
       const created = { slug: json.slug, referralCode: json.referralCode };
@@ -142,7 +157,7 @@ export function ShareResultBar({
 
   const handleDownload = async () => {
     try {
-      await downloadShareImage(imageUrl, 'ida-interior');
+      await downloadShareImage(imageUrl, 'ida-interior', true);
     } catch {
       setError(
         t(
@@ -163,7 +178,7 @@ export function ShareResultBar({
       }
     }
     try {
-      await downloadShareImage(imageUrl, 'ida-interior');
+      await downloadShareImage(imageUrl, 'ida-interior', true);
       setIgHint(true);
       window.setTimeout(() => setIgHint(false), 6000);
     } catch {

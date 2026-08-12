@@ -564,6 +564,7 @@ export const gcpApi = {
         styleLabel?: string | null;
         roomType?: string | null;
         personalityLabels?: string[];
+        reused?: boolean;
       }>('/api/share/cards', {
         method: 'POST',
         body: payload,

@@ -112,6 +112,7 @@ shareRouter.post('/share/cards', async (req, res) => {
         styleLabel: card.style_label,
         roomType: card.room_type,
         personalityLabels: card.personality_labels || [],
+        reused: card.reused,
       });
     } finally {
       client.release();
@@ -120,6 +121,9 @@ shareRouter.post('/share/cards', async (req, res) => {
     const err = error as Error;
     if (err.message === 'gcs_not_configured') {
       return res.status(503).json({ ok: false, error: 'gcs_not_configured' });
+    }
+    if (err.message === 'participant_not_found') {
+      return res.status(404).json({ ok: false, error: 'participant_not_found' });
     }
     if (err.message === 'invalid_image' || err.message === 'invalid_path_type') {
       return res.status(400).json({ ok: false, error: err.message });

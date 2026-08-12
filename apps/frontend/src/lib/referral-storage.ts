@@ -1,4 +1,4 @@
-import { REFERRAL_COOKIE_NAME, REFERRAL_STORAGE_KEY } from '@/lib/referral-constants';
+import { REFERRAL_COOKIE_NAME, REFERRAL_STORAGE_KEY } from './referral-constants';
 
 const CODE_PATTERN = /^IDA-[A-Z0-9]{4,12}$/;
 

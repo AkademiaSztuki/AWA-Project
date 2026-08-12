@@ -40,9 +40,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.ok || !result.data) {
+      const status = result.status === 404 ? 404 : result.status || 502;
       return NextResponse.json(
         { error: result.error || 'create_failed' },
-        { status: result.status || 502 },
+        { status },
       );
     }
     return NextResponse.json(result.data);

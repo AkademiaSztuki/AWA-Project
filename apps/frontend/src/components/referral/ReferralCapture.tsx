@@ -2,13 +2,18 @@
 
 import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useSessionData } from '@/hooks/useSessionData';
 import { persistReferralCode, resolvePendingReferralCode } from '@/lib/referral-storage';
-import { creditsAuthHeaders } from '@/lib/credits-request-headers';
+import { attributePendingReferral } from '@/lib/referral-attribute-client';
 
-function readUserHash(): string | null {
+function readStoredUserHash(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage.getItem('aura_user_hash')?.trim() || null;
+    return (
+      window.localStorage.getItem('aura_user_hash')?.trim() ||
+      window.sessionStorage.getItem('aura_user_hash')?.trim() ||
+      null
+    );
   } catch {
     return null;
   }
@@ -17,21 +22,15 @@ function readUserHash(): string | null {
 export function ReferralCapture() {
   const searchParams = useSearchParams();
   const searchRef = searchParams.get('ref');
+  const { sessionData, isInitialized } = useSessionData();
+  const userHash = sessionData?.userHash?.trim() || readStoredUserHash();
 
   useEffect(() => {
     const code = resolvePendingReferralCode(searchRef);
-    if (!code) return;
-    persistReferralCode(code);
-
-    const userHash = readUserHash();
+    if (code) persistReferralCode(code);
     if (!userHash) return;
-
-    void fetch('/api/referral/attribute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...creditsAuthHeaders() },
-      body: JSON.stringify({ userHash, code }),
-    }).catch(() => {});
-  }, [searchRef]);
+    void attributePendingReferral(userHash, searchRef);
+  }, [searchRef, userHash, isInitialized]);
 
   return null;
 }

@@ -19,6 +19,10 @@ referralRouter.get('/referral/me/:userHash', async (req, res) => {
       client.release();
     }
   } catch (error) {
+    const err = error as Error;
+    if (err.message === 'no_participant') {
+      return res.status(404).json({ ok: false, error: 'no_participant' });
+    }
     console.error('referral/me error', error);
     return res.status(500).json({ ok: false, error: 'internal_error' });
   }

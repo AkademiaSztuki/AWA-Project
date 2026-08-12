@@ -10,6 +10,7 @@ import {
 } from '@/lib/auth-storage-keys';
 import { getSessionStoreSnapshot, syncSessionUserHash } from '@/hooks/useSession';
 import type { SessionData } from '@/types';
+import { attributePendingReferral } from '@/lib/referral-attribute-client';
 import { FULL_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY } from '@/lib/flow/full-flow-progress';
 import { FAST_FLOW_MAX_JOURNEY_INDEX_STORAGE_KEY } from '@/lib/flow/fast-flow-progress';
 import {
@@ -98,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (hash) {
             safeLocalStorage.setItem('aura_user_hash', hash);
             syncSessionUserHash(hash);
+            void attributePendingReferral(hash);
           }
           const emailFromDb =
             typeof p.email === 'string' && p.email.trim().length > 0 ? p.email.trim() : undefined;
@@ -316,6 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     safeLocalStorage.setItem('aura_user_hash', effectiveHash);
     safeLocalStorage.setItem(GOOGLE_AUTH_USER_ID_STORAGE_KEY, auth_user_id);
     syncSessionUserHash(effectiveHash);
+    void attributePendingReferral(effectiveHash);
     hydrateFromMagicLink(auth_user_id, responseEmail || email);
 
     try {
@@ -374,6 +377,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     safeLocalStorage.setItem('aura_user_hash', user_hash);
     safeLocalStorage.setItem(GOOGLE_AUTH_USER_ID_STORAGE_KEY, auth_user_id);
     syncSessionUserHash(user_hash);
+    void attributePendingReferral(user_hash);
     hydrateFromMagicLink(auth_user_id, responseEmail);
     return { effectiveUserHash: user_hash };
   };
@@ -455,6 +459,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const resolvedHash = linked.data?.existingUserHash || userHash;
         safeLocalStorage.setItem('aura_user_hash', resolvedHash);
         syncSessionUserHash(resolvedHash);
+        void attributePendingReferral(resolvedHash);
       } else {
         console.warn('linkUserHashToAuth failed:', linked.error);
       }
@@ -476,7 +481,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hydrateFromMagicLink = (authUserId: string, email?: string) => {
     const storedHash = safeLocalStorage.getItem('aura_user_hash');
-    if (storedHash) syncSessionUserHash(storedHash);
+    if (storedHash) {
+      syncSessionUserHash(storedHash);
+      void attributePendingReferral(storedHash);
+    }
     safeLocalStorage.setItem(GOOGLE_AUTH_USER_ID_STORAGE_KEY, authUserId);
     const resolvedEmail = email ?? (authUserId.startsWith('email:') ? authUserId.slice(6) : undefined);
     if (resolvedEmail && resolvedEmail.trim().length > 0) {

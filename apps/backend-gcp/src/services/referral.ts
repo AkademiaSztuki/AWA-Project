@@ -106,7 +106,13 @@ export async function attributeReferral(
     return { attributed: false, reason: 'invalid_code' };
   }
 
-  await ensureParticipantRecord(client, inviteeUserHash);
+  const existingParticipant = await client.query(
+    `SELECT 1 FROM participants WHERE user_hash = $1 LIMIT 1`,
+    [inviteeUserHash],
+  );
+  if ((existingParticipant.rowCount ?? 0) === 0) {
+    return { attributed: false, reason: 'no_participant' };
+  }
 
   const referrer = await client.query<{ user_hash: string; code: string }>(
     `SELECT user_hash, code FROM referral_codes WHERE UPPER(code) = $1 LIMIT 1`,
@@ -405,6 +411,14 @@ export async function getReferralMe(
   client: PoolClient,
   userHash: string,
 ): Promise<ReferralMe> {
+  const existingParticipant = await client.query(
+    `SELECT 1 FROM participants WHERE user_hash = $1 LIMIT 1`,
+    [userHash],
+  );
+  if ((existingParticipant.rowCount ?? 0) === 0) {
+    throw new Error('no_participant');
+  }
+
   const code = await ensureReferralCode(client, userHash);
 
   const stats = await client.query<{

@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import { Storage } from '@google-cloud/storage';
 import { PoolClient } from 'pg';
-import { ensureParticipantRecord } from './billing';
 import { ensureReferralCode } from './referral';
+import { shareCardSlug } from '../lib/share-card-id';
 
 const bucketName = process.env.GCS_IMAGES_BUCKET;
 const storage = new Storage();
@@ -97,9 +97,17 @@ async function savePublicShareCopy(slug: string, buffer: Buffer): Promise<{
 export async function createShareCard(
   client: PoolClient,
   input: CreateShareCardInput,
-): Promise<ShareCardRow> {
+): Promise<ShareCardRow & { reused: boolean }> {
   const pathType = normalizePathType(input.pathType);
-  await ensureParticipantRecord(client, input.userHash);
+
+  const existingParticipant = await client.query(
+    `SELECT 1 FROM participants WHERE user_hash = $1 LIMIT 1`,
+    [input.userHash],
+  );
+  if ((existingParticipant.rowCount ?? 0) === 0) {
+    throw new Error('participant_not_found');
+  }
+
   const referralCode = await ensureReferralCode(client, input.userHash);
 
   const buffer = decodeBase64Image(input.base64Image);
@@ -107,14 +115,18 @@ export async function createShareCard(
     throw new Error('invalid_image');
   }
 
-  let slug = generateSlug();
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const exists = await client.query(`SELECT 1 FROM share_cards WHERE slug = $1 LIMIT 1`, [slug]);
-    if ((exists.rowCount ?? 0) === 0) break;
-    slug = generateSlug();
+  const slug = shareCardSlug(input.userHash, buffer);
+  const existing = await getShareCardBySlug(client, slug);
+  if (existing && existing.user_hash === input.userHash) {
+    return { ...existing, reused: true };
   }
 
-  const saved = await savePublicShareCopy(slug, buffer);
+  let finalSlug = slug;
+  if (existing && existing.user_hash !== input.userHash) {
+    finalSlug = `${slug}${generateSlug().slice(0, 4)}`;
+  }
+
+  const saved = await savePublicShareCopy(finalSlug, buffer);
   const labels = (input.personalityLabels || []).filter((label) => label.trim().length > 0).slice(0, 5);
 
   const { rows } = await client.query<ShareCardRow>(
@@ -124,12 +136,14 @@ export async function createShareCard(
         style_label, room_type, personality_labels
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (slug) DO UPDATE SET
+        referral_code = COALESCE(share_cards.referral_code, EXCLUDED.referral_code)
       RETURNING
         slug, user_hash, referral_code, path_type, image_public_url, storage_path,
         style_label, room_type, personality_labels, created_at
     `,
     [
-      slug,
+      finalSlug,
       input.userHash,
       referralCode,
       pathType,
@@ -141,7 +155,7 @@ export async function createShareCard(
     ],
   );
 
-  return rows[0];
+  return { ...rows[0], reused: false };
 }
 
 export async function getShareCardBySlug(
