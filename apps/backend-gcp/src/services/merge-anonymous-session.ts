@@ -13,6 +13,13 @@ const USER_HASH_CHILD_TABLES = [
   'credit_transactions',
 ] as const;
 
+const OPTIONAL_USER_HASH_CHILD_TABLES = [
+  'referral_codes',
+  'referral_attributions',
+  'referral_events',
+  'share_cards',
+] as const;
+
 type ParticipantRow = Record<string, unknown> & {
   user_hash: string;
   auth_user_id?: string | null;
@@ -123,6 +130,53 @@ async function reassignChildRows(
       } else {
         throw e;
       }
+    }
+  }
+
+  for (const table of OPTIONAL_USER_HASH_CHILD_TABLES) {
+    const savepoint = `merge_reassign_${table}`;
+    await client.query(`SAVEPOINT ${savepoint}`);
+    try {
+      await client.query(
+        `UPDATE ${table} SET user_hash = $1 WHERE user_hash = $2`,
+        [toHash, fromHash],
+      );
+      await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+    } catch (e) {
+      const err = e as Error & { code?: string };
+      await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+      if (err.code === '42P01') {
+        continue;
+      }
+      if (err.code === '23505') {
+        await client.query(`DELETE FROM ${table} WHERE user_hash = $1`, [fromHash]);
+        continue;
+      }
+      throw e;
+    }
+  }
+
+  const extraPointerUpdates: Array<{ table: string; column: string }> = [
+    { table: 'referral_attributions', column: 'referrer_user_hash' },
+    { table: 'referral_events', column: 'invitee_user_hash' },
+  ];
+  for (const { table, column } of extraPointerUpdates) {
+    const savepoint = `merge_reassign_${table}_${column}`;
+    await client.query(`SAVEPOINT ${savepoint}`);
+    try {
+      await client.query(
+        `UPDATE ${table} SET ${column} = $1 WHERE ${column} = $2`,
+        [toHash, fromHash],
+      );
+      await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+    } catch (e) {
+      const err = e as Error & { code?: string };
+      await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+      if (err.code === '42P01') {
+        // Table not applied yet in this environment.
+        continue;
+      }
+      throw e;
     }
   }
 }

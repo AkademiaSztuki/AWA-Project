@@ -35,6 +35,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
+import { ShareResultBar } from '@/components/share/ShareResultBar';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { addGeneratedImageToSpace } from '@/lib/spaces';
 import {
@@ -1792,6 +1793,20 @@ export default function FastGeneratePage() {
                         <Heart size={20} fill={generatedImage.isFavorite ? 'currentColor' : 'none'} />
                       </button>
                     </div>
+
+                    {generatedImage && (
+                      <ShareResultBar
+                        userHash={(sessionData as { userHash?: string } | null)?.userHash}
+                        imageUrl={generatedImage.url}
+                        imageBase64={generatedImage.base64}
+                        pathType="fast"
+                        styleLabel={
+                          (sessionData as { visualDNA?: { dominantStyle?: string } } | null)?.visualDNA
+                            ?.dominantStyle || null
+                        }
+                        roomType={(sessionData as { roomType?: string } | null)?.roomType || null}
+                      />
+                    )}
 
                     {/* Ratings - exactly like main generate */}
                     <AnimatePresence>

@@ -1,9 +1,12 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import type { Language } from './src/lib/questions/validated-scales';
+import { REFERRAL_COOKIE_NAME } from './src/lib/referral-constants';
 
 const LANGUAGE_COOKIE = 'app_language';
 const ONE_YEAR_IN_SECONDS = 60 * 60 * 24 * 365;
+const REFERRAL_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+const REFERRAL_CODE_PATTERN = /^IDA-[A-Z0-9]{4,12}$/;
 
 // Lista publicznych ścieżek (dostępne bez logowania)
 // Wszystkie inne ścieżki będą chronione (w tym /flow/* i /setup/*)
@@ -42,6 +45,18 @@ const isPublicPath = (pathname: string): boolean => {
   return PUBLIC_PATHS.some(publicPath => pathname.startsWith(publicPath + '/'));
 };
 
+function applyReferralCookie(request: NextRequest, response: NextResponse): void {
+  const raw = request.nextUrl.searchParams.get('ref')?.trim().toUpperCase() || '';
+  if (!REFERRAL_CODE_PATTERN.test(raw)) return;
+  response.cookies.set({
+    name: REFERRAL_COOKIE_NAME,
+    value: raw,
+    path: '/',
+    maxAge: REFERRAL_COOKIE_MAX_AGE,
+    sameSite: 'lax',
+  });
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
@@ -55,7 +70,9 @@ export async function middleware(request: NextRequest) {
   const current = request.cookies.get(LANGUAGE_COOKIE)?.value;
 
   if (current === resolvedLanguage) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    applyReferralCookie(request, response);
+    return response;
   }
 
   const response = NextResponse.next();
@@ -65,6 +82,7 @@ export async function middleware(request: NextRequest) {
     path: '/',
     maxAge: ONE_YEAR_IN_SECONDS,
   });
+  applyReferralCookie(request, response);
 
   return response;
 }

@@ -56,6 +56,8 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
+import { ShareResultBar } from '@/components/share/ShareResultBar';
+import { personalityLabelsFromScores } from '@/lib/share/personality-labels';
 import { 
   synthesizeSixPrompts,
   synthesizeFivePrompts, // Backward compatibility
@@ -5062,6 +5064,27 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   </div>
                 </div>
               </GlassCard>
+
+              {selectedImage && blindSelectionMade && (
+                <div className="px-1">
+                <ShareResultBar
+                  userHash={(sessionData as { userHash?: string } | null)?.userHash}
+                  imageUrl={selectedImage.url}
+                  imageBase64={selectedImage.base64}
+                  pathType="full"
+                  styleLabel={
+                    (sessionData as { visualDNA?: { dominantStyle?: string } } | null)?.visualDNA
+                      ?.dominantStyle || null
+                  }
+                  roomType={(sessionData as { roomType?: string } | null)?.roomType || null}
+                  personalityLabels={personalityLabelsFromScores(
+                    (sessionData as { bigFive?: { scores?: Record<string, unknown> } } | null)?.bigFive
+                      ?.scores,
+                    language === 'en' ? 'en' : 'pl',
+                  )}
+                />
+                </div>
+              )}
 
               {/* Taste rating — keyed to active history node / display image */}
               <div ref={tasteRatingPanelRef}>

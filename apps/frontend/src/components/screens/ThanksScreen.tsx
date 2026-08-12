@@ -11,6 +11,7 @@ import { gcpApi } from '@/lib/gcp-api-client';
 import { pruneLargeStringsForSessionExport } from '@/lib/prune-session-export';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal } from '@/components/auth/LoginModal';
+import { InviteFriendsPanel } from '@/components/referral/InviteFriendsPanel';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ArrowLeft } from 'lucide-react';
 import { saveSessionToGcp, safeLocalStorage } from '@/lib/gcp-data';
@@ -170,6 +171,12 @@ export function ThanksScreen() {
                   </p>
                 )}
               </div>
+
+              {sessionData?.userHash && (
+                <div className="mx-auto mt-6 w-full max-w-2xl text-left">
+                  <InviteFriendsPanel userHash={sessionData.userHash} />
+                </div>
+              )}
 
               <div className="mx-auto mt-2 w-full max-w-2xl pt-2 text-left sm:mt-4 sm:pt-4">
                 <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between sm:gap-4">

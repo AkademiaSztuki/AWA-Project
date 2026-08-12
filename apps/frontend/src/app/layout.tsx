@@ -22,6 +22,8 @@ import { GlobalProtectedRoute } from '@/components/auth/GlobalProtectedRoute';
 import { FullFlowProgressProviderGate } from '@/components/flow/FullFlowProgressProviderGate';
 import { AppContentFrame } from '@/components/layout/AppContentFrame';
 import { ChunkLoadRecovery } from '@/components/navigation/ChunkLoadRecovery';
+import { ReferralCapture } from '@/components/referral/ReferralCapture';
+import { Suspense } from 'react';
 import type { Language } from '@/lib/questions/validated-scales';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -122,6 +124,9 @@ export default function RootLayout({
                     
                     <GlobalProtectedRoute>
                       <FullFlowProgressProviderGate>
+                      <Suspense fallback={null}>
+                        <ReferralCapture />
+                      </Suspense>
                       <AppContentFrame>{children}</AppContentFrame>
                       </FullFlowProgressProviderGate>
                     </GlobalProtectedRoute>

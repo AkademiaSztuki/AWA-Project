@@ -513,6 +513,69 @@ export const gcpApi = {
       ),
   },
 
+  referral: {
+    me: (userHash: string) =>
+      apiFetch<{
+        ok: boolean;
+        code?: string;
+        invitePath?: string;
+        verifiedCount?: number;
+        firstGenerationCount?: number;
+        creditsEarned?: number;
+        milestone3Claimed?: boolean;
+        milestone10Claimed?: boolean;
+      }>(`/api/referral/me/${encodeURIComponent(userHash)}`),
+
+    attribute: (payload: { userHash: string; code: string }) =>
+      apiFetch<{ ok: boolean; attributed?: boolean; reason?: string }>('/api/referral/attribute', {
+        method: 'POST',
+        body: payload,
+      }),
+  },
+
+  share: {
+    getCard: (slug: string) =>
+      apiFetch<{
+        ok: boolean;
+        slug?: string;
+        referralCode?: string | null;
+        pathType?: 'fast' | 'full';
+        imagePublicUrl?: string;
+        styleLabel?: string | null;
+        roomType?: string | null;
+        personalityLabels?: string[];
+        createdAt?: string;
+      }>(`/api/share/cards/${encodeURIComponent(slug)}`),
+
+    createCard: (payload: {
+      userHash: string;
+      pathType: 'fast' | 'full';
+      base64Image: string;
+      styleLabel?: string | null;
+      roomType?: string | null;
+      personalityLabels?: string[] | null;
+    }) =>
+      apiFetch<{
+        ok: boolean;
+        slug?: string;
+        referralCode?: string | null;
+        pathType?: 'fast' | 'full';
+        imagePublicUrl?: string;
+        styleLabel?: string | null;
+        roomType?: string | null;
+        personalityLabels?: string[];
+      }>('/api/share/cards', {
+        method: 'POST',
+        body: payload,
+      }),
+
+    imageUrl: (slug: string) => {
+      const base = getBaseUrl();
+      if (!base) return null;
+      return `${base}/api/share/cards/${encodeURIComponent(slug)}/image`;
+    },
+  },
+
   /** Anonymous generation quotas (Cloud SQL via backend-gcp). */
   anon: {
     checkLimits: (payload: { anonId: string | null; pathScope: 'fast' | 'full'; action: string }) =>

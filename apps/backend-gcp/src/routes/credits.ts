@@ -9,6 +9,10 @@ import {
   getFoundersProgramStatus,
   grantFreeCredits,
 } from '../services/billing';
+import {
+  applyReferralOnFirstGenerationSafe,
+  applyReferralOnVerifiedSafe,
+} from '../services/referral';
 
 export const creditsRouter = Router();
 
@@ -102,6 +106,7 @@ creditsRouter.post('/credits/deduct', async (req, res) => {
       await client.query('BEGIN');
       const success = await deductCredits(client, userHash, generationId);
       await client.query('COMMIT');
+      await applyReferralOnFirstGenerationSafe(client, userHash);
       return res.json({ ok: true, success });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -132,6 +137,7 @@ creditsRouter.post('/credits/grant-free', (req, res, next) => {
       await client.query('BEGIN');
       const result = await grantFreeCredits(client, userHash);
       await client.query('COMMIT');
+      await applyReferralOnVerifiedSafe(client, userHash, result);
       return res.json({ ok: true, granted: result.granted, reason: result.reason });
     } catch (error) {
       await client.query('ROLLBACK');

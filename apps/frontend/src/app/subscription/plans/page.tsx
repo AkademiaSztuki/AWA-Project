@@ -5,6 +5,7 @@ import { SubscriptionPlans } from '@/components/subscription/SubscriptionPlans';
 import { useSessionData } from '@/hooks/useSessionData';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { StaticPageAwaDialogue } from '@/components/awa/StaticPageAwaDialogue';
+import { InviteFriendsPanel } from '@/components/referral/InviteFriendsPanel';
 
 export default function SubscriptionPlansPage() {
   const { sessionData } = useSessionData();
@@ -56,6 +57,11 @@ export default function SubscriptionPlansPage() {
       </div>
 
       <SubscriptionPlans userHash={userHash || undefined} />
+      {userHash ? (
+        <div className="max-w-3xl mx-auto">
+          <InviteFriendsPanel userHash={userHash} />
+        </div>
+      ) : null}
       <StaticPageAwaDialogue currentStep="subscription_plans" />
     </div>
   );
