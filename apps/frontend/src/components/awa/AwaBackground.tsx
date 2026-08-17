@@ -85,6 +85,7 @@ const AwaBackground: React.FC = () => {
         camera={{ position: [-1.2, 0.4, 2.2], fov: 70 }}
         className="pointer-events-none h-screen w-screen bg-transparent"
         style={{ pointerEvents: 'none' }}
+        dpr={isMobile ? 1 : [1, 1.5]}
       >
         <ambientLight intensity={0.6} color="#FFE5B4" />
         <directionalLight

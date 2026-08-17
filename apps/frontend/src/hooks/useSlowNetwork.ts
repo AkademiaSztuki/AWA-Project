@@ -34,7 +34,7 @@ export function usePreferHardNavigation(): boolean {
   return preferHard;
 }
 
-/** Skip 3D / particles only on a live slow connection (2G/3G/save-data). */
+/** Live 2G/3G/save-data. Compact/mobile may skip 3D; desktop 3D ignores this. */
 export function useLiveSlowConnection(): boolean {
   const [liveSlow, setLiveSlow] = useState(false);
 
