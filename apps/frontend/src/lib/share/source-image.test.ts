@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { resolveRoomBeforeImage, toBase64Payload, toImageDataUrl } from './source-image';
+import {
+  resolveRoomBeforeImage,
+  toBase64Payload,
+  toFetchableImageUrl,
+  toImageDataUrl,
+} from './source-image';
 
 describe('toImageDataUrl', () => {
   it('wraps raw base64 as a jpeg data URL', () => {
@@ -31,6 +36,21 @@ describe('toBase64Payload', () => {
   it('does not invent payload for http or relative URLs', () => {
     expect(toBase64Payload('/images/tinder/Living Room (1).jpg', null)).toBeNull();
     expect(toBase64Payload('https://cdn.example/a.jpg', null)).toBeNull();
+  });
+});
+
+describe('toFetchableImageUrl', () => {
+  it('encodes spaces in sample-room paths and prefixes origin', () => {
+    expect(toFetchableImageUrl('/images/tinder/Living Room (1).jpg')).toBe(
+      '/images/tinder/Living%20Room%20(1).jpg',
+    );
+    expect(toFetchableImageUrl('/images/tinder/Living Room (1).jpg', 'https://project-ida.com')).toBe(
+      'https://project-ida.com/images/tinder/Living%20Room%20(1).jpg',
+    );
+  });
+
+  it('leaves http(s) URLs unchanged', () => {
+    expect(toFetchableImageUrl('https://cdn.example/a.jpg')).toBe('https://cdn.example/a.jpg');
   });
 });
 

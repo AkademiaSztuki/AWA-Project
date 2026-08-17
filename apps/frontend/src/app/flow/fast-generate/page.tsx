@@ -2033,7 +2033,7 @@ export default function FastGeneratePage() {
                         userHash={(sessionData as { userHash?: string } | null)?.userHash}
                         imageUrl={generatedImage.url}
                         imageBase64={generatedImage.base64}
-                        beforeImageUrl={originalRoomPhotoUrl || roomBeforeImage?.url || null}
+                        beforeImageUrl={roomBeforeImage?.url || originalRoomPhotoUrl || null}
                         beforeImageBase64={roomBeforeImage?.base64 || null}
                         pathType="fast"
                         styleLabel={

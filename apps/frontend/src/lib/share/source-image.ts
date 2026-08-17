@@ -43,6 +43,49 @@ export function toImageDataUrl(raw?: string | null): string | null {
   return `data:image/jpeg;base64,${base64}`;
 }
 
+/** Encode relative paths (sample rooms often have spaces) and prefix origin when given. */
+export function toFetchableImageUrl(url: string, origin?: string | null): string {
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('/')) return trimmed;
+  const encoded = encodeURI(trimmed);
+  if (!origin) return encoded;
+  return `${origin.replace(/\/$/, '')}${encoded}`;
+}
+
+const SHARE_MAX_EDGE = 1400;
+const SHARE_JPEG_QUALITY = 0.82;
+
+/** Shrink large room photos so share-card POST stays under serverless body limits. */
+export async function compressBase64ForShare(base64: string): Promise<string> {
+  const payload = toBase64Payload(null, base64) || base64;
+  if (typeof document === 'undefined' || typeof Image === 'undefined') return payload;
+  if (payload.length < 80_000) return payload;
+  try {
+    const dataUrl = `data:image/jpeg;base64,${payload}`;
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('load_failed'));
+      el.src = dataUrl;
+    });
+    const srcW = Math.max(1, img.naturalWidth || img.width);
+    const srcH = Math.max(1, img.naturalHeight || img.height);
+    const scale = Math.min(1, SHARE_MAX_EDGE / Math.max(srcW, srcH));
+    const w = Math.max(1, Math.round(srcW * scale));
+    const h = Math.max(1, Math.round(srcH * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return payload;
+    ctx.drawImage(img, 0, 0, w, h);
+    const out = canvas.toDataURL('image/jpeg', SHARE_JPEG_QUALITY);
+    return toBase64Payload(out, null) || payload;
+  } catch {
+    return payload;
+  }
+}
+
 /** Base64 body for share-card create. Returns null for http(s)/relative/blob URLs. */
 export function toBase64Payload(url?: string | null, explicit?: string | null): string | null {
   if (explicit && explicit.trim()) {
@@ -93,7 +136,8 @@ export async function imageSourceToBase64(url?: string | null): Promise<string |
   if (direct) return direct;
   if (!url || typeof fetch === 'undefined') return null;
   try {
-    const res = await fetch(url);
+    const origin = typeof window !== 'undefined' ? window.location.origin : null;
+    const res = await fetch(toFetchableImageUrl(url, origin));
     if (!res.ok) return null;
     const blob = await res.blob();
     if (typeof FileReader === 'undefined') return null;

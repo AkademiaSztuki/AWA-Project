@@ -65,6 +65,32 @@ export function beforeStoragePathForSlug(slug: string): string {
   return `shares/${slug}-before.webp`;
 }
 
+function sniffImageContentType(buffer: Buffer): string {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+    return 'image/png';
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer[8] === 0x57 &&
+    buffer[9] === 0x45 &&
+    buffer[10] === 0x42 &&
+    buffer[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+  if (buffer.length >= 6 && buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+    return 'image/gif';
+  }
+  return 'image/jpeg';
+}
+
 async function savePublicShareCopy(
   storagePath: string,
   buffer: Buffer,
@@ -76,17 +102,18 @@ async function savePublicShareCopy(
     throw new Error('gcs_not_configured');
   }
 
+  const contentType = sniffImageContentType(buffer);
   const file = bucket.file(storagePath);
 
   try {
     await file.save(buffer, {
-      contentType: 'image/webp',
+      contentType,
       resumable: false,
       public: true,
     });
   } catch {
     await file.save(buffer, {
-      contentType: 'image/webp',
+      contentType,
       resumable: false,
       public: false,
     });
@@ -112,7 +139,8 @@ async function saveBeforeImageIfPresent(
     if (buffer.length < 32) return false;
     await savePublicShareCopy(beforeStoragePathForSlug(slug), buffer);
     return true;
-  } catch {
+  } catch (error) {
+    console.error('share before image save failed', { slug, error });
     return false;
   }
 }
@@ -218,7 +246,7 @@ export async function readShareImageBuffer(storagePath: string): Promise<{
   const [exists] = await file.exists();
   if (!exists) return null;
   const [buffer] = await file.download();
-  return { buffer, contentType: 'image/webp' };
+  return { buffer, contentType: sniffImageContentType(buffer) };
 }
 
 export async function readShareBeforeImageBuffer(slug: string): Promise<{

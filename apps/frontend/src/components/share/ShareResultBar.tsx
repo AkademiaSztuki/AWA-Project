@@ -5,12 +5,23 @@ import { Copy, Download, Check } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { creditsAuthHeaders } from '@/lib/credits-request-headers';
 import {
-  REFERRAL_FIRST_GENERATION_CREDITS,
   REFERRAL_VERIFY_CREDITS,
 } from '@/lib/referral-constants';
+import {
+  captionWithUrl,
+  facebookShareUrl,
+  nativeShareData,
+  shareCaptions,
+  xShareUrl,
+} from '@/lib/share/captions';
 import { copyTextToClipboard } from '@/lib/share/copy-text';
 import { composeBrandedImageBlob, downloadShareImage } from '@/lib/share/download-image';
-import { imageSourceToBase64, toBase64Payload } from '@/lib/share/source-image';
+import {
+  compressBase64ForShare,
+  imageSourceToBase64,
+  resolveRoomBeforeImage,
+  toBase64Payload,
+} from '@/lib/share/source-image';
 import { getSiteUrl } from '@/lib/seo/site';
 
 type SharePathType = 'fast' | 'full';
@@ -67,14 +78,6 @@ function shareUrlFor(created: CreatedCard): string {
   return `${getSiteUrl()}/s/${created.slug}${ref}`;
 }
 
-function facebookShareUrl(url: string): string {
-  return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
-}
-
-function xShareUrl(url: string, text: string): string {
-  return `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
-}
-
 function openShareWindow(url: string, preopened?: Window | null): void {
   if (preopened && !preopened.closed) {
     preopened.location.href = url;
@@ -107,8 +110,8 @@ export function ShareResultBar({
   const validCard = cardKey === shareKey ? card : null;
   const brandCta = t('Wygeneruj swoje na project-ida.com', 'Generate yours at project-ida.com');
   const storyLabels = {
-    before: t('Twój pokój', 'Your room'),
-    after: 'IDA',
+    before: t('Przed', 'Before'),
+    after: t('Po', 'After'),
   };
 
   const mapCreateError = useCallback(
@@ -152,9 +155,16 @@ export function ShareResultBar({
         if (!silent) setError(t('Brak obrazu do udostępnienia.', 'No image available to share.'));
         return null;
       }
+      const fallbackBefore = resolveRoomBeforeImage();
       const beforePayload =
         toBase64Payload(beforeImageUrl, beforeImageBase64) ||
-        (await imageSourceToBase64(beforeImageUrl));
+        (await imageSourceToBase64(beforeImageUrl)) ||
+        fallbackBefore?.base64 ||
+        (await imageSourceToBase64(fallbackBefore?.url));
+      const [afterCompressed, beforeCompressed] = await Promise.all([
+        compressBase64ForShare(payload),
+        beforePayload ? compressBase64ForShare(beforePayload) : Promise.resolve(null),
+      ]);
       setBusy(true);
       if (!silent) setError(null);
       try {
@@ -168,8 +178,8 @@ export function ShareResultBar({
           body: JSON.stringify({
             userHash,
             pathType,
-            base64Image: payload,
-            base64BeforeImage: beforePayload,
+            base64Image: afterCompressed,
+            base64BeforeImage: beforeCompressed,
             styleLabel,
             roomType,
             personalityLabels,
@@ -183,6 +193,11 @@ export function ShareResultBar({
         const created = { slug: json.slug, referralCode: json.referralCode };
         setCard(created);
         setCardKey(shareKey);
+        if (typeof window !== 'undefined') {
+          void fetch(`${window.location.origin}/s/${encodeURIComponent(created.slug)}/opengraph-image`).catch(
+            () => undefined,
+          );
+        }
         return created;
       } catch {
         if (!silent) setError(t('Błąd połączenia. Spróbuj ponownie.', 'Connection error. Try again.'));
@@ -225,10 +240,7 @@ export function ShareResultBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid loops when labels arrays are recreated
   }, [shareKey, userHash]);
 
-  const tweetText = t(
-    'Zobacz, jak IDA zmieniła mój pokój.',
-    'See how IDA transformed my room.',
-  );
+  const captions = shareCaptions(language === 'en' ? 'en' : 'pl');
 
   const copyCreatedOrInvite = async (created: CreatedCard | null): Promise<boolean> => {
     if (created) {
@@ -261,7 +273,7 @@ export function ShareResultBar({
       popup?.close();
       return;
     }
-    openShareWindow(facebookShareUrl(shareUrlFor(created)), popup);
+    openShareWindow(facebookShareUrl(shareUrlFor(created), captions.facebook), popup);
   };
 
   const handleX = async () => {
@@ -271,7 +283,7 @@ export function ShareResultBar({
       popup?.close();
       return;
     }
-    openShareWindow(xShareUrl(shareUrlFor(created), tweetText), popup);
+    openShareWindow(xShareUrl(shareUrlFor(created), captions.x), popup);
   };
 
   const handleCopy = async () => {
@@ -311,14 +323,17 @@ export function ShareResultBar({
         ensureCard(),
         composeBrandedImageBlob(imageUrl, brandCta, beforeImageUrl, storyLabels),
       ]);
-      if (created) {
-        await copyTextToClipboard(shareUrlFor(created));
+      const shareUrl = created ? shareUrlFor(created) : null;
+      if (shareUrl) {
+        await copyTextToClipboard(captionWithUrl(captions.instagram, shareUrl));
       }
       const file = new File([blob], 'ida-interior.jpg', { type: blob.type || 'image/jpeg' });
+      const sharePayload = shareUrl
+        ? nativeShareData(captions.instagram, shareUrl)
+        : { title: 'IDA', text: captions.instagram };
       const shareData: ShareData = {
         files: [file],
-        title: 'IDA',
-        text: created ? `${tweetText} ${shareUrlFor(created)}` : tweetText,
+        ...sharePayload,
       };
 
       if (typeof navigator.share === 'function') {
@@ -365,32 +380,30 @@ export function ShareResultBar({
 
   const pillBtn =
     'inline-flex min-h-11 flex-1 basis-[30%] items-center justify-center gap-1.5 rounded-full border border-white/40 bg-white/45 px-3 py-2 text-xs sm:text-sm font-modern text-graphite hover:bg-white/65 transition disabled:opacity-50 sm:basis-[18%]';
-  const storiesBtn =
-    'inline-flex min-h-11 flex-1 basis-[46%] items-center justify-center gap-1.5 rounded-full border border-gold/35 bg-gold-500/70 px-3 py-2 text-xs sm:text-sm font-modern font-semibold text-graphite hover:bg-gold-500/80 transition disabled:opacity-50 sm:basis-[22%]';
 
   return (
     <div className="space-y-3 rounded-2xl border border-white/35 bg-white/25 p-3 backdrop-blur-sm sm:p-4">
       <div>
         <p className="font-exo2 text-base font-bold text-graphite sm:text-lg">
-          {t('Pochwal się tą wizją', 'Show off this vision')}
+          {t('Pochwal się tą koncepcją', 'Show off this interior concept')}
         </p>
         <p className="mt-0.5 font-modern text-xs text-gray-600 sm:text-sm">
           {t(
-            `Udostępnij, żeby zdobyć dodatkowe ${REFERRAL_VERIFY_CREDITS} kredytów, gdy znajomy założy konto — i kolejne ${REFERRAL_FIRST_GENERATION_CREDITS} po jego pierwszej wizji. Znajomi też dostają kredyty.`,
-            `Share to earn an extra ${REFERRAL_VERIFY_CREDITS} credits when a friend creates an account — and another ${REFERRAL_FIRST_GENERATION_CREDITS} after their first vision. Friends get credits too.`,
+            `Udostępnij, żeby zdobyć dodatkowe ${REFERRAL_VERIFY_CREDITS} kredytów, gdy znajomy założy konto. Znajomi też dostają kredyty.`,
+            `Share to earn an extra ${REFERRAL_VERIFY_CREDITS} credits when a friend creates an account. Friends get credits too.`,
           )}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          className={storiesBtn}
+          className={pillBtn}
           onClick={() => void handleInstagram()}
           disabled={busy}
-          aria-label="Instagram Stories"
+          aria-label="Instagram"
         >
           <InstagramLogo className="h-4 w-4" />
-          {t('Stories', 'Stories')}
+          Instagram
         </button>
         <button
           type="button"
@@ -429,8 +442,8 @@ export function ShareResultBar({
       {igHint && (
         <p className="font-modern text-sm text-graphite" role="status">
           {t(
-            'Zapisano Stories (9:16, przed i po) i skopiowano link — wklej go w Instagramie.',
-            'Saved a 9:16 before/after Story image and copied the link — paste it in Instagram.',
+            'Zapisano Stories (9:16, przed i po) i skopiowano podpis z linkiem — wklej go w Instagramie.',
+            'Saved a 9:16 before/after Story image and copied the caption with the link — paste it in Instagram.',
           )}
         </p>
       )}

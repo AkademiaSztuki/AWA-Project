@@ -2,8 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { ShareCardPhotos } from '@/components/share/ShareCardPhotos';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { getSiteUrl } from '@/lib/seo/site';
+import { SHARE_SIGNUP_CREDITS, shareOgCopy } from '@/lib/share/captions';
 
 type SharePathType = 'fast' | 'full';
 
@@ -11,8 +13,6 @@ interface ShareCard {
   slug: string;
   referralCode: string | null;
   pathType: SharePathType;
-  imagePublicUrl: string;
-  hasBeforeImage: boolean;
   styleLabel: string | null;
   roomType: string | null;
   personalityLabels: string[];
@@ -27,8 +27,6 @@ async function loadCard(slug: string): Promise<ShareCard | null> {
     slug: result.data.slug,
     referralCode: result.data.referralCode ?? null,
     pathType,
-    imagePublicUrl: result.data.imagePublicUrl || `/api/share/${encodeURIComponent(slug)}/image`,
-    hasBeforeImage: Boolean(result.data.hasBeforeImage),
     styleLabel: result.data.styleLabel ?? null,
     roomType: result.data.roomType ?? null,
     personalityLabels: result.data.personalityLabels || [],
@@ -47,25 +45,25 @@ function pathCopy(
     case 'fast':
       return language === 'pl'
         ? {
-            title: 'Szybka wizja wnętrza',
-            description: 'Przed i po — zdjęcie pokoju i wizja IDA ze szybkiej ścieżki.',
-            cta: 'Wygeneruj swoje',
+            title: 'Koncepcja z szybkiej ścieżki',
+            description: 'Przed i po — zdjęcie pokoju i koncepcja wnętrza IDA ze szybkiej ścieżki.',
+            cta: 'Wygeneruj swoją koncepcję',
           }
         : {
-            title: 'A quick interior vision',
-            description: 'Before and after — your room photo and an IDA fast-path vision.',
+            title: 'A fast-path interior concept',
+            description: 'Before and after — your room photo and an IDA fast-path interior concept.',
             cta: 'Generate yours',
           };
     case 'full':
       return language === 'pl'
         ? {
             title: 'Wnętrze pod Twoją osobowość',
-            description: 'Przed i po — Twój pokój i wizja z pełnej ścieżki IDA.',
-            cta: 'Wygeneruj swoje',
+            description: 'Przed i po — Twój pokój i koncepcja wnętrza z pełnej ścieżki IDA.',
+            cta: 'Wygeneruj swoją koncepcję',
           }
         : {
             title: 'An interior matched to you',
-            description: 'Before and after — your room and a full-path IDA vision.',
+            description: 'Before and after — your room and a full-path IDA interior concept.',
             cta: 'Generate yours',
           };
     default: {
@@ -91,50 +89,32 @@ export async function generateMetadata({
     return { title: 'IDA', robots: { index: false, follow: false } };
   }
 
-  const copy = pathCopy(card.pathType, readLanguage());
+  const og = shareOgCopy(readLanguage());
   const canonical = `${siteUrl}/s/${card.slug}`;
-  const imageUrl = `${siteUrl}/api/share/${encodeURIComponent(card.slug)}/image`;
+  // Absolute /s/... URL (not /api/) so Twitterbot is not blocked by robots.txt Disallow: /api/.
+  // X may cache the first Card crawl; old tweets can keep a gray preview until cache expires.
+  const ogImageUrl = `${siteUrl}/s/${card.slug}/opengraph-image`;
 
   return {
-    title: `${copy.title} | IDA`,
-    description: copy.description,
+    title: `${og.title} | IDA`,
+    description: og.description,
     alternates: { canonical },
     openGraph: {
       type: 'website',
       locale: 'pl_PL',
       url: canonical,
       siteName: 'IDA Interior Design Assistant',
-      title: copy.title,
-      description: copy.description,
-      images: [{ url: imageUrl, width: 1024, height: 1024, alt: copy.title }],
+      title: og.title,
+      description: og.description,
+      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: og.title, type: 'image/png' }],
     },
     twitter: {
       card: 'summary_large_image',
-      title: copy.title,
-      description: copy.description,
-      images: [imageUrl],
+      title: og.title,
+      description: og.description,
+      images: [ogImageUrl],
     },
   };
-}
-
-function PhotoFrame({
-  src,
-  alt,
-  label,
-}: {
-  src: string;
-  alt: string;
-  label: string;
-}) {
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-gold/25 bg-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} className="aspect-[4/3] w-full object-cover" />
-      <span className="absolute bottom-3 left-3 rounded-full border border-gold/35 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
-        {label}
-      </span>
-    </div>
-  );
 }
 
 export default async function ShareCardPage({ params }: { params: { slug: string } }) {
@@ -143,12 +123,10 @@ export default async function ShareCardPage({ params }: { params: { slug: string
 
   const language = readLanguage();
   const copy = pathCopy(card.pathType, language);
-  const afterSrc = `/api/share/${encodeURIComponent(card.slug)}/image`;
-  const beforeSrc = card.hasBeforeImage
-    ? `/api/share/${encodeURIComponent(card.slug)}/before`
-    : null;
+  const og = shareOgCopy(language);
   const metaBits = [card.styleLabel, card.roomType].filter(Boolean) as string[];
-  const beforeLabel = language === 'pl' ? 'Twój pokój' : 'Your room';
+  const beforeLabel = language === 'pl' ? 'Przed' : 'Before';
+  const afterLabel = language === 'pl' ? 'Po' : 'After';
 
   return (
     <div className="mx-auto w-full max-w-[min(32rem,calc((100dvh-7rem)*9/16))] px-3 py-6 sm:px-0">
@@ -165,18 +143,16 @@ export default async function ShareCardPage({ params }: { params: { slug: string
           </p>
         </div>
 
-        {beforeSrc ? (
-          <div className="space-y-3">
-            <PhotoFrame src={beforeSrc} alt={beforeLabel} label={beforeLabel} />
-            <PhotoFrame src={afterSrc} alt={copy.title} label="IDA" />
-          </div>
-        ) : (
-          <PhotoFrame src={afterSrc} alt={copy.title} label="IDA" />
-        )}
+        <ShareCardPhotos
+          slug={card.slug}
+          title={copy.title}
+          beforeLabel={beforeLabel}
+          afterLabel={afterLabel}
+        />
 
         <div className="mt-5 space-y-3">
           <h1 className="font-exo2 text-2xl font-bold leading-tight text-graphite sm:text-3xl">
-            {copy.title}
+            {og.title}
           </h1>
           {metaBits.length > 0 && (
             <p className="font-modern text-sm text-graphite/70">{metaBits.join(' · ')}</p>
@@ -200,7 +176,9 @@ export default async function ShareCardPage({ params }: { params: { slug: string
             {copy.cta}
           </Link>
           <p className="text-center font-modern text-[11px] text-graphite/60">
-            {language === 'pl' ? 'Za darmo na project-ida.com' : 'Free at project-ida.com'}
+            {language === 'pl'
+              ? `${SHARE_SIGNUP_CREDITS} darmowych kredytów po założeniu konta · project-ida.com`
+              : `${SHARE_SIGNUP_CREDITS} free credits when you create an account · project-ida.com`}
           </p>
         </div>
       </article>

@@ -5283,7 +5283,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     userHash={(sessionData as { userHash?: string } | null)?.userHash}
                     imageUrl={selectedImage.url}
                     imageBase64={selectedImage.base64}
-                    beforeImageUrl={originalRoomPhotoUrl || roomBeforeImage?.url || null}
+                    beforeImageUrl={roomBeforeImage?.url || originalRoomPhotoUrl || null}
                     beforeImageBase64={roomBeforeImage?.base64 || null}
                     pathType="full"
                     styleLabel={

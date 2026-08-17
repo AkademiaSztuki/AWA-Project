@@ -69,6 +69,7 @@ shareRouter.get('/share/cards/:slug/image', async (req, res) => {
       }
       res.setHeader('Content-Type', file.contentType);
       res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+      res.setHeader('Access-Control-Allow-Origin', '*');
       return res.send(file.buffer);
     } finally {
       client.release();
@@ -98,6 +99,7 @@ shareRouter.get('/share/cards/:slug/before', async (req, res) => {
       }
       res.setHeader('Content-Type', file.contentType);
       res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+      res.setHeader('Access-Control-Allow-Origin', '*');
       return res.send(file.buffer);
     } finally {
       client.release();
