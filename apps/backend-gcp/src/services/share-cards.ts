@@ -27,6 +27,8 @@ export interface CreateShareCardInput {
   userHash: string;
   pathType: SharePathType;
   base64Image: string;
+  /** Optional original room photo (before). Stored as GCS sibling; no table change. */
+  base64BeforeImage?: string | null;
   styleLabel?: string | null;
   roomType?: string | null;
   personalityLabels?: string[] | null;
@@ -59,7 +61,14 @@ function decodeBase64Image(base64Image: string): Buffer {
   return Buffer.from(clean, 'base64');
 }
 
-async function savePublicShareCopy(slug: string, buffer: Buffer): Promise<{
+export function beforeStoragePathForSlug(slug: string): string {
+  return `shares/${slug}-before.webp`;
+}
+
+async function savePublicShareCopy(
+  storagePath: string,
+  buffer: Buffer,
+): Promise<{
   storagePath: string;
   publicUrl: string;
 }> {
@@ -67,7 +76,6 @@ async function savePublicShareCopy(slug: string, buffer: Buffer): Promise<{
     throw new Error('gcs_not_configured');
   }
 
-  const storagePath = `shares/${slug}.webp`;
   const file = bucket.file(storagePath);
 
   try {
@@ -90,14 +98,35 @@ async function savePublicShareCopy(slug: string, buffer: Buffer): Promise<{
     // Uniform bucket-level access may reject ACLs; proxy URL still works.
   }
 
-  const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(storagePath)}`;
+  const publicUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
   return { storagePath, publicUrl };
+}
+
+async function saveBeforeImageIfPresent(
+  slug: string,
+  base64BeforeImage?: string | null,
+): Promise<boolean> {
+  if (!base64BeforeImage) return false;
+  try {
+    const buffer = decodeBase64Image(base64BeforeImage);
+    if (buffer.length < 32) return false;
+    await savePublicShareCopy(beforeStoragePathForSlug(slug), buffer);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function shareBeforeImageExists(slug: string): Promise<boolean> {
+  if (!bucket) return false;
+  const [exists] = await bucket.file(beforeStoragePathForSlug(slug)).exists();
+  return exists;
 }
 
 export async function createShareCard(
   client: PoolClient,
   input: CreateShareCardInput,
-): Promise<ShareCardRow & { reused: boolean }> {
+): Promise<ShareCardRow & { reused: boolean; hasBeforeImage: boolean }> {
   const pathType = normalizePathType(input.pathType);
 
   const existingParticipant = await client.query(
@@ -118,7 +147,10 @@ export async function createShareCard(
   const slug = shareCardSlug(input.userHash, buffer);
   const existing = await getShareCardBySlug(client, slug);
   if (existing && existing.user_hash === input.userHash) {
-    return { ...existing, reused: true };
+    const hasBeforeImage =
+      (await saveBeforeImageIfPresent(existing.slug, input.base64BeforeImage)) ||
+      (await shareBeforeImageExists(existing.slug));
+    return { ...existing, reused: true, hasBeforeImage };
   }
 
   let finalSlug = slug;
@@ -126,7 +158,8 @@ export async function createShareCard(
     finalSlug = `${slug}${generateSlug().slice(0, 4)}`;
   }
 
-  const saved = await savePublicShareCopy(finalSlug, buffer);
+  const saved = await savePublicShareCopy(`shares/${finalSlug}.webp`, buffer);
+  const hasBeforeImage = await saveBeforeImageIfPresent(finalSlug, input.base64BeforeImage);
   const labels = (input.personalityLabels || []).filter((label) => label.trim().length > 0).slice(0, 5);
 
   const { rows } = await client.query<ShareCardRow>(
@@ -155,7 +188,7 @@ export async function createShareCard(
     ],
   );
 
-  return { ...rows[0], reused: false };
+  return { ...rows[0], reused: false, hasBeforeImage };
 }
 
 export async function getShareCardBySlug(
@@ -186,4 +219,11 @@ export async function readShareImageBuffer(storagePath: string): Promise<{
   if (!exists) return null;
   const [buffer] = await file.download();
   return { buffer, contentType: 'image/webp' };
+}
+
+export async function readShareBeforeImageBuffer(slug: string): Promise<{
+  buffer: Buffer;
+  contentType: string;
+} | null> {
+  return readShareImageBuffer(beforeStoragePathForSlug(slug));
 }

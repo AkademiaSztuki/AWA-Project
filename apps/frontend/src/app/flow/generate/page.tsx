@@ -58,6 +58,7 @@ import Image from 'next/image';
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
 import { ShareResultBar } from '@/components/share/ShareResultBar';
 import { personalityLabelsFromScores } from '@/lib/share/personality-labels';
+import { resolveRoomBeforeImage } from '@/lib/share/source-image';
 import { 
   synthesizeSixPrompts,
   synthesizeFivePrompts, // Backward compatibility
@@ -235,6 +236,10 @@ export default function GeneratePage() {
   const [upscaledImage, setUpscaledImage] = useState<GeneratedImage | null>(null); // Store upscaled version
   const [originalRoomPhotoUrl, setOriginalRoomPhotoUrl] = useState<string | null>(null);
   const [showOriginalRoomPhoto, setShowOriginalRoomPhoto] = useState(false);
+  const roomBeforeImage = useMemo(
+    () => resolveRoomBeforeImage(sessionData),
+    [sessionData],
+  );
   const [regenerateCount, setRegenerateCount] = useState(0); // Track regeneration count
   const [lastGenerationTime, setLastGenerationTime] = useState<number>(0); // For regeneration tracking
   const [qualityReport, setQualityReport] = useState<any>(null); // Store quality report for feedback
@@ -5065,27 +5070,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 </div>
               </GlassCard>
 
-              {selectedImage && blindSelectionMade && (
-                <div className="px-1">
-                <ShareResultBar
-                  userHash={(sessionData as { userHash?: string } | null)?.userHash}
-                  imageUrl={selectedImage.url}
-                  imageBase64={selectedImage.base64}
-                  pathType="full"
-                  styleLabel={
-                    (sessionData as { visualDNA?: { dominantStyle?: string } } | null)?.visualDNA
-                      ?.dominantStyle || null
-                  }
-                  roomType={(sessionData as { roomType?: string } | null)?.roomType || null}
-                  personalityLabels={personalityLabelsFromScores(
-                    (sessionData as { bigFive?: { scores?: Record<string, unknown> } } | null)?.bigFive
-                      ?.scores,
-                    language === 'en' ? 'en' : 'pl',
-                  )}
-                />
-                </div>
-              )}
-
               {/* Taste rating — keyed to active history node / display image */}
               <div ref={tasteRatingPanelRef}>
                 <AnimatePresence mode="wait">
@@ -5291,6 +5275,29 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     onNodeClick={handleHistoryNodeClick}
                   />
                 </motion.div>
+              )}
+
+              {selectedImage && blindSelectionMade && (
+                <div className="px-1">
+                  <ShareResultBar
+                    userHash={(sessionData as { userHash?: string } | null)?.userHash}
+                    imageUrl={selectedImage.url}
+                    imageBase64={selectedImage.base64}
+                    beforeImageUrl={originalRoomPhotoUrl || roomBeforeImage?.url || null}
+                    beforeImageBase64={roomBeforeImage?.base64 || null}
+                    pathType="full"
+                    styleLabel={
+                      (sessionData as { visualDNA?: { dominantStyle?: string } } | null)?.visualDNA
+                        ?.dominantStyle || null
+                    }
+                    roomType={(sessionData as { roomType?: string } | null)?.roomType || null}
+                    personalityLabels={personalityLabelsFromScores(
+                      (sessionData as { bigFive?: { scores?: Record<string, unknown> } } | null)?.bigFive
+                        ?.scores,
+                      language === 'en' ? 'en' : 'pl',
+                    )}
+                  />
+                </div>
               )}
 
               {/* Continue Button */}

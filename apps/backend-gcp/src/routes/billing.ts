@@ -12,6 +12,10 @@ import {
 export const billingRouter = Router();
 
 billingRouter.use((req, res, next) => {
+  if (!req.path.startsWith('/billing')) {
+    next();
+    return;
+  }
   if (!requireInternalSecretInProduction(req)) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }

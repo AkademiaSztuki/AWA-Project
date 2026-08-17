@@ -1,9 +1,16 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Copy, Download, Check } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { creditsAuthHeaders } from '@/lib/credits-request-headers';
+import {
+  REFERRAL_FIRST_GENERATION_CREDITS,
+  REFERRAL_VERIFY_CREDITS,
+} from '@/lib/referral-constants';
+import { copyTextToClipboard } from '@/lib/share/copy-text';
 import { composeBrandedImageBlob, downloadShareImage } from '@/lib/share/download-image';
+import { imageSourceToBase64, toBase64Payload } from '@/lib/share/source-image';
 import { getSiteUrl } from '@/lib/seo/site';
 
 type SharePathType = 'fast' | 'full';
@@ -12,6 +19,8 @@ interface ShareResultBarProps {
   userHash?: string | null;
   imageUrl: string;
   imageBase64?: string | null;
+  beforeImageUrl?: string | null;
+  beforeImageBase64?: string | null;
   pathType: SharePathType;
   styleLabel?: string | null;
   roomType?: string | null;
@@ -39,13 +48,12 @@ function InstagramLogo({ className }: { className?: string }) {
   );
 }
 
-function toBase64Payload(imageUrl: string, imageBase64?: string | null): string | null {
-  if (imageBase64 && imageBase64.length > 32) return imageBase64;
-  const comma = imageUrl.indexOf(',');
-  if (imageUrl.startsWith('data:') && comma !== -1) {
-    return imageUrl.slice(comma + 1);
-  }
-  return null;
+function FacebookLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true" fill="currentColor">
+      <path d="M22 12.07C22 6.48 17.52 2 11.93 2S1.86 6.48 1.86 12.07c0 4.99 3.66 9.13 8.44 9.88v-6.99H7.9v-2.89h2.4V9.84c0-2.37 1.41-3.68 3.57-3.68 1.03 0 2.12.18 2.12.18v2.33h-1.2c-1.18 0-1.55.73-1.55 1.48v1.78h2.64l-.42 2.89h-2.22V21.95C18.34 21.2 22 17.06 22 12.07z" />
+    </svg>
+  );
 }
 
 function isAbortError(err: unknown): boolean {
@@ -54,10 +62,33 @@ function isAbortError(err: unknown): boolean {
     : err instanceof Error && err.name === 'AbortError';
 }
 
+function shareUrlFor(created: CreatedCard): string {
+  const ref = created.referralCode ? `?ref=${encodeURIComponent(created.referralCode)}` : '';
+  return `${getSiteUrl()}/s/${created.slug}${ref}`;
+}
+
+function facebookShareUrl(url: string): string {
+  return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+}
+
+function xShareUrl(url: string, text: string): string {
+  return `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+}
+
+function openShareWindow(url: string, preopened?: Window | null): void {
+  if (preopened && !preopened.closed) {
+    preopened.location.href = url;
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 export function ShareResultBar({
   userHash,
   imageUrl,
   imageBase64,
+  beforeImageUrl,
+  beforeImageBase64,
   pathType,
   styleLabel,
   roomType,
@@ -66,113 +97,204 @@ export function ShareResultBar({
   const { language } = useLanguage();
   const t = (pl: string, en: string) => (language === 'pl' ? pl : en);
   const [card, setCard] = useState<CreatedCard | null>(null);
+  const [cardKey, setCardKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [igHint, setIgHint] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const createPromiseRef = useRef<Promise<CreatedCard | null> | null>(null);
+  const shareKey = `${userHash || ''}|${imageUrl}|${pathType}|${beforeImageUrl || ''}`;
+  const validCard = cardKey === shareKey ? card : null;
   const brandCta = t('Wygeneruj swoje na project-ida.com', 'Generate yours at project-ida.com');
+  const storyLabels = {
+    before: t('Twój pokój', 'Your room'),
+    after: 'IDA',
+  };
 
-  const ensureCard = useCallback(async (): Promise<CreatedCard | null> => {
-    if (card) return card;
-    if (!userHash) {
-      setError(
-        t(
-          'Sesja jeszcze się ładuje — spróbuj za chwilę.',
-          'Session is still loading — try again in a moment.',
-        ),
-      );
-      return null;
-    }
-    const payload = toBase64Payload(imageUrl, imageBase64);
-    if (!payload) {
-      setError(t('Brak obrazu do udostępnienia.', 'No image available to share.'));
-      return null;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userHash,
-          pathType,
-          base64Image: payload,
-          styleLabel,
-          roomType,
-          personalityLabels,
-        }),
-      });
-      const json = (await res.json()) as CreatedCard & { error?: string };
-      if (!res.ok || !json.slug) {
-        const raw = json.error || '';
-        if (raw === 'participant_not_found') {
+  const mapCreateError = useCallback(
+    (status: number, raw: string): string => {
+      if (raw === 'participant_not_found') {
+        return t(
+          'Sesja nie jest jeszcze zapisana. Odśwież stronę i spróbuj ponownie.',
+          'Session is not saved yet. Refresh and try again.',
+        );
+      }
+      if (status === 401 || /unauthor/i.test(raw)) {
+        return t(
+          'Nie udało się utworzyć publicznego linku (brak autoryzacji serwera). Spróbuj ponownie za chwilę.',
+          'Could not create the public link (server unauthorized). Please try again in a moment.',
+        );
+      }
+      return raw || t('Nie udało się utworzyć karty.', 'Could not create the share card.');
+    },
+    [language],
+  );
+
+  const ensureCard = useCallback(async (silent = false): Promise<CreatedCard | null> => {
+    if (validCard) return validCard;
+    if (createPromiseRef.current) return createPromiseRef.current;
+
+    const run = async (): Promise<CreatedCard | null> => {
+      if (!userHash) {
+        if (!silent) {
           setError(
             t(
-              'Sesja nie jest jeszcze zapisana. Odśwież stronę i spróbuj ponownie.',
-              'Session is not saved yet. Refresh and try again.',
+              'Sesja jeszcze się ładuje — spróbuj za chwilę.',
+              'Session is still loading — try again in a moment.',
             ),
           );
-        } else {
-          setError(raw || t('Nie udało się utworzyć karty.', 'Could not create the share card.'));
         }
         return null;
       }
-      const created = { slug: json.slug, referralCode: json.referralCode };
-      setCard(created);
-      return created;
-    } catch {
-      setError(t('Błąd połączenia. Spróbuj ponownie.', 'Connection error. Try again.'));
-      return null;
-    } finally {
-      setBusy(false);
-    }
-  }, [card, userHash, imageUrl, imageBase64, pathType, styleLabel, roomType, personalityLabels, language]);
+      const payload =
+        toBase64Payload(imageUrl, imageBase64) || (await imageSourceToBase64(imageUrl));
+      if (!payload) {
+        if (!silent) setError(t('Brak obrazu do udostępnienia.', 'No image available to share.'));
+        return null;
+      }
+      const beforePayload =
+        toBase64Payload(beforeImageUrl, beforeImageBase64) ||
+        (await imageSourceToBase64(beforeImageUrl));
+      setBusy(true);
+      if (!silent) setError(null);
+      try {
+        const res = await fetch('/api/share', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            ...creditsAuthHeaders(),
+          },
+          body: JSON.stringify({
+            userHash,
+            pathType,
+            base64Image: payload,
+            base64BeforeImage: beforePayload,
+            styleLabel,
+            roomType,
+            personalityLabels,
+          }),
+        });
+        const json = (await res.json()) as CreatedCard & { error?: string };
+        if (!res.ok || !json.slug) {
+          if (!silent) setError(mapCreateError(res.status, json.error || ''));
+          return null;
+        }
+        const created = { slug: json.slug, referralCode: json.referralCode };
+        setCard(created);
+        setCardKey(shareKey);
+        return created;
+      } catch {
+        if (!silent) setError(t('Błąd połączenia. Spróbuj ponownie.', 'Connection error. Try again.'));
+        return null;
+      } finally {
+        setBusy(false);
+      }
+    };
 
-  const shareUrlFor = (created: CreatedCard): string => {
-    const ref = created.referralCode ? `?ref=${encodeURIComponent(created.referralCode)}` : '';
-    return `${getSiteUrl()}/s/${created.slug}${ref}`;
-  };
+    const promise = run().then((created) => {
+      if (!created) createPromiseRef.current = null;
+      return created;
+    });
+    createPromiseRef.current = promise;
+    return promise;
+  }, [
+    validCard,
+    shareKey,
+    userHash,
+    imageUrl,
+    imageBase64,
+    beforeImageUrl,
+    beforeImageBase64,
+    pathType,
+    styleLabel,
+    roomType,
+    personalityLabels,
+    language,
+    mapCreateError,
+  ]);
+
+  useEffect(() => {
+    createPromiseRef.current = null;
+  }, [shareKey]);
+
+  useEffect(() => {
+    if (!userHash) return;
+    void ensureCard(true);
+    // Prefetch once per image so clipboard / window.open stay in a user gesture.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid loops when labels arrays are recreated
+  }, [shareKey, userHash]);
 
   const tweetText = t(
-    'Zobacz wnętrze, które IDA zaprojektowała pod mój gust.',
-    'See the interior IDA designed around my taste.',
+    'Zobacz, jak IDA zmieniła mój pokój.',
+    'See how IDA transformed my room.',
   );
 
-  const copyShareUrl = async (created: CreatedCard): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(shareUrlFor(created));
-    } catch {
-      // Native share / download still proceeds.
+  const copyCreatedOrInvite = async (created: CreatedCard | null): Promise<boolean> => {
+    if (created) {
+      return copyTextToClipboard(shareUrlFor(created));
     }
+    if (!userHash) return false;
+    try {
+      const res = await fetch(`/api/referral/me/${encodeURIComponent(userHash)}`, {
+        credentials: 'same-origin',
+        headers: creditsAuthHeaders(),
+      });
+      const json = (await res.json()) as { invitePath?: string; code?: string };
+      if (!res.ok) return false;
+      const inviteUrl = json.invitePath
+        ? `${getSiteUrl()}${json.invitePath}`
+        : json.code
+          ? `${getSiteUrl()}/?ref=${encodeURIComponent(json.code)}`
+          : null;
+      if (!inviteUrl) return false;
+      return copyTextToClipboard(inviteUrl);
+    } catch {
+      return false;
+    }
+  };
+
+  const handleFacebook = async () => {
+    const popup = window.open('about:blank', '_blank');
+    const created = await ensureCard();
+    if (!created) {
+      popup?.close();
+      return;
+    }
+    openShareWindow(facebookShareUrl(shareUrlFor(created)), popup);
   };
 
   const handleX = async () => {
+    const popup = window.open('about:blank', '_blank');
     const created = await ensureCard();
-    if (!created) return;
-    const url = shareUrlFor(created);
-    window.open(
-      `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(tweetText)}`,
-      '_blank',
-      'noopener,noreferrer',
-    );
+    if (!created) {
+      popup?.close();
+      return;
+    }
+    openShareWindow(xShareUrl(shareUrlFor(created), tweetText), popup);
   };
 
   const handleCopy = async () => {
     const created = await ensureCard();
-    if (!created) return;
-    try {
-      await navigator.clipboard.writeText(shareUrlFor(created));
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
+    const ok = await copyCreatedOrInvite(created);
+    if (!ok) {
       setError(t('Nie udało się skopiować linku.', 'Could not copy the link.'));
+      return;
     }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = async () => {
     try {
-      await downloadShareImage(imageUrl, 'ida-interior', true, brandCta);
+      await downloadShareImage(
+        imageUrl,
+        'ida-interior',
+        true,
+        brandCta,
+        beforeImageUrl,
+        storyLabels,
+      );
     } catch {
       setError(
         t(
@@ -187,10 +309,10 @@ export function ShareResultBar({
     try {
       const [created, blob] = await Promise.all([
         ensureCard(),
-        composeBrandedImageBlob(imageUrl, brandCta),
+        composeBrandedImageBlob(imageUrl, brandCta, beforeImageUrl, storyLabels),
       ]);
       if (created) {
-        await copyShareUrl(created);
+        await copyTextToClipboard(shareUrlFor(created));
       }
       const file = new File([blob], 'ida-interior.jpg', { type: blob.type || 'image/jpeg' });
       const shareData: ShareData = {
@@ -227,7 +349,7 @@ export function ShareResultBar({
       window.setTimeout(() => setIgHint(false), 8000);
     } catch {
       try {
-        await downloadShareImage(imageUrl, 'ida-interior', true, brandCta);
+        await downloadShareImage(imageUrl, 'ida-interior', true, brandCta, beforeImageUrl, storyLabels);
         setIgHint(true);
         window.setTimeout(() => setIgHint(false), 8000);
       } catch {
@@ -241,40 +363,52 @@ export function ShareResultBar({
     }
   };
 
-  const secondaryBtn =
-    'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/30 bg-white/40 px-3 py-2.5 text-xs sm:text-sm font-modern text-gray-800 hover:bg-white/60 transition disabled:opacity-50';
+  const pillBtn =
+    'inline-flex min-h-11 flex-1 basis-[30%] items-center justify-center gap-1.5 rounded-full border border-white/40 bg-white/45 px-3 py-2 text-xs sm:text-sm font-modern text-graphite hover:bg-white/65 transition disabled:opacity-50 sm:basis-[18%]';
+  const storiesBtn =
+    'inline-flex min-h-11 flex-1 basis-[46%] items-center justify-center gap-1.5 rounded-full border border-gold/35 bg-gold-500/70 px-3 py-2 text-xs sm:text-sm font-modern font-semibold text-graphite hover:bg-gold-500/80 transition disabled:opacity-50 sm:basis-[22%]';
 
   return (
-    <div className="space-y-3 rounded-2xl border border-gold/25 bg-gold/5 p-3 sm:p-4">
+    <div className="space-y-3 rounded-2xl border border-white/35 bg-white/25 p-3 backdrop-blur-sm sm:p-4">
       <div>
         <p className="font-exo2 text-base font-bold text-graphite sm:text-lg">
           {t('Pochwal się tą wizją', 'Show off this vision')}
         </p>
         <p className="mt-0.5 font-modern text-xs text-gray-600 sm:text-sm">
           {t(
-            'Stories, X albo link z zaproszeniem — znajomi dostają kredyty, Ty też.',
-            'Stories, X, or an invite link — friends get credits, and so do you.',
+            `Udostępnij, żeby zdobyć dodatkowe ${REFERRAL_VERIFY_CREDITS} kredytów, gdy znajomy założy konto — i kolejne ${REFERRAL_FIRST_GENERATION_CREDITS} po jego pierwszej wizji. Znajomi też dostają kredyty.`,
+            `Share to earn an extra ${REFERRAL_VERIFY_CREDITS} credits when a friend creates an account — and another ${REFERRAL_FIRST_GENERATION_CREDITS} after their first vision. Friends get credits too.`,
           )}
         </p>
       </div>
-      <button
-        type="button"
-        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-gold-500/90 px-4 py-3 font-exo2 text-sm font-bold text-white shadow-lg transition hover:scale-[1.01] disabled:opacity-50 sm:text-base"
-        onClick={() => void handleInstagram()}
-        disabled={busy}
-        aria-label="Instagram Stories"
-      >
-        <InstagramLogo className="h-5 w-5" />
-        {t('Udostępnij w Stories', 'Share to Stories')}
-      </button>
-      <div className="grid grid-cols-3 gap-2">
-        <button type="button" className={secondaryBtn} onClick={() => void handleX()} disabled={busy} aria-label="X">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={storiesBtn}
+          onClick={() => void handleInstagram()}
+          disabled={busy}
+          aria-label="Instagram Stories"
+        >
+          <InstagramLogo className="h-4 w-4" />
+          {t('Stories', 'Stories')}
+        </button>
+        <button
+          type="button"
+          className={pillBtn}
+          onClick={() => void handleFacebook()}
+          disabled={busy}
+          aria-label="Facebook"
+        >
+          <FacebookLogo className="h-4 w-4" />
+          Facebook
+        </button>
+        <button type="button" className={pillBtn} onClick={() => void handleX()} disabled={busy} aria-label="X">
           <XLogo className="h-4 w-4" />
           X
         </button>
         <button
           type="button"
-          className={secondaryBtn}
+          className={pillBtn}
           onClick={() => void handleCopy()}
           disabled={busy}
           aria-label={t('Kopiuj link', 'Copy link')}
@@ -284,7 +418,7 @@ export function ShareResultBar({
         </button>
         <button
           type="button"
-          className={secondaryBtn}
+          className={pillBtn}
           onClick={() => void handleDownload()}
           aria-label={t('Pobierz obrazek', 'Download image')}
         >
@@ -295,8 +429,8 @@ export function ShareResultBar({
       {igHint && (
         <p className="font-modern text-sm text-graphite" role="status">
           {t(
-            'Zapisano Stories (9:16) i skopiowano link — wklej go w Instagramie.',
-            'Saved a 9:16 Story image and copied the link — paste it in Instagram.',
+            'Zapisano Stories (9:16, przed i po) i skopiowano link — wklej go w Instagramie.',
+            'Saved a 9:16 before/after Story image and copied the link — paste it in Instagram.',
           )}
         </p>
       )}

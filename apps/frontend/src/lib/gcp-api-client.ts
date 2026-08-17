@@ -541,6 +541,8 @@ export const gcpApi = {
         referralCode?: string | null;
         pathType?: 'fast' | 'full';
         imagePublicUrl?: string;
+        beforeImagePublicUrl?: string | null;
+        hasBeforeImage?: boolean;
         styleLabel?: string | null;
         roomType?: string | null;
         personalityLabels?: string[];
@@ -551,6 +553,7 @@ export const gcpApi = {
       userHash: string;
       pathType: 'fast' | 'full';
       base64Image: string;
+      base64BeforeImage?: string | null;
       styleLabel?: string | null;
       roomType?: string | null;
       personalityLabels?: string[] | null;
@@ -561,6 +564,8 @@ export const gcpApi = {
         referralCode?: string | null;
         pathType?: 'fast' | 'full';
         imagePublicUrl?: string;
+        beforeImagePublicUrl?: string | null;
+        hasBeforeImage?: boolean;
         styleLabel?: string | null;
         roomType?: string | null;
         personalityLabels?: string[];
@@ -574,6 +579,12 @@ export const gcpApi = {
       const base = getBaseUrl();
       if (!base) return null;
       return `${base}/api/share/cards/${encodeURIComponent(slug)}/image`;
+    },
+
+    beforeImageUrl: (slug: string) => {
+      const base = getBaseUrl();
+      if (!base) return null;
+      return `${base}/api/share/cards/${encodeURIComponent(slug)}/before`;
     },
   },
 

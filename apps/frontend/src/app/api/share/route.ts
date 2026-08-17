@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
       userHash?: string;
       pathType?: 'fast' | 'full';
       base64Image?: string;
+      base64BeforeImage?: string | null;
       styleLabel?: string | null;
       roomType?: string | null;
       personalityLabels?: string[] | null;
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
       userHash: body.userHash,
       pathType: body.pathType,
       base64Image: body.base64Image,
+      base64BeforeImage: body.base64BeforeImage,
       styleLabel: body.styleLabel,
       roomType: body.roomType,
       personalityLabels: body.personalityLabels,

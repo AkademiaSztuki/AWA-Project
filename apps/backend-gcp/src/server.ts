@@ -23,7 +23,7 @@ import { requireDebugOrMigrateAccess } from './lib/internal-auth';
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
 app.use(morgan('tiny'));
 
 app.get('/health', (_req, res) => {
@@ -81,9 +81,9 @@ app.use('/api', matrixRouter);
 app.use('/api', spacesRouter);
 app.use('/api', creditsRouter);
 app.use('/api', promoRouter);
-app.use('/api', billingRouter);
 app.use('/api', referralRouter);
 app.use('/api', shareRouter);
+app.use('/api', billingRouter);
 
 const port = process.env.PORT || 8080;
 

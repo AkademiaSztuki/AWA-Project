@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
 import { ShareResultBar } from '@/components/share/ShareResultBar';
+import { resolveRoomBeforeImage } from '@/lib/share/source-image';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { addGeneratedImageToSpace } from '@/lib/spaces';
 import {
@@ -241,20 +242,7 @@ function isFastTrackStyleStale(session: any): boolean {
 
 /** Data URL for room upload thumbnail / preview — same sources as `handleShowOriginal`. */
 function buildRoomUploadDataUrlFromSession(session: any): string | null {
-  if (!session) return null;
-  let roomImage = session.roomImageEmpty || session.roomImage;
-  if (!roomImage && typeof window !== 'undefined') {
-    try {
-      roomImage = safeSessionStorage.getItem('aura_session_room_image') || undefined;
-    } catch {
-      /* ignore */
-    }
-  }
-  if (!roomImage || typeof roomImage !== 'string') return null;
-  if (roomImage.startsWith('data:')) return roomImage;
-  const base64 = roomImage.includes(',') ? roomImage.split(',')[1] : roomImage;
-  if (!base64?.trim()) return null;
-  return `data:image/jpeg;base64,${base64}`;
+  return resolveRoomBeforeImage(session)?.url ?? null;
 }
 
 function extractBase64FromGenerated(img: GeneratedImage): string | null {
@@ -312,10 +300,11 @@ export default function FastGeneratePage() {
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
   const [customModificationText, setCustomModificationText] = useState('');
 
-  const roomUploadPreviewUrl = useMemo(
-    () => buildRoomUploadDataUrlFromSession(sessionData),
+  const roomBeforeImage = useMemo(
+    () => resolveRoomBeforeImage(sessionData),
     [sessionData],
   );
+  const roomUploadPreviewUrl = roomBeforeImage?.url ?? null;
 
   const historyForDisplay = useMemo(() => {
     const uploadUrl = roomUploadPreviewUrl;
@@ -1794,20 +1783,6 @@ export default function FastGeneratePage() {
                       </button>
                     </div>
 
-                    {generatedImage && (
-                      <ShareResultBar
-                        userHash={(sessionData as { userHash?: string } | null)?.userHash}
-                        imageUrl={generatedImage.url}
-                        imageBase64={generatedImage.base64}
-                        pathType="fast"
-                        styleLabel={
-                          (sessionData as { visualDNA?: { dominantStyle?: string } } | null)?.visualDNA
-                            ?.dominantStyle || null
-                        }
-                        roomType={(sessionData as { roomType?: string } | null)?.roomType || null}
-                      />
-                    )}
-
                     {/* Ratings - exactly like main generate */}
                     <AnimatePresence>
                       {hasAnsweredInteriorQuestion && !hasCompletedRatings && (
@@ -2050,6 +2025,22 @@ export default function FastGeneratePage() {
                             }
                           }
                         }}
+                      />
+                    )}
+
+                    {generatedImage && (
+                      <ShareResultBar
+                        userHash={(sessionData as { userHash?: string } | null)?.userHash}
+                        imageUrl={generatedImage.url}
+                        imageBase64={generatedImage.base64}
+                        beforeImageUrl={originalRoomPhotoUrl || roomBeforeImage?.url || null}
+                        beforeImageBase64={roomBeforeImage?.base64 || null}
+                        pathType="fast"
+                        styleLabel={
+                          (sessionData as { visualDNA?: { dominantStyle?: string } } | null)?.visualDNA
+                            ?.dominantStyle || null
+                        }
+                        roomType={(sessionData as { roomType?: string } | null)?.roomType || null}
                       />
                     )}
 
