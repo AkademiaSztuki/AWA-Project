@@ -8,13 +8,15 @@ import { shareCardProxyPath } from '@/lib/share/share-card-urls';
 const SHARE_MD_BREAKPOINT = 768;
 const BEFORE_RETRY_LIMIT = 4;
 
-const noNativeImgDrag = {
+const imgDragGuard = {
   draggable: false as const,
   onDragStart: (event: React.DragEvent) => {
     event.preventDefault();
   },
-  style: { userSelect: 'none', WebkitUserDrag: 'none' } as React.CSSProperties,
 };
+
+const imgNoDragClass =
+  'select-none [-webkit-user-drag:none] [user-drag:none]';
 
 function PhotoSkeleton() {
   return (
@@ -27,35 +29,41 @@ function PhotoSkeleton() {
   );
 }
 
+function markIfAlreadyDecoded(el: HTMLImageElement | null, onReady?: () => void): void {
+  if (!el || !onReady) return;
+  if (el.complete && el.naturalWidth > 0) onReady();
+}
+
 function PhotoFrame({
   src,
   alt,
   label,
   onError,
   onLoad,
-  loading,
 }: {
   src: string;
   alt: string;
   label: string;
   onError?: () => void;
   onLoad?: () => void;
-  loading?: boolean;
 }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-gold-400/40 bg-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
-      {loading ? <PhotoSkeleton /> : null}
+      <div className="absolute inset-0 z-0">
+        <PhotoSkeleton />
+      </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
         alt={alt}
         decoding="async"
-        {...noNativeImgDrag}
-        className={`aspect-[4/3] w-full select-none object-cover ${loading ? 'absolute inset-0 h-full opacity-0' : ''}`}
+        {...imgDragGuard}
+        ref={(el) => markIfAlreadyDecoded(el, onLoad)}
+        className={`relative z-[1] aspect-[4/3] w-full object-cover ${imgNoDragClass}`}
         onError={onError}
         onLoad={onLoad}
       />
-      <span className="absolute bottom-3 left-3 rounded-full border border-gold-400/40 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
+      <span className="pointer-events-none absolute bottom-3 left-3 z-[2] rounded-full border border-gold-400/40 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
         {label}
       </span>
     </div>
@@ -68,8 +76,6 @@ function ShareComparisonSlider({
   beforeLabel,
   afterLabel,
   title,
-  beforeLoading,
-  afterLoading,
   onBeforeError,
   onBeforeLoad,
   onAfterLoad,
@@ -79,8 +85,6 @@ function ShareComparisonSlider({
   beforeLabel: string;
   afterLabel: string;
   title: string;
-  beforeLoading?: boolean;
-  afterLoading?: boolean;
   onBeforeError?: () => void;
   onBeforeLoad?: () => void;
   onAfterLoad?: () => void;
@@ -114,7 +118,7 @@ function ShareComparisonSlider({
       try {
         node.setPointerCapture(event.pointerId);
       } catch {
-        // Capture is best-effort; document listeners still drive the drag.
+        // Document listeners still drive the drag if capture is rejected.
       }
       updateFromClientX(event.clientX);
     },
@@ -144,8 +148,6 @@ function ShareComparisonSlider({
     };
   }, [updateFromClientX]);
 
-  const showPlaceholder = Boolean(beforeLoading && afterLoading);
-
   return (
     <div
       ref={frameRef}
@@ -161,7 +163,6 @@ function ShareComparisonSlider({
       }}
       onPointerUp={stopDragging}
       onPointerCancel={stopDragging}
-      onLostPointerCapture={stopDragging}
       onKeyDown={(event) => {
         if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
           event.preventDefault();
@@ -182,32 +183,35 @@ function ShareComparisonSlider({
         }
       }}
     >
-      {showPlaceholder ? (
-        <div className="absolute inset-0">
-          <PhotoSkeleton />
-        </div>
-      ) : null}
-      {/* After is the full background — visible to the RIGHT of the handle (Po). */}
+      <div className="absolute inset-0 z-0">
+        <PhotoSkeleton />
+      </div>
+      {/* After fills the frame — visible to the RIGHT of the handle (Po). */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={afterSrc}
         alt={title}
         decoding="async"
         fetchPriority="high"
-        {...noNativeImgDrag}
-        className={`pointer-events-none absolute inset-0 h-full w-full select-none object-cover [-webkit-user-drag:none] ${afterLoading ? 'opacity-0' : ''}`}
+        {...imgDragGuard}
+        ref={(el) => markIfAlreadyDecoded(el, onAfterLoad)}
+        className={`pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover ${imgNoDragClass}`}
         onLoad={onAfterLoad}
       />
-      {/* Before is clipped to the LEFT of the handle (Przed). Never reuse afterSrc here. */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}>
+      {/* Before is clipped to the LEFT of the handle (Przed). Never reuse afterSrc. */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[2] overflow-hidden"
+        style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={beforeSrc}
           alt={beforeLabel}
           decoding="async"
           fetchPriority="high"
-          {...noNativeImgDrag}
-          className={`absolute inset-0 h-full w-full select-none object-cover [-webkit-user-drag:none] ${beforeLoading ? 'opacity-0' : ''}`}
+          {...imgDragGuard}
+          ref={(el) => markIfAlreadyDecoded(el, onBeforeLoad)}
+          className={`absolute inset-0 h-full w-full object-cover ${imgNoDragClass}`}
           onError={onBeforeError}
           onLoad={onBeforeLoad}
         />
@@ -237,10 +241,10 @@ function ShareComparisonSlider({
           />
         </div>
       </div>
-      <span className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-gold-400/40 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
+      <span className="pointer-events-none absolute bottom-3 left-3 z-[4] rounded-full border border-gold-400/40 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
         {beforeLabel}
       </span>
-      <span className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-gold-400/40 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
+      <span className="pointer-events-none absolute bottom-3 right-3 z-[4] rounded-full border border-gold-400/40 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
         {afterLabel}
       </span>
     </div>
@@ -261,8 +265,6 @@ export function ShareCardPhotos({
   const isMobile = useIsMobile(SHARE_MD_BREAKPOINT);
   const afterSrc = shareCardProxyPath(slug, 'image');
   const [beforeAttempt, setBeforeAttempt] = useState(0);
-  const [beforeLoaded, setBeforeLoaded] = useState(false);
-  const [afterLoaded, setAfterLoaded] = useState(false);
   const [beforeFailed, setBeforeFailed] = useState(false);
   const retryTimerRef = useRef<number | null>(null);
   const beforeSrc = shareCardProxyPath(slug, 'before', beforeAttempt);
@@ -274,16 +276,7 @@ export function ShareCardPhotos({
     };
   }, []);
 
-  const handleBeforeLoad = useCallback(() => {
-    setBeforeLoaded(true);
-  }, []);
-
-  const handleAfterLoad = useCallback(() => {
-    setAfterLoaded(true);
-  }, []);
-
   const handleBeforeError = useCallback(() => {
-    setBeforeLoaded(false);
     if (beforeAttempt >= BEFORE_RETRY_LIMIT) {
       setBeforeFailed(true);
       return;
@@ -302,9 +295,7 @@ export function ShareCardPhotos({
             src={distinctBeforeSrc}
             alt={beforeLabel}
             label={beforeLabel}
-            loading={!beforeLoaded}
             onError={handleBeforeError}
-            onLoad={handleBeforeLoad}
           />
         ) : (
           <div className="relative overflow-hidden rounded-2xl border border-gold-400/40 bg-white/40">
@@ -314,29 +305,13 @@ export function ShareCardPhotos({
             </span>
           </div>
         )}
-        <PhotoFrame
-          src={afterSrc}
-          alt={title}
-          label={afterLabel}
-          loading={!afterLoaded}
-          onLoad={handleAfterLoad}
-        />
+        <PhotoFrame src={afterSrc} alt={title} label={afterLabel} />
       </div>
     );
   }
 
   if (!distinctBeforeSrc || beforeFailed) {
-    return (
-      <div className="relative overflow-hidden rounded-2xl border border-gold-400/40 bg-white/40">
-        <PhotoFrame
-          src={afterSrc}
-          alt={title}
-          label={afterLabel}
-          loading={!afterLoaded}
-          onLoad={handleAfterLoad}
-        />
-      </div>
-    );
+    return <PhotoFrame src={afterSrc} alt={title} label={afterLabel} />;
   }
 
   return (
@@ -346,11 +321,7 @@ export function ShareCardPhotos({
       beforeLabel={beforeLabel}
       afterLabel={afterLabel}
       title={title}
-      beforeLoading={!beforeLoaded}
-      afterLoading={!afterLoaded}
       onBeforeError={handleBeforeError}
-      onBeforeLoad={handleBeforeLoad}
-      onAfterLoad={handleAfterLoad}
     />
   );
 }
