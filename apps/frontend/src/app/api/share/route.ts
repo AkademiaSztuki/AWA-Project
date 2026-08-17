@@ -3,6 +3,7 @@ import { gcpApi } from '@/lib/gcp-api-client';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +22,9 @@ export async function POST(request: NextRequest) {
         { error: 'userHash, pathType and base64Image are required' },
         { status: 400 },
       );
+    }
+    if (!body.base64BeforeImage) {
+      return NextResponse.json({ error: 'before_image_required' }, { status: 400 });
     }
     if (body.pathType !== 'fast' && body.pathType !== 'full') {
       return NextResponse.json({ error: 'invalid_path_type' }, { status: 400 });

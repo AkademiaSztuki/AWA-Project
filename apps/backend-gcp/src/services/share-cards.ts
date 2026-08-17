@@ -27,7 +27,7 @@ export interface CreateShareCardInput {
   userHash: string;
   pathType: SharePathType;
   base64Image: string;
-  /** Optional original room photo (before). Stored as GCS sibling; no table change. */
+  /** Original room photo (before). Required for new cards; stored as GCS sibling. */
   base64BeforeImage?: string | null;
   styleLabel?: string | null;
   roomType?: string | null;
@@ -129,20 +129,15 @@ async function savePublicShareCopy(
   return { storagePath, publicUrl };
 }
 
-async function saveBeforeImageIfPresent(
+async function saveBeforeImage(
   slug: string,
-  base64BeforeImage?: string | null,
-): Promise<boolean> {
-  if (!base64BeforeImage) return false;
-  try {
-    const buffer = decodeBase64Image(base64BeforeImage);
-    if (buffer.length < 32) return false;
-    await savePublicShareCopy(beforeStoragePathForSlug(slug), buffer);
-    return true;
-  } catch (error) {
-    console.error('share before image save failed', { slug, error });
-    return false;
+  base64BeforeImage: string,
+): Promise<void> {
+  const buffer = decodeBase64Image(base64BeforeImage);
+  if (buffer.length < 32) {
+    throw new Error('invalid_before_image');
   }
+  await savePublicShareCopy(beforeStoragePathForSlug(slug), buffer);
 }
 
 export async function shareBeforeImageExists(slug: string): Promise<boolean> {
@@ -175,10 +170,23 @@ export async function createShareCard(
   const slug = shareCardSlug(input.userHash, buffer);
   const existing = await getShareCardBySlug(client, slug);
   if (existing && existing.user_hash === input.userHash) {
-    const hasBeforeImage =
-      (await saveBeforeImageIfPresent(existing.slug, input.base64BeforeImage)) ||
-      (await shareBeforeImageExists(existing.slug));
-    return { ...existing, reused: true, hasBeforeImage };
+    if (input.base64BeforeImage) {
+      try {
+        await saveBeforeImage(existing.slug, input.base64BeforeImage);
+      } catch (error) {
+        console.error('share before image save failed', { slug: existing.slug, error });
+        if (!(await shareBeforeImageExists(existing.slug))) {
+          throw new Error('before_image_save_failed');
+        }
+      }
+    } else if (!(await shareBeforeImageExists(existing.slug))) {
+      throw new Error('before_image_required');
+    }
+    return { ...existing, reused: true, hasBeforeImage: true };
+  }
+
+  if (!input.base64BeforeImage) {
+    throw new Error('before_image_required');
   }
 
   let finalSlug = slug;
@@ -187,7 +195,12 @@ export async function createShareCard(
   }
 
   const saved = await savePublicShareCopy(`shares/${finalSlug}.webp`, buffer);
-  const hasBeforeImage = await saveBeforeImageIfPresent(finalSlug, input.base64BeforeImage);
+  try {
+    await saveBeforeImage(finalSlug, input.base64BeforeImage);
+  } catch (error) {
+    console.error('share before image save failed', { slug: finalSlug, error });
+    throw new Error('before_image_save_failed');
+  }
   const labels = (input.personalityLabels || []).filter((label) => label.trim().length > 0).slice(0, 5);
 
   const { rows } = await client.query<ShareCardRow>(
@@ -216,7 +229,7 @@ export async function createShareCard(
     ],
   );
 
-  return { ...rows[0], reused: false, hasBeforeImage };
+  return { ...rows[0], reused: false, hasBeforeImage: true };
 }
 
 export async function getShareCardBySlug(

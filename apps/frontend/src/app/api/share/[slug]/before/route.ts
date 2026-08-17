@@ -11,5 +11,7 @@ export async function GET(
   if (!slug) {
     return new NextResponse('Not found', { status: 404 });
   }
-  return proxyGcpShareImage(`/api/share/cards/${encodeURIComponent(slug)}/before`);
+  return proxyGcpShareImage(`/api/share/cards/${encodeURIComponent(slug)}/before`, {
+    cache: 'no-store',
+  });
 }

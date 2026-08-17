@@ -164,8 +164,16 @@ shareRouter.post('/share/cards', async (req, res) => {
     if (err.message === 'participant_not_found') {
       return res.status(404).json({ ok: false, error: 'participant_not_found' });
     }
-    if (err.message === 'invalid_image' || err.message === 'invalid_path_type') {
+    if (
+      err.message === 'invalid_image' ||
+      err.message === 'invalid_path_type' ||
+      err.message === 'invalid_before_image' ||
+      err.message === 'before_image_required'
+    ) {
       return res.status(400).json({ ok: false, error: err.message });
+    }
+    if (err.message === 'before_image_save_failed') {
+      return res.status(502).json({ ok: false, error: err.message });
     }
     console.error('share/cards create error', error);
     return res.status(500).json({ ok: false, error: 'internal_error' });

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  collectShareBeforeBase64,
+  guessMimeFromBase64,
   resolveRoomBeforeImage,
   toBase64Payload,
   toFetchableImageUrl,
@@ -54,6 +56,18 @@ describe('toFetchableImageUrl', () => {
   });
 });
 
+describe('guessMimeFromBase64', () => {
+  it('detects jpeg SOI bytes', () => {
+    const jpeg = btoa('\xff\xd8\xff\xe0xxxx');
+    expect(guessMimeFromBase64(jpeg)).toBe('image/jpeg');
+  });
+
+  it('detects png signature', () => {
+    const png = btoa('\x89PNG\r\n\x1a\nxxxx');
+    expect(guessMimeFromBase64(png)).toBe('image/png');
+  });
+});
+
 describe('resolveRoomBeforeImage', () => {
   it('uses the original room photo, not the empty processed room', () => {
     const resolved = resolveRoomBeforeImage({
@@ -68,5 +82,17 @@ describe('resolveRoomBeforeImage', () => {
     expect(resolveRoomBeforeImage({ uploadedImage: 'from-upload' })?.base64).toBe('from-upload');
     expect(resolveRoomBeforeImage({ roomImageEmpty: 'empty-only' })?.base64).toBe('empty-only');
     expect(resolveRoomBeforeImage({})).toBeNull();
+  });
+});
+
+describe('collectShareBeforeBase64', () => {
+  it('uses explicit base64 from props', async () => {
+    await expect(collectShareBeforeBase64(null, 'room-bytes', null)).resolves.toBe('room-bytes');
+  });
+
+  it('uses session roomImage when props are empty', async () => {
+    await expect(
+      collectShareBeforeBase64(null, null, { roomImage: 'from-session' }),
+    ).resolves.toBe('from-session');
   });
 });

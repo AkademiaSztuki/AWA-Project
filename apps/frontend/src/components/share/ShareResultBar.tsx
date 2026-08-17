@@ -17,12 +17,13 @@ import {
 import { copyTextToClipboard } from '@/lib/share/copy-text';
 import { composeBrandedImageBlob, downloadShareImage } from '@/lib/share/download-image';
 import {
+  collectShareBeforeBase64,
   compressBase64ForShare,
   imageSourceToBase64,
-  resolveRoomBeforeImage,
   toBase64Payload,
 } from '@/lib/share/source-image';
 import { getSiteUrl } from '@/lib/seo/site';
+import { getSessionStoreSnapshot } from '@/hooks/useSession';
 
 type SharePathType = 'fast' | 'full';
 
@@ -41,6 +42,7 @@ interface ShareResultBarProps {
 interface CreatedCard {
   slug: string;
   referralCode: string | null;
+  hasBeforeImage?: boolean;
 }
 
 function XLogo({ className }: { className?: string }) {
@@ -122,6 +124,18 @@ export function ShareResultBar({
           'Session is not saved yet. Refresh and try again.',
         );
       }
+      if (raw === 'before_image_required' || raw === 'invalid_before_image') {
+        return t(
+          'Nie udało się dołączyć zdjęcia pokoju (przed). Odśwież stronę i spróbuj ponownie.',
+          'Could not attach the room photo (before). Refresh and try again.',
+        );
+      }
+      if (raw === 'before_image_save_failed') {
+        return t(
+          'Nie udało się zapisać zdjęcia „przed”. Spróbuj ponownie za chwilę.',
+          'Could not save the before photo. Please try again in a moment.',
+        );
+      }
       if (status === 401 || /unauthor/i.test(raw)) {
         return t(
           'Nie udało się utworzyć publicznego linku (brak autoryzacji serwera). Spróbuj ponownie za chwilę.',
@@ -155,15 +169,35 @@ export function ShareResultBar({
         if (!silent) setError(t('Brak obrazu do udostępnienia.', 'No image available to share.'));
         return null;
       }
-      const fallbackBefore = resolveRoomBeforeImage();
-      const beforePayload =
-        toBase64Payload(beforeImageUrl, beforeImageBase64) ||
-        (await imageSourceToBase64(beforeImageUrl)) ||
-        fallbackBefore?.base64 ||
-        (await imageSourceToBase64(fallbackBefore?.url));
+
+      let beforePayload = await collectShareBeforeBase64(
+        beforeImageUrl,
+        beforeImageBase64,
+        getSessionStoreSnapshot(),
+      );
+      if (!beforePayload && silent) {
+        await new Promise((resolve) => window.setTimeout(resolve, 400));
+        beforePayload = await collectShareBeforeBase64(
+          beforeImageUrl,
+          beforeImageBase64,
+          getSessionStoreSnapshot(),
+        );
+      }
+      if (!beforePayload) {
+        if (!silent) {
+          setError(
+            t(
+              'Brak zdjęcia pokoju (przed). Wróć do kroku ze zdjęciem i spróbuj ponownie.',
+              'The room photo (before) is missing. Return to the photo step and try again.',
+            ),
+          );
+        }
+        return null;
+      }
+
       const [afterCompressed, beforeCompressed] = await Promise.all([
         compressBase64ForShare(payload),
-        beforePayload ? compressBase64ForShare(beforePayload) : Promise.resolve(null),
+        compressBase64ForShare(beforePayload),
       ]);
       setBusy(true);
       if (!silent) setError(null);
@@ -185,12 +219,23 @@ export function ShareResultBar({
             personalityLabels,
           }),
         });
-        const json = (await res.json()) as CreatedCard & { error?: string };
+        const json = (await res.json()) as CreatedCard & { error?: string; hasBeforeImage?: boolean };
         if (!res.ok || !json.slug) {
           if (!silent) setError(mapCreateError(res.status, json.error || ''));
           return null;
         }
-        const created = { slug: json.slug, referralCode: json.referralCode };
+        if (json.hasBeforeImage === false) {
+          if (!silent) {
+            setError(
+              t(
+                'Karta powstała bez zdjęcia „przed”. Spróbuj ponownie.',
+                'The share card was created without a before photo. Please try again.',
+              ),
+            );
+          }
+          return null;
+        }
+        const created = { slug: json.slug, referralCode: json.referralCode, hasBeforeImage: true };
         setCard(created);
         setCardKey(shareKey);
         if (typeof window !== 'undefined') {
