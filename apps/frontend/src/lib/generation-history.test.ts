@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ORIGINAL_ROOM_HISTORY_ID, prependOriginalRoomHistory } from './generation-history';
+import { ORIGINAL_ROOM_HISTORY_ID, originalRoomHistoryUrl, prependOriginalRoomHistory } from './generation-history';
 
 describe('prependOriginalRoomHistory', () => {
   const generated = {
@@ -28,5 +28,15 @@ describe('prependOriginalRoomHistory', () => {
     expect(prependOriginalRoomHistory([generated], null, 'Uploaded photo')).toEqual([generated]);
     const once = prependOriginalRoomHistory([generated], '/images/tinder/Living Room (2).jpg', 'A');
     expect(prependOriginalRoomHistory(once, '/images/tinder/Living Room (2).jpg', 'B')).toEqual(once);
+  });
+
+  it('reads the upload node URL and ignores generated visions', () => {
+    expect(originalRoomHistoryUrl([generated])).toBeNull();
+    const withUpload = prependOriginalRoomHistory(
+      [generated],
+      '/images/tinder/Living Room (1).jpg',
+      'Uploaded photo',
+    );
+    expect(originalRoomHistoryUrl(withUpload)).toBe('/images/tinder/Living Room (1).jpg');
   });
 });

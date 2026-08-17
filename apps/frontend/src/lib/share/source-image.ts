@@ -1,6 +1,8 @@
 /** SessionStorage keys — keep in sync with `hooks/useSession.ts`. */
 export const ROOM_IMAGE_SESSION_KEY = 'aura_session_room_image';
 export const ROOM_IMAGE_EMPTY_SESSION_KEY = 'aura_session_room_image_empty';
+/** Signature of the original roomImage that `roomImageEmpty` was derived from. */
+export const ROOM_IMAGE_EMPTY_SOURCE_SIG_KEY = 'aura_session_room_image_empty_source_sig';
 /** Lightweight pointer to a sample/base photo so share can re-fetch bytes if base64 was dropped. */
 export const ROOM_IMAGE_SOURCE_URL_KEY = 'aura_session_room_image_src';
 
@@ -218,6 +220,21 @@ export async function compressBase64ForShare(base64: string): Promise<string> {
   }
 }
 
+/** True when two share sources are the same photo (URL, data URL, or raw base64). */
+export function isSameShareImageSource(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  const left = a.trim();
+  const right = b.trim();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftPayload = toBase64Payload(left, null);
+  const rightPayload = toBase64Payload(right, null);
+  if (leftPayload && rightPayload && leftPayload === rightPayload) return true;
+  if (leftPayload && right.includes(leftPayload.slice(0, 48))) return true;
+  if (rightPayload && left.includes(rightPayload.slice(0, 48))) return true;
+  return false;
+}
+
 /** Base64 body for share-card create. Returns null for http(s)/relative/blob URLs. */
 export function toBase64Payload(url?: string | null, explicit?: string | null): string | null {
   if (explicit && explicit.trim()) {
@@ -311,37 +328,136 @@ export async function imageSourceToBase64(url?: string | null): Promise<string |
   }
 }
 
-/** Resolve room photo bytes for share-card create. Props first, then session / storage. */
+export type ShareAfterForbid = {
+  url?: string | null;
+  base64?: string | null;
+};
+
+function matchesForbiddenAfter(candidate: string, after?: ShareAfterForbid | null): boolean {
+  if (!after) return false;
+  return (
+    isSameShareImageSource(candidate, after.url) || isSameShareImageSource(candidate, after.base64)
+  );
+}
+
+function matchesForbiddenEmptyRoom(
+  candidate: string,
+  session?: RoomBeforeSession | null,
+): boolean {
+  if (!session?.roomImageEmpty) return false;
+  return isSameShareImageSource(candidate, session.roomImageEmpty);
+}
+
+/**
+ * Original room photo for share Przed — Generation History upload node first,
+ * then session roomImage. Never the generated after, never empty-room.
+ */
+export function pickShareBeforeSource(opts: {
+  historyUrl?: string | null;
+  roomBefore?: RoomBeforeImage | null;
+  originalRoomPhotoUrl?: string | null;
+  afterUrl?: string | null;
+  afterBase64?: string | null;
+}): RoomBeforeImage | null {
+  const after: ShareAfterForbid = { url: opts.afterUrl, base64: opts.afterBase64 };
+  const candidates: RoomBeforeImage[] = [];
+
+  if (opts.historyUrl && opts.historyUrl.trim()) {
+    const url = opts.historyUrl.trim();
+    candidates.push({ url, base64: toBase64Payload(url, null) });
+  }
+  if (opts.roomBefore?.url) {
+    candidates.push({
+      url: opts.roomBefore.url,
+      base64: opts.roomBefore.base64 ?? toBase64Payload(opts.roomBefore.url, null),
+    });
+  }
+  if (opts.originalRoomPhotoUrl && opts.originalRoomPhotoUrl.trim()) {
+    const url = opts.originalRoomPhotoUrl.trim();
+    candidates.push({ url, base64: toBase64Payload(url, null) });
+  }
+
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (seen.has(candidate.url)) continue;
+    seen.add(candidate.url);
+    if (matchesForbiddenAfter(candidate.url, after)) continue;
+    if (candidate.base64 && matchesForbiddenAfter(candidate.base64, after)) continue;
+    return candidate;
+  }
+  return null;
+}
+
+/** Resolve room photo bytes for share-card create. Props first, then session / storage. Never the after image. */
 export async function collectShareBeforeBase64(
   beforeImageUrl?: string | null,
   beforeImageBase64?: string | null,
   session?: RoomBeforeSession | null,
+  after?: ShareAfterForbid | null,
 ): Promise<string | null> {
+  const propsLookLikeAfter =
+    isSameShareImageSource(beforeImageUrl, after?.url) ||
+    isSameShareImageSource(beforeImageUrl, after?.base64) ||
+    isSameShareImageSource(beforeImageBase64, after?.url) ||
+    isSameShareImageSource(beforeImageBase64, after?.base64);
+  const propsLookLikeEmpty =
+    matchesForbiddenEmptyRoom(beforeImageUrl || '', session) ||
+    matchesForbiddenEmptyRoom(beforeImageBase64 || '', session);
+
   const tryPayload = async (url?: string | null, explicit?: string | null): Promise<string | null> => {
+    const forbidden = (value?: string | null) =>
+      Boolean(
+        value &&
+          (matchesForbiddenAfter(value, after) || matchesForbiddenEmptyRoom(value, session)),
+      );
     const direct = toBase64Payload(url, explicit);
-    if (direct && looksLikeImageBase64(direct)) return direct;
+    if (direct && looksLikeImageBase64(direct)) {
+      return forbidden(direct) ? null : direct;
+    }
     if (url && isRemoteOrAssetUrl(url)) {
-      return imageSourceToBase64(url);
+      if (forbidden(url)) return null;
+      const fetched = await imageSourceToBase64(url);
+      if (fetched && forbidden(fetched)) return null;
+      return fetched;
     }
     if (explicit && isRemoteOrAssetUrl(explicit)) {
-      return imageSourceToBase64(explicit);
+      if (forbidden(explicit)) return null;
+      const fetched = await imageSourceToBase64(explicit);
+      if (fetched && forbidden(fetched)) return null;
+      return fetched;
     }
     return null;
   };
 
-  const fromProps = await tryPayload(beforeImageUrl, beforeImageBase64);
-  if (fromProps) return fromProps;
+  if (!propsLookLikeAfter && !propsLookLikeEmpty) {
+    const fromProps = await tryPayload(beforeImageUrl, beforeImageBase64);
+    if (fromProps) return fromProps;
+  }
 
   const resolved = resolveRoomBeforeImage(session) || resolveRoomBeforeImage();
-  if (resolved) {
+  if (
+    resolved &&
+    !matchesForbiddenAfter(resolved.url, after) &&
+    !matchesForbiddenEmptyRoom(resolved.url, session)
+  ) {
     const fromSession = await tryPayload(resolved.url, resolved.base64);
     if (fromSession) return fromSession;
   }
 
   const sourceUrl = readRoomImageSourceUrl();
-  if (sourceUrl) {
+  if (
+    sourceUrl &&
+    !matchesForbiddenAfter(sourceUrl, after) &&
+    !matchesForbiddenEmptyRoom(sourceUrl, session)
+  ) {
     const fromStored = await imageSourceToBase64(sourceUrl);
-    if (fromStored) return fromStored;
+    if (
+      fromStored &&
+      !matchesForbiddenAfter(fromStored, after) &&
+      !matchesForbiddenEmptyRoom(fromStored, session)
+    ) {
+      return fromStored;
+    }
   }
 
   return null;

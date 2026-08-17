@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
-import { looksLikeImageBase64 } from '@/lib/share/source-image';
+import { looksLikeImageBase64, isSameShareImageSource } from '@/lib/share/source-image';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -27,6 +27,9 @@ export async function POST(request: NextRequest) {
     // JPEG base64 always starts with `/9j/` — that is image bytes, not a site path.
     if (!looksLikeImageBase64(body.base64BeforeImage)) {
       return NextResponse.json({ error: 'before_image_required' }, { status: 400 });
+    }
+    if (isSameShareImageSource(body.base64Image, body.base64BeforeImage)) {
+      return NextResponse.json({ error: 'before_after_identical' }, { status: 400 });
     }
     if (body.pathType !== 'fast' && body.pathType !== 'full') {
       return NextResponse.json({ error: 'invalid_path_type' }, { status: 400 });

@@ -95,6 +95,21 @@ export function detectImageContentType(buffer: Buffer): string | null {
   return null;
 }
 
+export function shareImageContentHash(buffer: Buffer): string {
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+function assertDistinctBeforeImage(beforeBase64: string, afterBuffer: Buffer): Buffer {
+  const beforeBuffer = decodeBase64Image(beforeBase64);
+  if (beforeBuffer.length < 32 || !detectImageContentType(beforeBuffer)) {
+    throw new Error('invalid_before_image');
+  }
+  if (shareImageContentHash(beforeBuffer) === shareImageContentHash(afterBuffer)) {
+    throw new Error('before_after_identical');
+  }
+  return beforeBuffer;
+}
+
 async function savePublicShareCopy(
   storagePath: string,
   buffer: Buffer,
@@ -133,17 +148,6 @@ async function savePublicShareCopy(
   return { storagePath, publicUrl };
 }
 
-async function saveBeforeImage(
-  slug: string,
-  base64BeforeImage: string,
-): Promise<void> {
-  const buffer = decodeBase64Image(base64BeforeImage);
-  if (buffer.length < 32 || !detectImageContentType(buffer)) {
-    throw new Error('invalid_before_image');
-  }
-  await savePublicShareCopy(beforeStoragePathForSlug(slug), buffer);
-}
-
 export async function shareBeforeImageExists(slug: string): Promise<boolean> {
   if (!bucket) return false;
   const [exists] = await bucket.file(beforeStoragePathForSlug(slug)).exists();
@@ -176,8 +180,26 @@ export async function createShareCard(
   if (existing && existing.user_hash === input.userHash) {
     if (input.base64BeforeImage) {
       try {
-        await saveBeforeImage(existing.slug, input.base64BeforeImage);
+        const beforeBuffer = decodeBase64Image(input.base64BeforeImage);
+        if (beforeBuffer.length < 32 || !detectImageContentType(beforeBuffer)) {
+          throw new Error('invalid_before_image');
+        }
+        if (shareImageContentHash(beforeBuffer) === shareImageContentHash(buffer)) {
+          if (!(await shareBeforeImageExists(existing.slug))) {
+            throw new Error('before_after_identical');
+          }
+        } else {
+          await savePublicShareCopy(beforeStoragePathForSlug(existing.slug), beforeBuffer);
+        }
       } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        if (
+          message === 'before_after_identical' ||
+          message === 'invalid_before_image' ||
+          message === 'gcs_not_configured'
+        ) {
+          throw error;
+        }
         console.error('share before image save failed', { slug: existing.slug, error });
         if (!(await shareBeforeImageExists(existing.slug))) {
           throw new Error('before_image_save_failed');
@@ -192,6 +214,7 @@ export async function createShareCard(
   if (!input.base64BeforeImage) {
     throw new Error('before_image_required');
   }
+  const beforeBuffer = assertDistinctBeforeImage(input.base64BeforeImage, buffer);
 
   let finalSlug = slug;
   if (existing && existing.user_hash !== input.userHash) {
@@ -200,7 +223,7 @@ export async function createShareCard(
 
   const saved = await savePublicShareCopy(`shares/${finalSlug}.webp`, buffer);
   try {
-    await saveBeforeImage(finalSlug, input.base64BeforeImage);
+    await savePublicShareCopy(beforeStoragePathForSlug(finalSlug), beforeBuffer);
   } catch (error) {
     console.error('share before image save failed', { slug: finalSlug, error });
     throw new Error('before_image_save_failed');

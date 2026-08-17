@@ -3,7 +3,9 @@ import {
   collectShareBeforeBase64,
   guessMimeFromBase64,
   isRemoteOrAssetUrl,
+  isSameShareImageSource,
   looksLikeImageBase64,
+  pickShareBeforeSource,
   resolveRoomBeforeImage,
   toBase64Payload,
   toFetchableImageUrl,
@@ -156,5 +158,66 @@ describe('collectShareBeforeBase64', () => {
     await expect(
       collectShareBeforeBase64(`data:image/jpeg;base64,${JPEG_B64}`, null, null),
     ).resolves.toBe(JPEG_B64);
+  });
+
+  it('refuses the generated after image as before', async () => {
+    await expect(
+      collectShareBeforeBase64(JPEG_B64, JPEG_B64, null, { url: `data:image/jpeg;base64,${JPEG_B64}`, base64: JPEG_B64 }),
+    ).resolves.toBeNull();
+    await expect(
+      collectShareBeforeBase64(JPEG_B64, null, { roomImage: JPEG_B64 }, { base64: JPEG_B64 }),
+    ).resolves.toBeNull();
+  });
+
+  it('refuses furniture-removed empty-room as before', async () => {
+    const empty = btoa('\xff\xd8\xff\xe0' + 'e'.repeat(48));
+    await expect(
+      collectShareBeforeBase64(empty, empty, { roomImageEmpty: empty }),
+    ).resolves.toBeNull();
+  });
+});
+
+describe('pickShareBeforeSource', () => {
+  const original = '/images/tinder/Living Room (1).jpg';
+  const generated = `data:image/jpeg;base64,${JPEG_B64}`;
+
+  it('prefers the Generation History upload node over session fallbacks', () => {
+    const picked = pickShareBeforeSource({
+      historyUrl: original,
+      roomBefore: { url: '/images/tinder/Living Room (2).jpg', base64: null },
+      originalRoomPhotoUrl: generated,
+      afterUrl: generated,
+      afterBase64: JPEG_B64,
+    });
+    expect(picked?.url).toBe(original);
+  });
+
+  it('never returns the generated after image, even if history[0] was a vision', () => {
+    expect(
+      pickShareBeforeSource({
+        historyUrl: generated,
+        roomBefore: { url: generated, base64: JPEG_B64 },
+        originalRoomPhotoUrl: generated,
+        afterUrl: generated,
+        afterBase64: JPEG_B64,
+      }),
+    ).toBeNull();
+  });
+
+  it('falls back to session original when history is missing', () => {
+    const picked = pickShareBeforeSource({
+      historyUrl: null,
+      roomBefore: { url: original, base64: null },
+      afterUrl: generated,
+      afterBase64: JPEG_B64,
+    });
+    expect(picked?.url).toBe(original);
+  });
+});
+
+describe('isSameShareImageSource', () => {
+  it('matches data URL to raw jpeg payload', () => {
+    expect(isSameShareImageSource(`data:image/jpeg;base64,${JPEG_B64}`, JPEG_B64)).toBe(true);
+    expect(isSameShareImageSource(JPEG_B64, 'other-bytes-here')).toBe(false);
   });
 });

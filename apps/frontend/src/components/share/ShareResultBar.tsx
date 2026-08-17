@@ -20,6 +20,7 @@ import {
   collectShareBeforeBase64,
   compressBase64ForShare,
   imageSourceToBase64,
+  isSameShareImageSource,
   looksLikeImageBase64,
   toBase64Payload,
 } from '@/lib/share/source-image';
@@ -131,6 +132,12 @@ export function ShareResultBar({
           'Could not attach the room photo (before). Refresh and try again.',
         );
       }
+      if (raw === 'before_after_identical') {
+        return t(
+          'Zdjęcie „przed” nie może być tą samą koncepcją. Wróć do historii generacji i wybierz oryginalne zdjęcie pokoju.',
+          'The before photo cannot be the same as the generated concept. Return to generation history and pick the original room photo.',
+        );
+      }
       if (raw === 'before_image_save_failed') {
         return t(
           'Nie udało się zapisać zdjęcia „przed”. Spróbuj ponownie za chwilę.',
@@ -175,6 +182,7 @@ export function ShareResultBar({
         beforeImageUrl,
         beforeImageBase64,
         getSessionStoreSnapshot(),
+        { url: imageUrl, base64: imageBase64 },
       );
       if (!beforePayload && silent) {
         await new Promise((resolve) => window.setTimeout(resolve, 400));
@@ -182,6 +190,7 @@ export function ShareResultBar({
           beforeImageUrl,
           beforeImageBase64,
           getSessionStoreSnapshot(),
+          { url: imageUrl, base64: imageBase64 },
         );
       }
       if (!beforePayload || !looksLikeImageBase64(beforePayload)) {
@@ -195,11 +204,33 @@ export function ShareResultBar({
         }
         return null;
       }
+      if (isSameShareImageSource(beforePayload, payload)) {
+        if (!silent) {
+          setError(
+            t(
+              'Zdjęcie „przed” nie może być tą samą koncepcją. Wróć do historii generacji i wybierz oryginalne zdjęcie pokoju.',
+              'The before photo cannot be the same as the generated concept. Return to generation history and pick the original room photo.',
+            ),
+          );
+        }
+        return null;
+      }
 
       const [afterCompressed, beforeCompressed] = await Promise.all([
         compressBase64ForShare(payload),
         compressBase64ForShare(beforePayload),
       ]);
+      if (isSameShareImageSource(beforeCompressed, afterCompressed)) {
+        if (!silent) {
+          setError(
+            t(
+              'Zdjęcie „przed” nie może być tą samą koncepcją. Wróć do historii generacji i wybierz oryginalne zdjęcie pokoju.',
+              'The before photo cannot be the same as the generated concept. Return to generation history and pick the original room photo.',
+            ),
+          );
+        }
+        return null;
+      }
       setBusy(true);
       if (!silent) setError(null);
       try {

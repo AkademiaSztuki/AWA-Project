@@ -36,8 +36,8 @@ import {
 } from 'lucide-react';
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
 import { ShareResultBar } from '@/components/share/ShareResultBar';
-import { prependOriginalRoomHistory } from '@/lib/generation-history';
-import { resolveRoomBeforeImage } from '@/lib/share/source-image';
+import { originalRoomHistoryUrl, prependOriginalRoomHistory } from '@/lib/generation-history';
+import { pickShareBeforeSource, resolveRoomBeforeImage } from '@/lib/share/source-image';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { addGeneratedImageToSpace } from '@/lib/spaces';
 import {
@@ -315,6 +315,17 @@ export default function FastGeneratePage() {
         language === 'pl' ? 'Zdjęcie z uploadu' : 'Uploaded photo',
       ),
     [generationHistory, roomUploadPreviewUrl, language],
+  );
+  const shareBeforeSource = useMemo(
+    () =>
+      pickShareBeforeSource({
+        historyUrl: originalRoomHistoryUrl(historyForDisplay),
+        roomBefore: roomBeforeImage,
+        originalRoomPhotoUrl,
+        afterUrl: generatedImage?.url,
+        afterBase64: generatedImage?.base64,
+      }),
+    [historyForDisplay, roomBeforeImage, originalRoomPhotoUrl, generatedImage],
   );
 
   /** Thumbnail selection in history: base image for all modifications (micro, macro, custom). */
@@ -2028,8 +2039,8 @@ export default function FastGeneratePage() {
                         userHash={(sessionData as { userHash?: string } | null)?.userHash}
                         imageUrl={generatedImage.url}
                         imageBase64={generatedImage.base64}
-                        beforeImageUrl={roomBeforeImage?.url || originalRoomPhotoUrl || null}
-                        beforeImageBase64={roomBeforeImage?.base64 || null}
+                        beforeImageUrl={shareBeforeSource?.url || null}
+                        beforeImageBase64={shareBeforeSource?.base64 || null}
                         pathType="fast"
                         styleLabel={
                           (sessionData as { visualDNA?: { dominantStyle?: string } } | null)?.visualDNA

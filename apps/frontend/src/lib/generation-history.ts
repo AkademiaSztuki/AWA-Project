@@ -41,6 +41,17 @@ export function prependOriginalRoomHistory<T extends { id?: string; type?: strin
   ];
 }
 
+/** URL of the original upload node — never the first generated vision. */
+export function originalRoomHistoryUrl(
+  history: Array<{ id?: string; type?: string; imageUrl?: string }>,
+): string | null {
+  const node = history.find(
+    (item) => item.type === 'upload' || item.id === ORIGINAL_ROOM_HISTORY_ID,
+  );
+  const url = typeof node?.imageUrl === 'string' ? node.imageUrl.trim() : '';
+  return url || null;
+}
+
 type MatrixHistoryItem = {
   id: string;
   label?: string;

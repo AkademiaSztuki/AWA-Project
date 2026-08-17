@@ -58,7 +58,7 @@ import Image from 'next/image';
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
 import { ShareResultBar } from '@/components/share/ShareResultBar';
 import { personalityLabelsFromScores } from '@/lib/share/personality-labels';
-import { resolveRoomBeforeImage } from '@/lib/share/source-image';
+import { pickShareBeforeSource, resolveRoomBeforeImage } from '@/lib/share/source-image';
 import { 
   synthesizeSixPrompts,
   synthesizeFivePrompts, // Backward compatibility
@@ -92,6 +92,7 @@ import {
 import {
   buildGenerationHistoryFromSession,
   mergeMatrixHistoryRecords,
+  originalRoomHistoryUrl,
   prependOriginalRoomHistory,
 } from '@/lib/generation-history';
 
@@ -305,6 +306,17 @@ export default function GeneratePage() {
         language === 'pl' ? 'Zdjęcie z uploadu' : 'Uploaded photo',
       ),
     [generationHistory, roomUploadPreviewUrl, language],
+  );
+  const shareBeforeSource = useMemo(
+    () =>
+      pickShareBeforeSource({
+        historyUrl: originalRoomHistoryUrl(historyForDisplay),
+        roomBefore: roomBeforeImage,
+        originalRoomPhotoUrl,
+        afterUrl: selectedImage?.url,
+        afterBase64: selectedImage?.base64,
+      }),
+    [historyForDisplay, roomBeforeImage, originalRoomPhotoUrl, selectedImage],
   );
   const tasteRatingPanelRef = useRef<HTMLDivElement>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
@@ -5308,8 +5320,8 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                     userHash={(sessionData as { userHash?: string } | null)?.userHash}
                     imageUrl={selectedImage.url}
                     imageBase64={selectedImage.base64}
-                    beforeImageUrl={roomBeforeImage?.url || originalRoomPhotoUrl || null}
-                    beforeImageBase64={roomBeforeImage?.base64 || null}
+                    beforeImageUrl={shareBeforeSource?.url || null}
+                    beforeImageBase64={shareBeforeSource?.base64 || null}
                     pathType="full"
                     styleLabel={
                       (sessionData as { visualDNA?: { dominantStyle?: string } } | null)?.visualDNA

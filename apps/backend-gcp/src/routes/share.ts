@@ -168,7 +168,8 @@ shareRouter.post('/share/cards', async (req, res) => {
       err.message === 'invalid_image' ||
       err.message === 'invalid_path_type' ||
       err.message === 'invalid_before_image' ||
-      err.message === 'before_image_required'
+      err.message === 'before_image_required' ||
+      err.message === 'before_after_identical'
     ) {
       return res.status(400).json({ ok: false, error: err.message });
     }
