@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { proxyGcpShareImage } from '@/lib/share/proxy-share-image';
 
 export const runtime = 'nodejs';
+export const revalidate = 86400;
 
 export async function GET(
   _request: NextRequest,
@@ -11,7 +12,5 @@ export async function GET(
   if (!slug) {
     return new NextResponse('Not found', { status: 404 });
   }
-  return proxyGcpShareImage(`/api/share/cards/${encodeURIComponent(slug)}/before`, {
-    cache: 'no-store',
-  });
+  return proxyGcpShareImage(`/api/share/cards/${encodeURIComponent(slug)}/before`);
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { proxyGcpShareImage } from '@/lib/share/proxy-share-image';
 
 export const runtime = 'nodejs';
+export const revalidate = 86400;
 
 export async function GET(
   _request: NextRequest,

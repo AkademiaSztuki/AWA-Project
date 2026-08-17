@@ -6,6 +6,7 @@ import { ShareCardPhotos } from '@/components/share/ShareCardPhotos';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { getSiteUrl } from '@/lib/seo/site';
 import { SHARE_SIGNUP_CREDITS, shareOgCopy } from '@/lib/share/captions';
+import { shareCardProxyPath } from '@/lib/share/share-card-urls';
 
 type SharePathType = 'fast' | 'full';
 
@@ -128,8 +129,13 @@ export default async function ShareCardPage({ params }: { params: { slug: string
   const beforeLabel = language === 'pl' ? 'Przed' : 'Before';
   const afterLabel = language === 'pl' ? 'Po' : 'After';
 
+  const afterSrc = shareCardProxyPath(card.slug, 'image');
+  const beforeSrc = shareCardProxyPath(card.slug, 'before');
+
   return (
-    <div className="mx-auto w-full max-w-[min(32rem,calc((100dvh-7rem)*9/16))] px-3 py-6 sm:px-0">
+    <div className="mx-auto w-full px-3 py-6 sm:px-0">
+      <link rel="preload" as="image" href={beforeSrc} />
+      <link rel="preload" as="image" href={afterSrc} />
       <article className="relative isolate overflow-hidden rounded-3xl border border-white/40 bg-white/30 p-4 text-graphite shadow-xl backdrop-blur-sm sm:p-5">
         <div className="mb-4 flex items-center gap-2">
           <span

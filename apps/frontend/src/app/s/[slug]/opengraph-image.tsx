@@ -5,8 +5,8 @@ export const runtime = 'nodejs';
 export const alt = 'Przed i po — koncepcja wnętrza IDA';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
-export const revalidate = 0;
-export const dynamic = 'force-dynamic';
+/** Card photos are immutable per slug — do not rebuild ImageResponse on every crawler hit. */
+export const revalidate = 86400;
 
 function getGcpBaseUrl(): string | null {
   const url = process.env.NEXT_PUBLIC_GCP_API_BASE_URL;
@@ -18,6 +18,21 @@ function toDataUrl(buffer: ArrayBuffer): string {
   return `data:${mime};base64,${Buffer.from(buffer).toString('base64')}`;
 }
 
+/** Shrink photos before Satori so OG PNG encode stays cheap. */
+async function toOgPhotoDataUrl(buffer: ArrayBuffer): Promise<string> {
+  try {
+    const sharp = (await import('sharp')).default;
+    const out = await sharp(Buffer.from(buffer))
+      .rotate()
+      .resize(640, 480, { fit: 'cover' })
+      .jpeg({ quality: 72, mozjpeg: true })
+      .toBuffer();
+    return `data:image/jpeg;base64,${out.toString('base64')}`;
+  } catch {
+    return toDataUrl(buffer);
+  }
+}
+
 async function fetchShareImage(kind: 'image' | 'before', slug: string): Promise<string | null> {
   const base = getGcpBaseUrl();
   if (!base) {
@@ -26,13 +41,13 @@ async function fetchShareImage(kind: 'image' | 'before', slug: string): Promise<
   }
   try {
     const res = await fetch(`${base}/api/share/cards/${encodeURIComponent(slug)}/${kind}`, {
-      cache: 'no-store',
+      next: { revalidate: 86400 },
     });
     if (!res.ok) {
       console.error('[share-og] image fetch failed', { kind, slug, status: res.status });
       return null;
     }
-    return toDataUrl(await res.arrayBuffer());
+    return toOgPhotoDataUrl(await res.arrayBuffer());
   } catch (error) {
     console.error('[share-og] image fetch error', { kind, slug, error: String(error) });
     return null;
@@ -103,6 +118,8 @@ export default async function ShareOpenGraphImage({
   const [afterSrc, beforeSrc] = slug
     ? await Promise.all([fetchShareImage('image', slug), fetchShareImage('before', slug)])
     : [null, null];
+
+  const ready = Boolean(beforeSrc && afterSrc);
 
   return new ImageResponse(
     (
@@ -175,9 +192,9 @@ export default async function ShareOpenGraphImage({
     {
       ...size,
       headers: {
-        'Cache-Control': beforeSrc && afterSrc
-          ? 'public, max-age=300, s-maxage=300'
-          : 'no-store',
+        'Cache-Control': ready
+          ? 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800, immutable'
+          : 'public, max-age=60, must-revalidate',
       },
     },
   );

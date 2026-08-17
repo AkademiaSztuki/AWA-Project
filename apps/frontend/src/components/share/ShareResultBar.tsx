@@ -239,11 +239,6 @@ export function ShareResultBar({
         const created = { slug: json.slug, referralCode: json.referralCode, hasBeforeImage: true };
         setCard(created);
         setCardKey(shareKey);
-        if (typeof window !== 'undefined') {
-          void fetch(`${window.location.origin}/s/${encodeURIComponent(created.slug)}/opengraph-image`).catch(
-            () => undefined,
-          );
-        }
         return created;
       } catch {
         if (!silent) setError(t('Błąd połączenia. Spróbuj ponownie.', 'Connection error. Try again.'));

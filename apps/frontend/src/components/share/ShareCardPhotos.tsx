@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { shareCardProxyPath } from '@/lib/share/share-card-urls';
 
 const SHARE_MD_BREAKPOINT = 768;
-const BEFORE_RETRY_LIMIT = 6;
+const BEFORE_RETRY_LIMIT = 4;
 
 function PhotoSkeleton() {
   return (
@@ -40,6 +41,7 @@ function PhotoFrame({
       <img
         src={src}
         alt={alt}
+        decoding="async"
         className={`aspect-[4/3] w-full object-cover ${loading ? 'absolute inset-0 h-full opacity-0' : ''}`}
         onError={onError}
         onLoad={onLoad}
@@ -58,8 +60,10 @@ function ShareComparisonSlider({
   afterLabel,
   title,
   beforeLoading,
+  afterLoading,
   onBeforeError,
   onBeforeLoad,
+  onAfterLoad,
 }: {
   beforeSrc: string;
   afterSrc: string;
@@ -67,10 +71,13 @@ function ShareComparisonSlider({
   afterLabel: string;
   title: string;
   beforeLoading?: boolean;
+  afterLoading?: boolean;
   onBeforeError?: () => void;
   onBeforeLoad?: () => void;
+  onAfterLoad?: () => void;
 }) {
   const [position, setPosition] = useState(50);
+  const [hasUsedSlider, setHasUsedSlider] = useState(false);
   const draggingRef = useRef(false);
   const frameRef = useRef<HTMLDivElement | null>(null);
 
@@ -81,6 +88,12 @@ function ShareComparisonSlider({
     setPosition(Math.max(8, Math.min(92, next)));
   }, []);
 
+  const markUsed = useCallback(() => {
+    setHasUsedSlider(true);
+  }, []);
+
+  const showPlaceholder = Boolean(beforeLoading && afterLoading);
+
   return (
     <div
       ref={frameRef}
@@ -90,9 +103,10 @@ function ShareComparisonSlider({
       aria-valuemin={8}
       aria-valuemax={92}
       aria-valuenow={Math.round(position)}
-      className="relative aspect-[4/3] cursor-ew-resize select-none overflow-hidden rounded-2xl border border-gold-400/40 bg-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70"
+      className="relative aspect-[4/3] cursor-ew-resize touch-none select-none overflow-hidden rounded-2xl border border-gold-400/40 bg-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70"
       onPointerDown={(event) => {
         draggingRef.current = true;
+        markUsed();
         event.currentTarget.setPointerCapture(event.pointerId);
         updateFromClientX(event.clientX);
       }}
@@ -112,40 +126,67 @@ function ShareComparisonSlider({
       onKeyDown={(event) => {
         if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
           event.preventDefault();
+          markUsed();
           setPosition((prev) => Math.max(8, prev - 5));
         } else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
           event.preventDefault();
+          markUsed();
           setPosition((prev) => Math.min(92, prev + 5));
         } else if (event.key === 'Home') {
           event.preventDefault();
+          markUsed();
           setPosition(8);
         } else if (event.key === 'End') {
           event.preventDefault();
+          markUsed();
           setPosition(92);
         }
       }}
     >
-      {beforeLoading ? <div className="absolute inset-0"><PhotoSkeleton /></div> : null}
+      {showPlaceholder ? (
+        <div className="absolute inset-0">
+          <PhotoSkeleton />
+        </div>
+      ) : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={beforeSrc}
         alt={beforeLabel}
+        decoding="async"
+        fetchPriority="high"
         className={`absolute inset-0 h-full w-full object-cover ${beforeLoading ? 'opacity-0' : ''}`}
         onError={onBeforeError}
         onLoad={onBeforeLoad}
       />
       <div className="absolute inset-0 overflow-hidden" style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={afterSrc} alt={title} className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={afterSrc}
+          alt={title}
+          decoding="async"
+          fetchPriority="high"
+          className={`absolute inset-0 h-full w-full object-cover ${afterLoading ? 'opacity-0' : ''}`}
+          onLoad={onAfterLoad}
+        />
       </div>
       <div
-        className="absolute inset-y-0 z-[2] w-px bg-white/55"
+        className="pointer-events-none absolute inset-y-0 z-[2] w-1 -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.12)]"
         style={{ left: `${position}%` }}
         aria-hidden="true"
       >
-        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5">
-          <ChevronLeft className="h-5 w-5 shrink-0 text-[#C79833] drop-shadow-[0_1px_0_rgba(255,255,255,0.55),0_0_8px_rgba(0,0,0,0.35)]" strokeWidth={2.5} />
-          <ChevronRight className="h-5 w-5 shrink-0 text-[#C79833] drop-shadow-[0_1px_0_rgba(255,255,255,0.55),0_0_8px_rgba(0,0,0,0.35)]" strokeWidth={2.5} />
+        <div
+          className={`absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/80 bg-white/90 shadow-xl backdrop-blur-sm ${
+            hasUsedSlider ? '' : 'animate-pulse'
+          }`}
+        >
+          <ChevronLeft
+            className="h-5 w-5 shrink-0 text-[#C79833] drop-shadow-[0_1px_0_rgba(255,255,255,0.55)]"
+            strokeWidth={2.5}
+          />
+          <ChevronRight
+            className="h-5 w-5 shrink-0 text-[#C79833] drop-shadow-[0_1px_0_rgba(255,255,255,0.55)]"
+            strokeWidth={2.5}
+          />
         </div>
       </div>
       <span className="absolute bottom-3 left-3 rounded-full border border-gold-400/40 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
@@ -170,11 +211,12 @@ export function ShareCardPhotos({
   afterLabel: string;
 }) {
   const isMobile = useIsMobile(SHARE_MD_BREAKPOINT);
-  const afterSrc = `/api/share/${encodeURIComponent(slug)}/image`;
+  const afterSrc = shareCardProxyPath(slug, 'image');
   const [beforeAttempt, setBeforeAttempt] = useState(0);
   const [beforeLoaded, setBeforeLoaded] = useState(false);
+  const [afterLoaded, setAfterLoaded] = useState(false);
   const retryTimerRef = useRef<number | null>(null);
-  const beforeSrc = `/api/share/${encodeURIComponent(slug)}/before?v=${beforeAttempt}`;
+  const beforeSrc = shareCardProxyPath(slug, 'before', beforeAttempt);
 
   useEffect(() => {
     return () => {
@@ -184,6 +226,10 @@ export function ShareCardPhotos({
 
   const handleBeforeLoad = useCallback(() => {
     setBeforeLoaded(true);
+  }, []);
+
+  const handleAfterLoad = useCallback(() => {
+    setAfterLoaded(true);
   }, []);
 
   const handleBeforeError = useCallback(() => {
@@ -206,7 +252,13 @@ export function ShareCardPhotos({
           onError={handleBeforeError}
           onLoad={handleBeforeLoad}
         />
-        <PhotoFrame src={afterSrc} alt={title} label={afterLabel} />
+        <PhotoFrame
+          src={afterSrc}
+          alt={title}
+          label={afterLabel}
+          loading={!afterLoaded}
+          onLoad={handleAfterLoad}
+        />
       </div>
     );
   }
@@ -219,8 +271,10 @@ export function ShareCardPhotos({
       afterLabel={afterLabel}
       title={title}
       beforeLoading={!beforeLoaded}
+      afterLoading={!afterLoaded}
       onBeforeError={handleBeforeError}
       onBeforeLoad={handleBeforeLoad}
+      onAfterLoad={handleAfterLoad}
     />
   );
 }
