@@ -41,14 +41,21 @@ export function prependOriginalRoomHistory<T extends { id?: string; type?: strin
   ];
 }
 
-/** URL of the original upload node — never the first generated vision. */
+export function isOriginalRoomHistoryNode(node?: { id?: string; type?: string } | null): boolean {
+  return Boolean(node && (node.type === 'upload' || node.id === ORIGINAL_ROOM_HISTORY_ID));
+}
+
+function isGeneratedHistoryType(type?: string): boolean {
+  return type === 'initial' || type === 'micro' || type === 'macro';
+}
+
+/** URL of the original upload node — never a generated vision (including history[0] if that is a gen). */
 export function originalRoomHistoryUrl(
   history: Array<{ id?: string; type?: string; imageUrl?: string }>,
 ): string | null {
-  const node = history.find(
-    (item) => item.type === 'upload' || item.id === ORIGINAL_ROOM_HISTORY_ID,
-  );
-  const url = typeof node?.imageUrl === 'string' ? node.imageUrl.trim() : '';
+  const node = history.find((item) => isOriginalRoomHistoryNode(item));
+  if (!node || isGeneratedHistoryType(node.type)) return null;
+  const url = typeof node.imageUrl === 'string' ? node.imageUrl.trim() : '';
   return url || null;
 }
 

@@ -220,18 +220,66 @@ export async function compressBase64ForShare(base64: string): Promise<string> {
   }
 }
 
-/** True when two share sources are the same photo (URL, data URL, or raw base64). */
+function stripBase64Whitespace(payload: string): string {
+  return payload.replace(/\s+/g, '');
+}
+
+function decodeBase64Bytes(payload: string): Uint8Array | null {
+  try {
+    const normalized = stripBase64Whitespace(payload);
+    if (!normalized) return null;
+    const binary = atob(normalized);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function imageBytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length || a.length === 0) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+/** Path / http(s) / blob — not a data URL and not raw image bytes. */
+function normalizeComparableUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith('data:')) return null;
+  if (!isRemoteOrAssetUrl(trimmed)) return null;
+  try {
+    return decodeURI(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
+/**
+ * True when two share sources are the same photo.
+ * Compares resolved URLs, or full decoded image bytes — never JPEG-header prefixes
+ * (canvas-compressed JPEGs share the same first ~48 base64 chars).
+ */
 export function isSameShareImageSource(a?: string | null, b?: string | null): boolean {
   if (!a || !b) return false;
   const left = a.trim();
   const right = b.trim();
   if (!left || !right) return false;
   if (left === right) return true;
+
+  const leftUrl = normalizeComparableUrl(left);
+  const rightUrl = normalizeComparableUrl(right);
+  if (leftUrl && rightUrl) return leftUrl === rightUrl;
+
   const leftPayload = toBase64Payload(left, null);
   const rightPayload = toBase64Payload(right, null);
-  if (leftPayload && rightPayload && leftPayload === rightPayload) return true;
-  if (leftPayload && right.includes(leftPayload.slice(0, 48))) return true;
-  if (rightPayload && left.includes(rightPayload.slice(0, 48))) return true;
+  if (!leftPayload || !rightPayload) return false;
+  if (stripBase64Whitespace(leftPayload) === stripBase64Whitespace(rightPayload)) return true;
+  const leftBytes = decodeBase64Bytes(leftPayload);
+  const rightBytes = decodeBase64Bytes(rightPayload);
+  if (leftBytes && rightBytes) return imageBytesEqual(leftBytes, rightBytes);
   return false;
 }
 
@@ -445,12 +493,19 @@ export async function collectShareBeforeBase64(
   }
 
   const sourceUrl = readRoomImageSourceUrl();
+  const sampleFallback =
+    sourceUrl && isSampleRoomImagePath(sourceUrl)
+      ? sourceUrl
+      : session?.roomImage && isSampleRoomImagePath(session.roomImage)
+        ? session.roomImage.trim()
+        : null;
+  const storedOrSample = sourceUrl || sampleFallback;
   if (
-    sourceUrl &&
-    !matchesForbiddenAfter(sourceUrl, after) &&
-    !matchesForbiddenEmptyRoom(sourceUrl, session)
+    storedOrSample &&
+    !matchesForbiddenAfter(storedOrSample, after) &&
+    !matchesForbiddenEmptyRoom(storedOrSample, session)
   ) {
-    const fromStored = await imageSourceToBase64(sourceUrl);
+    const fromStored = await imageSourceToBase64(storedOrSample);
     if (
       fromStored &&
       !matchesForbiddenAfter(fromStored, after) &&

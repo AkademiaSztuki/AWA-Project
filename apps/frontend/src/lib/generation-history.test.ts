@@ -39,4 +39,19 @@ describe('prependOriginalRoomHistory', () => {
     );
     expect(originalRoomHistoryUrl(withUpload)).toBe('/images/tinder/Living Room (1).jpg');
   });
+
+  it('does not treat history[0] as original when it is the latest generated vision', () => {
+    const latest = {
+      id: 'gen-9',
+      type: 'macro' as const,
+      imageUrl: 'https://cdn.example/latest-gen.jpg',
+    };
+    expect(originalRoomHistoryUrl([latest, generated])).toBeNull();
+    expect(
+      originalRoomHistoryUrl([
+        generated,
+        latest,
+      ]),
+    ).toBeNull();
+  });
 });

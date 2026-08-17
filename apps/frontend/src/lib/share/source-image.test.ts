@@ -175,6 +175,17 @@ describe('collectShareBeforeBase64', () => {
       collectShareBeforeBase64(empty, empty, { roomImageEmpty: empty }),
     ).resolves.toBeNull();
   });
+
+  it('keeps a different original JPEG as before even when both share a JPEG SOI', async () => {
+    const original = btoa('\xff\xd8\xff\xe0' + 'O'.repeat(80));
+    const generated = btoa('\xff\xd8\xff\xe0' + 'G'.repeat(80));
+    await expect(
+      collectShareBeforeBase64(null, original, null, { base64: generated }),
+    ).resolves.toBe(original);
+    await expect(
+      collectShareBeforeBase64(null, original, { roomImage: original }, { base64: generated }),
+    ).resolves.toBe(original);
+  });
 });
 
 describe('pickShareBeforeSource', () => {
@@ -213,11 +224,47 @@ describe('pickShareBeforeSource', () => {
     });
     expect(picked?.url).toBe(original);
   });
+
+  it('does not use history[0] when that slot is a generated vision', () => {
+    const picked = pickShareBeforeSource({
+      historyUrl: generated,
+      roomBefore: { url: original, base64: null },
+      afterUrl: generated,
+      afterBase64: JPEG_B64,
+    });
+    expect(picked?.url).toBe(original);
+  });
 });
 
 describe('isSameShareImageSource', () => {
   it('matches data URL to raw jpeg payload', () => {
     expect(isSameShareImageSource(`data:image/jpeg;base64,${JPEG_B64}`, JPEG_B64)).toBe(true);
     expect(isSameShareImageSource(JPEG_B64, 'other-bytes-here')).toBe(false);
+  });
+
+  it('does not treat two different JPEGs as the same just because they share a SOI header', () => {
+    // Typical JFIF APP0 (~20 bytes) is identical across canvas JPEGs; old guard used slice(0, 48).
+    const jfifHeader =
+      '\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00' +
+      '\xff\xdb\x00C\x00' +
+      '\x10'.repeat(16);
+    const jpegA = btoa(jfifHeader + 'A'.repeat(80));
+    const jpegB = btoa(jfifHeader + 'B'.repeat(80));
+    expect(jpegA.slice(0, 48)).toBe(jpegB.slice(0, 48));
+    expect(isSameShareImageSource(jpegA, jpegB)).toBe(false);
+    expect(isSameShareImageSource(`data:image/jpeg;base64,${jpegA}`, jpegB)).toBe(false);
+  });
+
+  it('matches equivalent room URLs after decoding, not a URL against image bytes', () => {
+    expect(
+      isSameShareImageSource(
+        '/images/tinder/Living Room (1).jpg',
+        '/images/tinder/Living%20Room%20(1).jpg',
+      ),
+    ).toBe(true);
+    expect(isSameShareImageSource('/images/tinder/Living Room (1).jpg', JPEG_B64)).toBe(false);
+    expect(isSameShareImageSource('https://cdn.example/a.jpg', 'https://cdn.example/b.jpg')).toBe(
+      false,
+    );
   });
 });

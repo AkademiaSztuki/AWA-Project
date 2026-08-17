@@ -134,8 +134,8 @@ export function ShareResultBar({
       }
       if (raw === 'before_after_identical') {
         return t(
-          'Zdjęcie „przed” nie może być tą samą koncepcją. Wróć do historii generacji i wybierz oryginalne zdjęcie pokoju.',
-          'The before photo cannot be the same as the generated concept. Return to generation history and pick the original room photo.',
+          'Nie udało się dobrać oryginalnego zdjęcia pokoju do porównania „przed”. Odśwież stronę i spróbuj ponownie.',
+          'Could not attach the original room photo as before. Refresh and try again.',
         );
       }
       if (raw === 'before_image_save_failed') {
@@ -208,8 +208,8 @@ export function ShareResultBar({
         if (!silent) {
           setError(
             t(
-              'Zdjęcie „przed” nie może być tą samą koncepcją. Wróć do historii generacji i wybierz oryginalne zdjęcie pokoju.',
-              'The before photo cannot be the same as the generated concept. Return to generation history and pick the original room photo.',
+              'Nie udało się dobrać oryginalnego zdjęcia pokoju do porównania „przed”. Odśwież stronę i spróbuj ponownie.',
+              'Could not attach the original room photo as before. Refresh and try again.',
             ),
           );
         }
@@ -224,8 +224,8 @@ export function ShareResultBar({
         if (!silent) {
           setError(
             t(
-              'Zdjęcie „przed” nie może być tą samą koncepcją. Wróć do historii generacji i wybierz oryginalne zdjęcie pokoju.',
-              'The before photo cannot be the same as the generated concept. Return to generation history and pick the original room photo.',
+              'Nie udało się dobrać oryginalnego zdjęcia pokoju do porównania „przed”. Odśwież stronę i spróbuj ponownie.',
+              'Could not attach the original room photo as before. Refresh and try again.',
             ),
           );
         }
