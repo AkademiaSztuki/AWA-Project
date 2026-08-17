@@ -21,8 +21,10 @@ export function AppContentFrame({ children }: AppContentFrameProps) {
   const pathname = usePathname();
   /** 1024px — home hero pointer-events only; header mobile nav uses Tailwind `md` (768px). */
   const isMobile = useIsMobile();
+  const isShareCardRoute = pathname === '/s' || pathname.startsWith('/s/');
   const edgeToEdgeTop = EDGE_TO_EDGE_TOP_ROUTES.has(pathname);
-  const minimalMainBottom = MINIMAL_MAIN_BOTTOM_ROUTES.has(pathname);
+  const edgeToEdgeX = edgeToEdgeTop || isShareCardRoute;
+  const minimalMainBottom = MINIMAL_MAIN_BOTTOM_ROUTES.has(pathname) || isShareCardRoute;
   /** Let the living-room marquee (portaled under main z-10) receive hover/clicks in its strip. */
   const homeDesktopPointerPassThrough = pathname === '/' && !isMobile;
 
@@ -39,7 +41,7 @@ export function AppContentFrame({ children }: AppContentFrameProps) {
       id="main-content"
       className={cn(
         'relative z-10 min-h-[100dvh] w-full',
-        edgeToEdgeTop ? 'max-xl:px-0 xl:px-8' : 'px-1.5 sm:px-4 md:px-8',
+        edgeToEdgeX ? 'max-xl:px-0 xl:px-8' : 'px-1.5 sm:px-4 md:px-8',
         homeDesktopPointerPassThrough && 'pointer-events-none'
       )}
       role="main"

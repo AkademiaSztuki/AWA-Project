@@ -43,3 +43,22 @@ Set `PROMO_ADMIN_SECRET` in backend-gcp and Vercel.
 Users redeem in the app under subscription plans (“Masz kod zaproszenia?”) or `POST /api/promo/redeem` (authenticated).
 
 Promo redemptions do **not** consume founders program slots.
+
+## Referral (additive, does not change founders)
+
+New tables only (`infra/gcp/sql/22_share_and_referral.sql`). Apply with:
+
+```bash
+psql "$DATABASE_URL" -f infra/gcp/sql/22_share_and_referral.sql
+# or
+pnpm db:migrate:share-referral
+```
+
+Rewards are extra `credit_transactions` rows (`type = 'grant'`, `source` in `referral` / `referral_welcome` / `referral_milestone`). They are **not** counted in `WHERE source = 'free_grant'`, so the founders cap of 1000 stays unchanged.
+
+| Event | Referrer | Invitee |
+|---|---|---|
+| Invitee verifies email | +500 | founders grant, or +2000 welcome if founders is full |
+| Invitee first generation | +500 | — |
+| 3 / 10 verified invites | +1000 / +3000 | — |
+

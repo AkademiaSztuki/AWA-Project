@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { pool } from '../db';
 import { grantFreeCredits } from '../services/billing';
+import { applyReferralOnVerifiedSafe } from '../services/referral';
 import { sendEmail } from '../lib/email';
 
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
@@ -174,6 +175,7 @@ authRouter.post('/auth/verify-magic-link', async (req, res) => {
     );
     const grantResult = await grantFreeCredits(client, userHash);
     console.log('[auth] google native register grant', { userHash, grantResult });
+    await applyReferralOnVerifiedSafe(client, userHash, grantResult);
 
     return res.json({
       ok: true,
@@ -421,6 +423,7 @@ authRouter.post('/auth/verify-email', async (req, res) => {
           userHash: participant.user_hash,
           grantResult,
         });
+        await applyReferralOnVerifiedSafe(client, participant.user_hash, grantResult);
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/18b9349d-1699-4e68-9929-30c79f24c497', {
           method: 'POST',

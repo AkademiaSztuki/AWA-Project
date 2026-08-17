@@ -14,6 +14,8 @@ import { creditsRouter } from './routes/credits';
 import { promoRouter } from './routes/promo';
 import { billingRouter } from './routes/billing';
 import { authRouter } from './routes/auth';
+import { referralRouter } from './routes/referral';
+import { shareRouter } from './routes/share';
 import { contactRouter } from './routes/contact';
 import { anonUsageRouter } from './routes/anon-usage';
 import { requireDebugOrMigrateAccess } from './lib/internal-auth';
@@ -80,6 +82,8 @@ app.use('/api', spacesRouter);
 app.use('/api', creditsRouter);
 app.use('/api', promoRouter);
 app.use('/api', billingRouter);
+app.use('/api', referralRouter);
+app.use('/api', shareRouter);
 
 const port = process.env.PORT || 8080;
 

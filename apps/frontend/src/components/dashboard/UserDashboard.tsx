@@ -44,6 +44,7 @@ import {
   GenerationStatsSection,
 } from '@/components/dashboard/ProfileSections';
 import { CreditBalance } from '@/components/subscription/CreditBalance';
+import { InviteFriendsPanel } from '@/components/referral/InviteFriendsPanel';
 import { AppContentFloatingAnchor } from '@/components/layout/AppContentFloatingAnchor';
 import { mergeInspirationLists } from '@/lib/inspiration-merge';
 import { DashboardTopPanel } from '@/components/dashboard/DashboardTopPanel';
@@ -991,6 +992,12 @@ export function UserDashboard() {
               }
             })()}
           />
+
+          {user && (
+            <div className="mt-6">
+              <InviteFriendsPanel userHash={getUserHash()} />
+            </div>
+          )}
 
           <DashboardJourneySteps
             primarySpaceId={primarySpaceId}

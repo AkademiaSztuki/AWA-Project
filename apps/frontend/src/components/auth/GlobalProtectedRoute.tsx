@@ -21,6 +21,7 @@ const PUBLIC_PATHS = [
   '/flow', // Onboarding / funnel without forced login
   '/setup', // Profile wizard without forced login
   '/subscription/plans', // Pricing — public before checkout
+  '/s', // Public share cards
 ];
 
 const isPublicPath = (pathname: string): boolean => {
