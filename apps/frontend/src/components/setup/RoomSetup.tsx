@@ -34,6 +34,7 @@ import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { SessionData } from '@/types';
 import { RoomPreferencePayload, RoomActivity } from '@/types/deep-personalization';
 import { fileToNormalizedBase64 } from '@/lib/utils';
+import { imageSourceToBase64, rememberRoomImageSourceUrl } from '@/lib/share/source-image';
 import { COLOR_PALETTE_OPTIONS, getPaletteLabel } from '@/components/setup/paletteOptions';
 import { STYLE_OPTIONS, getStyleLabel } from '@/lib/questions/style-options';
 import { SensoryTestSuite, type SensoryTestSuiteHandle } from '@/components/research/SensoryTests';
@@ -408,25 +409,30 @@ export function RoomSetup({ householdId }: { householdId: string }) {
       
       if (roomData.photos && roomData.photos.length > 0) {
         const firstPhoto = roomData.photos[0];
-        // Check if it's a blob URL
-        if (firstPhoto.startsWith('blob:')) {
-          console.log('[RoomSetup] Converting blob URL to base64 for roomImage');
+        if (
+          firstPhoto.startsWith('blob:') ||
+          firstPhoto.startsWith('/') ||
+          firstPhoto.startsWith('http://') ||
+          firstPhoto.startsWith('https://')
+        ) {
+          console.log('[RoomSetup] Converting photo URL to base64 for roomImage');
           try {
-            const response = await fetch(firstPhoto);
-            const blob = await response.blob();
-            const file = new File([blob], 'room_photo.jpg', { type: blob.type });
-            roomImageBase64 = await fileToNormalizedBase64(file);
-            console.log('[RoomSetup] Converted blob URL to base64, length:', roomImageBase64.length);
+            if (firstPhoto.startsWith('blob:')) {
+              const response = await fetch(firstPhoto);
+              const blob = await response.blob();
+              const file = new File([blob], 'room_photo.jpg', { type: blob.type });
+              roomImageBase64 = await fileToNormalizedBase64(file);
+            } else {
+              roomImageBase64 = (await imageSourceToBase64(firstPhoto)) || undefined;
+            }
+            console.log('[RoomSetup] Converted photo URL to base64, length:', roomImageBase64?.length);
           } catch (error) {
-            console.error('[RoomSetup] Error converting blob URL to base64:', error);
-            // Fallback to sessionData.roomImage if conversion fails
+            console.error('[RoomSetup] Error converting photo URL to base64:', error);
             roomImageBase64 = sessionData.roomImage;
           }
         } else if (firstPhoto.startsWith('data:')) {
-          // Already base64 with data URI prefix
           roomImageBase64 = firstPhoto.split(',')[1];
         } else {
-          // Assume it's already base64 without prefix
           roomImageBase64 = firstPhoto;
         }
       } else {
@@ -1405,7 +1411,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         setUploadedPhotosBase64(newPhotosBase64);
         setSelectedImage(imageObjectUrl);
         setProcessedImage(null); // Clear processed image when new photo is added
-        updateSessionData({ roomImageEmpty: undefined } as any); // Clear roomImageEmpty when new photo is added
+        rememberRoomImageSourceUrl(imageUrl);
+        updateSessionData({ roomImageEmpty: undefined, roomImage: base64 } as any);
         onUpdate(newPhotosBase64, metadata.roomType, metadata.roomName);
         
         // Set pre-computed data instantly
@@ -1456,7 +1463,8 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         setUploadedPhotosBase64(newPhotosBase64);
         setSelectedImage(imageObjectUrl);
         setProcessedImage(null); // Clear processed image when new photo is added
-        updateSessionData({ roomImageEmpty: undefined } as any); // Clear roomImageEmpty when new photo is added
+        rememberRoomImageSourceUrl(imageUrl);
+        updateSessionData({ roomImageEmpty: undefined, roomImage: base64 } as any);
         onUpdate(newPhotosBase64, detectedRoomType || '', roomName || '');
         
         // Automatically analyze the example image
@@ -1508,6 +1516,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       setUploadedPhotosBase64(newPhotosBase64);
       setSelectedImage(imageUrl);
       setProcessedImage(null); // Clear processed image when new photo is added
+      rememberRoomImageSourceUrl(null);
       updateSessionData({ roomImageEmpty: undefined } as any); // Clear roomImageEmpty when new photo is added
       
       // Pass base64 to parent (for API usage)

@@ -20,6 +20,7 @@ import {
   collectShareBeforeBase64,
   compressBase64ForShare,
   imageSourceToBase64,
+  looksLikeImageBase64,
   toBase64Payload,
 } from '@/lib/share/source-image';
 import { getSiteUrl } from '@/lib/seo/site';
@@ -183,7 +184,7 @@ export function ShareResultBar({
           getSessionStoreSnapshot(),
         );
       }
-      if (!beforePayload) {
+      if (!beforePayload || !looksLikeImageBase64(beforePayload)) {
         if (!silent) {
           setError(
             t(
@@ -224,7 +225,7 @@ export function ShareResultBar({
           if (!silent) setError(mapCreateError(res.status, json.error || ''));
           return null;
         }
-        if (json.hasBeforeImage === false) {
+        if (json.hasBeforeImage !== true) {
           if (!silent) {
             setError(
               t(

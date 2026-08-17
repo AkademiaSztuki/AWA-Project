@@ -66,6 +66,10 @@ export function beforeStoragePathForSlug(slug: string): string {
 }
 
 function sniffImageContentType(buffer: Buffer): string {
+  return detectImageContentType(buffer) || 'image/jpeg';
+}
+
+export function detectImageContentType(buffer: Buffer): string | null {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
     return 'image/jpeg';
   }
@@ -88,7 +92,7 @@ function sniffImageContentType(buffer: Buffer): string {
   if (buffer.length >= 6 && buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
     return 'image/gif';
   }
-  return 'image/jpeg';
+  return null;
 }
 
 async function savePublicShareCopy(
@@ -134,7 +138,7 @@ async function saveBeforeImage(
   base64BeforeImage: string,
 ): Promise<void> {
   const buffer = decodeBase64Image(base64BeforeImage);
-  if (buffer.length < 32) {
+  if (buffer.length < 32 || !detectImageContentType(buffer)) {
     throw new Error('invalid_before_image');
   }
   await savePublicShareCopy(beforeStoragePathForSlug(slug), buffer);
@@ -163,7 +167,7 @@ export async function createShareCard(
   const referralCode = await ensureReferralCode(client, input.userHash);
 
   const buffer = decodeBase64Image(input.base64Image);
-  if (buffer.length < 32) {
+  if (buffer.length < 32 || !detectImageContentType(buffer)) {
     throw new Error('invalid_image');
   }
 

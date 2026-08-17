@@ -1,32 +1,50 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useIsMobile } from '@/hooks/useIsMobile';
+
+const SHARE_MD_BREAKPOINT = 768;
+const BEFORE_RETRY_LIMIT = 6;
+
+function PhotoSkeleton() {
+  return (
+    <div
+      className="flex aspect-[4/3] w-full animate-pulse items-center justify-center bg-gradient-to-br from-pearl-50 via-champagne/70 to-gold-400/20 font-exo2 text-lg font-semibold text-graphite/35"
+      aria-hidden="true"
+    >
+      IDA
+    </div>
+  );
+}
 
 function PhotoFrame({
   src,
   alt,
   label,
   onError,
-  missing,
+  onLoad,
+  loading,
 }: {
   src: string;
   alt: string;
   label: string;
   onError?: () => void;
-  missing?: boolean;
+  onLoad?: () => void;
+  loading?: boolean;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-gold-600/30 bg-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
-      {missing ? (
-        <div className="flex aspect-[4/3] w-full items-center justify-center bg-champagne/50 font-exo2 text-lg font-semibold text-graphite/40">
-          IDA
-        </div>
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={alt} className="aspect-[4/3] w-full object-cover" onError={onError} />
-      )}
-      <span className="absolute bottom-3 left-3 rounded-full border border-gold-600/35 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
+    <div className="relative overflow-hidden rounded-2xl border border-gold-400/40 bg-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
+      {loading ? <PhotoSkeleton /> : null}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        className={`aspect-[4/3] w-full object-cover ${loading ? 'absolute inset-0 h-full opacity-0' : ''}`}
+        onError={onError}
+        onLoad={onLoad}
+      />
+      <span className="absolute bottom-3 left-3 rounded-full border border-gold-400/40 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
         {label}
       </span>
     </div>
@@ -39,14 +57,18 @@ function ShareComparisonSlider({
   beforeLabel,
   afterLabel,
   title,
+  beforeLoading,
   onBeforeError,
+  onBeforeLoad,
 }: {
   beforeSrc: string;
   afterSrc: string;
   beforeLabel: string;
   afterLabel: string;
   title: string;
+  beforeLoading?: boolean;
   onBeforeError?: () => void;
+  onBeforeLoad?: () => void;
 }) {
   const [position, setPosition] = useState(50);
   const draggingRef = useRef(false);
@@ -68,7 +90,7 @@ function ShareComparisonSlider({
       aria-valuemin={8}
       aria-valuemax={92}
       aria-valuenow={Math.round(position)}
-      className="relative aspect-[4/3] cursor-ew-resize select-none overflow-hidden rounded-2xl border border-gold-600/30 bg-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] outline-none focus-visible:ring-2 focus-visible:ring-gold-600/70"
+      className="relative aspect-[4/3] cursor-ew-resize select-none overflow-hidden rounded-2xl border border-gold-400/40 bg-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70"
       onPointerDown={(event) => {
         draggingRef.current = true;
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -103,8 +125,15 @@ function ShareComparisonSlider({
         }
       }}
     >
+      {beforeLoading ? <div className="absolute inset-0"><PhotoSkeleton /></div> : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={beforeSrc} alt={beforeLabel} className="absolute inset-0 h-full w-full object-cover" onError={onBeforeError} />
+      <img
+        src={beforeSrc}
+        alt={beforeLabel}
+        className={`absolute inset-0 h-full w-full object-cover ${beforeLoading ? 'opacity-0' : ''}`}
+        onError={onBeforeError}
+        onLoad={onBeforeLoad}
+      />
       <div className="absolute inset-0 overflow-hidden" style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={afterSrc} alt={title} className="absolute inset-0 h-full w-full object-cover" />
@@ -115,14 +144,14 @@ function ShareComparisonSlider({
         aria-hidden="true"
       >
         <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5">
-          <ChevronLeft className="h-5 w-5 shrink-0 text-gold-600 drop-shadow-[0_1px_0_rgba(255,255,255,0.55),0_0_8px_rgba(0,0,0,0.35)]" strokeWidth={2.5} />
-          <ChevronRight className="h-5 w-5 shrink-0 text-gold-600 drop-shadow-[0_1px_0_rgba(255,255,255,0.55),0_0_8px_rgba(0,0,0,0.35)]" strokeWidth={2.5} />
+          <ChevronLeft className="h-5 w-5 shrink-0 text-[#C79833] drop-shadow-[0_1px_0_rgba(255,255,255,0.55),0_0_8px_rgba(0,0,0,0.35)]" strokeWidth={2.5} />
+          <ChevronRight className="h-5 w-5 shrink-0 text-[#C79833] drop-shadow-[0_1px_0_rgba(255,255,255,0.55),0_0_8px_rgba(0,0,0,0.35)]" strokeWidth={2.5} />
         </div>
       </div>
-      <span className="absolute bottom-3 left-3 rounded-full border border-gold-600/35 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
+      <span className="absolute bottom-3 left-3 rounded-full border border-gold-400/40 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
         {beforeLabel}
       </span>
-      <span className="absolute bottom-3 right-3 rounded-full border border-gold-600/35 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
+      <span className="absolute bottom-3 right-3 rounded-full border border-gold-400/40 bg-white/85 px-3 py-1 font-modern text-xs font-semibold text-graphite shadow-sm">
         {afterLabel}
       </span>
     </div>
@@ -140,60 +169,58 @@ export function ShareCardPhotos({
   beforeLabel: string;
   afterLabel: string;
 }) {
+  const isMobile = useIsMobile(SHARE_MD_BREAKPOINT);
   const afterSrc = `/api/share/${encodeURIComponent(slug)}/image`;
   const [beforeAttempt, setBeforeAttempt] = useState(0);
-  const [beforeMissing, setBeforeMissing] = useState(false);
+  const [beforeLoaded, setBeforeLoaded] = useState(false);
+  const retryTimerRef = useRef<number | null>(null);
   const beforeSrc = `/api/share/${encodeURIComponent(slug)}/before?v=${beforeAttempt}`;
 
-  const retryBefore = useCallback(() => {
-    window.setTimeout(() => {
-      setBeforeAttempt((n) => {
-        if (n >= 4) return n;
-        return n + 1;
-      });
-    }, 450);
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current != null) window.clearTimeout(retryTimerRef.current);
+    };
+  }, []);
+
+  const handleBeforeLoad = useCallback(() => {
+    setBeforeLoaded(true);
   }, []);
 
   const handleBeforeError = useCallback(() => {
-    if (beforeAttempt >= 4) {
-      setBeforeMissing(true);
-      return;
-    }
-    retryBefore();
-  }, [beforeAttempt, retryBefore]);
+    setBeforeLoaded(false);
+    if (beforeAttempt >= BEFORE_RETRY_LIMIT) return;
+    if (retryTimerRef.current != null) window.clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = window.setTimeout(() => {
+      setBeforeAttempt((n) => Math.min(BEFORE_RETRY_LIMIT, n + 1));
+    }, 400 + beforeAttempt * 250);
+  }, [beforeAttempt]);
 
-  if (beforeMissing) {
+  if (isMobile) {
     return (
       <div className="space-y-3">
-        <PhotoFrame src={beforeSrc} alt={beforeLabel} label={beforeLabel} missing />
+        <PhotoFrame
+          src={beforeSrc}
+          alt={beforeLabel}
+          label={beforeLabel}
+          loading={!beforeLoaded}
+          onError={handleBeforeError}
+          onLoad={handleBeforeLoad}
+        />
         <PhotoFrame src={afterSrc} alt={title} label={afterLabel} />
       </div>
     );
   }
 
   return (
-    <>
-      <div className="md:hidden">
-        <div className="space-y-3">
-          <PhotoFrame
-            src={beforeSrc}
-            alt={beforeLabel}
-            label={beforeLabel}
-            onError={handleBeforeError}
-          />
-          <PhotoFrame src={afterSrc} alt={title} label={afterLabel} />
-        </div>
-      </div>
-      <div className="hidden md:block">
-        <ShareComparisonSlider
-          beforeSrc={beforeSrc}
-          afterSrc={afterSrc}
-          beforeLabel={beforeLabel}
-          afterLabel={afterLabel}
-          title={title}
-          onBeforeError={handleBeforeError}
-        />
-      </div>
-    </>
+    <ShareComparisonSlider
+      beforeSrc={beforeSrc}
+      afterSrc={afterSrc}
+      beforeLabel={beforeLabel}
+      afterLabel={afterLabel}
+      title={title}
+      beforeLoading={!beforeLoaded}
+      onBeforeError={handleBeforeError}
+      onBeforeLoad={handleBeforeLoad}
+    />
   );
 }

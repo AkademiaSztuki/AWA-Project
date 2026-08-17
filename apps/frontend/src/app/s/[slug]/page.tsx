@@ -134,7 +134,7 @@ export default async function ShareCardPage({ params }: { params: { slug: string
         <div className="mb-4 flex items-center gap-2">
           <span
             aria-hidden="true"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-gold-600/40 bg-gold-600/55 font-exo2 text-sm font-bold text-graphite"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-gold-400/50 bg-gradient-to-br from-gold-400/55 via-champagne/80 to-gold-400/35 font-exo2 text-sm font-bold text-graphite shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]"
           >
             IDA
           </span>
@@ -171,7 +171,7 @@ export default async function ShareCardPage({ params }: { params: { slug: string
           )}
           <Link
             href={ctaHref(card.referralCode)}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-gold-600/45 bg-gold-600/30 px-5 py-2.5 font-exo2 text-sm font-semibold text-graphite shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-sm transition hover:bg-gold-600/40 sm:text-base"
+            className="glass-button glass-button-emphasis inline-flex min-h-11 w-full items-center justify-center rounded-full px-5 py-2.5 font-exo2 text-sm font-semibold text-graphite sm:text-base"
           >
             {copy.cta}
           </Link>

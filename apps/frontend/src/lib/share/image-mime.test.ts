@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sniffImageMime } from './image-mime';
+import { detectImageMime, sniffImageMime } from './image-mime';
 
 describe('sniffImageMime', () => {
   it('detects JPEG from SOI bytes', () => {
@@ -21,5 +21,12 @@ describe('sniffImageMime', () => {
 
   it('falls back to jpeg for unknown payloads', () => {
     expect(sniffImageMime(new Uint8Array([0x00, 0x01]))).toBe('image/jpeg');
+  });
+});
+
+describe('detectImageMime', () => {
+  it('returns null for non-image bytes', () => {
+    expect(detectImageMime(new Uint8Array([0x00, 0x01]))).toBeNull();
+    expect(detectImageMime(new TextEncoder().encode('/images/tinder/Living Room (1).jpg'))).toBeNull();
   });
 });

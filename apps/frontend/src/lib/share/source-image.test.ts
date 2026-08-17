@@ -2,11 +2,15 @@ import { describe, it, expect } from 'vitest';
 import {
   collectShareBeforeBase64,
   guessMimeFromBase64,
+  isRemoteOrAssetUrl,
+  looksLikeImageBase64,
   resolveRoomBeforeImage,
   toBase64Payload,
   toFetchableImageUrl,
   toImageDataUrl,
 } from './source-image';
+
+const JPEG_B64 = btoa('\xff\xd8\xff\xe0' + 'x'.repeat(48));
 
 describe('toImageDataUrl', () => {
   it('wraps raw base64 as a jpeg data URL', () => {
@@ -38,6 +42,31 @@ describe('toBase64Payload', () => {
   it('does not invent payload for http or relative URLs', () => {
     expect(toBase64Payload('/images/tinder/Living Room (1).jpg', null)).toBeNull();
     expect(toBase64Payload('https://cdn.example/a.jpg', null)).toBeNull();
+  });
+
+  it('does not treat a sample path as base64 even when passed as explicit', () => {
+    expect(toBase64Payload(null, '/images/tinder/Living Room (1).jpg')).toBeNull();
+    expect(
+      toBase64Payload(
+        '/images/tinder/Living Room (1).jpg',
+        '/images/tinder/Living Room (1).jpg',
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('isRemoteOrAssetUrl / looksLikeImageBase64', () => {
+  it('recognizes sample room paths as URLs, not image bytes', () => {
+    expect(isRemoteOrAssetUrl('/images/tinder/Living Room (1).jpg')).toBe(true);
+    expect(looksLikeImageBase64('/images/tinder/Living Room (1).jpg')).toBe(false);
+    expect(looksLikeImageBase64('not-an-image')).toBe(false);
+    expect(isRemoteOrAssetUrl(JPEG_B64)).toBe(false);
+    expect(looksLikeImageBase64(JPEG_B64)).toBe(true);
+  });
+
+  it('does not treat JPEG base64 (/9j/...) as a site path', () => {
+    expect(JPEG_B64.startsWith('/9j/')).toBe(true);
+    expect(isRemoteOrAssetUrl(JPEG_B64)).toBe(false);
   });
 });
 
@@ -71,28 +100,42 @@ describe('guessMimeFromBase64', () => {
 describe('resolveRoomBeforeImage', () => {
   it('uses the original room photo, not the empty processed room', () => {
     const resolved = resolveRoomBeforeImage({
-      roomImage: 'room-original',
+      roomImage: JPEG_B64,
       roomImageEmpty: 'room-empty',
     });
-    expect(resolved?.url).toBe('data:image/jpeg;base64,room-original');
-    expect(resolved?.base64).toBe('room-original');
+    expect(resolved?.url).toBe(`data:image/jpeg;base64,${JPEG_B64}`);
+    expect(resolved?.base64).toBe(JPEG_B64);
   });
 
   it('falls back to uploadedImage, then empty room', () => {
-    expect(resolveRoomBeforeImage({ uploadedImage: 'from-upload' })?.base64).toBe('from-upload');
-    expect(resolveRoomBeforeImage({ roomImageEmpty: 'empty-only' })?.base64).toBe('empty-only');
+    expect(resolveRoomBeforeImage({ uploadedImage: JPEG_B64 })?.base64).toBe(JPEG_B64);
+    expect(resolveRoomBeforeImage({ roomImageEmpty: JPEG_B64 })?.base64).toBe(JPEG_B64);
     expect(resolveRoomBeforeImage({})).toBeNull();
+  });
+
+  it('keeps sample-library paths fetchable instead of wrapping them as jpeg data URLs', () => {
+    const resolved = resolveRoomBeforeImage({
+      roomImage: '/images/tinder/Living Room (2).jpg',
+    });
+    expect(resolved?.url).toBe('/images/tinder/Living Room (2).jpg');
+    expect(resolved?.base64).toBeNull();
   });
 });
 
 describe('collectShareBeforeBase64', () => {
-  it('uses explicit base64 from props', async () => {
-    await expect(collectShareBeforeBase64(null, 'room-bytes', null)).resolves.toBe('room-bytes');
+  it('uses explicit image bytes from props', async () => {
+    await expect(collectShareBeforeBase64(null, JPEG_B64, null)).resolves.toBe(JPEG_B64);
   });
 
   it('uses session roomImage when props are empty', async () => {
     await expect(
-      collectShareBeforeBase64(null, null, { roomImage: 'from-session' }),
-    ).resolves.toBe('from-session');
+      collectShareBeforeBase64(null, null, { roomImage: JPEG_B64 }),
+    ).resolves.toBe(JPEG_B64);
+  });
+
+  it('does not POST a sample path as fake image bytes', async () => {
+    await expect(
+      collectShareBeforeBase64('/images/tinder/Living Room (1).jpg', '/images/tinder/Living Room (1).jpg', null),
+    ).resolves.toBeNull();
   });
 });

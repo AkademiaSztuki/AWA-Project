@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    if (!body.base64BeforeImage) {
+    if (!body.base64BeforeImage || body.base64BeforeImage.startsWith('/') || body.base64BeforeImage.startsWith('http')) {
       return NextResponse.json({ error: 'before_image_required' }, { status: 400 });
     }
     if (body.pathType !== 'fast' && body.pathType !== 'full') {

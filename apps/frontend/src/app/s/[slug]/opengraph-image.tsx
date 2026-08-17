@@ -51,7 +51,7 @@ function photoFrame(
         flex: 1,
         overflow: 'hidden',
         borderRadius: 24,
-        border: '2px solid rgba(218, 165, 32, 0.45)',
+        border: '2px solid rgba(199, 152, 51, 0.45)',
         background: 'rgba(255,255,255,0.45)',
       }}
     >
@@ -82,7 +82,7 @@ function photoFrame(
           padding: '6px 14px',
           borderRadius: 999,
           background: 'rgba(255, 254, 247, 0.94)',
-          border: '1px solid rgba(218, 165, 32, 0.55)',
+          border: '1px solid rgba(199, 152, 51, 0.55)',
           color: '#1F2937',
           fontSize: 20,
           fontWeight: 700,
@@ -134,7 +134,7 @@ export default async function ShareOpenGraphImage({
               width: 44,
               height: 44,
               borderRadius: 999,
-              background: 'rgba(218, 165, 32, 0.78)',
+              background: 'rgba(199, 152, 51, 0.55)',
               fontSize: 16,
               fontWeight: 700,
             }}
