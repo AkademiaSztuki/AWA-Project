@@ -92,6 +92,7 @@ import {
 import {
   buildGenerationHistoryFromSession,
   mergeMatrixHistoryRecords,
+  prependOriginalRoomHistory,
 } from '@/lib/generation-history';
 
 interface GeneratedImage {
@@ -240,6 +241,7 @@ export default function GeneratePage() {
     () => resolveRoomBeforeImage(sessionData),
     [sessionData],
   );
+  const roomUploadPreviewUrl = roomBeforeImage?.url ?? null;
   const [regenerateCount, setRegenerateCount] = useState(0); // Track regeneration count
   const [lastGenerationTime, setLastGenerationTime] = useState<number>(0); // For regeneration tracking
   const [qualityReport, setQualityReport] = useState<any>(null); // Store quality report for feedback
@@ -295,6 +297,15 @@ export default function GeneratePage() {
     imageUrl: string;
   }>>([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
+  const historyForDisplay = useMemo(
+    () =>
+      prependOriginalRoomHistory(
+        generationHistory,
+        roomUploadPreviewUrl,
+        language === 'pl' ? 'Zdjęcie z uploadu' : 'Uploaded photo',
+      ),
+    [generationHistory, roomUploadPreviewUrl, language],
+  );
   const tasteRatingPanelRef = useRef<HTMLDivElement>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<'positive' | 'neutral' | 'negative'>('neutral');
@@ -2674,6 +2685,12 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     generationHistory.length > 0
       ? Math.min(Math.max(0, currentHistoryIndex), generationHistory.length - 1)
       : 0;
+  const displayHistoryIndex =
+    roomUploadPreviewUrl && showOriginalRoomPhoto
+      ? 0
+      : roomUploadPreviewUrl
+        ? safeHistoryIndex + 1
+        : safeHistoryIndex;
   const activeImageId = selectedImage?.id;
   const tasteRatingPanelVisible =
     (blindSelectionMade || !isMatrixMode) &&
@@ -2750,6 +2767,14 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     requestAnimationFrame(() => {
       tasteRatingPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
+  };
+
+  const handleDisplayHistoryNodeClick = (index: number) => {
+    if (roomUploadPreviewUrl && index === 0) {
+      handleShowOriginal();
+      return;
+    }
+    handleHistoryNodeClick(roomUploadPreviewUrl ? index - 1 : index);
   };
 
   // Use centralized parameters from useGoogleAI
@@ -5270,9 +5295,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                   className="mt-8"
                 >
                   <GenerationHistory
-                    history={generationHistory}
-                    currentIndex={safeHistoryIndex}
-                    onNodeClick={handleHistoryNodeClick}
+                    history={historyForDisplay}
+                    currentIndex={displayHistoryIndex}
+                    onNodeClick={handleDisplayHistoryNodeClick}
                   />
                 </motion.div>
               )}
@@ -5629,9 +5654,9 @@ RESULT: A completely empty, bare room with only architectural structure visible.
                 {generationHistory.length > 0 && (
                   <div className="mt-12 mb-8">
                     <GenerationHistory
-                      history={generationHistory}
-                      currentIndex={safeHistoryIndex}
-                      onNodeClick={handleHistoryNodeClick}
+                      history={historyForDisplay}
+                      currentIndex={displayHistoryIndex}
+                      onNodeClick={handleDisplayHistoryNodeClick}
                     />
                   </div>
                 )}

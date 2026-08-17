@@ -9,6 +9,38 @@ export type GenerationHistoryNode = {
   isSelected?: boolean;
 };
 
+export const ORIGINAL_ROOM_HISTORY_ID = 'room-upload-original';
+
+export type OriginalRoomHistoryNode = {
+  id: typeof ORIGINAL_ROOM_HISTORY_ID;
+  type: 'upload';
+  label: string;
+  timestamp: number;
+  imageUrl: string;
+};
+
+/** First thumbnail in Historia Generacji — original room (not empty-room, not a generated vision). */
+export function prependOriginalRoomHistory<T extends { id?: string; type?: string }>(
+  history: T[],
+  originalUrl: string | null | undefined,
+  label: string,
+): Array<T | OriginalRoomHistoryNode> {
+  if (!originalUrl) return history;
+  if (history.some((node) => node.type === 'upload' || node.id === ORIGINAL_ROOM_HISTORY_ID)) {
+    return history;
+  }
+  return [
+    {
+      id: ORIGINAL_ROOM_HISTORY_ID,
+      type: 'upload',
+      label,
+      timestamp: 0,
+      imageUrl: originalUrl,
+    },
+    ...history,
+  ];
+}
+
 type MatrixHistoryItem = {
   id: string;
   label?: string;

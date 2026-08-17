@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
 import { ShareResultBar } from '@/components/share/ShareResultBar';
+import { prependOriginalRoomHistory } from '@/lib/generation-history';
 import { resolveRoomBeforeImage } from '@/lib/share/source-image';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { addGeneratedImageToSpace } from '@/lib/spaces';
@@ -306,21 +307,15 @@ export default function FastGeneratePage() {
   );
   const roomUploadPreviewUrl = roomBeforeImage?.url ?? null;
 
-  const historyForDisplay = useMemo(() => {
-    const uploadUrl = roomUploadPreviewUrl;
-    if (!uploadUrl) return generationHistory;
-    return [
-      {
-        id: 'fast-track-upload-original',
-        type: 'upload' as const,
-        label:
-          language === 'pl' ? 'Zdjęcie z uploadu' : 'Uploaded photo',
-        timestamp: 0,
-        imageUrl: uploadUrl,
-      },
-      ...generationHistory,
-    ];
-  }, [generationHistory, roomUploadPreviewUrl, language]);
+  const historyForDisplay = useMemo(
+    () =>
+      prependOriginalRoomHistory(
+        generationHistory,
+        roomUploadPreviewUrl,
+        language === 'pl' ? 'Zdjęcie z uploadu' : 'Uploaded photo',
+      ),
+    [generationHistory, roomUploadPreviewUrl, language],
+  );
 
   /** Thumbnail selection in history: base image for all modifications (micro, macro, custom). */
   const resolveSelectedGeneratedImageForModification = useCallback((): GeneratedImage | null => {

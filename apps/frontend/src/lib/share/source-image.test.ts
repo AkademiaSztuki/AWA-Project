@@ -66,7 +66,9 @@ describe('isRemoteOrAssetUrl / looksLikeImageBase64', () => {
 
   it('does not treat JPEG base64 (/9j/...) as a site path', () => {
     expect(JPEG_B64.startsWith('/9j/')).toBe(true);
+    expect(JPEG_B64.startsWith('/')).toBe(true);
     expect(isRemoteOrAssetUrl(JPEG_B64)).toBe(false);
+    expect(looksLikeImageBase64(JPEG_B64)).toBe(true);
   });
 });
 
@@ -82,6 +84,16 @@ describe('toFetchableImageUrl', () => {
 
   it('leaves http(s) URLs unchanged', () => {
     expect(toFetchableImageUrl('https://cdn.example/a.jpg')).toBe('https://cdn.example/a.jpg');
+  });
+
+  it('does not double-encode already-escaped sample paths', () => {
+    expect(toFetchableImageUrl('/images/tinder/Living%20Room%20(1).jpg')).toBe(
+      '/images/tinder/Living%20Room%20(1).jpg',
+    );
+  });
+
+  it('does not treat JPEG base64 as a fetch path', () => {
+    expect(toFetchableImageUrl(JPEG_B64)).toBe(JPEG_B64);
   });
 });
 
@@ -107,9 +119,9 @@ describe('resolveRoomBeforeImage', () => {
     expect(resolved?.base64).toBe(JPEG_B64);
   });
 
-  it('falls back to uploadedImage, then empty room', () => {
+  it('falls back to uploadedImage and ignores furniture-removed empty room', () => {
     expect(resolveRoomBeforeImage({ uploadedImage: JPEG_B64 })?.base64).toBe(JPEG_B64);
-    expect(resolveRoomBeforeImage({ roomImageEmpty: JPEG_B64 })?.base64).toBe(JPEG_B64);
+    expect(resolveRoomBeforeImage({ roomImageEmpty: JPEG_B64 })).toBeNull();
     expect(resolveRoomBeforeImage({})).toBeNull();
   });
 
@@ -137,5 +149,12 @@ describe('collectShareBeforeBase64', () => {
     await expect(
       collectShareBeforeBase64('/images/tinder/Living Room (1).jpg', '/images/tinder/Living Room (1).jpg', null),
     ).resolves.toBeNull();
+  });
+
+  it('accepts raw JPEG /9j/ as before bytes (history / session roomImage)', async () => {
+    await expect(collectShareBeforeBase64(null, JPEG_B64, null)).resolves.toBe(JPEG_B64);
+    await expect(
+      collectShareBeforeBase64(`data:image/jpeg;base64,${JPEG_B64}`, null, null),
+    ).resolves.toBe(JPEG_B64);
   });
 });

@@ -110,8 +110,14 @@ export function toImageDataUrl(raw?: string | null): string | null {
 /** Encode relative paths (sample rooms often have spaces) and prefix origin when given. */
 export function toFetchableImageUrl(url: string, origin?: string | null): string {
   const trimmed = url.trim();
-  if (!trimmed.startsWith('/')) return trimmed;
-  const encoded = encodeURI(trimmed);
+  if (!trimmed.startsWith('/') || trimmed.startsWith('/9j/')) return trimmed;
+  let path = trimmed;
+  try {
+    path = decodeURI(trimmed);
+  } catch {
+    // Keep the raw string if it is not a valid URI encoding.
+  }
+  const encoded = encodeURI(path);
   if (!origin) return encoded;
   return `${origin.replace(/\/$/, '')}${encoded}`;
 }
@@ -235,8 +241,8 @@ export function toBase64Payload(url?: string | null, explicit?: string | null): 
 }
 
 /**
- * Uploaded room, current room photo, or sample/base room stored as `roomImage`.
- * Furniture-removed empty room is last resort only — never a blank frame.
+ * Original room photo for share “before”: upload, sample library, or stored roomImage.
+ * Never the furniture-removed empty room — that is a processed variant, not before.
  */
 export function resolveRoomBeforeImage(session?: RoomBeforeSession | null): RoomBeforeImage | null {
   const sourceUrl = readRoomImageSourceUrl();
@@ -245,8 +251,6 @@ export function resolveRoomBeforeImage(session?: RoomBeforeSession | null): Room
     session?.uploadedImage,
     readSessionStorage(ROOM_IMAGE_SESSION_KEY),
     sourceUrl,
-    session?.roomImageEmpty,
-    readSessionStorage(ROOM_IMAGE_EMPTY_SESSION_KEY),
   ];
 
   for (const candidate of candidates) {
