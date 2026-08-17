@@ -3,7 +3,7 @@
 import React, { useCallback, useState } from 'react';
 import { Copy, Download, Check } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { downloadShareImage } from '@/lib/share/download-image';
+import { composeBrandedImageBlob, downloadShareImage } from '@/lib/share/download-image';
 import { getSiteUrl } from '@/lib/seo/site';
 
 type SharePathType = 'fast' | 'full';
@@ -48,6 +48,12 @@ function toBase64Payload(imageUrl: string, imageBase64?: string | null): string 
   return null;
 }
 
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException
+    ? err.name === 'AbortError'
+    : err instanceof Error && err.name === 'AbortError';
+}
+
 export function ShareResultBar({
   userHash,
   imageUrl,
@@ -64,6 +70,7 @@ export function ShareResultBar({
   const [copied, setCopied] = useState(false);
   const [igHint, setIgHint] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const brandCta = t('Wygeneruj swoje na project-ida.com', 'Generate yours at project-ida.com');
 
   const ensureCard = useCallback(async (): Promise<CreatedCard | null> => {
     if (card) return card;
@@ -132,6 +139,14 @@ export function ShareResultBar({
     'See the interior IDA designed around my taste.',
   );
 
+  const copyShareUrl = async (created: CreatedCard): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(shareUrlFor(created));
+    } catch {
+      // Native share / download still proceeds.
+    }
+  };
+
   const handleX = async () => {
     const created = await ensureCard();
     if (!created) return;
@@ -157,7 +172,7 @@ export function ShareResultBar({
 
   const handleDownload = async () => {
     try {
-      await downloadShareImage(imageUrl, 'ida-interior', true);
+      await downloadShareImage(imageUrl, 'ida-interior', true, brandCta);
     } catch {
       setError(
         t(
@@ -169,64 +184,124 @@ export function ShareResultBar({
   };
 
   const handleInstagram = async () => {
-    const created = await ensureCard();
-    if (created) {
-      try {
-        await navigator.clipboard.writeText(shareUrlFor(created));
-      } catch {
-        // download still proceeds
-      }
-    }
     try {
-      await downloadShareImage(imageUrl, 'ida-interior', true);
+      const [created, blob] = await Promise.all([
+        ensureCard(),
+        composeBrandedImageBlob(imageUrl, brandCta),
+      ]);
+      if (created) {
+        await copyShareUrl(created);
+      }
+      const file = new File([blob], 'ida-interior.jpg', { type: blob.type || 'image/jpeg' });
+      const shareData: ShareData = {
+        files: [file],
+        title: 'IDA',
+        text: created ? `${tweetText} ${shareUrlFor(created)}` : tweetText,
+      };
+
+      if (typeof navigator.share === 'function') {
+        const canShareFiles =
+          typeof navigator.canShare !== 'function' ||
+          navigator.canShare({ files: [file] }) ||
+          navigator.canShare(shareData);
+        if (canShareFiles) {
+          try {
+            await navigator.share(shareData);
+            return;
+          } catch (err) {
+            if (isAbortError(err)) return;
+          }
+        }
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `ida-interior-${Date.now()}.jpg`;
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
       setIgHint(true);
-      window.setTimeout(() => setIgHint(false), 6000);
+      window.setTimeout(() => setIgHint(false), 8000);
     } catch {
-      setError(
-        t(
-          'Nie udało się przygotować obrazu do Instagrama.',
-          'Could not prepare the image for Instagram.',
-        ),
-      );
+      try {
+        await downloadShareImage(imageUrl, 'ida-interior', true, brandCta);
+        setIgHint(true);
+        window.setTimeout(() => setIgHint(false), 8000);
+      } catch {
+        setError(
+          t(
+            'Nie udało się przygotować obrazu do Instagrama.',
+            'Could not prepare the image for Instagram.',
+          ),
+        );
+      }
     }
   };
 
-  const btnClass =
-    'inline-flex items-center justify-center gap-2 rounded-full border border-white/30 bg-white/40 px-3 py-2 text-xs sm:text-sm font-modern text-gray-800 hover:bg-white/60 transition disabled:opacity-50';
+  const secondaryBtn =
+    'inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/30 bg-white/40 px-3 py-2.5 text-xs sm:text-sm font-modern text-gray-800 hover:bg-white/60 transition disabled:opacity-50';
 
   return (
-    <div className="space-y-2">
-      <p className="text-sm font-semibold text-graphite font-modern">
-        {t('Udostępnij', 'Share')}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className={btnClass} onClick={() => void handleX()} disabled={busy} aria-label="X">
+    <div className="space-y-3 rounded-2xl border border-gold/25 bg-gold/5 p-3 sm:p-4">
+      <div>
+        <p className="font-exo2 text-base font-bold text-graphite sm:text-lg">
+          {t('Pochwal się tą wizją', 'Show off this vision')}
+        </p>
+        <p className="mt-0.5 font-modern text-xs text-gray-600 sm:text-sm">
+          {t(
+            'Stories, X albo link z zaproszeniem — znajomi dostają kredyty, Ty też.',
+            'Stories, X, or an invite link — friends get credits, and so do you.',
+          )}
+        </p>
+      </div>
+      <button
+        type="button"
+        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-gold-500/90 px-4 py-3 font-exo2 text-sm font-bold text-white shadow-lg transition hover:scale-[1.01] disabled:opacity-50 sm:text-base"
+        onClick={() => void handleInstagram()}
+        disabled={busy}
+        aria-label="Instagram Stories"
+      >
+        <InstagramLogo className="h-5 w-5" />
+        {t('Udostępnij w Stories', 'Share to Stories')}
+      </button>
+      <div className="grid grid-cols-3 gap-2">
+        <button type="button" className={secondaryBtn} onClick={() => void handleX()} disabled={busy} aria-label="X">
           <XLogo className="h-4 w-4" />
           X
         </button>
-        <button type="button" className={btnClass} onClick={() => void handleInstagram()} disabled={busy} aria-label="Instagram">
-          <InstagramLogo className="h-4 w-4" />
-          Instagram
-        </button>
-        <button type="button" className={btnClass} onClick={() => void handleCopy()} disabled={busy} aria-label={t('Kopiuj link', 'Copy link')}>
+        <button
+          type="button"
+          className={secondaryBtn}
+          onClick={() => void handleCopy()}
+          disabled={busy}
+          aria-label={t('Kopiuj link', 'Copy link')}
+        >
           {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
-          {copied ? t('Skopiowano', 'Copied') : t('Kopiuj link', 'Copy link')}
+          <span className="truncate">{copied ? t('Skopiowano', 'Copied') : t('Link', 'Link')}</span>
         </button>
-        <button type="button" className={btnClass} onClick={() => void handleDownload()} aria-label={t('Pobierz obrazek', 'Download image')}>
+        <button
+          type="button"
+          className={secondaryBtn}
+          onClick={() => void handleDownload()}
+          aria-label={t('Pobierz obrazek', 'Download image')}
+        >
           <Download className="h-4 w-4" aria-hidden="true" />
-          {t('Pobierz obrazek', 'Download image')}
+          <span className="truncate">{t('Pobierz', 'Save')}</span>
         </button>
       </div>
       {igHint && (
-        <p className="text-xs font-modern text-gray-700" role="status">
+        <p className="font-modern text-sm text-graphite" role="status">
           {t(
-            'Obraz zapisany, link w schowku — wklej go w Stories lub poście.',
-            'Image saved and link copied — paste it in your Story or post.',
+            'Zapisano Stories (9:16) i skopiowano link — wklej go w Instagramie.',
+            'Saved a 9:16 Story image and copied the link — paste it in Instagram.',
           )}
         </p>
       )}
       {error && (
-        <p className="text-xs font-modern text-red-700" role="status">
+        <p className="font-modern text-xs text-red-700" role="status">
           {error}
         </p>
       )}

@@ -32,59 +32,140 @@ function loadHtmlImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
+/** Instagram Stories frame: 9:16 (width / height). */
+export const STORIES_ASPECT = 9 / 16;
+
+export type StoriesBrandLayout = {
+  canvasWidth: number;
+  canvasHeight: number;
+  imageX: number;
+  imageY: number;
+  imageWidth: number;
+  imageHeight: number;
+  topBarHeight: number;
+  bottomBarHeight: number;
+};
+
+/**
+ * Letterbox a source image into a 9:16 Stories canvas with room for IDA branding.
+ */
+export function storiesBrandLayout(sourceWidth: number, sourceHeight: number): StoriesBrandLayout {
+  const srcW = Math.max(1, Math.round(sourceWidth));
+  const srcH = Math.max(1, Math.round(sourceHeight));
+  const canvasWidth = srcW;
+  const canvasHeight = Math.max(srcH, Math.round(canvasWidth / STORIES_ASPECT));
+  const topBarHeight = Math.max(64, Math.round(canvasHeight * 0.09));
+  const bottomBarHeight = Math.max(110, Math.round(canvasHeight * 0.15));
+  const availH = Math.max(1, canvasHeight - topBarHeight - bottomBarHeight);
+  const scale = Math.min(canvasWidth / srcW, availH / srcH);
+  const imageWidth = Math.max(1, Math.round(srcW * scale));
+  const imageHeight = Math.max(1, Math.round(srcH * scale));
+  const imageX = Math.round((canvasWidth - imageWidth) / 2);
+  const imageY = topBarHeight + Math.round((availH - imageHeight) / 2);
+  return {
+    canvasWidth,
+    canvasHeight,
+    imageX,
+    imageY,
+    imageWidth,
+    imageHeight,
+    topBarHeight,
+    bottomBarHeight,
+  };
+}
+
+function drawFittedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  fontSize: number,
+): void {
+  let size = fontSize;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  do {
+    ctx.font = `600 ${size}px system-ui, sans-serif`;
+    if (ctx.measureText(text).width <= maxWidth || size <= 12) break;
+    size -= 1;
+  } while (size > 12);
+  ctx.fillText(text, x, y, maxWidth);
+}
+
 export function composeBrandedCanvas(
   img: HTMLImageElement,
   cta: string,
 ): HTMLCanvasElement {
-  const bar = Math.max(52, Math.round(img.height * 0.09));
+  const srcW = Math.max(1, img.naturalWidth || img.width);
+  const srcH = Math.max(1, img.naturalHeight || img.height);
+  const layout = storiesBrandLayout(srcW, srcH);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, img.naturalWidth || img.width);
-  canvas.height = Math.max(1, (img.naturalHeight || img.height) + bar);
+  canvas.width = layout.canvasWidth;
+  canvas.height = layout.canvasHeight;
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     throw new Error('no_canvas');
   }
 
-  const imageHeight = img.naturalHeight || img.height;
-  ctx.drawImage(img, 0, 0, canvas.width, imageHeight);
   ctx.fillStyle = '#1a1612';
-  ctx.fillRect(0, imageHeight, canvas.width, bar);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, layout.imageX, layout.imageY, layout.imageWidth, layout.imageHeight);
+
   ctx.fillStyle = '#d4af37';
-  ctx.fillRect(0, imageHeight, canvas.width, 3);
+  ctx.fillRect(0, layout.topBarHeight - 3, canvas.width, 3);
+  ctx.fillRect(0, canvas.height - layout.bottomBarHeight, canvas.width, 3);
+
+  ctx.fillStyle = '#d4af37';
+  const wordmarkSize = Math.max(22, Math.round(layout.topBarHeight * 0.42));
+  drawFittedText(ctx, 'IDA', canvas.width / 2, layout.topBarHeight / 2, canvas.width * 0.86, wordmarkSize);
+
   ctx.fillStyle = '#f5f0e6';
-  const fontSize = Math.max(16, Math.round(bar * 0.36));
-  ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(cta, canvas.width / 2, imageHeight + bar / 2);
+  const ctaSize = Math.max(16, Math.round(layout.bottomBarHeight * 0.28));
+  drawFittedText(
+    ctx,
+    cta,
+    canvas.width / 2,
+    canvas.height - layout.bottomBarHeight / 2,
+    canvas.width * 0.88,
+    ctaSize,
+  );
   return canvas;
 }
 
-async function canvasToObjectUrl(canvas: HTMLCanvasElement): Promise<string> {
+function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
         reject(new Error('blob_failed'));
         return;
       }
-      resolve(URL.createObjectURL(blob));
+      resolve(blob);
     }, 'image/jpeg', 0.92);
   });
+}
+
+export async function composeBrandedImageBlob(
+  url: string,
+  cta = 'Wygeneruj swoje na project-ida.com',
+): Promise<Blob> {
+  const img = await loadHtmlImage(url);
+  const canvas = composeBrandedCanvas(img, cta);
+  return canvasToBlob(canvas);
 }
 
 export async function downloadShareImage(
   url: string,
   filenameBase = 'ida-interior',
   branded = false,
-  cta = 'IDA  ·  project-ida.com',
+  cta = 'Wygeneruj swoje na project-ida.com',
 ): Promise<void> {
   const stamp = Date.now();
 
   if (branded) {
     try {
-      const img = await loadHtmlImage(url);
-      const canvas = composeBrandedCanvas(img, cta);
-      const objectUrl = await canvasToObjectUrl(canvas);
+      const blob = await composeBrandedImageBlob(url, cta);
+      const objectUrl = URL.createObjectURL(blob);
       triggerAnchorDownload(objectUrl, `${filenameBase}-${stamp}.jpg`);
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
       return;

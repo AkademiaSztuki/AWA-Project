@@ -44,24 +44,24 @@ function pathCopy(pathType: SharePathType, language: 'pl' | 'en'): { title: stri
         ? {
             title: 'Szybka wizja wnętrza',
             description: 'Wygenerowane w szybkiej ścieżce IDA — styl i zdjęcie pokoju.',
-            cta: 'Wygeneruj swoje na project-ida.com',
+            cta: 'Wygeneruj swoje',
           }
         : {
             title: 'A quick interior vision',
             description: 'Generated on IDA’s fast path — style plus your room photo.',
-            cta: 'Generate yours at project-ida.com',
+            cta: 'Generate yours',
           };
     case 'full':
       return language === 'pl'
         ? {
-            title: 'Wnętrze dopasowane do osobowości',
+            title: 'Wnętrze pod Twoją osobowość',
             description: 'Wizja z pełnej ścieżki IDA — gust, nastrój i profil osobowości.',
-            cta: 'Wygeneruj swoje na project-ida.com',
+            cta: 'Wygeneruj swoje',
           }
         : {
-            title: 'An interior matched to personality',
+            title: 'An interior matched to you',
             description: 'A full-path IDA vision — taste, mood, and personality profile.',
-            cta: 'Generate yours at project-ida.com',
+            cta: 'Generate yours',
           };
     default: {
       const _exhaustive: never = pathType;
@@ -116,51 +116,59 @@ export default async function ShareCardPage({ params }: { params: { slug: string
   const card = await loadCard(params.slug);
   if (!card) notFound();
 
-  const copy = pathCopy(card.pathType, readLanguage());
+  const language = readLanguage();
+  const copy = pathCopy(card.pathType, language);
   const imageSrc = `/api/share/${encodeURIComponent(card.slug)}/image`;
   const metaBits = [card.styleLabel, card.roomType].filter(Boolean) as string[];
 
   return (
-    <main className="mx-auto flex min-h-[80vh] w-full max-w-3xl flex-col items-center px-4 py-10 sm:py-14">
-      <article className="w-full overflow-hidden rounded-3xl border border-white/30 bg-white/40 shadow-xl backdrop-blur-xl">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imageSrc}
-          alt={copy.title}
-          className="h-auto w-full object-cover"
-        />
-        <div className="space-y-4 px-5 py-6 sm:px-8 sm:py-8">
-          <h1 className="font-exo2 text-2xl font-bold text-gray-900 sm:text-3xl">{copy.title}</h1>
-          {metaBits.length > 0 && (
-            <p className="font-modern text-sm text-gray-700">{metaBits.join(' · ')}</p>
-          )}
-          {card.pathType === 'full' && card.personalityLabels.length > 0 && (
-            <ul className="flex flex-wrap gap-2">
-              {card.personalityLabels.map((label) => (
-                <li
-                  key={label}
-                  className="rounded-full bg-gold-400/20 px-3 py-1 font-modern text-xs text-gray-800"
-                >
-                  {label}
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="font-modern text-sm leading-relaxed text-gray-700">{copy.description}</p>
-          <Link
-            href={ctaHref(card.referralCode)}
-            className="inline-flex items-center gap-3 rounded-full bg-gold-500/90 px-5 py-3 font-exo2 text-sm font-bold text-white shadow-lg transition hover:scale-[1.02]"
-          >
+    <div className="mx-auto w-full max-w-[min(32rem,calc((100dvh-7rem)*9/16))]">
+      <article className="relative isolate overflow-hidden bg-[#1a1612] text-white shadow-xl sm:rounded-3xl">
+        <div className="relative aspect-[9/16] w-full">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageSrc}
+            alt={copy.title}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 bg-gradient-to-b from-black/70 to-transparent px-4 pb-16 pt-4">
             <span
               aria-hidden="true"
-              className="flex h-8 w-8 items-center justify-center rounded-md bg-white/20 text-base font-bold"
+              className="flex h-9 w-9 items-center justify-center rounded-md bg-gold-500/90 font-exo2 text-sm font-bold text-white"
             >
               IDA
             </span>
-            {copy.cta}
-          </Link>
+            <p className="font-modern text-xs font-semibold tracking-wide text-white/90">project-ida.com</p>
+          </div>
+          <div className="absolute inset-x-0 bottom-0 space-y-3 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-4 pb-6 pt-20">
+            <h1 className="font-exo2 text-2xl font-bold leading-tight text-white sm:text-3xl">{copy.title}</h1>
+            {metaBits.length > 0 && (
+              <p className="font-modern text-sm text-white/80">{metaBits.join(' · ')}</p>
+            )}
+            {card.pathType === 'full' && card.personalityLabels.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {card.personalityLabels.map((label) => (
+                  <li
+                    key={label}
+                    className="rounded-full bg-white/15 px-3 py-1 font-modern text-xs text-white"
+                  >
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link
+              href={ctaHref(card.referralCode)}
+              className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-gold-500/95 px-5 py-3 font-exo2 text-base font-bold text-white shadow-lg transition hover:scale-[1.02]"
+            >
+              {copy.cta}
+            </Link>
+            <p className="text-center font-modern text-[11px] text-white/70">
+              {language === 'pl' ? 'Za darmo na project-ida.com' : 'Free at project-ida.com'}
+            </p>
+          </div>
         </div>
       </article>
-    </main>
+    </div>
   );
 }
