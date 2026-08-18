@@ -34,7 +34,7 @@ import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { SessionData } from '@/types';
 import { RoomPreferencePayload, RoomActivity } from '@/types/deep-personalization';
 import { fileToNormalizedBase64 } from '@/lib/utils';
-import { imageSourceToBase64, rememberRoomImageSourceUrl } from '@/lib/share/source-image';
+import { captureOriginalRoomImage, imageSourceToBase64, rememberRoomImageSourceUrl, readRoomImageSourceUrl } from '@/lib/share/source-image';
 import { COLOR_PALETTE_OPTIONS, getPaletteLabel } from '@/components/setup/paletteOptions';
 import { STYLE_OPTIONS, getStyleLabel } from '@/lib/questions/style-options';
 import { SensoryTestSuite, type SensoryTestSuiteHandle } from '@/components/research/SensoryTests';
@@ -543,6 +543,9 @@ export function RoomSetup({ householdId }: { householdId: string }) {
         roomPreferences: roomData.explicitPreferences,
         roomActivityContext: activityContext,
         roomImage: roomImageBase64, // Use converted base64, not blob URL
+        originalRoomImage: captureOriginalRoomImage(
+          readRoomImageSourceUrl() || roomImageBase64,
+        ) || roomImageBase64,
         prsCurrent: roomData.prsCurrent,
         prsTarget: roomData.prsTarget,
         currentSpaceId: targetSpaceId,
@@ -1412,7 +1415,12 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         setSelectedImage(imageObjectUrl);
         setProcessedImage(null); // Clear processed image when new photo is added
         rememberRoomImageSourceUrl(imageUrl);
-        updateSessionData({ roomImageEmpty: undefined, roomImage: base64 } as any);
+        captureOriginalRoomImage(imageUrl, { replace: true });
+        updateSessionData({
+          roomImageEmpty: undefined,
+          roomImage: base64,
+          originalRoomImage: imageUrl,
+        } as any);
         onUpdate(newPhotosBase64, metadata.roomType, metadata.roomName);
         
         // Set pre-computed data instantly
@@ -1464,7 +1472,12 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         setSelectedImage(imageObjectUrl);
         setProcessedImage(null); // Clear processed image when new photo is added
         rememberRoomImageSourceUrl(imageUrl);
-        updateSessionData({ roomImageEmpty: undefined, roomImage: base64 } as any);
+        captureOriginalRoomImage(imageUrl, { replace: true });
+        updateSessionData({
+          roomImageEmpty: undefined,
+          roomImage: base64,
+          originalRoomImage: imageUrl,
+        } as any);
         onUpdate(newPhotosBase64, detectedRoomType || '', roomName || '');
         
         // Automatically analyze the example image
@@ -1517,7 +1530,12 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       setSelectedImage(imageUrl);
       setProcessedImage(null); // Clear processed image when new photo is added
       rememberRoomImageSourceUrl(null);
-      updateSessionData({ roomImageEmpty: undefined } as any); // Clear roomImageEmpty when new photo is added
+      captureOriginalRoomImage(base64, { replace: true });
+      updateSessionData({
+        roomImageEmpty: undefined,
+        roomImage: base64,
+        originalRoomImage: base64,
+      } as any);
       
       // Pass base64 to parent (for API usage)
       onUpdate(newPhotosBase64, detectedRoomType || '', roomName || '');

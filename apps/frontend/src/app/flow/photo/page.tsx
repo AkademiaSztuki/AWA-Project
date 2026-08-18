@@ -14,7 +14,7 @@ import { useDialogueVoice } from '@/hooks/useDialogueVoice';
 import { useAiApi } from '@/hooks/useAiApi';
 import { EXAMPLE_IMAGES_METADATA, getExampleImageMetadata, isExampleImage } from '@/lib/exampleImagesMetadata';
 import { fileToNormalizedBase64 } from '@/lib/utils';
-import { rememberRoomImageSourceUrl } from '@/lib/share/source-image';
+import { rememberRoomImageSourceUrl, captureOriginalRoomImage } from '@/lib/share/source-image';
 import DialogueAudioPlayer from '@/components/ui/DialogueAudioPlayer';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GLASS_CARD_DESKTOP_GROW_STEP } from '@/lib/flow/glass-step-layout';
@@ -299,7 +299,8 @@ export default function PhotoUploadPage() {
       
       const base64 = await fileToNormalizedBase64(file);
       rememberRoomImageSourceUrl(null);
-      await updateSession({ roomImage: base64 });
+      captureOriginalRoomImage(base64, { replace: true });
+      await updateSession({ roomImage: base64, originalRoomImage: base64 });
       setSelectedImage(URL.createObjectURL(file));
       setPendingAnalysisFile(file);
       setPendingAnalysisLabel(file.name);
@@ -322,7 +323,8 @@ export default function PhotoUploadPage() {
       const file = new File([blob], imageUrl.split('/').pop() || 'image.jpg', { type: blob.type });
       const base64 = await fileToNormalizedBase64(file);
       rememberRoomImageSourceUrl(imageUrl);
-      await updateSession({ roomImage: base64 });
+      captureOriginalRoomImage(imageUrl, { replace: true });
+      await updateSession({ roomImage: base64, originalRoomImage: imageUrl });
       setSelectedImage(imageUrl);
       
       if (metadata) {

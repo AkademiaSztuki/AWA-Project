@@ -1,3 +1,5 @@
+import { originalRoomHistoryUrl } from '../generation-history';
+
 /** SessionStorage keys — keep in sync with `hooks/useSession.ts`. */
 export const ROOM_IMAGE_SESSION_KEY = 'aura_session_room_image';
 export const ROOM_IMAGE_EMPTY_SESSION_KEY = 'aura_session_room_image_empty';
@@ -5,6 +7,8 @@ export const ROOM_IMAGE_EMPTY_SESSION_KEY = 'aura_session_room_image_empty';
 export const ROOM_IMAGE_EMPTY_SOURCE_SIG_KEY = 'aura_session_room_image_empty_source_sig';
 /** Lightweight pointer to a sample/base photo so share can re-fetch bytes if base64 was dropped. */
 export const ROOM_IMAGE_SOURCE_URL_KEY = 'aura_session_room_image_src';
+/** Write-once original room photo (upload/sample). Never empty-room, never a generation result. */
+export const ORIGINAL_ROOM_IMAGE_SESSION_KEY = 'aura_session_original_room_image';
 
 /** Static “podstawowe zdjęcia” from the photo step — always fetch as bytes, never POST the path. */
 export const SAMPLE_ROOM_IMAGE_PATHS = [
@@ -14,6 +18,7 @@ export const SAMPLE_ROOM_IMAGE_PATHS = [
 ] as const;
 
 export type RoomBeforeSession = {
+  originalRoomImage?: string | null;
   roomImage?: string | null;
   roomImageEmpty?: string | null;
   uploadedImage?: string | null;
@@ -23,6 +28,12 @@ export type RoomBeforeImage = {
   url: string;
   base64: string | null;
 };
+
+function nonempty(value?: string | null): string | null {
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 function readSessionStorage(key: string): string | null {
   if (typeof window === 'undefined') return null;
@@ -96,6 +107,37 @@ export function rememberRoomImageSourceUrl(url?: string | null): void {
 export function readRoomImageSourceUrl(): string | null {
   const stored = readSessionStorage(ROOM_IMAGE_SOURCE_URL_KEY);
   return stored && isRemoteOrAssetUrl(stored) ? stored.trim() : null;
+}
+
+export function readStoredOriginalRoomImage(): string | null {
+  return nonempty(readSessionStorage(ORIGINAL_ROOM_IMAGE_SESSION_KEY));
+}
+
+/**
+ * Persist the user-picked room photo once. `replace` only when the user picks a new
+ * sample/upload — never when a generation or empty-room result arrives.
+ */
+export function captureOriginalRoomImage(
+  source?: string | null,
+  opts?: { replace?: boolean; existing?: string | null },
+): string | null {
+  const stored = nonempty(opts?.existing) || readStoredOriginalRoomImage();
+  if (stored && !opts?.replace) return stored;
+  const next = nonempty(source);
+  if (!next) return stored;
+  writeSessionStorage(ORIGINAL_ROOM_IMAGE_SESSION_KEY, next);
+  return next;
+}
+
+/**
+ * Snapshot the original room photo at generate / fast-generate start.
+ * Prefers an already-captured original; never uses empty-room.
+ */
+export function ensureOriginalRoomImage(session?: RoomBeforeSession | null): string | null {
+  return captureOriginalRoomImage(
+    session?.originalRoomImage || session?.roomImage || readRoomImageSourceUrl(),
+    { existing: session?.originalRoomImage || readStoredOriginalRoomImage() },
+  );
 }
 
 /** Display URL for a stored room photo (data URL, http(s), or raw base64). */
@@ -306,12 +348,14 @@ export function toBase64Payload(url?: string | null, explicit?: string | null): 
 }
 
 /**
- * Original room photo for share “before”: upload, sample library, or stored roomImage.
- * Never the furniture-removed empty room — that is a processed variant, not before.
+ * Original room photo for share “before”: dedicated originalRoomImage first,
+ * then upload/sample, then stored roomImage. Never the furniture-removed empty room.
  */
 export function resolveRoomBeforeImage(session?: RoomBeforeSession | null): RoomBeforeImage | null {
   const sourceUrl = readRoomImageSourceUrl();
   const candidates = [
+    session?.originalRoomImage,
+    readStoredOriginalRoomImage(),
     session?.roomImage,
     session?.uploadedImage,
     readSessionStorage(ROOM_IMAGE_SESSION_KEY),
@@ -397,10 +441,13 @@ function matchesForbiddenEmptyRoom(
 }
 
 /**
- * Original room photo for share Przed — Generation History upload node first,
+ * Original room photo for share Przed — dedicated originalRoomImage first,
+ * then a history node tagged upload/sample/source (never history[0] if that is a gen),
  * then session roomImage. Never the generated after, never empty-room.
  */
 export function pickShareBeforeSource(opts: {
+  originalRoomImage?: string | null;
+  history?: Array<{ id?: string; type?: string; source?: string; imageUrl?: string }>;
   historyUrl?: string | null;
   roomBefore?: RoomBeforeImage | null;
   originalRoomPhotoUrl?: string | null;
@@ -410,19 +457,21 @@ export function pickShareBeforeSource(opts: {
   const after: ShareAfterForbid = { url: opts.afterUrl, base64: opts.afterBase64 };
   const candidates: RoomBeforeImage[] = [];
 
-  if (opts.historyUrl && opts.historyUrl.trim()) {
-    const url = opts.historyUrl.trim();
-    candidates.push({ url, base64: toBase64Payload(url, null) });
-  }
+  const push = (raw?: string | null, base64?: string | null) => {
+    if (!raw || !raw.trim()) return;
+    const url = raw.trim();
+    candidates.push({ url, base64: base64 ?? toBase64Payload(url, null) });
+  };
+
+  push(opts.originalRoomImage);
+  push(opts.originalRoomPhotoUrl);
+  push(opts.history ? originalRoomHistoryUrl(opts.history) : null);
+  push(opts.historyUrl);
   if (opts.roomBefore?.url) {
     candidates.push({
       url: opts.roomBefore.url,
       base64: opts.roomBefore.base64 ?? toBase64Payload(opts.roomBefore.url, null),
     });
-  }
-  if (opts.originalRoomPhotoUrl && opts.originalRoomPhotoUrl.trim()) {
-    const url = opts.originalRoomPhotoUrl.trim();
-    candidates.push({ url, base64: toBase64Payload(url, null) });
   }
 
   const seen = new Set<string>();

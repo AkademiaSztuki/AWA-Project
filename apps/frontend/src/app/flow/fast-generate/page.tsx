@@ -37,7 +37,12 @@ import {
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
 import { ShareResultBar } from '@/components/share/ShareResultBar';
 import { originalRoomHistoryUrl, prependOriginalRoomHistory } from '@/lib/generation-history';
-import { pickShareBeforeSource, resolveRoomBeforeImage } from '@/lib/share/source-image';
+import {
+  pickShareBeforeSource,
+  resolveRoomBeforeImage,
+  ensureOriginalRoomImage,
+  toImageDataUrl,
+} from '@/lib/share/source-image';
 import { GenerationSource } from '@/lib/prompt-synthesis/modes';
 import { addGeneratedImageToSpace } from '@/lib/spaces';
 import {
@@ -288,6 +293,11 @@ export default function FastGeneratePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   /** Compare with user upload — same pattern as full-flow generate page */
   const [originalRoomPhotoUrl, setOriginalRoomPhotoUrl] = useState<string | null>(null);
+  const originalRoomImageRef = useRef<string | null>(null);
+  if (isSessionInitialized && !originalRoomImageRef.current) {
+    originalRoomImageRef.current = ensureOriginalRoomImage(getSessionStoreSnapshot());
+  }
+  const liveOriginalRoomImage = originalRoomImageRef.current;
   const [showOriginalRoomPhoto, setShowOriginalRoomPhoto] = useState(false);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [upscaledImage, setUpscaledImage] = useState<GeneratedImage | null>(null);
@@ -311,22 +321,36 @@ export default function FastGeneratePage() {
     () =>
       prependOriginalRoomHistory(
         generationHistory,
-        roomUploadPreviewUrl,
+        toImageDataUrl(liveOriginalRoomImage) || originalRoomPhotoUrl || roomUploadPreviewUrl,
         language === 'pl' ? 'Zdjęcie z uploadu' : 'Uploaded photo',
       ),
-    [generationHistory, roomUploadPreviewUrl, language],
+    [generationHistory, liveOriginalRoomImage, originalRoomPhotoUrl, roomUploadPreviewUrl, language],
   );
   const shareBeforeSource = useMemo(
     () =>
       pickShareBeforeSource({
+        originalRoomImage: liveOriginalRoomImage || originalRoomPhotoUrl,
+        history: historyForDisplay,
         historyUrl: originalRoomHistoryUrl(historyForDisplay),
         roomBefore: roomBeforeImage,
-        originalRoomPhotoUrl,
         afterUrl: generatedImage?.url,
         afterBase64: generatedImage?.base64,
       }),
-    [historyForDisplay, roomBeforeImage, originalRoomPhotoUrl, generatedImage],
+    [liveOriginalRoomImage, originalRoomPhotoUrl, historyForDisplay, roomBeforeImage, generatedImage],
   );
+
+  useEffect(() => {
+    if (!isSessionInitialized) return;
+    const snap = getSessionStoreSnapshot();
+    const captured = originalRoomImageRef.current || ensureOriginalRoomImage(snap);
+    if (!captured) return;
+    originalRoomImageRef.current = captured;
+    const display = toImageDataUrl(captured) || captured;
+    setOriginalRoomPhotoUrl((prev) => prev || display);
+    if (!snap.originalRoomImage) {
+      updateSessionData({ originalRoomImage: captured });
+    }
+  }, [isSessionInitialized, updateSessionData]);
 
   /** Thumbnail selection in history: base image for all modifications (micro, macro, custom). */
   const resolveSelectedGeneratedImageForModification = useCallback((): GeneratedImage | null => {
@@ -429,6 +453,18 @@ export default function FastGeneratePage() {
       const roomImage = typedSessionData?.roomImage;
       const roomImageEmpty = typedSessionData?.roomImageEmpty;
       const processedRoomImage = roomImageEmpty || roomImage;
+
+      const capturedOriginal = ensureOriginalRoomImage({
+        originalRoomImage: typedSessionData?.originalRoomImage || originalRoomImageRef.current,
+        roomImage,
+      });
+      if (capturedOriginal) {
+        originalRoomImageRef.current = capturedOriginal;
+        setOriginalRoomPhotoUrl((prev) => prev || toImageDataUrl(capturedOriginal) || capturedOriginal);
+        if (!typedSessionData?.originalRoomImage) {
+          void updateSessionData({ originalRoomImage: capturedOriginal });
+        }
+      }
 
       if (!processedRoomImage) {
         setError('Brak zdjęcia pomieszczenia. Wróć do poprzedniego kroku i dodaj zdjęcie.');
@@ -1679,6 +1715,16 @@ export default function FastGeneratePage() {
   };
 
   const handleShowOriginal = () => {
+    const captured = originalRoomImageRef.current || ensureOriginalRoomImage(getSessionStoreSnapshot());
+    if (captured) {
+      originalRoomImageRef.current = captured;
+      setOriginalRoomPhotoUrl(toImageDataUrl(captured) || captured);
+      setShowOriginalRoomPhoto(true);
+      setShowModifications(false);
+      setError(null);
+      return;
+    }
+
     let roomImage = (sessionData as { roomImage?: string })?.roomImage;
 
     if (!roomImage && typeof window !== 'undefined') {

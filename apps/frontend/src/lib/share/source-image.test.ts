@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  captureOriginalRoomImage,
   collectShareBeforeBase64,
   guessMimeFromBase64,
   isRemoteOrAssetUrl,
@@ -112,6 +113,15 @@ describe('guessMimeFromBase64', () => {
 });
 
 describe('resolveRoomBeforeImage', () => {
+  it('uses dedicated originalRoomImage over the empty processed room', () => {
+    const resolved = resolveRoomBeforeImage({
+      originalRoomImage: JPEG_B64,
+      roomImage: 'other-room',
+      roomImageEmpty: 'room-empty',
+    });
+    expect(resolved?.base64).toBe(JPEG_B64);
+  });
+
   it('uses the original room photo, not the empty processed room', () => {
     const resolved = resolveRoomBeforeImage({
       roomImage: JPEG_B64,
@@ -139,6 +149,16 @@ describe('resolveRoomBeforeImage', () => {
 describe('collectShareBeforeBase64', () => {
   it('uses explicit image bytes from props', async () => {
     await expect(collectShareBeforeBase64(null, JPEG_B64, null)).resolves.toBe(JPEG_B64);
+  });
+
+  it('uses session originalRoomImage even when roomImage equals the generated after', async () => {
+    const original = btoa('\xff\xd8\xff\xe0' + 'O'.repeat(80));
+    const generated = btoa('\xff\xd8\xff\xe0' + 'G'.repeat(80));
+    await expect(
+      collectShareBeforeBase64(null, null, { originalRoomImage: original, roomImage: generated }, {
+        base64: generated,
+      }),
+    ).resolves.toBe(original);
   });
 
   it('uses session roomImage when props are empty', async () => {
@@ -233,6 +253,33 @@ describe('pickShareBeforeSource', () => {
       afterBase64: JPEG_B64,
     });
     expect(picked?.url).toBe(original);
+  });
+
+  it('uses originalRoomImage even when history[0] is the latest generated vision', () => {
+    const picked = pickShareBeforeSource({
+      originalRoomImage: original,
+      history: [
+        { id: 'gen-9', type: 'macro', imageUrl: generated },
+        { id: 'gen-1', type: 'initial', imageUrl: generated },
+      ],
+      historyUrl: generated,
+      roomBefore: { url: generated, base64: JPEG_B64 },
+      afterUrl: generated,
+      afterBase64: JPEG_B64,
+    });
+    expect(picked?.url).toBe(original);
+    expect(picked?.url).not.toBe(generated);
+  });
+});
+
+describe('captureOriginalRoomImage', () => {
+  const original = '/images/tinder/Living Room (1).jpg';
+  const generated = `data:image/jpeg;base64,${JPEG_B64}`;
+
+  it('does not overwrite a captured original with a later generated result', () => {
+    const first = captureOriginalRoomImage(original);
+    expect(first).toBe(original);
+    expect(captureOriginalRoomImage(generated, { existing: first })).toBe(original);
   });
 });
 

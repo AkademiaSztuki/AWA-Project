@@ -117,6 +117,11 @@ export interface SessionData {
   dnaFeedbackTime?: string;
   dnaAnalysisComplete?: boolean;
   roomImage?: string; // Base64 encoded image
+  /**
+   * User-picked room photo (upload or sample), captured once at photo/generate start.
+   * Never overwritten with empty-room or generation results — share “before” uses only this.
+   */
+  originalRoomImage?: string;
   roomImageEmpty?: string; // Base64 encoded image with furniture removed
   detectedRoomType?: string; // Automatycznie wykryty typ pokoju
   roomAnalysis?: {

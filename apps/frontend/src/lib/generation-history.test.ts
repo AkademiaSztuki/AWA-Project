@@ -40,6 +40,21 @@ describe('prependOriginalRoomHistory', () => {
     expect(originalRoomHistoryUrl(withUpload)).toBe('/images/tinder/Living Room (1).jpg');
   });
 
+  it('reads a history node tagged sample/source, not history[0] generated', () => {
+    const original = '/images/tinder/Living Room (1).jpg';
+    const latest = {
+      id: 'gen-9',
+      type: 'macro' as const,
+      imageUrl: 'https://cdn.example/latest-gen.jpg',
+    };
+    expect(
+      originalRoomHistoryUrl([
+        latest,
+        { id: 'src-1', type: 'sample', imageUrl: original },
+      ]),
+    ).toBe(original);
+  });
+
   it('does not treat history[0] as original when it is the latest generated vision', () => {
     const latest = {
       id: 'gen-9',

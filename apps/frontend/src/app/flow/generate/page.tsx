@@ -58,7 +58,7 @@ import Image from 'next/image';
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
 import { ShareResultBar } from '@/components/share/ShareResultBar';
 import { personalityLabelsFromScores } from '@/lib/share/personality-labels';
-import { pickShareBeforeSource, resolveRoomBeforeImage } from '@/lib/share/source-image';
+import { pickShareBeforeSource, resolveRoomBeforeImage, ensureOriginalRoomImage, toImageDataUrl } from '@/lib/share/source-image';
 import { 
   synthesizeSixPrompts,
   synthesizeFivePrompts, // Backward compatibility
@@ -237,6 +237,11 @@ export default function GeneratePage() {
   const [isUpscaling, setIsUpscaling] = useState(false); // Track upscale in progress
   const [upscaledImage, setUpscaledImage] = useState<GeneratedImage | null>(null); // Store upscaled version
   const [originalRoomPhotoUrl, setOriginalRoomPhotoUrl] = useState<string | null>(null);
+  const originalRoomImageRef = useRef<string | null>(null);
+  if (isSessionInitialized && !originalRoomImageRef.current) {
+    originalRoomImageRef.current = ensureOriginalRoomImage(getSessionStoreSnapshot());
+  }
+  const liveOriginalRoomImage = originalRoomImageRef.current;
   const [showOriginalRoomPhoto, setShowOriginalRoomPhoto] = useState(false);
   const roomBeforeImage = useMemo(
     () => resolveRoomBeforeImage(sessionData),
@@ -302,22 +307,37 @@ export default function GeneratePage() {
     () =>
       prependOriginalRoomHistory(
         generationHistory,
-        roomUploadPreviewUrl,
+        toImageDataUrl(liveOriginalRoomImage) || originalRoomPhotoUrl || roomUploadPreviewUrl,
         language === 'pl' ? 'Zdjęcie z uploadu' : 'Uploaded photo',
       ),
-    [generationHistory, roomUploadPreviewUrl, language],
+    [generationHistory, liveOriginalRoomImage, originalRoomPhotoUrl, roomUploadPreviewUrl, language],
   );
   const shareBeforeSource = useMemo(
     () =>
       pickShareBeforeSource({
+        originalRoomImage: liveOriginalRoomImage || originalRoomPhotoUrl,
+        history: historyForDisplay,
         historyUrl: originalRoomHistoryUrl(historyForDisplay),
         roomBefore: roomBeforeImage,
-        originalRoomPhotoUrl,
         afterUrl: selectedImage?.url,
         afterBase64: selectedImage?.base64,
       }),
-    [historyForDisplay, roomBeforeImage, originalRoomPhotoUrl, selectedImage],
+    [liveOriginalRoomImage, originalRoomPhotoUrl, historyForDisplay, roomBeforeImage, selectedImage],
   );
+
+  useEffect(() => {
+    if (!isSessionInitialized) return;
+    const snap = getSessionStoreSnapshot();
+    const captured = originalRoomImageRef.current || ensureOriginalRoomImage(snap);
+    if (!captured) return;
+    originalRoomImageRef.current = captured;
+    const display = toImageDataUrl(captured) || captured;
+    setOriginalRoomPhotoUrl((prev) => prev || display);
+    if (!snap.originalRoomImage) {
+      updateSessionData({ originalRoomImage: captured });
+    }
+  }, [isSessionInitialized, updateSessionData]);
+
   const tasteRatingPanelRef = useRef<HTMLDivElement>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<'positive' | 'neutral' | 'negative'>('neutral');
@@ -1054,6 +1074,17 @@ RESULT: A completely empty, bare room with only architectural structure visible.
         roomImage = sessionRoomImage;
         // Update sessionData with the restored image
         updateSessionData({ roomImage: sessionRoomImage });
+      }
+    }
+    const capturedOriginal = ensureOriginalRoomImage({
+      originalRoomImage: typedSessionData?.originalRoomImage || originalRoomImageRef.current,
+      roomImage,
+    });
+    if (capturedOriginal) {
+      originalRoomImageRef.current = capturedOriginal;
+      setOriginalRoomPhotoUrl((prev) => prev || toImageDataUrl(capturedOriginal) || capturedOriginal);
+      if (!typedSessionData?.originalRoomImage) {
+        updateSessionData({ originalRoomImage: capturedOriginal });
       }
     }
     
@@ -3230,6 +3261,18 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     
     const typedSessionData = sessionData as any;
 
+    const capturedOriginal = ensureOriginalRoomImage({
+      originalRoomImage: typedSessionData?.originalRoomImage || originalRoomImageRef.current,
+      roomImage: typedSessionData?.roomImage,
+    });
+    if (capturedOriginal) {
+      originalRoomImageRef.current = capturedOriginal;
+      setOriginalRoomPhotoUrl((prev) => prev || toImageDataUrl(capturedOriginal) || capturedOriginal);
+      if (!typedSessionData?.originalRoomImage) {
+        updateSessionData({ originalRoomImage: capturedOriginal });
+      }
+    }
+
     if (!typedSessionData || !typedSessionData.roomImage) {
       console.error("KRYTYCZNY BŁĄD: Brak 'roomImage' w danych sesji.");
       console.error("Dostępne klucze w sessionData:", Object.keys(typedSessionData || {}));
@@ -4040,6 +4083,15 @@ RESULT: A completely empty, bare room with only architectural structure visible.
   };
 
   const handleShowOriginal = () => {
+    const captured = originalRoomImageRef.current || ensureOriginalRoomImage(getSessionStoreSnapshot());
+    if (captured) {
+      originalRoomImageRef.current = captured;
+      setOriginalRoomPhotoUrl(toImageDataUrl(captured) || captured);
+      setShowOriginalRoomPhoto(true);
+      setShowModifications(false);
+      return;
+    }
+
     // Try to get roomImage from sessionData first
     let roomImage = (sessionData as any)?.roomImage;
     

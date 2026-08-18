@@ -41,17 +41,25 @@ export function prependOriginalRoomHistory<T extends { id?: string; type?: strin
   ];
 }
 
-export function isOriginalRoomHistoryNode(node?: { id?: string; type?: string } | null): boolean {
-  return Boolean(node && (node.type === 'upload' || node.id === ORIGINAL_ROOM_HISTORY_ID));
-}
-
 function isGeneratedHistoryType(type?: string): boolean {
   return type === 'initial' || type === 'micro' || type === 'macro';
 }
 
-/** URL of the original upload node — never a generated vision (including history[0] if that is a gen). */
+const ORIGINAL_HISTORY_TAGS = new Set(['upload', 'sample', 'source']);
+
+export function isOriginalRoomHistoryNode(
+  node?: { id?: string; type?: string; source?: string } | null,
+): boolean {
+  if (!node || isGeneratedHistoryType(node.type)) return false;
+  if (node.id === ORIGINAL_ROOM_HISTORY_ID) return true;
+  if (node.type && ORIGINAL_HISTORY_TAGS.has(node.type)) return true;
+  if (node.source && ORIGINAL_HISTORY_TAGS.has(node.source)) return true;
+  return false;
+}
+
+/** URL of the original upload/sample node — never a generated vision (including history[0] if that is a gen). */
 export function originalRoomHistoryUrl(
-  history: Array<{ id?: string; type?: string; imageUrl?: string }>,
+  history: Array<{ id?: string; type?: string; source?: string; imageUrl?: string }>,
 ): string | null {
   const node = history.find((item) => isOriginalRoomHistoryNode(item));
   if (!node || isGeneratedHistoryType(node.type)) return null;

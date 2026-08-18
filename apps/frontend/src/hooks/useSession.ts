@@ -21,6 +21,7 @@ const USER_HASH_STORAGE_KEY = 'aura_user_hash';
 const ROOM_IMAGE_SESSION_KEY = 'aura_session_room_image';
 const ROOM_IMAGE_EMPTY_SESSION_KEY = 'aura_session_room_image_empty';
 const ROOM_IMAGE_EMPTY_SOURCE_SIG_KEY = 'aura_session_room_image_empty_source_sig';
+const ORIGINAL_ROOM_IMAGE_SESSION_KEY = 'aura_session_original_room_image';
 const STORAGE_SIZE_THRESHOLD = 4_500_000; // ~4,5MB
 const MAX_INLINE_DATA_LENGTH = 120_000; // ~120KB
 const MAX_GENERATIONS_HISTORY = 120;
@@ -40,7 +41,7 @@ const isLargeDataUrl = (value?: string | null): boolean => {
 };
 
 const shouldSanitizeSessionData = (data: SessionData): boolean => {
-  if (isLargeDataUrl(data.roomImage)) {
+  if (isLargeDataUrl(data.roomImage) || isLargeDataUrl(data.originalRoomImage)) {
     return true;
   }
 
@@ -74,6 +75,7 @@ const sanitizeSessionDataForStorage = (data: SessionData): SessionData => {
 
   // Always drop heavy blobs from localStorage; they are cached separately (sessionStorage / Supabase)
   sanitized.roomImage = undefined;
+  sanitized.originalRoomImage = undefined;
   sanitized.roomImageEmpty = undefined; // Also cached in sessionStorage
   sanitized.uploadedImage = undefined;
   // Preserve selected image with base64 and parameters (needed for modifications to work after refresh)
@@ -314,11 +316,24 @@ const persistSanitizedSessionData = (data: SessionData) => {
   }
 };
 
+const manageOriginalRoomImageCache = (originalRoomImage?: string) => {
+  if (typeof window === 'undefined') return;
+  if (!originalRoomImage) return;
+  try {
+    const existing = safeSessionStorage.getItem(ORIGINAL_ROOM_IMAGE_SESSION_KEY);
+    if (existing) return;
+    safeSessionStorage.setItem(ORIGINAL_ROOM_IMAGE_SESSION_KEY, originalRoomImage);
+  } catch {
+    // Quota — generate-page React state still holds the snapshot.
+  }
+};
+
 const persistSessionData = (data: SessionData): SessionData => {
   if (typeof window === 'undefined') return data;
 
   manageRoomImageCache(data.roomImage);
   manageRoomImageEmptyCache(data.roomImageEmpty, data.roomImage);
+  manageOriginalRoomImageCache(data.originalRoomImage);
   
 
   // Preserve existing Big Five/userHash/colorsAndMaterials/visualDNA from stored snapshot if incoming data lacks them
@@ -508,6 +523,7 @@ export const useSession = (): UseSessionReturn => {
       // Get room images from sessionStorage (fast)
       const sessionRoomImage = safeSessionStorage.getItem(ROOM_IMAGE_SESSION_KEY);
       const sessionRoomImageEmpty = safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
+      const sessionOriginalRoomImage = safeSessionStorage.getItem(ORIGINAL_ROOM_IMAGE_SESSION_KEY);
 
       // Generate userHash if missing (fast, synchronous)
       if (!userHash) {
@@ -525,6 +541,9 @@ export const useSession = (): UseSessionReturn => {
       // Add room images from sessionStorage
       if (sessionRoomImage) {
         initialSession.roomImage = sessionRoomImage;
+      }
+      if (sessionOriginalRoomImage) {
+        initialSession.originalRoomImage = sessionOriginalRoomImage;
       }
       if (sessionRoomImageEmpty) {
         initialSession.roomImageEmpty = sessionRoomImageEmpty;
@@ -950,6 +969,12 @@ export const useSession = (): UseSessionReturn => {
         mergedSession = { ...mergedSession, roomImage: sessionRoomImage };
       }
 
+      const sessionOriginalFinal =
+        safeSessionStorage.getItem(ORIGINAL_ROOM_IMAGE_SESSION_KEY) || sessionOriginalRoomImage;
+      if (sessionOriginalFinal && !mergedSession.originalRoomImage) {
+        mergedSession = { ...mergedSession, originalRoomImage: sessionOriginalFinal };
+      }
+
       // CRITICAL: Upewnij się, że najświeższe roomImageEmpty z sessionStorage ma priorytet
       const sessionRoomImageEmptyFinal = safeSessionStorage.getItem(ROOM_IMAGE_EMPTY_SESSION_KEY);
       
@@ -1004,11 +1029,18 @@ export const useSession = (): UseSessionReturn => {
       const prevData = prev.sessionData;
       // Preserve roomImageEmpty from previous state if not explicitly provided in updates
       const hasRoomImageEmptyInUpdates = 'roomImageEmpty' in updates;
+      const hasOriginalRoomImageInUpdates = 'originalRoomImage' in updates;
       const merged = mergeSessionDataUpdates(prevData, updates);
       const newData = {
         ...merged,
         // CRITICAL: Preserve roomImageEmpty from previous state if not explicitly in updates
         roomImageEmpty: hasRoomImageEmptyInUpdates ? updates.roomImageEmpty : prevData.roomImageEmpty,
+        originalRoomImage:
+          hasOriginalRoomImageInUpdates &&
+          typeof updates.originalRoomImage === 'string' &&
+          updates.originalRoomImage.trim()
+            ? updates.originalRoomImage
+            : prevData.originalRoomImage,
       };
 
       const persisted = persistSessionData(newData);
