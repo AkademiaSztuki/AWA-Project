@@ -993,12 +993,6 @@ export function UserDashboard() {
             })()}
           />
 
-          {user && (
-            <div className="mt-6">
-              <InviteFriendsPanel userHash={getUserHash()} />
-            </div>
-          )}
-
           <DashboardJourneySteps
             primarySpaceId={primarySpaceId}
             completedStepIndices={completedJourneyStepIndices}
@@ -1064,6 +1058,12 @@ export function UserDashboard() {
               onDeleteGeneratedImage={handleDeleteGeneratedImage}
             />
           </section>
+
+          {user && (
+            <div className="mt-10">
+              <InviteFriendsPanel userHash={getUserHash()} defaultCollapsed />
+            </div>
+          )}
 
           <section id="dashboard-rooms" className="scroll-mt-24">
             <motion.div
