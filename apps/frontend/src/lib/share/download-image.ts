@@ -116,6 +116,12 @@ function triggerAnchorDownload(href: string, filename: string): void {
   document.body.removeChild(link);
 }
 
+export function downloadBlobFile(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  triggerAnchorDownload(objectUrl, filename);
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+}
+
 function loadHtmlImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -347,9 +353,7 @@ export async function downloadShareImage(
   if (branded) {
     try {
       const blob = await composeBrandedImageBlob(url, cta, beforeUrl, labels);
-      const objectUrl = URL.createObjectURL(blob);
-      triggerAnchorDownload(objectUrl, `${filenameBase}-${stamp}.jpg`);
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+      downloadBlobFile(blob, `${filenameBase}-${stamp}.jpg`);
       return;
     } catch {
       // Fall through to the unbranded file if canvas/CORS fails.

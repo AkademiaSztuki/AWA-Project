@@ -47,6 +47,8 @@ export function facebookShareUrl(url: string, quote: string): string {
   return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(quote)}`;
 }
 
+export const INSTAGRAM_WEB_URL = 'https://www.instagram.com/';
+
 export function nativeShareData(
   text: string,
   url: string,

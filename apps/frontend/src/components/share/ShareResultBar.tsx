@@ -10,12 +10,22 @@ import {
 import {
   captionWithUrl,
   facebookShareUrl,
+  INSTAGRAM_WEB_URL,
   nativeShareData,
   shareCaptions,
   xShareUrl,
 } from '@/lib/share/captions';
 import { copyTextToClipboard } from '@/lib/share/copy-text';
-import { composeBrandedImageBlob, downloadShareImage } from '@/lib/share/download-image';
+import {
+  composeBrandedImageBlob,
+  downloadBlobFile,
+  downloadShareImage,
+} from '@/lib/share/download-image';
+import {
+  isMobileShareClient,
+  readCoarsePointer,
+  shouldUseNativeFileShare,
+} from '@/lib/share/native-file-share';
 import {
   collectShareBeforeBase64,
   compressBase64ForShare,
@@ -107,9 +117,10 @@ export function ShareResultBar({
   const [cardKey, setCardKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [igHint, setIgHint] = useState(false);
+  const [shareHint, setShareHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const createPromiseRef = useRef<Promise<CreatedCard | null> | null>(null);
+  const hintTimerRef = useRef<number | null>(null);
   const shareKey = `${userHash || ''}|${imageUrl}|${pathType}|${beforeImageUrl || ''}`;
   const validCard = cardKey === shareKey ? card : null;
   const brandCta = t('Wygeneruj swoje na project-ida.com', 'Generate yours at project-ida.com');
@@ -312,6 +323,18 @@ export function ShareResultBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid loops when labels arrays are recreated
   }, [shareKey, userHash]);
 
+  useEffect(() => {
+    return () => {
+      if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current);
+    };
+  }, []);
+
+  const showShareHint = (message: string) => {
+    setShareHint(message);
+    if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = window.setTimeout(() => setShareHint(null), 8000);
+  };
+
   const captions = shareCaptions(language === 'en' ? 'en' : 'pl');
 
   const copyCreatedOrInvite = async (created: CreatedCard | null): Promise<boolean> => {
@@ -345,7 +368,15 @@ export function ShareResultBar({
       popup?.close();
       return;
     }
-    openShareWindow(facebookShareUrl(shareUrlFor(created), captions.facebook), popup);
+    const shareUrl = shareUrlFor(created);
+    await copyTextToClipboard(captionWithUrl(captions.facebook, shareUrl));
+    openShareWindow(facebookShareUrl(shareUrl, captions.facebook), popup);
+    showShareHint(
+      t(
+        'Skopiowano podpis — wklej go w poście na Facebooku.',
+        'Caption copied — paste it into the Facebook post.',
+      ),
+    );
   };
 
   const handleX = async () => {
@@ -390,56 +421,71 @@ export function ShareResultBar({
   };
 
   const handleInstagram = async () => {
+    const nativeClient = isMobileShareClient(navigator.userAgent, readCoarsePointer());
+    const popup = nativeClient ? null : window.open('about:blank', '_blank');
+
+    const finishOnWeb = async (blob: Blob | null, shareUrl: string | null) => {
+      if (blob) {
+        downloadBlobFile(blob, `ida-interior-${Date.now()}.jpg`);
+      } else {
+        await downloadShareImage(
+          imageUrl,
+          'ida-interior',
+          true,
+          brandCta,
+          beforeImageUrl,
+          storyLabels,
+        );
+      }
+      if (shareUrl) {
+        await copyTextToClipboard(captionWithUrl(captions.instagram, shareUrl));
+      }
+      openShareWindow(INSTAGRAM_WEB_URL, popup);
+      showShareHint(
+        t(
+          'Obrazek pobrany, tekst skopiowany — wklej w Stories / nowy post.',
+          'Image downloaded, caption copied — paste it in Stories or a new post.',
+        ),
+      );
+    };
+
     try {
       const [created, blob] = await Promise.all([
         ensureCard(),
         composeBrandedImageBlob(imageUrl, brandCta, beforeImageUrl, storyLabels),
       ]);
       const shareUrl = created ? shareUrlFor(created) : null;
-      if (shareUrl) {
-        await copyTextToClipboard(captionWithUrl(captions.instagram, shareUrl));
-      }
       const file = new File([blob], 'ida-interior.jpg', { type: blob.type || 'image/jpeg' });
-      const sharePayload = shareUrl
-        ? nativeShareData(captions.instagram, shareUrl)
-        : { title: 'IDA', text: captions.instagram };
-      const shareData: ShareData = {
-        files: [file],
-        ...sharePayload,
-      };
 
-      if (typeof navigator.share === 'function') {
-        const canShareFiles =
-          typeof navigator.canShare !== 'function' ||
-          navigator.canShare({ files: [file] }) ||
-          navigator.canShare(shareData);
-        if (canShareFiles) {
-          try {
-            await navigator.share(shareData);
+      if (shouldUseNativeFileShare(file)) {
+        if (shareUrl) {
+          await copyTextToClipboard(captionWithUrl(captions.instagram, shareUrl));
+        }
+        const sharePayload = shareUrl
+          ? nativeShareData(captions.instagram, shareUrl)
+          : { title: 'IDA', text: captions.instagram };
+        try {
+          await navigator.share({
+            files: [file],
+            ...sharePayload,
+          });
+          popup?.close();
+          return;
+        } catch (err) {
+          if (isAbortError(err)) {
+            popup?.close();
             return;
-          } catch (err) {
-            if (isAbortError(err)) return;
           }
         }
       }
 
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = `ida-interior-${Date.now()}.jpg`;
-      link.rel = 'noopener noreferrer';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
-      setIgHint(true);
-      window.setTimeout(() => setIgHint(false), 8000);
+      await finishOnWeb(blob, shareUrl);
     } catch {
       try {
-        await downloadShareImage(imageUrl, 'ida-interior', true, brandCta, beforeImageUrl, storyLabels);
-        setIgHint(true);
-        window.setTimeout(() => setIgHint(false), 8000);
+        const created = await ensureCard();
+        await finishOnWeb(null, created ? shareUrlFor(created) : null);
       } catch {
+        popup?.close();
         setError(
           t(
             'Nie udało się przygotować obrazu do Instagrama.',
@@ -511,12 +557,9 @@ export function ShareResultBar({
           <span className="truncate">{t('Pobierz', 'Save')}</span>
         </button>
       </div>
-      {igHint && (
+      {shareHint && (
         <p className="font-modern text-sm text-graphite" role="status">
-          {t(
-            'Zapisano Stories (9:16, przed i po) i skopiowano podpis z linkiem — wklej go w Instagramie.',
-            'Saved a 9:16 before/after Story image and copied the caption with the link — paste it in Instagram.',
-          )}
+          {shareHint}
         </p>
       )}
       {error && (
