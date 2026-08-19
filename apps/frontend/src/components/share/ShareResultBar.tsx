@@ -8,9 +8,7 @@ import {
   REFERRAL_VERIFY_CREDITS,
 } from '@/lib/referral-constants';
 import {
-  captionWithUrl,
   facebookShareUrl,
-  INSTAGRAM_WEB_URL,
   nativeShareData,
   shareCaptions,
   xShareUrl,
@@ -21,11 +19,7 @@ import {
   downloadBlobFile,
   downloadShareImage,
 } from '@/lib/share/download-image';
-import {
-  isMobileShareClient,
-  readCoarsePointer,
-  shouldUseNativeFileShare,
-} from '@/lib/share/native-file-share';
+import { shouldUseNativeFileShare } from '@/lib/share/native-file-share';
 import {
   collectShareBeforeBase64,
   compressBase64ForShare,
@@ -319,7 +313,7 @@ export function ShareResultBar({
   useEffect(() => {
     if (!userHash) return;
     void ensureCard(true);
-    // Prefetch once per image so clipboard / window.open stay in a user gesture.
+    // Prefetch once per image so Facebook window.open stays in a user gesture.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid loops when labels arrays are recreated
   }, [shareKey, userHash]);
 
@@ -368,15 +362,7 @@ export function ShareResultBar({
       popup?.close();
       return;
     }
-    const shareUrl = shareUrlFor(created);
-    await copyTextToClipboard(captionWithUrl(captions.facebook, shareUrl));
-    openShareWindow(facebookShareUrl(shareUrl, captions.facebook), popup);
-    showShareHint(
-      t(
-        'Skopiowano podpis — wklej go w poście na Facebooku.',
-        'Caption copied — paste it into the Facebook post.',
-      ),
-    );
+    openShareWindow(facebookShareUrl(shareUrlFor(created)), popup);
   };
 
   const handleX = async () => {
@@ -420,35 +406,16 @@ export function ShareResultBar({
     }
   };
 
+  const showStoriesSavedHint = () => {
+    showShareHint(
+      t(
+        'Kadr Stories zapisany — wrzuć go w aplikacji Instagram.',
+        'Stories frame saved — upload it in the Instagram app.',
+      ),
+    );
+  };
+
   const handleInstagram = async () => {
-    const nativeClient = isMobileShareClient(navigator.userAgent, readCoarsePointer());
-    const popup = nativeClient ? null : window.open('about:blank', '_blank');
-
-    const finishOnWeb = async (blob: Blob | null, shareUrl: string | null) => {
-      if (blob) {
-        downloadBlobFile(blob, `ida-interior-${Date.now()}.jpg`);
-      } else {
-        await downloadShareImage(
-          imageUrl,
-          'ida-interior',
-          true,
-          brandCta,
-          beforeImageUrl,
-          storyLabels,
-        );
-      }
-      if (shareUrl) {
-        await copyTextToClipboard(captionWithUrl(captions.instagram, shareUrl));
-      }
-      openShareWindow(INSTAGRAM_WEB_URL, popup);
-      showShareHint(
-        t(
-          'Obrazek pobrany, tekst skopiowany — wklej w Stories / nowy post.',
-          'Image downloaded, caption copied — paste it in Stories or a new post.',
-        ),
-      );
-    };
-
     try {
       const [created, blob] = await Promise.all([
         ensureCard(),
@@ -458,9 +425,6 @@ export function ShareResultBar({
       const file = new File([blob], 'ida-interior.jpg', { type: blob.type || 'image/jpeg' });
 
       if (shouldUseNativeFileShare(file)) {
-        if (shareUrl) {
-          await copyTextToClipboard(captionWithUrl(captions.instagram, shareUrl));
-        }
         const sharePayload = shareUrl
           ? nativeShareData(captions.instagram, shareUrl)
           : { title: 'IDA', text: captions.instagram };
@@ -469,23 +433,28 @@ export function ShareResultBar({
             files: [file],
             ...sharePayload,
           });
-          popup?.close();
           return;
         } catch (err) {
           if (isAbortError(err)) {
-            popup?.close();
             return;
           }
         }
       }
 
-      await finishOnWeb(blob, shareUrl);
+      downloadBlobFile(blob, `ida-interior-${Date.now()}.jpg`);
+      showStoriesSavedHint();
     } catch {
       try {
-        const created = await ensureCard();
-        await finishOnWeb(null, created ? shareUrlFor(created) : null);
+        await downloadShareImage(
+          imageUrl,
+          'ida-interior',
+          true,
+          brandCta,
+          beforeImageUrl,
+          storyLabels,
+        );
+        showStoriesSavedHint();
       } catch {
-        popup?.close();
         setError(
           t(
             'Nie udało się przygotować obrazu do Instagrama.',

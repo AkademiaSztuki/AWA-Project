@@ -43,11 +43,9 @@ export function xShareUrl(url: string, text: string): string {
   return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
 }
 
-export function facebookShareUrl(url: string, quote: string): string {
-  return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(quote)}`;
+export function facebookShareUrl(url: string): string {
+  return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
 }
-
-export const INSTAGRAM_WEB_URL = 'https://www.instagram.com/';
 
 export function nativeShareData(
   text: string,
