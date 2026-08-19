@@ -10,7 +10,9 @@ import {
 import {
   facebookShareUrl,
   nativeShareData,
+  SHARE_SIGNUP_CREDITS,
   shareCaptions,
+  shareOgCopy,
   xShareUrl,
 } from '@/lib/share/captions';
 import { copyTextToClipboard } from '@/lib/share/copy-text';
@@ -27,6 +29,7 @@ import {
   isSameShareImageSource,
   looksLikeImageBase64,
   toBase64Payload,
+  toImageDataUrl,
 } from '@/lib/share/source-image';
 import { getSiteUrl } from '@/lib/seo/site';
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
@@ -117,10 +120,42 @@ export function ShareResultBar({
   const hintTimerRef = useRef<number | null>(null);
   const shareKey = `${userHash || ''}|${imageUrl}|${pathType}|${beforeImageUrl || ''}`;
   const validCard = cardKey === shareKey ? card : null;
-  const brandCta = t('Wygeneruj swoje na project-ida.com', 'Generate yours at project-ida.com');
+  const brandCta = t('Wygeneruj swoją koncepcję', 'Generate yours');
   const storyLabels = {
     before: t('Przed', 'Before'),
     after: t('Po', 'After'),
+  };
+  const ogCopy = shareOgCopy(language === 'en' ? 'en' : 'pl');
+  const storyMeta = [styleLabel, roomType]
+    .map((bit) => bit?.trim())
+    .filter((bit): bit is string => Boolean(bit))
+    .join(' · ');
+  const storyCopy = {
+    headline: ogCopy.title,
+    footer: t(
+      `${SHARE_SIGNUP_CREDITS} darmowych kredytów po założeniu konta · project-ida.com`,
+      `${SHARE_SIGNUP_CREDITS} free credits when you create an account · project-ida.com`,
+    ),
+    metaLine: storyMeta || null,
+    siteLabel: 'project-ida.com',
+    beforeFallbackUrl: toImageDataUrl(beforeImageBase64),
+  };
+  const missingBeforeError = t(
+    'Brak zdjęcia pokoju (przed). Wróć do kroku ze zdjęciem i spróbuj ponownie.',
+    'The room photo (before) is missing. Return to the photo step and try again.',
+  );
+
+  const resolveBeforeSource = async (): Promise<string | null> => {
+    if (beforeImageUrl?.trim()) return beforeImageUrl;
+    const fromBase64 = toImageDataUrl(beforeImageBase64);
+    if (fromBase64) return fromBase64;
+    const collected = await collectShareBeforeBase64(
+      beforeImageUrl,
+      beforeImageBase64,
+      getSessionStoreSnapshot(),
+      { url: imageUrl, base64: imageBase64 },
+    );
+    return toImageDataUrl(collected);
   };
 
   const mapCreateError = useCallback(
@@ -388,20 +423,29 @@ export function ShareResultBar({
 
   const handleDownload = async () => {
     try {
+      const beforeSource = await resolveBeforeSource();
+      if (!beforeSource) {
+        setError(missingBeforeError);
+        return;
+      }
       await downloadShareImage(
         imageUrl,
         'ida-interior',
         true,
         brandCta,
-        beforeImageUrl,
+        beforeSource,
         storyLabels,
+        storyCopy,
       );
-    } catch {
+    } catch (err) {
+      const code = err instanceof Error ? err.message : '';
       setError(
-        t(
-          'Nie udało się pobrać obrazu. Spróbuj ponownie za chwilę.',
-          'Could not download the image. Please try again in a moment.',
-        ),
+        code === 'before_image_required' || code === 'before_image_load_failed'
+          ? missingBeforeError
+          : t(
+              'Nie udało się pobrać obrazu. Spróbuj ponownie za chwilę.',
+              'Could not download the image. Please try again in a moment.',
+            ),
       );
     }
   };
@@ -417,9 +461,14 @@ export function ShareResultBar({
 
   const handleInstagram = async () => {
     try {
+      const beforeSource = await resolveBeforeSource();
+      if (!beforeSource) {
+        setError(missingBeforeError);
+        return;
+      }
       const [created, blob] = await Promise.all([
         ensureCard(),
-        composeBrandedImageBlob(imageUrl, brandCta, beforeImageUrl, storyLabels),
+        composeBrandedImageBlob(imageUrl, brandCta, beforeSource, storyLabels, storyCopy),
       ]);
       const shareUrl = created ? shareUrlFor(created) : null;
       const file = new File([blob], 'ida-interior.jpg', { type: blob.type || 'image/jpeg' });
@@ -443,25 +492,18 @@ export function ShareResultBar({
 
       downloadBlobFile(blob, `ida-interior-${Date.now()}.jpg`);
       showStoriesSavedHint();
-    } catch {
-      try {
-        await downloadShareImage(
-          imageUrl,
-          'ida-interior',
-          true,
-          brandCta,
-          beforeImageUrl,
-          storyLabels,
-        );
-        showStoriesSavedHint();
-      } catch {
-        setError(
-          t(
-            'Nie udało się przygotować obrazu do Instagrama.',
-            'Could not prepare the image for Instagram.',
-          ),
-        );
+    } catch (err) {
+      const code = err instanceof Error ? err.message : '';
+      if (code === 'before_image_required' || code === 'before_image_load_failed') {
+        setError(missingBeforeError);
+        return;
       }
+      setError(
+        t(
+          'Nie udało się przygotować obrazu do Instagrama.',
+          'Could not prepare the image for Instagram.',
+        ),
+      );
     }
   };
 

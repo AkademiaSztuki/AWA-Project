@@ -1,14 +1,18 @@
+import { SHARE_SIGNUP_CREDITS, shareOgCopy } from './captions';
+
 export const STORIES_CANVAS_WIDTH = 1080;
 export const STORIES_CANVAS_HEIGHT = 1920;
 /** Instagram Stories frame: 9:16 (width / height). */
 export const STORIES_ASPECT = STORIES_CANVAS_WIDTH / STORIES_CANVAS_HEIGHT;
 
-/** Warm beige / gold glass — matches IDA marketing and generate UI, not dark serif frames. */
+/** Warm beige / gold glass — matches IDA marketing and the public /s card, not dark serif or neon. */
 export const STORIES_COLORS = {
   background: '#F6EFE3',
   backgroundHi: '#FFFEF7',
   gold: '#C79833',
   goldSoft: '#DAA520',
+  goldFill: 'rgba(255, 215, 0, 0.42)',
+  goldBorder: 'rgba(255, 215, 0, 0.8)',
   graphite: '#374151',
   muted: '#6B7280',
   whiteGlass: 'rgba(255, 255, 255, 0.72)',
@@ -21,9 +25,32 @@ export type StoriesPhotoSlot = {
   height: number;
 };
 
+export type StoriesBrandCopy = {
+  cta?: string;
+  headline?: string;
+  footer?: string;
+  siteLabel?: string;
+  metaLine?: string | null;
+  labels?: { before: string; after: string };
+  beforeFallbackUrl?: string | null;
+};
+
+export const STORIES_DEFAULT_COPY: {
+  cta: string;
+  headline: string;
+  footer: string;
+  siteLabel: string;
+} = {
+  cta: 'Wygeneruj swoją koncepcję',
+  headline: shareOgCopy('pl').title,
+  footer: `${SHARE_SIGNUP_CREDITS} darmowych kredytów po założeniu konta · project-ida.com`,
+  siteLabel: 'project-ida.com',
+};
+
 export type StoriesBrandLayout = {
   canvasWidth: number;
   canvasHeight: number;
+  pad: number;
   imageX: number;
   imageY: number;
   imageWidth: number;
@@ -31,57 +58,69 @@ export type StoriesBrandLayout = {
   topBarHeight: number;
   bottomBarHeight: number;
   radius: number;
-  beforeSlot: StoriesPhotoSlot | null;
+  badgeSize: number;
+  beforeSlot: StoriesPhotoSlot;
   afterSlot: StoriesPhotoSlot;
+  headlineY: number;
+  metaY: number;
+  pill: StoriesPhotoSlot;
+  footerY: number;
 };
 
 /**
- * 9:16 Stories chrome. Photos use cover-crop slots (little letterboxing).
- * Source dimensions are accepted for callers/tests but the canvas is always 1080×1920.
- * Share cards always pass hasBefore=true (Przed + Po). hasBefore=false is only for
- * legacy cards that were stored without a room photo.
+ * 9:16 Stories chrome matching the public /s card: header, stacked Przed/Po,
+ * headline, gold pill CTA, credits footer. Canvas is always 1080×1920.
  */
 export function storiesBrandLayout(
-  _sourceWidth: number,
-  _sourceHeight: number,
-  hasBefore = false,
+  _sourceWidth = 1,
+  _sourceHeight = 1,
 ): StoriesBrandLayout {
   const canvasWidth = STORIES_CANVAS_WIDTH;
   const canvasHeight = STORIES_CANVAS_HEIGHT;
-  const pad = Math.round(canvasWidth * 0.045);
-  const topBarHeight = Math.round(canvasHeight * 0.068);
-  const bottomBarHeight = Math.round(canvasHeight * 0.092);
-  const radius = Math.round(canvasWidth * 0.035);
+  const pad = Math.round(canvasWidth * 0.055);
+  const badgeSize = Math.round(canvasWidth * 0.068);
+  const headerGap = Math.round(pad * 0.55);
+  const topBarHeight = pad + badgeSize + headerGap;
+  const radius = Math.round(canvasWidth * 0.032);
   const slotX = pad;
   const slotWidth = canvasWidth - pad * 2;
+
+  const headlineBlock = Math.round(canvasHeight * 0.056);
+  const metaBlock = Math.round(canvasHeight * 0.022);
+  const pillHeight = Math.round(canvasHeight * 0.036);
+  const footerBlock = Math.round(canvasHeight * 0.02);
+  const stackGap = Math.round(pad * 0.32);
+  const bottomBarHeight =
+    headlineBlock + metaBlock + pillHeight + footerBlock + stackGap * 3 + pad;
+
+  const photoGap = Math.round(pad * 0.38);
   const availableTop = topBarHeight;
-  const availableHeight = canvasHeight - topBarHeight - bottomBarHeight - pad * 0.35;
-  const gap = hasBefore ? Math.round(pad * 0.55) : 0;
+  const availableHeight = canvasHeight - topBarHeight - bottomBarHeight;
+  const slotHeight = Math.max(1, Math.round((availableHeight - photoGap) / 2));
 
-  let beforeSlot: StoriesPhotoSlot | null = null;
-  let afterSlot: StoriesPhotoSlot;
+  const beforeSlot: StoriesPhotoSlot = {
+    x: slotX,
+    y: availableTop,
+    width: slotWidth,
+    height: slotHeight,
+  };
+  const afterSlot: StoriesPhotoSlot = {
+    x: slotX,
+    y: availableTop + slotHeight + photoGap,
+    width: slotWidth,
+    height: slotHeight,
+  };
 
-  if (hasBefore) {
-    const slotHeight = Math.max(1, Math.round((availableHeight - gap) / 2));
-    beforeSlot = { x: slotX, y: availableTop, width: slotWidth, height: slotHeight };
-    afterSlot = {
-      x: slotX,
-      y: availableTop + slotHeight + gap,
-      width: slotWidth,
-      height: slotHeight,
-    };
-  } else {
-    afterSlot = {
-      x: slotX,
-      y: availableTop,
-      width: slotWidth,
-      height: Math.max(1, Math.round(availableHeight)),
-    };
-  }
+  const copyTop = afterSlot.y + afterSlot.height + stackGap;
+  const headlineY = copyTop + Math.round(headlineBlock * 0.42);
+  const metaY = copyTop + headlineBlock + Math.round(metaBlock * 0.35);
+  const pillY = copyTop + headlineBlock + metaBlock + stackGap;
+  const footerY = pillY + pillHeight + stackGap + Math.round(footerBlock * 0.35);
 
   return {
     canvasWidth,
     canvasHeight,
+    pad,
     imageX: afterSlot.x,
     imageY: afterSlot.y,
     imageWidth: afterSlot.width,
@@ -89,8 +128,13 @@ export function storiesBrandLayout(
     topBarHeight,
     bottomBarHeight,
     radius,
+    badgeSize,
     beforeSlot,
     afterSlot,
+    headlineY,
+    metaY,
+    pill: { x: slotX, y: pillY, width: slotWidth, height: pillHeight },
+    footerY,
   };
 }
 
@@ -132,6 +176,18 @@ function loadHtmlImage(url: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error('image_load_failed'));
     img.src = url;
   });
+}
+
+async function loadRequiredImage(url: string | null | undefined, errorCode: string): Promise<HTMLImageElement> {
+  const trimmed = url?.trim() || '';
+  if (!trimmed) {
+    throw new Error(errorCode);
+  }
+  try {
+    return await loadHtmlImage(trimmed);
+  } catch {
+    throw new Error(errorCode);
+  }
 }
 
 function roundedRectPath(
@@ -210,26 +266,44 @@ function drawPillLabel(
   ctx.restore();
 }
 
-function drawFittedText(
+function wrapTextLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  font: string,
+): string[] {
+  ctx.font = font;
+  const words = text.trim().split(/\s+/);
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (ctx.measureText(next).width <= maxWidth || !current) {
+      current = next;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [text];
+}
+
+function drawLeftText(
   ctx: CanvasRenderingContext2D,
   text: string,
   x: number,
   y: number,
-  maxWidth: number,
-  fontSize: number,
-  weight: '600' | '700',
+  font: string,
   color: string,
 ): void {
-  let size = fontSize;
-  ctx.textAlign = 'center';
+  ctx.save();
+  ctx.font = font;
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = color;
-  do {
-    ctx.font = `${weight} ${size}px "Exo 2", "Segoe UI", system-ui, sans-serif`;
-    if (ctx.measureText(text).width <= maxWidth || size <= 12) break;
-    size -= 1;
-  } while (size > 12);
-  ctx.fillText(text, x, y, maxWidth);
+  ctx.fillText(text, x, y);
+  ctx.restore();
 }
 
 function paintWarmBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -240,23 +314,94 @@ function paintWarmBackground(ctx: CanvasRenderingContext2D, width: number, heigh
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
-  const glow = ctx.createRadialGradient(width * 0.5, height * 0.18, 20, width * 0.5, height * 0.18, width * 0.7);
+  const glow = ctx.createRadialGradient(
+    width * 0.5,
+    height * 0.18,
+    20,
+    width * 0.5,
+    height * 0.18,
+    width * 0.7,
+  );
   glow.addColorStop(0, 'rgba(255, 215, 0, 0.16)');
   glow.addColorStop(1, 'rgba(255, 215, 0, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, width, height);
 }
 
+function paintGlassCard(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  const inset = Math.round(width * 0.018);
+  const radius = Math.round(width * 0.055);
+  roundedRectPath(ctx, inset, inset, width - inset * 2, height - inset * 2, radius);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawShareHeader(ctx: CanvasRenderingContext2D, layout: StoriesBrandLayout, siteLabel: string): void {
+  const { pad, badgeSize } = layout;
+  const cx = pad + badgeSize / 2;
+  const cy = pad + badgeSize / 2;
+
+  const badge = ctx.createLinearGradient(cx - badgeSize / 2, cy - badgeSize / 2, cx + badgeSize / 2, cy + badgeSize / 2);
+  badge.addColorStop(0, 'rgba(199, 152, 51, 0.55)');
+  badge.addColorStop(0.5, 'rgba(247, 231, 206, 0.85)');
+  badge.addColorStop(1, 'rgba(199, 152, 51, 0.35)');
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, badgeSize / 2, 0, Math.PI * 2);
+  ctx.fillStyle = badge;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(199, 152, 51, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = `700 ${Math.round(badgeSize * 0.32)}px "Exo 2", "Segoe UI", system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = STORIES_COLORS.graphite;
+  ctx.fillText('IDA', cx, cy);
+  ctx.restore();
+
+  drawLeftText(
+    ctx,
+    siteLabel,
+    pad + badgeSize + Math.round(pad * 0.35),
+    cy,
+    `600 ${Math.max(22, Math.round(badgeSize * 0.38))}px "Exo 2", "Segoe UI", system-ui, sans-serif`,
+    'rgba(55, 65, 81, 0.8)',
+  );
+}
+
+function drawGoldCtaPill(ctx: CanvasRenderingContext2D, text: string, slot: StoriesPhotoSlot): void {
+  ctx.save();
+  roundedRectPath(ctx, slot.x, slot.y, slot.width, slot.height, slot.height / 2);
+  ctx.fillStyle = STORIES_COLORS.goldFill;
+  ctx.fill();
+  ctx.strokeStyle = STORIES_COLORS.goldBorder;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = `600 ${Math.max(22, Math.round(slot.height * 0.42))}px "Exo 2", "Segoe UI", system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = STORIES_COLORS.graphite;
+  ctx.fillText(text, slot.x + slot.width / 2, slot.y + slot.height / 2, slot.width * 0.9);
+  ctx.restore();
+}
+
 export function composeBrandedCanvas(
   afterImg: HTMLImageElement,
-  cta: string,
-  beforeImg?: HTMLImageElement | null,
-  labels?: { before: string; after: string },
+  beforeImg: HTMLImageElement,
+  copy?: StoriesBrandCopy,
 ): HTMLCanvasElement {
+  if (!beforeImg) {
+    throw new Error('before_image_required');
+  }
+
   const srcW = Math.max(1, afterImg.naturalWidth || afterImg.width);
   const srcH = Math.max(1, afterImg.naturalHeight || afterImg.height);
-  const hasBefore = Boolean(beforeImg);
-  const layout = storiesBrandLayout(srcW, srcH, hasBefore);
+  const layout = storiesBrandLayout(srcW, srcH);
   const canvas = document.createElement('canvas');
   canvas.width = layout.canvasWidth;
   canvas.height = layout.canvasHeight;
@@ -265,43 +410,69 @@ export function composeBrandedCanvas(
     throw new Error('no_canvas');
   }
 
+  const headline = copy?.headline?.trim() || STORIES_DEFAULT_COPY.headline;
+  const cta = copy?.cta?.trim() || STORIES_DEFAULT_COPY.cta;
+  const footer = copy?.footer?.trim() || STORIES_DEFAULT_COPY.footer;
+  const siteLabel = copy?.siteLabel?.trim() || STORIES_DEFAULT_COPY.siteLabel;
+  const metaLine = copy?.metaLine?.trim() || '';
+  const beforeLabel = copy?.labels?.before ?? 'Przed';
+  const afterLabel = copy?.labels?.after ?? 'Po';
+
   paintWarmBackground(ctx, canvas.width, canvas.height);
+  paintGlassCard(ctx, canvas.width, canvas.height);
+  drawShareHeader(ctx, layout, siteLabel);
 
-  const beforeLabel = labels?.before ?? 'Twój pokój';
-  const afterLabel = labels?.after ?? 'IDA';
+  drawCoverInRoundedRect(ctx, beforeImg, layout.beforeSlot, layout.radius);
+  drawPillLabel(ctx, beforeLabel, layout.beforeSlot);
+  drawCoverInRoundedRect(ctx, afterImg, layout.afterSlot, layout.radius);
+  drawPillLabel(ctx, afterLabel, layout.afterSlot);
 
-  if (hasBefore && beforeImg && layout.beforeSlot) {
-    drawCoverInRoundedRect(ctx, beforeImg, layout.beforeSlot, layout.radius);
-    drawPillLabel(ctx, beforeLabel, layout.beforeSlot);
-    drawCoverInRoundedRect(ctx, afterImg, layout.afterSlot, layout.radius);
-    drawPillLabel(ctx, afterLabel, layout.afterSlot);
-  } else {
-    drawCoverInRoundedRect(ctx, afterImg, layout.afterSlot, layout.radius);
+  const headlineMaxWidth = layout.beforeSlot.width;
+  let headlineFontSize = Math.max(26, Math.round(layout.canvasWidth * 0.038));
+  let headlineFont = `700 ${headlineFontSize}px "Exo 2", "Segoe UI", system-ui, sans-serif`;
+  let headlineLines = wrapTextLines(ctx, headline, headlineMaxWidth, headlineFont);
+  let lineHeight = Math.round(headlineFontSize * 1.12);
+  while (
+    headlineFontSize > 22 &&
+    (headlineLines.length > 2 || layout.headlineY + (headlineLines.length - 1) * lineHeight > layout.metaY - 4)
+  ) {
+    headlineFontSize -= 2;
+    headlineFont = `700 ${headlineFontSize}px "Exo 2", "Segoe UI", system-ui, sans-serif`;
+    headlineLines = wrapTextLines(ctx, headline, headlineMaxWidth, headlineFont);
+    lineHeight = Math.round(headlineFontSize * 1.12);
+  }
+  headlineLines.slice(0, 2).forEach((line, index) => {
+    drawLeftText(
+      ctx,
+      line,
+      layout.pad,
+      layout.headlineY + index * lineHeight,
+      headlineFont,
+      STORIES_COLORS.graphite,
+    );
+  });
+
+  if (metaLine) {
+    drawLeftText(
+      ctx,
+      metaLine,
+      layout.pad,
+      layout.metaY,
+      `400 ${Math.max(18, Math.round(layout.canvasWidth * 0.024))}px "Exo 2", "Segoe UI", system-ui, sans-serif`,
+      'rgba(55, 65, 81, 0.7)',
+    );
   }
 
-  const wordmarkSize = Math.max(28, Math.round(layout.topBarHeight * 0.42));
-  drawFittedText(
-    ctx,
-    'IDA',
-    canvas.width / 2,
-    layout.topBarHeight * 0.52,
-    canvas.width * 0.7,
-    wordmarkSize,
-    '700',
-    STORIES_COLORS.graphite,
-  );
+  drawGoldCtaPill(ctx, cta, layout.pill);
 
-  const ctaSize = Math.max(18, Math.round(layout.bottomBarHeight * 0.28));
-  drawFittedText(
-    ctx,
-    cta,
-    canvas.width / 2,
-    canvas.height - layout.bottomBarHeight * 0.52,
-    canvas.width * 0.86,
-    ctaSize,
-    '600',
-    STORIES_COLORS.graphite,
-  );
+  ctx.save();
+  ctx.font = `400 ${Math.max(16, Math.round(layout.canvasWidth * 0.022))}px "Exo 2", "Segoe UI", system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(55, 65, 81, 0.6)';
+  ctx.fillText(footer, canvas.width / 2, layout.footerY, layout.beforeSlot.width);
+  ctx.restore();
+
   return canvas;
 }
 
@@ -323,20 +494,36 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 
 export async function composeBrandedImageBlob(
   url: string,
-  cta = 'Wygeneruj swoje na project-ida.com',
+  cta = STORIES_DEFAULT_COPY.cta,
   beforeUrl?: string | null,
   labels?: { before: string; after: string },
+  extras?: StoriesBrandCopy,
 ): Promise<Blob> {
-  const afterImg = await loadHtmlImage(url);
+  const beforeCandidates = [beforeUrl, extras?.beforeFallbackUrl]
+    .map((candidate) => candidate?.trim() || '')
+    .filter(Boolean);
+  if (beforeCandidates.length === 0) {
+    throw new Error('before_image_required');
+  }
+
+  const afterImg = await loadRequiredImage(url, 'image_load_failed');
   let beforeImg: HTMLImageElement | null = null;
-  if (beforeUrl) {
+  for (const candidate of beforeCandidates) {
     try {
-      beforeImg = await loadHtmlImage(beforeUrl);
+      beforeImg = await loadHtmlImage(candidate);
+      break;
     } catch {
       beforeImg = null;
     }
   }
-  const canvas = composeBrandedCanvas(afterImg, cta, beforeImg, labels);
+  if (!beforeImg) {
+    throw new Error('before_image_load_failed');
+  }
+  const canvas = composeBrandedCanvas(afterImg, beforeImg, {
+    ...extras,
+    cta,
+    labels: labels ?? extras?.labels,
+  });
   return canvasToBlob(canvas);
 }
 
@@ -344,20 +531,17 @@ export async function downloadShareImage(
   url: string,
   filenameBase = 'ida-interior',
   branded = false,
-  cta = 'Wygeneruj swoje na project-ida.com',
+  cta = STORIES_DEFAULT_COPY.cta,
   beforeUrl?: string | null,
   labels?: { before: string; after: string },
+  extras?: StoriesBrandCopy,
 ): Promise<void> {
   const stamp = Date.now();
 
   if (branded) {
-    try {
-      const blob = await composeBrandedImageBlob(url, cta, beforeUrl, labels);
-      downloadBlobFile(blob, `${filenameBase}-${stamp}.jpg`);
-      return;
-    } catch {
-      // Fall through to the unbranded file if canvas/CORS fails.
-    }
+    const blob = await composeBrandedImageBlob(url, cta, beforeUrl, labels, extras);
+    downloadBlobFile(blob, `${filenameBase}-${stamp}.jpg`);
+    return;
   }
 
   if (url.startsWith('data:')) {
