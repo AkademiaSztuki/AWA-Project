@@ -95,6 +95,7 @@ import {
   originalRoomHistoryUrl,
   prependOriginalRoomHistory,
 } from '@/lib/generation-history';
+import { decideModificationBase, pickGenerationBaseImage } from '@/lib/generation-base-image';
 
 interface GeneratedImage {
   id: string;
@@ -3609,7 +3610,61 @@ RESULT: A completely empty, bare room with only architectural structure visible.
     }
 
     const isMacro = modification.category === 'macro';
-    const baseImageSource = selectedImage.base64;
+    const isCustomModification = Boolean(customPrompt) || modification.id === 'custom_text';
+    const sessionSnap = getSessionStoreSnapshot() as {
+      roomImage?: string | null;
+      roomImageEmpty?: string | null;
+    };
+    const originalCanvas = pickGenerationBaseImage({
+      roomImage: sessionSnap.roomImage,
+      roomImageEmpty: sessionSnap.roomImageEmpty,
+    });
+    const baseDecision = decideModificationBase({
+      category: isCustomModification ? 'micro' : modification.category,
+      viewingOriginalUpload: showOriginalRoomPhoto,
+      hasGeneratedBase: Boolean(selectedImage.base64 || selectedImage.url),
+      originalCanvasPayload: originalCanvas?.payload ?? null,
+    });
+
+    let baseImageSource: string | null = null;
+    switch (baseDecision.kind) {
+      case 'original_canvas':
+        baseImageSource = baseDecision.payload;
+        break;
+      case 'generated':
+        baseImageSource = selectedImage.base64 || null;
+        break;
+      case 'need_generated':
+        setError(
+          t({
+            pl: 'Wybierz w historii wygenerowany obraz (nie zdjęcie z uploadu), aby go zmodyfikować.',
+            en: 'Pick a generated thumbnail in history (not the uploaded photo) to modify it.',
+          }),
+        );
+        return;
+      case 'missing':
+        setError(
+          t({
+            pl: 'Brak obrazu do modyfikacji.',
+            en: 'No image available to modify.',
+          }),
+        );
+        return;
+      default: {
+        const _never: never = baseDecision;
+        return _never;
+      }
+    }
+
+    if (!baseImageSource) {
+      setError(
+        t({
+          pl: 'Brak danych obrazu do modyfikacji. Proszę wybrać obraz ponownie.',
+          en: 'No image data available for modification. Please select an image again.',
+        }),
+      );
+      return;
+    }
 
     let modificationPrompt: string;
     
@@ -3740,7 +3795,6 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // Clear failed modification on success
       setLastFailedModification(null);
 
-      const isCustomModification = Boolean(customPrompt) || modification.id === 'custom_text';
       const modLogEntry = buildModificationPromptLogEntry({
         modification,
         modificationPrompt,
@@ -3782,6 +3836,7 @@ RESULT: A completely empty, bare room with only architectural structure visible.
       // This way modifications appear in history but not in the 6-image matrix grid
       setGeneratedImages((prev) => [...prev, newImage]);
       setSelectedImage(newImage);
+      setShowOriginalRoomPhoto(false);
       setGenerationCount((prev) => prev + 1);
       setShowModifications(false);
       setBlindSelectionMade(true);

@@ -37,6 +37,7 @@ import {
 import { IntrinsicContainImage } from '@/components/ui/IntrinsicContainImage';
 import { ShareResultBar } from '@/components/share/ShareResultBar';
 import { originalRoomHistoryUrl, prependOriginalRoomHistory } from '@/lib/generation-history';
+import { decideModificationBase, pickGenerationBaseImage } from '@/lib/generation-base-image';
 import {
   pickShareBeforeSource,
   resolveRoomBeforeImage,
@@ -1022,28 +1023,72 @@ export default function FastGeneratePage() {
     const isCustomModification =
       Boolean(customPrompt) || modification.id === 'custom_text';
 
-    let baseForModification: GeneratedImage | null = null;
     const resolved = resolveSelectedGeneratedImageForModification();
-    if (resolved) {
-      baseForModification = resolved;
-    } else if (roomUploadPreviewUrl && currentHistoryIndex === 0) {
-      setError(
-        language === 'pl'
-          ? 'Wybierz w historii wygenerowany obraz (nie zdjęcie z uploadu), aby go zmodyfikować.'
-          : 'Pick a generated thumbnail in history (not the uploaded photo) to modify it.',
-      );
-      return;
-    } else {
-      baseForModification = generatedImage;
-      if (!baseForModification) {
+    const generatedBase = resolved ?? generatedImage;
+    const viewingOriginalUpload =
+      showOriginalRoomPhoto || (!!roomUploadPreviewUrl && currentHistoryIndex === 0);
+    const sessionSnap = getSessionStoreSnapshot() as {
+      roomImage?: string | null;
+      roomImageEmpty?: string | null;
+    };
+    const originalCanvas = pickGenerationBaseImage({
+      roomImage: sessionSnap.roomImage,
+      roomImageEmpty: sessionSnap.roomImageEmpty,
+    });
+    const baseDecision = decideModificationBase({
+      category: isCustomModification ? 'micro' : modification.category,
+      viewingOriginalUpload,
+      hasGeneratedBase: !!generatedBase,
+      originalCanvasPayload: originalCanvas?.payload ?? null,
+    });
+
+    let baseImageSource: string | null = null;
+    switch (baseDecision.kind) {
+      case 'original_canvas':
+        baseImageSource = baseDecision.payload;
+        break;
+      case 'generated':
+        if (!generatedBase) {
+          setError(
+            language === 'pl'
+              ? 'Brak obrazu do modyfikacji.'
+              : 'No image available to modify.',
+          );
+          return;
+        }
+        baseImageSource = extractBase64FromGenerated(generatedBase);
+        break;
+      case 'need_generated':
+        setError(
+          language === 'pl'
+            ? 'Wybierz w historii wygenerowany obraz (nie zdjęcie z uploadu), aby go zmodyfikować.'
+            : 'Pick a generated thumbnail in history (not the uploaded photo) to modify it.',
+        );
+        return;
+      case 'missing':
         setError(
           language === 'pl'
             ? 'Brak obrazu do modyfikacji.'
             : 'No image available to modify.',
         );
         return;
+      default: {
+        const _never: never = baseDecision;
+        return _never;
       }
     }
+
+    if (!baseImageSource) {
+      setError(
+        language === 'pl'
+          ? 'Brak danych obrazu. Wybierz ponownie miniaturę w historii.'
+          : 'Missing image data. Select a thumbnail in history again.',
+      );
+      return;
+    }
+
+    const usingOriginalCanvas = baseDecision.kind === 'original_canvas';
+    const baseForModification = generatedBase;
 
     const uh = (sessionData as { userHash?: string } | null)?.userHash;
     if (uh) {
@@ -1072,20 +1117,24 @@ export default function FastGeneratePage() {
     setLoadingStage(2);
     setLoadingProgress(30);
     setStatusMessage(
-      language === 'pl'
-        ? `Modyfikuję: ${modification.label.pl}...`
-        : `Modifying: ${modification.label.en}...`,
+      usingOriginalCanvas
+        ? language === 'pl'
+          ? `Generuję nową wizję: ${modification.label.pl}...`
+          : `Generating a new vision: ${modification.label.en}...`
+        : language === 'pl'
+          ? `Modyfikuję: ${modification.label.pl}...`
+          : `Modifying: ${modification.label.en}...`,
     );
     setEstimatedTime(60);
 
     const baseParams = getGenerationParameters(isMacro ? 'macro' : 'micro', generationCount);
     const srcDims = fastTrackSourceGenerationDimsRef.current;
-    const prev = baseForModification.parameters as {
+    const prev = baseForModification?.parameters as {
       width?: number;
       height?: number;
       aspect_ratio?: string;
       style?: string;
-    };
+    } | undefined;
     const dimPack =
       srcDims != null
         ? {
@@ -1116,20 +1165,10 @@ export default function FastGeneratePage() {
           ? buildFastMacroModificationPrompt(modification)
           : buildFastMicroModificationPrompt(modification, currentStyle);
 
-      const baseImageSource = extractBase64FromGenerated(baseForModification);
-      if (!baseImageSource) {
-        setError(
-          language === 'pl'
-            ? 'Brak danych obrazu. Wybierz ponownie miniaturę w historii.'
-            : 'Missing image data. Select a thumbnail in history again.',
-        );
-        return;
-      }
-
       const response = await generateSixImagesParallelWithGoogle({
         prompts: [{ source: 'implicit' as GenerationSource, prompt: modificationPrompt }],
         base_image: baseImageSource,
-        style: isMacro ? modification.id : (baseForModification.parameters?.style || currentStyle),
+        style: isMacro ? modification.id : (baseForModification?.parameters?.style || currentStyle),
         parameters,
       });
 
