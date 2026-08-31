@@ -20,6 +20,7 @@ export interface ShareCardRow {
   style_label: string | null;
   room_type: string | null;
   personality_labels: string[] | null;
+  language: 'pl' | 'en';
   created_at: string;
 }
 
@@ -32,10 +33,15 @@ export interface CreateShareCardInput {
   styleLabel?: string | null;
   roomType?: string | null;
   personalityLabels?: string[] | null;
+  language?: 'pl' | 'en' | null;
 }
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled share path type: ${String(value)}`);
+}
+
+function normalizeShareLanguage(raw: unknown): 'pl' | 'en' {
+  return raw === 'en' ? 'en' : 'pl';
 }
 
 function normalizePathType(raw: string): SharePathType {
@@ -175,6 +181,8 @@ export async function createShareCard(
     throw new Error('invalid_image');
   }
 
+  const language = normalizeShareLanguage(input.language);
+
   const slug = shareCardSlug(input.userHash, buffer);
   const existing = await getShareCardBySlug(client, slug);
   if (existing && existing.user_hash === input.userHash) {
@@ -208,6 +216,13 @@ export async function createShareCard(
     } else if (!(await shareBeforeImageExists(existing.slug))) {
       throw new Error('before_image_required');
     }
+    if (existing.language !== language) {
+      await client.query(`UPDATE share_cards SET language = $2 WHERE slug = $1`, [
+        existing.slug,
+        language,
+      ]);
+      existing.language = language;
+    }
     return { ...existing, reused: true, hasBeforeImage: true };
   }
 
@@ -234,14 +249,15 @@ export async function createShareCard(
     `
       INSERT INTO share_cards (
         slug, user_hash, referral_code, path_type, image_public_url, storage_path,
-        style_label, room_type, personality_labels
+        style_label, room_type, personality_labels, language
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (slug) DO UPDATE SET
-        referral_code = COALESCE(share_cards.referral_code, EXCLUDED.referral_code)
+        referral_code = COALESCE(share_cards.referral_code, EXCLUDED.referral_code),
+        language = EXCLUDED.language
       RETURNING
         slug, user_hash, referral_code, path_type, image_public_url, storage_path,
-        style_label, room_type, personality_labels, created_at
+        style_label, room_type, personality_labels, language, created_at
     `,
     [
       finalSlug,
@@ -253,6 +269,7 @@ export async function createShareCard(
       input.styleLabel || null,
       input.roomType || null,
       labels.length > 0 ? labels : null,
+      language,
     ],
   );
 
@@ -267,7 +284,7 @@ export async function getShareCardBySlug(
     `
       SELECT
         slug, user_hash, referral_code, path_type, image_public_url, storage_path,
-        style_label, room_type, personality_labels, created_at
+        style_label, room_type, personality_labels, language, created_at
       FROM share_cards
       WHERE slug = $1
       LIMIT 1

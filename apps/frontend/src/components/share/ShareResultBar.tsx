@@ -13,6 +13,7 @@ import {
   SHARE_SIGNUP_CREDITS,
   shareCaptions,
   shareOgCopy,
+  sharePageUrl,
   xShareUrl,
 } from '@/lib/share/captions';
 import { copyTextToClipboard } from '@/lib/share/copy-text';
@@ -32,6 +33,7 @@ import {
   toImageDataUrl,
 } from '@/lib/share/source-image';
 import { getSiteUrl } from '@/lib/seo/site';
+import { prewarmShareOgImage } from '@/lib/share/prewarm-og';
 import { getSessionStoreSnapshot } from '@/hooks/useSession';
 
 type SharePathType = 'fast' | 'full';
@@ -84,9 +86,8 @@ function isAbortError(err: unknown): boolean {
     : err instanceof Error && err.name === 'AbortError';
 }
 
-function shareUrlFor(created: CreatedCard): string {
-  const ref = created.referralCode ? `?ref=${encodeURIComponent(created.referralCode)}` : '';
-  return `${getSiteUrl()}/s/${created.slug}${ref}`;
+function shareUrlFor(created: CreatedCard, language: 'pl' | 'en'): string {
+  return sharePageUrl(getSiteUrl(), created.slug, language, created.referralCode);
 }
 
 function openShareWindow(url: string, preopened?: Window | null): void {
@@ -144,6 +145,7 @@ export function ShareResultBar({
     'Brak zdjęcia pokoju (przed). Wróć do kroku ze zdjęciem i spróbuj ponownie.',
     'The room photo (before) is missing. Return to the photo step and try again.',
   );
+  const shareLanguage = language === 'en' ? 'en' : 'pl';
 
   const resolveBeforeSource = async (): Promise<string | null> => {
     if (beforeImageUrl?.trim()) return beforeImageUrl;
@@ -289,6 +291,7 @@ export function ShareResultBar({
             styleLabel,
             roomType,
             personalityLabels,
+            language: shareLanguage,
           }),
         });
         const json = (await res.json()) as CreatedCard & { error?: string; hasBeforeImage?: boolean };
@@ -337,7 +340,7 @@ export function ShareResultBar({
     styleLabel,
     roomType,
     personalityLabels,
-    language,
+    shareLanguage,
     mapCreateError,
   ]);
 
@@ -364,11 +367,15 @@ export function ShareResultBar({
     hintTimerRef.current = window.setTimeout(() => setShareHint(null), 8000);
   };
 
-  const captions = shareCaptions(language === 'en' ? 'en' : 'pl');
+  const captions = shareCaptions(shareLanguage);
+
+  const warmOgForCard = async (created: CreatedCard): Promise<void> => {
+    await prewarmShareOgImage(getSiteUrl(), created.slug, shareLanguage);
+  };
 
   const copyCreatedOrInvite = async (created: CreatedCard | null): Promise<boolean> => {
     if (created) {
-      return copyTextToClipboard(shareUrlFor(created));
+      return copyTextToClipboard(shareUrlFor(created, shareLanguage));
     }
     if (!userHash) return false;
     try {
@@ -397,7 +404,8 @@ export function ShareResultBar({
       popup?.close();
       return;
     }
-    openShareWindow(facebookShareUrl(shareUrlFor(created)), popup);
+    await warmOgForCard(created);
+    openShareWindow(facebookShareUrl(shareUrlFor(created, shareLanguage)), popup);
   };
 
   const handleX = async () => {
@@ -407,7 +415,8 @@ export function ShareResultBar({
       popup?.close();
       return;
     }
-    openShareWindow(xShareUrl(shareUrlFor(created), captions.x), popup);
+    await warmOgForCard(created);
+    openShareWindow(xShareUrl(shareUrlFor(created, shareLanguage), captions.x), popup);
   };
 
   const handleCopy = async () => {
@@ -470,7 +479,7 @@ export function ShareResultBar({
         ensureCard(),
         composeBrandedImageBlob(imageUrl, brandCta, beforeSource, storyLabels, storyCopy),
       ]);
-      const shareUrl = created ? shareUrlFor(created) : null;
+      const shareUrl = created ? shareUrlFor(created, shareLanguage) : null;
       const file = new File([blob], 'ida-interior.jpg', { type: blob.type || 'image/jpeg' });
 
       if (shouldUseNativeFileShare(file)) {

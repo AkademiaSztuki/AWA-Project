@@ -36,6 +36,7 @@ shareRouter.get('/share/cards/:slug', async (req, res) => {
         pathType: card.path_type,
         imagePublicUrl: card.image_public_url,
         hasBeforeImage,
+        language: card.language,
         styleLabel: card.style_label,
         roomType: card.room_type,
         personalityLabels: card.personality_labels || [],
@@ -111,7 +112,7 @@ shareRouter.get('/share/cards/:slug/before', async (req, res) => {
 });
 
 shareRouter.post('/share/cards', async (req, res) => {
-  const { userHash, pathType, base64Image, base64BeforeImage, styleLabel, roomType, personalityLabels } =
+  const { userHash, pathType, base64Image, base64BeforeImage, styleLabel, roomType, personalityLabels, language } =
     req.body as {
       userHash?: string;
       pathType?: string;
@@ -120,6 +121,7 @@ shareRouter.post('/share/cards', async (req, res) => {
       styleLabel?: string | null;
       roomType?: string | null;
       personalityLabels?: string[] | null;
+      language?: string | null;
     };
 
   if (!userHash || !pathType || !base64Image) {
@@ -140,6 +142,7 @@ shareRouter.post('/share/cards', async (req, res) => {
         styleLabel,
         roomType,
         personalityLabels,
+        language: language === 'en' ? 'en' : 'pl',
       });
       return res.json({
         ok: true,
@@ -148,6 +151,7 @@ shareRouter.post('/share/cards', async (req, res) => {
         pathType: card.path_type,
         imagePublicUrl: card.image_public_url,
         hasBeforeImage: card.hasBeforeImage,
+        language: card.language,
         styleLabel: card.style_label,
         roomType: card.room_type,
         personalityLabels: card.personality_labels || [],

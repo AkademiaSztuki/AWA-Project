@@ -22,6 +22,7 @@
     "vercel:link:frontend": "cd apps/frontend && vercel link --project awa-project-frontend-fhka --yes --scope pali89s-projects",
     "db:migrate:anon-usage": "pnpm --filter @aura/backend-gcp migrate:anon-usage",
     "db:migrate:share-referral": "pnpm --filter @aura/backend-gcp migrate:share-referral",
+    "db:migrate:share-language": "pnpm --filter @aura/backend-gcp migrate:share-language",
     "db:grant-dev-credits": "pnpm --filter @aura/backend-gcp grant-dev-credits"
   },
   "devDependencies": {

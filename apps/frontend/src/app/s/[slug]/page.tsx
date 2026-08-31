@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { ShareCardPhotos } from '@/components/share/ShareCardPhotos';
 import { gcpApi } from '@/lib/gcp-api-client';
 import { getSiteUrl } from '@/lib/seo/site';
 import { SHARE_SIGNUP_CREDITS, shareOgCopy } from '@/lib/share/captions';
+import { shareOgImageUrl } from '@/lib/share/og-image-url';
+import { resolveShareLanguage } from '@/lib/share/resolve-language';
 import { shareCardProxyPath } from '@/lib/share/share-card-urls';
 
 type SharePathType = 'fast' | 'full';
@@ -17,6 +19,7 @@ interface ShareCard {
   styleLabel: string | null;
   roomType: string | null;
   personalityLabels: string[];
+  language: 'pl' | 'en' | null;
 }
 
 async function loadCard(slug: string): Promise<ShareCard | null> {
@@ -24,6 +27,8 @@ async function loadCard(slug: string): Promise<ShareCard | null> {
   if (!result.ok || !result.data?.slug || !result.data.pathType) return null;
   const pathType = result.data.pathType;
   if (pathType !== 'fast' && pathType !== 'full') return null;
+  const language =
+    result.data.language === 'en' || result.data.language === 'pl' ? result.data.language : null;
   return {
     slug: result.data.slug,
     referralCode: result.data.referralCode ?? null,
@@ -31,6 +36,7 @@ async function loadCard(slug: string): Promise<ShareCard | null> {
     styleLabel: result.data.styleLabel ?? null,
     roomType: result.data.roomType ?? null,
     personalityLabels: result.data.personalityLabels || [],
+    language,
   };
 }
 
@@ -74,15 +80,17 @@ function pathCopy(
   }
 }
 
-function readLanguage(): 'pl' | 'en' {
+function readViewerLanguage(): 'pl' | 'en' {
   const value = cookies().get('app_language')?.value;
   return value === 'en' ? 'en' : 'pl';
 }
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: { slug: string };
+  searchParams?: { lang?: string; ref?: string };
 }): Promise<Metadata> {
   const card = await loadCard(params.slug);
   const siteUrl = getSiteUrl();
@@ -90,11 +98,14 @@ export async function generateMetadata({
     return { title: 'IDA', robots: { index: false, follow: false } };
   }
 
-  const og = shareOgCopy(readLanguage());
+  const language = resolveShareLanguage({
+    searchParam: searchParams?.lang,
+    cardLanguage: card.language,
+    acceptLanguage: headers().get('accept-language'),
+  });
+  const og = shareOgCopy(language);
   const canonical = `${siteUrl}/s/${card.slug}`;
-  // Absolute /s/... URL (not /api/) so Twitterbot is not blocked by robots.txt Disallow: /api/.
-  // X may cache the first Card crawl; old tweets can keep a gray preview until cache expires.
-  const ogImageUrl = `${siteUrl}/s/${card.slug}/opengraph-image`;
+  const ogImageUrl = shareOgImageUrl(siteUrl, card.slug, language);
 
   return {
     title: `${og.title} | IDA`,
@@ -102,7 +113,7 @@ export async function generateMetadata({
     alternates: { canonical },
     openGraph: {
       type: 'website',
-      locale: 'pl_PL',
+      locale: language === 'en' ? 'en_US' : 'pl_PL',
       url: canonical,
       siteName: 'IDA Interior Design Assistant',
       title: og.title,
@@ -122,7 +133,7 @@ export default async function ShareCardPage({ params }: { params: { slug: string
   const card = await loadCard(params.slug);
   if (!card) notFound();
 
-  const language = readLanguage();
+  const language = readViewerLanguage();
   const copy = pathCopy(card.pathType, language);
   const og = shareOgCopy(language);
   const metaBits = [card.styleLabel, card.roomType].filter(Boolean) as string[];
