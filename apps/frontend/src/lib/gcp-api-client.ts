@@ -543,6 +543,7 @@ export const gcpApi = {
         imagePublicUrl?: string;
         beforeImagePublicUrl?: string | null;
         hasBeforeImage?: boolean;
+        language?: 'pl' | 'en';
         styleLabel?: string | null;
         roomType?: string | null;
         personalityLabels?: string[];
@@ -557,6 +558,7 @@ export const gcpApi = {
       styleLabel?: string | null;
       roomType?: string | null;
       personalityLabels?: string[] | null;
+      language?: 'pl' | 'en' | null;
     }) =>
       apiFetch<{
         ok: boolean;
@@ -566,6 +568,7 @@ export const gcpApi = {
         imagePublicUrl?: string;
         beforeImagePublicUrl?: string | null;
         hasBeforeImage?: boolean;
+        language?: 'pl' | 'en';
         styleLabel?: string | null;
         roomType?: string | null;
         personalityLabels?: string[];

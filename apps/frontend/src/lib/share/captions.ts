@@ -58,3 +58,16 @@ export function nativeShareData(
 export function captionWithUrl(text: string, url: string): string {
   return `${text} ${url}`;
 }
+
+export function sharePageUrl(
+  siteUrl: string,
+  slug: string,
+  language: ShareLanguage,
+  referralCode?: string | null,
+): string {
+  const params = new URLSearchParams({ lang: language });
+  if (referralCode?.trim()) {
+    params.set('ref', referralCode.trim());
+  }
+  return `${siteUrl}/s/${encodeURIComponent(slug)}?${params.toString()}`;
+}

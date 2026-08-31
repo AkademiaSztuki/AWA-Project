@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
       styleLabel?: string | null;
       roomType?: string | null;
       personalityLabels?: string[] | null;
+      language?: 'pl' | 'en' | null;
     };
 
     if (!body.userHash || !body.pathType || !body.base64Image) {
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
       styleLabel: body.styleLabel,
       roomType: body.roomType,
       personalityLabels: body.personalityLabels,
+      language: body.language === 'en' ? 'en' : 'pl',
     });
 
     if (!result.ok || !result.data) {
