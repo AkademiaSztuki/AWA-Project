@@ -54,6 +54,9 @@ export function buildRootMetadata(): Metadata {
     creator: 'Jakub Palka',
     publisher: SITE_FULL_NAME,
     category: 'technology',
+    other: {
+      'facebook-domain-verification': '4leb5c5mmgp7xb9z6xll1exrx0d0bs',
+    },
     ...buildPageMetadata({
       path: '/',
       title: 'IDA — projektuj wnętrze z AI dopasowane do Twojej osobowości',
