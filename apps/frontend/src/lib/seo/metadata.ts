@@ -2,6 +2,15 @@ import type { Metadata } from 'next';
 import { SITE_FULL_NAME, SITE_NAME, getSiteUrl } from './site';
 import type { PageSeoConfig } from './routes';
 
+/** Social preview image (Facebook, LinkedIn, iMessage, etc.) */
+export const DEFAULT_OG_IMAGE = {
+  url: '/og/ida-sociale.jpg',
+  width: 1024,
+  height: 1024,
+  alt: 'IDA — Interior Design Assistant',
+  type: 'image/jpeg',
+} as const;
+
 export function buildPageMetadata(seo: PageSeoConfig): Metadata {
   const siteUrl = getSiteUrl();
   const canonical = seo.path === '/' ? siteUrl : `${siteUrl}${seo.path}`;
@@ -35,11 +44,13 @@ export function buildPageMetadata(seo: PageSeoConfig): Metadata {
       siteName: SITE_FULL_NAME,
       title,
       description: seo.description,
+      images: [DEFAULT_OG_IMAGE],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description: seo.description,
+      images: [DEFAULT_OG_IMAGE.url],
     },
   };
 }
