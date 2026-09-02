@@ -6,7 +6,7 @@ import type { PageSeoConfig } from './routes';
 export const DEFAULT_OG_IMAGE = {
   url: '/og/ida-sociale.jpg',
   width: 1024,
-  height: 1024,
+  height: 537,
   alt: 'IDA — Interior Design Assistant',
   type: 'image/jpeg',
 } as const;
