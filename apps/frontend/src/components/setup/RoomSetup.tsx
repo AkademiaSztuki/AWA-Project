@@ -1130,6 +1130,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
   const [llmComment, setLlmComment] = useState<{ comment: string; suggestions: string[]; } | null>(null);
   const [humanComment, setHumanComment] = useState<string | null>(null);
   const [showRoomTypeSelection, setShowRoomTypeSelection] = useState(false);
+  const [roomAnalysisFailed, setRoomAnalysisFailed] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null); // Image with furniture removed
   const [isRemovingFurniture, setIsRemovingFurniture] = useState(false);
@@ -1191,6 +1192,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
 
   const analyzeImage = async (file: File) => {
     setIsAnalyzing(true);
+    setRoomAnalysisFailed(false);
     try {
       console.log('Starting room analysis for file:', file.name);
       
@@ -1239,6 +1241,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
       
     } catch (error) {
       console.error('Error analyzing room:', error);
+      setRoomAnalysisFailed(true);
       
       // Check if it's a timeout error (cold start)
       if (error instanceof Error && error.message.includes('408')) {
@@ -1620,9 +1623,19 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                     </div>
                   </div>
                 ) : (
-                  <p className="text-graphite font-modern font-bold text-lg mb-3">
-                    {tp("Wybierz typ pomieszczenia:", "Select room type:")}
-                  </p>
+                  <>
+                    <p className="text-graphite font-modern font-bold text-lg mb-1">
+                      {tp("Wybierz typ pomieszczenia:", "Select room type:")}
+                    </p>
+                    {roomAnalysisFailed && (
+                      <p className="text-silver-dark text-sm font-modern">
+                        {tp(
+                          "Nie udało się automatycznie rozpoznać pomieszczenia – wybierz typ ręcznie.",
+                          "Couldn't recognize the room automatically – please select the type manually.",
+                        )}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1630,7 +1643,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
         )}
 
         {/* Room type selection - hidden until "Zmień" is clicked */}
-        {showRoomTypeSelection && (
+        {(showRoomTypeSelection || (selectedImage && !isAnalyzing && !detectedRoomType)) && (
           <div className="mb-6 rounded-xl border border-white/20 bg-white/5 p-6 shadow-sm">
             <h3 className="text-sm font-bold text-graphite mb-3 font-modern">
               {tp("Typ pomieszczenia", "Room type")}
@@ -1760,6 +1773,7 @@ export function PhotoUploadStep({ photos, roomType, onUpdate, onNext, onBack }: 
                     setSelectedImage(null);
                     setProcessedImage(null);
                     setDetectedRoomType(null);
+                    setRoomAnalysisFailed(false);
                     setRoomAnalysis(null);
                     setLlmComment(null);
                     setHumanComment(null);

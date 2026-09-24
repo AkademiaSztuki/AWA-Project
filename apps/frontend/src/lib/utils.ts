@@ -38,34 +38,38 @@ export function analyzeVisualDNA(swipeData: any[]): any {
   };
 }
 
+// Full-resolution phone photos (12–50 MP) exceed the serverless request body limit (~4.5 MB)
+// and can exhaust canvas memory on Android browsers.
+const MAX_NORMALIZED_IMAGE_SIDE = 2048;
+const NORMALIZED_JPEG_QUALITY = 0.9;
+
 /**
- * Normalizes image orientation and returns base64 string without MIME header.
+ * Normalizes image orientation, downscales to MAX_NORMALIZED_IMAGE_SIDE and returns a JPEG data URL.
  * Uses canvas to ensure EXIF orientation is applied.
  */
-export async function fileToNormalizedBase64(file: File): Promise<string> {
+export async function fileToNormalizedDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
+        const scale = Math.min(1, MAX_NORMALIZED_IMAGE_SIDE / Math.max(img.width, img.height));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+
         const canvas = document.createElement('canvas');
-        
         // Modern browsers handle EXIF orientation automatically when drawing to canvas.
-        canvas.width = img.width;
-        canvas.height = img.height;
-        
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           reject(new Error('Could not get canvas context'));
           return;
         }
-        
-        ctx.drawImage(img, 0, 0, img.width, img.height);
-        
-        // Export as JPEG with good quality
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-        const base64 = dataUrl.split(',')[1];
-        resolve(base64);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', NORMALIZED_JPEG_QUALITY));
       };
       img.onerror = () => reject(new Error('Failed to load image'));
       img.src = e.target?.result as string;
@@ -76,30 +80,9 @@ export async function fileToNormalizedBase64(file: File): Promise<string> {
 }
 
 /**
- * Normalizes image orientation and returns full data URL string.
+ * Same as fileToNormalizedDataUrl, but returns base64 without the MIME header.
  */
-export async function fileToNormalizedDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('Could not get canvas context'));
-          return;
-        }
-        ctx.drawImage(img, 0, 0, img.width, img.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-        resolve(dataUrl);
-      };
-      img.onerror = () => reject(new Error('Failed to load image'));
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
+export async function fileToNormalizedBase64(file: File): Promise<string> {
+  const dataUrl = await fileToNormalizedDataUrl(file);
+  return dataUrl.split(',')[1];
 }
