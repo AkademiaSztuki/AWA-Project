@@ -1,0 +1,41 @@
+% Purpose: alphabetical author–title list. Footnotes use a different sentence
+% (verbose-trad2); this file only shapes the end list.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles/bibliography}[2026/10/05 IDA thesis bibliography]
+
+\renewcommand*{\bibfont}{\small}
+\setlength{\bibitemsep}{0.4\baselineskip}
+\setlength{\bibparsep}{0pt}
+\setlength{\bibhang}{1.8em}
+\setcounter{biburlucpenalty}{100}
+\setcounter{biburlnumpenalty}{100}
+\setcounter{biburllcpenalty}{100}
+
+% A citation links to the bibliography entry. The note is a comma-separated
+% sentence; the list keeps the style's period punctuation, DOI and URL.
+\DeclareFieldFormat{bibhyperlink}{\bibhyperlink{\thefield{entrykey}}{#1}}
+\AtEveryCite{\renewcommand*{\newunitpunct}{\addcomma\space}}
+\renewbibmacro*{cite:full}{%
+  \usebibmacro{cite:full:citepages}%
+  \global\toggletrue{cbx:fullcite}%
+  \printtext[bibhyperlink]{%
+    \usedriver
+      {\DeclareNameAlias{sortname}{default}%
+       \clearfield{doi}%
+       \clearfield{url}%
+       \clearfield{eprint}%
+       \clearfield{isbn}}
+      {\thefield{entrytype}}}%
+  \usebibmacro{shorthandintro}%
+}
+\renewbibmacro*{cite:ibid}{%
+  \printtext[bibhyperlink]{\bibstring[\mkibid]{ibidem}}%
+  \ifloccit
+    {\global\toggletrue{cbx:loccit}}
+    {}%
+}
+
+\AtBeginBibliography{%
+  \color{ink}%
+  \setlength{\parskip}{0pt}%
+}

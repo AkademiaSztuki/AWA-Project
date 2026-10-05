@@ -1,0 +1,62 @@
+% Snapshot zagregowany z Cloud SQL (awa_db), 1 października 2026, 13:16 Europe/Warsaw.
+% Ostatnia aktualizacja rekordu participants: 2026-10-01 09:39:10 UTC.
+% Zapytania: data/snapshot-2026-10-01.sql
+% Wstawienie: \input{chapters/08-dane-2026-10-01} wewnątrz rozdziału Wyniki.
+\section{Stan zbioru na 1 października 2026}
+\label{ch08:sec:snapshot-2026-10-01}
+
+\paragraph{Źródło.}
+Liczby poniżej pochodzą z agregacji tabel badawczych w Cloud SQL (baza \texttt{awa\_db}), wykonanej 1~października 2026 o~13:16 czasu warszawskiego. Eksport nie zawiera identyfikatorów uczestników. Pierwszy rekord w \texttt{participants} powstał 13~marca 2026; ostatnia aktualizacja rekordu przypada na 1~października 2026, 11:39 czasu warszawskiego. To opis stanu operacyjnego zbioru, nie zamknięta próba analityczna z~rozdziału metodologii.
+
+\begin{table}[ht]
+  \centering
+  \caption{Wolumen tabel badawczych, stan na 1 października 2026}
+  \label{tab:ch08:volume-2026-10-01}
+  \begin{tabular}{lr}
+    \toprule
+    Tabela & $N$ \\
+    \midrule
+    \texttt{participants} & 240 \\
+    \texttt{research\_consents} & 249 \\
+    \texttt{participant\_swipes} & 2190 \\
+    \texttt{participant\_generations} & 1174 \\
+    \texttt{participant\_research\_events} & 4354 \\
+    \texttt{participant\_matrix\_entries} & 143 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Ścieżka i kompletność.}
+W~\texttt{participants} jest 240 wierszy: ścieżka \texttt{fast} --- 109, ścieżka \texttt{full} --- 85, brak \texttt{path\_type} --- 46. Znacznik czasu zgody jest przy wszystkich 240 wierszach. Eksport sesji (\texttt{session\_export\_json}) ma 185 osób, w~tym 77 na ścieżce pełnej i~108 na szybkiej. Ukończony Big Five (\texttt{big5\_completed\_at}) ma 174 osoby, w~tym 84 na ścieżce pełnej i~89 na szybkiej. Profil rdzeniowy (\texttt{core\_profile\_complete}) ma 72 osoby, z~czego 68 na ścieżce pełnej. Flaga ślepego wyboru (\texttt{blind\_selection\_made}) jest ustawiona u~17 osób, w~tym u~16 na ścieżce pełnej.
+
+\begin{table}[ht]
+  \centering
+  \caption{Kamienie milowe w \texttt{participants} według ścieżki (1 października 2026)}
+  \label{tab:ch08:path-2026-10-01}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Ścieżka & $N$ & profil rdzeniowy & Big Five & eksport sesji & ślepy wybór \\
+    \midrule
+    \texttt{fast} & 109 & 4 & 89 & 108 & 1 \\
+    \texttt{full} & 85 & 68 & 84 & 77 & 16 \\
+    brak & 46 & 0 & 1 & 0 & 0 \\
+    \midrule
+    Razem & 240 & 72 & 174 & 185 & 17 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Napływ.}
+Nowe rekordy \texttt{participants} według miesiąca utworzenia (czas warszawski): marzec 6, kwiecień 7, maj 1, czerwiec 40, lipiec 3, sierpień 35, wrzesień 148. Wrzesień jest jedynym miesiącem o~wyraźnej skali rekrutacji. W~samym oknie 21~września--1~października aktualizowano kolejno 1, 12, 6, 41, 25, 10, 2, 13, 19, 1 i~1 rekordów; szczyt aktualizacji przypada na 24~września (41).
+
+\paragraph{Ślepa macierz.}
+Tabela \texttt{participant\_matrix\_entries} ma 143 wiersze. Flaga \texttt{is\_selected} jest ustawiona w~29 wierszach, każdy u~innej osoby. Rozkład zaznaczeń: \texttt{implicit} 11, \texttt{mixed} 6, \texttt{inspiration\_reference} 5, \texttt{explicit} 3, \texttt{mixed\_functional} 2, \texttt{personality} 2. To nie jest to samo co \texttt{blind\_selection\_made} w~\texttt{participants} ($n=17$). Do wniosków o~RQ3 potrzebne jest uzgodnienie obu znaczników, zanim którykolwiek z~nich zostanie uznany za wybór końcowy.
+
+\paragraph{Swipy i generacje.}
+W~\texttt{participant\_swipes} jest 2190 zdarzeń: 1303 w~lewo i~887 w~prawo (80 osób ma \texttt{tinder\_total\_swipes}~$>0$). W~\texttt{participant\_generations} jest 1174 zleceń: 411 zakończonych sukcesem, 485 błędem, 278 w~stanie \texttt{pending}. Udział błędów wynosi 485/1174. Sto dwa rekordy uczestników mają \texttt{generations\_count}~$>0$.
+
+\paragraph{Skale po flow.}
+Średnie liczone tylko na niepustych wartościach: SUS 66,64 ($n=29$), jasność 5,00 ($n=28$), sprawczość 5,10 ($n=27$), satysfakcja 5,34 ($n=27$). Przy tak małym $n$ są to opisy rozkładu, nie test różnic między ścieżkami.
+
+\paragraph{Czego ten zrzut nie rozstrzyga.}
+Zbiór 240 wierszy miesza sesje testowe, ścieżkę szybką, ścieżkę pełną i~rekordy bez ścieżki. Rdzeń empiryczny ślepego wyboru pozostaje mały ($n=17$ albo $n=29$, zależnie od znacznika). Wysoki udział generacji w~stanie błędu lub \texttt{pending} ogranicza interpretację obrazów jako bodźca, który uczestnik faktycznie zobaczył.

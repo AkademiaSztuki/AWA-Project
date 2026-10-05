@@ -1,0 +1,170 @@
+% OWNER: theory-a
+% STATUS: review
+% SOURCES: notes/SPIS_TRESCI_SZCZEGOLOWY.md §3; GLOSSARY.md; notes/HIPOTEZY_REWIZJA.md
+\chapter{Preferencje estetyczne: jawne, ukryte i behawioralne}
+\label{ch03:top}
+\ChapterStatus{draft}{theory-a}
+
+Rozdział przedstawia preferencje estetyczne jako tworzywo personalizacji w IDA.
+Wychodzi od rozróżnienia kanonicznego: preferencje \textbf{jawne} (\emph{explicit}), \textbf{ukryte} (\emph{implicit}) oraz wskaźniki \textbf{behawioralne}. Osobowość (Big Five, IPIP-NEO-120) pojawia się tu tylko jako most do rozdz.~\ref{ch05:top}.
+Modelem docelowym jest synteza wieloźródłowa, czyli sześć kluczy \texttt{GenerationSource} w ślepej macierzy generacji \footcite{idaPlatform2026}.
+
+\section{Preferencje jawne (explicit)}
+\label{ch03:sec:explicit}
+
+Preferencje jawne to deklaracje, które użytkownik formułuje świadomie: styl, kolor, materiał, jasność, złożoność.
+Osgood, Suci i Tannenbaum zaproponowali dyferencjał semantyczny do pomiaru znaczeń konotacyjnych. Ocenia się w nim pary przeciwstawnych biegunów na skali ciągłej \footcite{osgood1957measurement}.
+IDA nadaje dyferencjałowi formę sliderów (m.in.\ ciepło, jasność, złożoność) oraz wyborów palety i materiałów. Wynik trafia do pól \texttt{explicit\_*} i dalej do źródła \texttt{explicit} w macierzy.
+
+Jawność nie gwarantuje zgodności z zachowaniem.
+Deklaracja „lubię minimalizm” może współistnieć z szybkim akceptowaniem obrazów gęstych wizualnie w teście swipe. Dlatego obok kanału jawnego potrzebny jest równoległy kanał ukryty (rozdz.~\ref{ch03:sec:implicit}), a rozbieżność między nimi staje się pytaniem badawczym (\RQ{2}).
+
+Upload inspiracji (rozdz.~\ref{ch03:sec:inspiracje}) uzupełnia deklarację słowną i skalową o referencję wizualną. Pozostaje jednak w rejestrze jawnym, bo użytkownik sam wybiera, \emph{co pokazać} systemowi.
+
+\section{Preferencje ukryte (implicit) i adaptacja IAT}
+\label{ch03:sec:implicit}
+
+Greenwald, McGhee i Schwartz mierzą w Implicit Association Test (IAT) siłę skojarzeń przez opóźnienia odpowiedzi w zadaniach kategoryzacji, a nie przez samoopis \footcite{greenwald1998iat}.
+W badaniach nad interakcją człowieka z komputerem (HCI) szybki gest wyboru, na przykład przesunięcie karty (swipe), bywa używany jako przybliżenie preferencji, których trudno użyć słów. Nie jest to jednak klasyczny IAT laboratoryjny.
+\NeedsCite{przeglądy adaptacji IAT / implicit measures w HCI i rekomendacjach -- tylko peer-review z DOI}
+
+W IDA kanał ukryty ma postać \emph{IAT-like / Tinder}: uczestnik widzi kolejno karty z wizualizacjami wnętrz i każdą akceptuje albo odrzuca. Platforma zapisuje to w \texttt{participant\_swipes} (m.in.\ \texttt{reaction\_time\_ms} i cechy bodźca).
+Agregaty \texttt{implicit\_*} zasilają w macierzy wariant preferencji ukrytych (\texttt{implicit}).
+Słowo „ukryte” oznacza tu pomiar pośredni preferencji estetycznych. Nie niesie tezy psychoanalitycznej o nieświadomości.
+
+\begin{figure}[htbp]
+  \centering
+  \Todo{wstaw plik: figures/ch03/ch03-tinder-iat-flow.pdf --- schemat flow: bodziec wizualny $\rightarrow$ swipe $\rightarrow$ reaction\_time\_ms $\rightarrow$ agregaty implicit\_* $\rightarrow$ źródło implicit}
+  \caption{Schemat kanału IAT-like (Tinder) w IDA.
+    Opracowanie własne; rama IAT: \textcite{greenwald1998iat}; artefakt: \footcite{idaPlatform2026}.}
+  \label{fig:ch03:tinder-iat}
+\end{figure}
+
+\section{Rozbieżności implicit versus explicit}
+\label{ch03:sec:rozbieznosci}
+
+Kahneman opisuje myślenie szybkie i wolne jako dwa tryby, w których deklaracja i impulsywna reakcja mogą się rozchodzić \footcite{kahneman2011thinking}.
+W personalizacji wnętrz rozbieżność nie musi być szumem pomiarowym. Może oznaczać konflikt gustu, pożądanie społeczne albo trudność w nazwaniu atmosfery. \textcolor{red}{[ŹRÓDŁO DO UZUPEŁNIENIA]}
+
+IDA zapisuje porównanie obu kanałów w \texttt{preference\_comparison\_json} (m.in.\ \texttt{style\_match}, zgodność tokenów koloru, biophilia).
+Pytanie~\RQ{2} sprawdza, czy większa rozbieżność wiąże się z zachowaniem w ślepej macierzy: na przykład z dłuższym \texttt{selection\_time\_ms} albo z częstszym wyborem źródeł mieszanych zamiast czystego \texttt{implicit} lub \texttt{explicit}.
+Rozbieżność jest więc materiałem projektowym przejrzystego potoku, a nie błędem, który należałoby ukryć.
+
+\section{Wskaźniki behawioralne}
+\label{ch03:sec:behavioral}
+
+Obok kierunku swipe platforma zapisuje czas reakcji (\texttt{reaction\_time\_ms}), który przybliża trudność lub pewność decyzji.
+W obecnym schemacie danych \textbf{nie} ma osobnych miar czasu zatrzymania (\emph{dwell time}) ani wahania (\emph{hesitation}). Uproszczenia interfejsu nie wolno odczytywać jako pełnego śledzenia uwagi.
+
+W macierzy generacji dostępny jest natomiast \texttt{selection\_time\_ms} przy ślepym wyborze. Ten czas bliżej odpowiada decyzji porównawczej niż latencja pojedynczego swipe.
+Z braku dwell i hesitation wynika, że dawna hipoteza o ich wyższości nad samym gestem nie ma w danych operacjonalizacji. Zostaje ostrożna analiza czasów reakcji i wyboru (\RQ{2},~\RQ{3}).
+
+\section{Means-end laddering}
+\label{ch03:sec:laddering}
+
+Reynolds i Gutman opisują laddering means-end jako technikę, która prowadzi od atrybutów produktu (albo przestrzeni) przez konsekwencje użytkowe do wartości końcowych \footcite{reynolds1988laddering}.
+W Room Setup IDA rozmowa z awatarem przewodniczki zbiera aktywności, punkty tarcia (\emph{pain points}) i odpowiedzi ladder, czyli hierarchię „dlaczego to jest ważne”.
+
+Dla generacji obrazu laddering łączy estetykę z funkcją. Nie wystarczy wiedzieć, że użytkownik chce „cieplejszego drewna”. Trzeba też wiedzieć, czy drewno ma wspierać wyciszenie po pracy, koncentrację dziecka, czy rytuał gościnności.
+Stąd bliski związek laddering ze źródłem \texttt{mixed\_functional} i z luką PRS current$\rightarrow$target (rozdz.~\ref{ch02:sec:prs}).
+
+\section{Inspiracje wizualne}
+\label{ch03:sec:inspiracje}
+
+Obrazy referencyjne wprowadzają preferencję przez okaz: użytkownik pokazuje atmosferę, której nie umie w pełni nazwać suwakami.
+W produkcji IDA zdjęcie pokoju i inspiracje analizuje model wizyjno-językowy (VLM, Gemini Flash Lite). Wynik zasila źródło \texttt{inspiration\_reference} w macierzy sześciu wariantów \footcite{idaPlatform2026}.
+
+Eksperymenty w ComfyUI (w tym kontrola referencji i geometrii) stanowią warstwę praktyki autora. Produkcyjny artefakt IDA realizuje generację przez Gemini Image / Vertex AI i zachowuje inspirację jako jawne, cytowalne wejście briefu, a nie niewidzialny transfer stylu.
+
+\section{Osobowość: most do rozdziału~\ref{ch05:top}}
+\label{ch03:sec:bigfive-bridge}
+
+Model Wielkiej Piątki i instrument IPIP-NEO-120 (domeny i facety) tworzą osobny filar personalizacji. Zasilają źródło \texttt{personality} i wchodzą do wariantów mieszanych.
+Konstrukt, mapowania facet$\rightarrow$estetyka, ryzyko determinizmu i etykę wnioskowania o stylu z cech osobowości omawia rozdział~\ref{ch05:top}.
+Tutaj wystarczy odnotować, że osobowość jest w IDA \emph{hipotezą projektową} sprawdzaną w~\RQ{4}, a nie wyrokiem o „właściwym” guście.
+
+\section{Synteza: model wieloźródłowy i mapa instrumentów}
+\label{ch03:sec:synteza}
+
+Preferencje w IDA nie konkurują o miano „prawdziwych”. Są kanałami, które przejrzysty potok waży i zamienia w ślepą macierz sześciu źródeł (tab.~\ref{tab:ch03:sources} i~\ref{tab:ch03:instruments}).
+Implementację syntezy i interfejs macierzy opisuje rozdz.~\ref{ch07:top}, a plan analiz rozdz.~\ref{ch06:top}.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Mapowanie kanałów preferencji na sześć kluczy \texttt{GenerationSource} w IDA.}
+  \label{tab:ch03:sources}
+  \begin{tabular}{@{}llp{0.42\textwidth}@{}}
+    \toprule
+    Klucz & Określenie PL & Główne wejścia danych \\
+    \midrule
+    \texttt{implicit}
+      & wariant preferencji ukrytych
+      & swipe IAT-like, \texttt{implicit\_*}, \texttt{reaction\_time\_ms} \\
+    \texttt{explicit}
+      & wariant preferencji jawnych
+      & dyferencjał semantyczny, paleta, materiały (\texttt{explicit\_*}) \\
+    \texttt{personality}
+      & wariant osobowościowy
+      & IPIP-NEO-120 / Big Five (rozdz.~\ref{ch05:top}) \\
+    \texttt{mixed}
+      & wariant mieszany
+      & fuzja implicit + explicit (+ wybrane wagi profilu) \\
+    \texttt{mixed\_functional}
+      & wariant mieszany z funkcją przestrzeni
+      & PRS current/target, aktywności, pain points, ladder \\
+    \texttt{inspiration\_reference}
+      & wariant referencji inspiracji
+      & upload inspiracji + analiza VLM \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Instrumenty preferencji w IDA: źródło naukowe, forma, limity pomiaru.}
+  \label{tab:ch03:instruments}
+  \begin{tabular}{@{}p{0.18\textwidth}p{0.20\textwidth}p{0.24\textwidth}p{0.26\textwidth}@{}}
+    \toprule
+    Instrument & Źródło (seed) & Forma w IDA & Limity / uwagi \\
+    \midrule
+    PRS / mood grid
+      & \textcite{hartig1997prs}; ART \footcite{kaplan1995restorative}
+      & siatka 2D; \texttt{prs\_ideal/current/target}
+      & brak pomiaru post-AI; nie pełne PRS-11 \\
+    Biophilia (dawka)
+      & \textcite{kellert2008biophilic}
+      & 4 poziomy wizualne
+      & orientacja wizualna, nie pełna skala biofilii \\
+    Dyferencjał semantyczny
+      & \textcite{osgood1957measurement}
+      & slidery / wybory stylu
+      & podatność na pożądanie społeczne \\
+    IAT-like (Tinder)
+      & \textcite{greenwald1998iat}
+      & swipe; \texttt{participant\_swipes}
+      & adaptacja HCI $\neq$ klasyczny IAT; brak dwell/hesitation w DB \\
+    Laddering means-end
+      & \textcite{reynolds1988laddering}
+      & Room Setup + dialog
+      & jakość zależna od zaangażowania \\
+    Inspiracje
+      & praktyka projektowa; VLM w IDA \footcite{idaPlatform2026}
+      & upload + analiza
+      & bias wyboru referencji przez użytkownika \\
+    Big Five / IPIP-NEO-120
+      & zob.\ rozdz.~\ref{ch05:top}
+      & \texttt{/flow/big-five}
+      & most teoretyczny; nie rozwijane tu \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \Todo{wstaw plik: figures/ch03/ch03-multisource-model.pdf --- diagram: kanały preferencji $\rightarrow$ scoring/brief $\rightarrow$ 6 źródeł $\rightarrow$ ślepy wybór}
+  \caption{Model wieloźródłowy preferencji w IDA a macierz generacji.
+    Opracowanie własne na podstawie \footcite{idaPlatform2026}.}
+  \label{fig:ch03:multisource}
+\end{figure}
+
+Tabele zamykają argument rozdziałów~\ref{ch02:top}--\ref{ch03:top}. Regeneracyjność i funkcja (PRS, biophilia, ladder) razem z preferencjami jawnymi i ukrytymi dostarczają materiału, z którego artefakt RtD buduje porównywalne koncepcje wnętrz. Ślepy wybór poddaje je próbie empirycznej (\RQ{3}), więc żaden pojedynczy kanał gustu nie ma z góry autorytetu.

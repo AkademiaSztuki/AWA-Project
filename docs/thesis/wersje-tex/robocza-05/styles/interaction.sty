@@ -1,0 +1,175 @@
+% Purpose: one source, two reading modes.
+%
+% SCREEN is the default (interactive main.pdf): accent links.
+% An abbreviation opens one explanation page. ``Wróć'' is a PDF GoBack
+% action, so the same label returns to the click that opened the page.
+% Footnotes and bibliography keep their own instance returns.
+%
+% PRINT — uncomment the line after \newif and recompile. Same chapters, same text.
+% Links stay clickable but uncolored; the abbreviation underline disappears.
+% Explanation pages stay (they are the definitions). ``Wróć'' remains as quiet
+% type, not as the only place the definition lives.
+% Citation backrefs keep their page numbers, which work on paper.
+% A \ThesisPrinttrue issued before this package is kept.
+\ifcsname ifThesisPrint\endcsname\else\newif\ifThesisPrint\fi
+%\ThesisPrinttrue
+
+\RequirePackage{etoolbox}
+\RequirePackage{xparse}
+
+\newattribute\ida@nolinkattr
+\directlua{ida = ida or {}; ida.nolink_attr = \the\allocationnumber}
+\newcount\ida@printmode
+\ifThesisPrint
+  \ida@printmode=1
+  \hypersetup{hidelinks}
+\else
+  \hypersetup{menucolor=accent}
+\fi
+\newcounter{ida@fnback}
+\newcounter{ida@cb}
+\def\ida@fnid{ida.fn.0}
+
+% Headword in the abbreviation list. The short expansion stays in the item
+% body. The link target is the explanation page, not this line.
+\ExplSyntaxOn
+\cs_new:Npn \ida_target:n #1
+  {
+    \str_case:nnF {#1}
+      {
+        {SAM2} {SAM}
+        {Big~Five} {BigFive}
+        {Vertex~AI} {VertexAI}
+      }
+      {#1}
+  }
+\NewDocumentCommand{\idaTermHead}{m}{#1}
+% Visible label stays "SAM / SAM2"; both forms open the same page.
+\NewDocumentCommand{\idaSamHead}{}{SAM / SAM2}
+% Retired: page-number piles at the headword. Kept so an old call stays empty.
+\NewDocumentCommand{\idaTermBack}{m}{}
+% Manual wrap. The node pass skips glyphs that are already inside a link.
+\NewDocumentCommand{\term}{m}{
+  \hyperlink {ida.term.\ida_target:n {#1}} {#1}
+}
+\ExplSyntaxOff
+
+% Previous run recorded every typeset occurrence (chapters, captions, tables, notes).
+\newcommand{\ida@termused}[3]{%
+  \listcsgadd{ida@uses@#1}{#2/#3}%
+}
+% Body is frozen while @ is a letter. Lua calls this name (no @) at shipout.
+\newcommand{\idarecordline}[3]{%
+  \immediate\write\@auxout{\string\ida@termused{#1}{#2}{#3}}%
+}
+
+% Footnote number returns to the marker. No extra glyph on paper.
+\AtBeginDocument{%
+  \let\ida@savedmakefntext\@makefntext
+  \long\def\@makefntext#1{%
+    \def\@makefnmark{%
+      \hbox{\@textsuperscript{\normalfont\hyperlink{\ida@fnid}{\@thefnmark}}}%
+    }%
+    \ida@savedmakefntext{#1}%
+  }%
+  \pretocmd{\footnote}{%
+    \stepcounter{ida@fnback}%
+    \edef\ida@fnid{ida.fn.\theida@fnback}%
+    \leavevmode\hypertarget{\ida@fnid}{}%
+  }{}{\PackageWarning{styles/interaction}{Could not patch \string\footnote}}%
+  \directlua{%
+    dofile(kpse.find_file("styles/ida-terms.lua"))
+    ida.install()
+  }%
+}
+\AtEndDocument{\directlua{ida.flush_uses()}}
+
+% Each citation instance, not only each page.
+% The aux file calls \abx@aux@backref, once per citation instance.
+\let\ida@orig@backref\abx@aux@backref
+\protected\def\abx@aux@backref#1#2#3#4#5{%
+  \ida@orig@backref{#1}{#2}{#3}{#4}{#5}%
+  \listcsgadd{ida@cites@#3@\detokenize{#2}}{#1/#4}%
+}
+\pretocmd{\blx@addbackref@i}{%
+  \hypertarget{cite.\the\c@instcount}{}%
+}{}{\PackageWarning{styles/interaction}{Could not mark citation instances}}
+
+\letcs\ida@savedpageref{abx@macro@pageref}
+\newcommand{\ida@onecb}{}
+\def\ida@onecb#1/#2\relax{%
+  \ifnum\value{ida@cb}>0 \addcomma\addspace\fi
+  \stepcounter{ida@cb}%
+  {\scriptsize\hyperlink{cite.#1}{#2}}%
+}
+\newcommand{\ida@printcitebacks}{%
+  \setcounter{ida@cb}{0}%
+  \begingroup
+  \edef\ida@tmpkey{\abx@field@entrykey}%
+  \expandafter\ida@usecitelist\expandafter{\ida@tmpkey}%
+  \endgroup
+}
+\newcommand{\ida@usecitelist}[1]{%
+  \edef\ida@listname{ida@cites@\the\c@refsection @\detokenize{#1}}%
+  \expandafter\ifcsvoid\expandafter{\ida@listname}{}{%
+    \def\do##1{\ida@onecb##1\relax}%
+    \expandafter\dolistcsloop\expandafter{\ida@listname}%
+  }%
+}
+\renewbibmacro*{pageref}{%
+  \iflistundef{pageref}
+    {}
+    {%
+      \ifThesisPrint
+        \ida@savedpageref
+      \else
+        \printtext[parens]{%
+          \ifnumgreater{\value{pageref}}{1}
+            {\bibstring{backrefpages}\ppspace}
+            {\bibstring{backrefpage}\ppspace}%
+          \ida@printcitebacks
+        }%
+      \fi
+    }%
+}
+
+% Listings are verbatim. URLs and hrefs are already links, so the
+% node pass does not nest a second link inside them.
+\AtBeginEnvironment{lstlisting}{\ida@nolinkattr=1 }
+
+% One explanation page per abbreviation. GoBack (named PDF action) returns
+% to the view that opened the page. Adobe Acrobat and Foxit honor it;
+% many browser viewers and Apple Preview do not.
+\newpagestyle{ida@expl}{%
+  \setheadrule{0pt}%
+  \setfootrule{0pt}%
+  \sethead[][][\idaExplBack]%
+    {}{}{\idaExplBack}%
+  \setfoot[\idaFolio][][]%
+    {}{}{\idaFolio}%
+}
+\DeclareRobustCommand{\idaExplBack}{%
+  \ifThesisPrint
+    {\scriptsize\sffamily\color{inksoft}Wróć}%
+  \else
+    {\scriptsize\sffamily\Acrobatmenu{GoBack}{Wróć}}%
+  \fi
+}
+\newif\ifida@explfirst
+\ida@explfirsttrue
+% #1 slug (ida.term.<slug>), #2 headword, #3 alias, #4 what it is.
+\NewDocumentCommand{\idaExpl}{m m m +m}{%
+  \clearpage
+  \pagestyle{ida@expl}%
+  \thispagestyle{ida@expl}%
+  \hypertarget{ida.term.#1}{}%
+  \ifida@explfirst
+    \pdfbookmark[0]{Objaśnienia skrótów}{ida.expl.top}%
+    \ida@explfirstfalse
+  \fi
+  \pdfbookmark[1]{#2}{ida.expl.#1}%
+  \vspace*{5\baselineskip}%
+  \noindent
+  {\ida@nolinkattr=1 \textcolor{accent}{\idaSb #2}}%
+  \textcolor{inksoft}{\ (#3)}\ --- #4\par
+}

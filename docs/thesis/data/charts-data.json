@@ -1,0 +1,498 @@
+{
+  "meta": {
+    "snapshotDate": "2026-10-01",
+    "sqlFile": "snapshot-2026-10-01.sql",
+    "analysisFile": "analysis-2026-10-01.json",
+    "description": "Zagregowane metryki badawcze IDA (bez PII).",
+    "syncedAt": "2026-10-04T16:08:45.807Z"
+  },
+  "funnel": [
+    {
+      "path_type": "fast",
+      "n": "109",
+      "consent": "109",
+      "core": "4",
+      "big5_flag": "89",
+      "big5_scored": "3",
+      "room": "74",
+      "swipes": "5",
+      "implicit": "25",
+      "explicit": "5",
+      "generations": "61",
+      "blind": "1",
+      "ux": "2",
+      "inspirations": "4"
+    },
+    {
+      "path_type": "full",
+      "n": "85",
+      "consent": "85",
+      "core": "68",
+      "big5_flag": "84",
+      "big5_scored": "39",
+      "room": "49",
+      "swipes": "74",
+      "implicit": "69",
+      "explicit": "71",
+      "generations": "41",
+      "blind": "16",
+      "ux": "25",
+      "inspirations": "36"
+    },
+    {
+      "path_type": "(brak)",
+      "n": "46",
+      "consent": "46",
+      "core": "0",
+      "big5_flag": "1",
+      "big5_scored": "0",
+      "room": "0",
+      "swipes": "1",
+      "implicit": "0",
+      "explicit": "0",
+      "generations": "0",
+      "blind": "0",
+      "ux": "0",
+      "inspirations": "0"
+    }
+  ],
+  "swipes": [
+    {
+      "rows": "2190",
+      "with_rt": "2190",
+      "median_rt": "1609",
+      "p25": "1074",
+      "p75": "2513"
+    }
+  ],
+  "swipes_per_user": [
+    {
+      "median_swipes": "30.0",
+      "p25": "30.0",
+      "p75": "30.0",
+      "users": "74"
+    }
+  ],
+  "style_match": [
+    {
+      "style_match": "false",
+      "n": "170"
+    },
+    {
+      "style_match": "(null)",
+      "n": "60"
+    },
+    {
+      "style_match": "true",
+      "n": "10"
+    }
+  ],
+  "feedback": [
+    {
+      "rows": "59",
+      "with_source": "59",
+      "with_time": "59",
+      "with_conflict": "58"
+    }
+  ],
+  "feedback_sources": [
+    {
+      "source": "implicit",
+      "n": "19"
+    },
+    {
+      "source": "inspiration_reference",
+      "n": "13"
+    },
+    {
+      "source": "mixed",
+      "n": "9"
+    },
+    {
+      "source": "explicit",
+      "n": "8"
+    },
+    {
+      "source": "personality",
+      "n": "6"
+    },
+    {
+      "source": "mixed_functional",
+      "n": "4"
+    }
+  ],
+  "matrix_selected": [
+    {
+      "source": "implicit",
+      "selected": "11",
+      "entries": "37"
+    },
+    {
+      "source": "mixed",
+      "selected": "6",
+      "entries": "21"
+    },
+    {
+      "source": "inspiration_reference",
+      "selected": "5",
+      "entries": "19"
+    },
+    {
+      "source": "explicit",
+      "selected": "3",
+      "entries": "26"
+    },
+    {
+      "source": "personality",
+      "selected": "2",
+      "entries": "19"
+    },
+    {
+      "source": "mixed_functional",
+      "selected": "2",
+      "entries": "21"
+    }
+  ],
+  "matrix_users": [
+    {
+      "users_any": "42",
+      "users_selected": "29"
+    }
+  ],
+  "big5_by_source": [
+    {
+      "source": "implicit",
+      "n": "11",
+      "big5_scored": "7"
+    },
+    {
+      "source": "mixed",
+      "n": "6",
+      "big5_scored": "3"
+    },
+    {
+      "source": "inspiration_reference",
+      "n": "5",
+      "big5_scored": "5"
+    },
+    {
+      "source": "explicit",
+      "n": "3",
+      "big5_scored": "3"
+    },
+    {
+      "source": "mixed_functional",
+      "n": "2",
+      "big5_scored": "1"
+    },
+    {
+      "source": "personality",
+      "n": "2",
+      "big5_scored": "2"
+    }
+  ],
+  "insp_by_source": [
+    {
+      "source": "implicit",
+      "n": "11",
+      "with_insp": "6"
+    },
+    {
+      "source": "mixed",
+      "n": "6",
+      "with_insp": "5"
+    },
+    {
+      "source": "inspiration_reference",
+      "n": "5",
+      "with_insp": "5"
+    },
+    {
+      "source": "explicit",
+      "n": "3",
+      "with_insp": "2"
+    },
+    {
+      "source": "mixed_functional",
+      "n": "2",
+      "with_insp": "1"
+    },
+    {
+      "source": "personality",
+      "n": "2",
+      "with_insp": "1"
+    }
+  ],
+  "prs": [
+    {
+      "with_gap": "47",
+      "mean_gap": "0.682"
+    }
+  ],
+  "prs_by_source": [
+    {
+      "source": "(brak wyboru macierzy)",
+      "n": "22",
+      "mean_gap": "0.944"
+    },
+    {
+      "source": "implicit",
+      "n": "10",
+      "mean_gap": "0.385"
+    },
+    {
+      "source": "inspiration_reference",
+      "n": "5",
+      "mean_gap": "0.817"
+    },
+    {
+      "source": "mixed",
+      "n": "5",
+      "mean_gap": "0.359"
+    },
+    {
+      "source": "personality",
+      "n": "2",
+      "mean_gap": "0.234"
+    },
+    {
+      "source": "explicit",
+      "n": "2",
+      "mean_gap": "0.519"
+    },
+    {
+      "source": "mixed_functional",
+      "n": "1",
+      "mean_gap": "0.039"
+    }
+  ],
+  "ux": [
+    {
+      "path_type": "full",
+      "sus_n": "27",
+      "sus": "66.48",
+      "clarity_n": "26",
+      "clarity": "5.05",
+      "agency_n": "25",
+      "agency": "5.13",
+      "sat_n": "25",
+      "sat": "5.34"
+    },
+    {
+      "path_type": "fast",
+      "sus_n": "2",
+      "sus": "68.75",
+      "clarity_n": "2",
+      "clarity": "4.30",
+      "agency_n": "2",
+      "agency": "4.67",
+      "sat_n": "2",
+      "sat": "5.38"
+    },
+    {
+      "path_type": "(brak)",
+      "sus_n": "0",
+      "sus": "",
+      "clarity_n": "0",
+      "clarity": "",
+      "agency_n": "0",
+      "agency": "",
+      "sat_n": "0",
+      "sat": ""
+    }
+  ],
+  "pref_json": [
+    {
+      "with_json": "180"
+    }
+  ],
+  "direction": [
+    {
+      "direction": "left",
+      "n": "1303",
+      "median_rt": "1623"
+    },
+    {
+      "direction": "right",
+      "n": "887",
+      "median_rt": "1599"
+    }
+  ],
+  "correlations": [
+    {
+      "x": "o",
+      "y": "ic",
+      "n": 41,
+      "rho": 0.2,
+      "t": 1.28
+    },
+    {
+      "x": "o",
+      "y": "iw",
+      "n": 41,
+      "rho": 0.345,
+      "t": 2.29
+    },
+    {
+      "x": "o",
+      "y": "ib",
+      "n": 41,
+      "rho": 0.24,
+      "t": 1.55
+    },
+    {
+      "x": "c",
+      "y": "ec",
+      "n": 41,
+      "rho": -0.291,
+      "t": -1.9
+    },
+    {
+      "x": "c",
+      "y": "et",
+      "n": 11,
+      "rho": null
+    },
+    {
+      "x": "c",
+      "y": "ew",
+      "n": 42,
+      "rho": 0.016,
+      "t": 0.1
+    },
+    {
+      "x": "e",
+      "y": "iw",
+      "n": 41,
+      "rho": 0.008,
+      "t": 0.05
+    },
+    {
+      "x": "a",
+      "y": "iw",
+      "n": 41,
+      "rho": 0.411,
+      "t": 2.81
+    },
+    {
+      "x": "n",
+      "y": "ic",
+      "n": 41,
+      "rho": 0.286,
+      "t": 1.86
+    },
+    {
+      "x": "n",
+      "y": "ib",
+      "n": 41,
+      "rho": -0.021,
+      "t": -0.13
+    },
+    {
+      "x": "iw",
+      "y": "ew",
+      "n": 72,
+      "rho": 0.389,
+      "t": 3.54
+    },
+    {
+      "x": "ib",
+      "y": "eb",
+      "n": 72,
+      "rho": 0.458,
+      "t": 4.31
+    },
+    {
+      "x": "ic",
+      "y": "ec",
+      "n": 72,
+      "rho": 0.426,
+      "t": 3.94
+    },
+    {
+      "x": "agency",
+      "y": "sat",
+      "n": 27,
+      "rho": 0.705,
+      "t": 4.97
+    },
+    {
+      "x": "clarity",
+      "y": "sat",
+      "n": 26,
+      "rho": 0.684,
+      "t": 4.59
+    },
+    {
+      "x": "sus",
+      "y": "sat",
+      "n": 27,
+      "rho": 0.767,
+      "t": 5.98
+    },
+    {
+      "x": "agency",
+      "y": "clarity",
+      "n": 26,
+      "rho": 0.565,
+      "t": 3.36
+    },
+    {
+      "x": "o",
+      "y": "chose_personality",
+      "n": 21,
+      "rho": 0.43,
+      "t": 2.08
+    },
+    {
+      "x": "n",
+      "y": "chose_personality",
+      "n": 21,
+      "rho": -0.309,
+      "t": -1.42
+    },
+    {
+      "x": "c",
+      "y": "chose_personality",
+      "n": 21,
+      "rho": 0.322,
+      "t": 1.48
+    },
+    {
+      "x": "prs_gap",
+      "y": "chose_mf",
+      "n": 25,
+      "rho": -0.283,
+      "t": -1.42
+    },
+    {
+      "x": "prs_gap",
+      "y": "chose_mixed_any",
+      "n": 25,
+      "rho": -0.26,
+      "t": -1.29
+    },
+    {
+      "x": "o",
+      "y": "c",
+      "n": 42,
+      "rho": 0.433,
+      "t": 3.04
+    },
+    {
+      "x": "o",
+      "y": "e",
+      "n": 42,
+      "rho": 0.262,
+      "t": 1.71
+    },
+    {
+      "x": "o",
+      "y": "n",
+      "n": 42,
+      "rho": -0.107,
+      "t": -0.68
+    }
+  ],
+  "n_rows_numeric": 196
+}

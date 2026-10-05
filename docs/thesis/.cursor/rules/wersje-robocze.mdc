@@ -1,0 +1,18 @@
+---
+description: Przy większej zmianie składu odkładaj zamrożoną wersję LaTeX i PDF (robocza-NN)
+alwaysApply: true
+---
+
+# Wersje robocze rozprawy
+
+Przy zmianie większej niż literówka, jeden akapit albo drobna poprawka stylu — layout, system typograficzny (`styles/`), hyperref/cytowania, struktura rozdziałów, front matter, inne przebudowanie składu — zanim oddasz pracę:
+
+1. Skompiluj PDF ekranowy w `docs/thesis/` (`latexmk -pdflua main.tex`). `\ThesisPrinttrue` w `styles/interaction.sty` zostaje wyłączone. Osobny PDF drukowany tylko na prośbę.
+2. Weź następny wolny numer z `notes/WERSJA.md`. Nie nadpisuj istniejącego `robocza-NN`.
+3. `.\scripts\snapshot-wersja-tex.ps1 -Number N` → `wersje-tex/robocza-NN/` (prawdziwe pliki: `.tex`, `bibliography/references.bib`, `styles/`). Figury zostają w roboczym `figures/` i nie są kopiowane.
+4. `.\scripts\save-wersja-pdf.ps1 -Number N` → `wersje-pdf/robocza-NN.pdf` (kopia `main.pdf`).
+5. Dopisz wiersz w `notes/WERSJA.md`.
+
+Drobnej edycji nie archiwizuj. Nie commituj snapshotu bez prośby (`wersje-pdf/` jest w `.gitignore`).
+
+Przykład: literówka w akapicie — bez wersji. Nowa `styles/*.sty`, zmiana hyperref albo przebudowa front matter — wersja.

@@ -1,0 +1,88 @@
+% OWNER: artifact
+% STATUS: draft
+% Fast path UI sequence — figures in figures/ida/flow/
+% NOTE: canonical narrative opis dziela is chapters/07c-opis-dziela-przebieg.tex (this file is not \input; do not include both: duplicate label ch07:sec:flow-quick).
+
+\subsection{Sekwencja ekranów ścieżki szybkiej (Fast)}
+\label{ch07:sec:flow-quick}
+
+Ścieżka szybka (Fast) realizuje Product-First: użytkownik w czterech etapach paska postępu (\emph{Start} $\rightarrow$ \emph{Przestrzeń} $\rightarrow$ \emph{Styl} $\rightarrow$ \emph{Generacja}) przechodzi od wejścia na platformę do pierwszej koncepcji wizualnej na własnym lub przykładowym zdjęciu pokoju, bez pełnego IPIP-NEO-120, Tindera i ślepej macierzy sześciu źródeł. Poniższe ryciny dokumentują kanoniczny przebieg produkcyjny na \texttt{project-ida.com} (październik 2026); w podpisach obowiązuje formuła screen z platformy IDA.
+
+Na landingu IDA komunikuje wartość produktu (koncepcja wnętrza dopasowana do profilu) i prowadzi do funnela przyciskiem \emph{Stwórz moje wnętrze}. Awatar może otworzyć wprowadzający dialog głosowy --- w sesji dokumentacyjnej dopuszczalne jest jego pominięcie przyciskiem \emph{Pomiń dialog}, aby nie zasłaniał CTA (ryc.~\ref{fig:ch07:flow-quick-landing}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{ida/flow/ch07-flow-quick-01-landing.png}
+  \caption{Landing platformy IDA: wejście do funnela i komunikat Product-First (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:flow-quick-landing}
+\end{figure}
+
+Wybór \texttt{path\_type} następuje na ekranie \emph{Wybierz swoją ścieżkę}: karta \emph{Szybka ścieżka} (ok.\ 3--5~min) kontrastuje z \emph{Pełnym doświadczeniem} (Full, ok.\ 20--30~min) i jawnie komunikuje skrócony zestaw kroków --- zdjęcie, styl, generacja (ryc.~\ref{fig:ch07:flow-quick-path-selection}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{ida/flow/ch07-flow-quick-02-path-selection.png}
+  \caption{Wybór ścieżki pełnej (Full) vs ścieżki szybkiej (Fast) --- punkt rozgałęzienia \texttt{path\_type} (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:flow-quick-path-selection}
+\end{figure}
+
+Etap 1/4 (\emph{Start}) łączy zgodę badawczą (RODO, zakres danych, dobrowolność) z minimalnym kontekstem demograficznym wymaganym pod ewaluację lejka (RQ1). Master-checkbox \emph{Akceptuję wszystkie warunki} odblokowuje przycisk \emph{Dalej} (ryc.~\ref{fig:ch07:flow-quick-onboarding-consent}); kolejny podformularz zbiera przedział wieku, płeć, wykształcenie i kraj (ryc.~\ref{fig:ch07:flow-quick-demographics}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{ida/flow/ch07-flow-quick-03-onboarding-consent.png}
+  \caption{Etap 1/4 Fast: zgoda na udział w badaniu i warunki RODO przed dalszymi krokami (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:flow-quick-onboarding-consent}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{ida/flow/ch07-flow-quick-04-demographics.png}
+  \caption{Etap 1/4 Fast: skrócony blok demografii uczestnika badania (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:flow-quick-demographics}
+\end{figure}
+
+Etap 2/4 (\emph{Przestrzeń}) realizuje upload zdjęcia pokoju lub wybór przykładowej fotografii stockowej; VLM w runtime analizuje charakter przestrzeni jako wejście do syntezy promptu (bez pełnego Room Setup ze ścieżki Full). Użytkownik może przejść dalej bez opcji \emph{Usuń meble} (empty shell pozostaje skrótem produkcyjnym --- sekcja~\ref{ch07:sec:empty-shell}) (ryc.~\ref{fig:ch07:flow-quick-room-upload}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{ida/flow/ch07-flow-quick-05-room-upload.png}
+  \caption{Etap 2/4 Fast: przesłanie zdjęcia wnętrza lub wybór przykładu (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:flow-quick-room-upload}
+\end{figure}
+
+Etap 3/4 (\emph{Styl}) redukuje personalizację do jawnego wyboru kierunku estetycznego (kanał zbliżony do \texttt{explicit} w macierzy Full, lecz bez ślepego porównania sześciu źródeł) --- użytkownik wskazuje jeden styl bazowy przed generacją (ryc.~\ref{fig:ch07:flow-quick-style-selection}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{ida/flow/ch07-flow-quick-06-style-selection.png}
+  \caption{Etap 3/4 Fast: wybór stylu bazowego dla koncepcji (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:flow-quick-style-selection}
+\end{figure}
+
+Etap 4/4 (\emph{Generacja}) wywołuje pipeline Vertex~AI / Gemini Image: UI pokazuje postęp (\emph{Przygotowuję środowisko AI}, \emph{Generuję obrazek z AI…}) oraz --- po zakończeniu --- podgląd wyniku i skalę satysfakcji (wątek RQ6 w wersji skróconej). W trakcie sesji dokumentacyjnej obserwowano modal zachęcający do założenia konta; dopuszczalne jest \emph{Kontynuuj bez konta}, aby domknąć ścieżkę anonimowo (ryc.~\ref{fig:ch07:flow-quick-generating}, \ref{fig:ch07:flow-quick-result}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{ida/flow/ch07-flow-quick-07-generating.png}
+  \caption{Etap 4/4 Fast: stan pośredni generacji obrazu (postęp, komunikat awatara) (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:flow-quick-generating}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{ida/flow/ch07-flow-quick-08-result.png}
+  \caption{Etap 4/4 Fast: domknięcie paska postępu generacji (\emph{Gotowe!}, 100\%) --- w tej klatce UI jeszcze bez pełnowymiarowej miniaturki wyniku; kolejny stan obejmuje podgląd wizualizacji i ocenę satysfakcji (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:flow-quick-result}
+\end{figure}
+
+Po ukończeniu Fast aplikacja kieruje z powrotem na ekran wyboru ścieżki (w URL m.in.\ \texttt{fast\_completed=true}); w kadrze dokumentacyjnym widoczny jest ponownie wybór Fast vs Full, bez osobnego banera --- sygnał ukończenia jest głównie parametryczny w nawigacji (ryc.~\ref{fig:ch07:flow-quick-completion}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{ida/flow/ch07-flow-quick-09-completion.png}
+  \caption{Powrót do wyboru ścieżki po ukończeniu Fast --- lejek wejścia i możliwość przejścia na Full (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:flow-quick-completion}
+\end{figure}
+
+Sekwencja uzupełnia diagram kanoniczny (ryc.~\ref{fig:ch07:flow}) i załącznik~\ref{app:h:sec:fast}; pełna ścieżka z macierzą sześciu źródeł pozostaje dokumentowana osobno.

@@ -1,0 +1,14 @@
+# Expected author screenshots (media-lab / ch. 4 + appendix G)
+# Caption source line for all: "Opracowanie własne autora --- pracownia generatywna"
+#
+# Required:
+#   ch04-comfyui-graph.png           — ComfyUI node graph screenshot
+#   ch04-model-comparison.png        — model comparison grid (same room photo)
+#   ch04-depth-overlay.png           — room photo + depth map overlay
+#   ch04-sam-mask.png                — SAM/SAM2 mask (+ optional zone restyle)
+#   ch04-geometry-fail-success.png   — success vs failed geometry pair
+#
+# Optional:
+#   app-g-comfyui-graph-inpaint.png  — empty-shell / inpainting graph
+#
+# Do not invent or AI-generate fake project screenshots.

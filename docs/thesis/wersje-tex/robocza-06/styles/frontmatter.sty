@@ -1,0 +1,65 @@
+% Purpose: contents lists and the quieter front-matter rhythm.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles/frontmatter}[2026/10/05 IDA thesis front matter]
+
+\RequirePackage{titletoc}
+\RequirePackage{etoolbox}
+
+\makeatletter
+\newcommand{\idaTocPage}{\sffamily\color{inksoft}\contentspage}
+\newcommand{\idaTocLeader}{%
+  \titlerule*[0.72em]{\textcolor{rule}{\raisebox{0.42ex}{\rule{0.28em}{0.3pt}}}}%
+}
+
+\titlecontents{chapter}
+  [2.5em]
+  {\addvspace{0.62\baselineskip}\sffamily\color{ink}}
+  {\contentslabel[\textcolor{accent}{\thecontentslabel}]{2.5em}}
+  {\hspace*{-2.5em}}
+  {\hfill\idaTocPage}
+
+\titlecontents{section}
+  [2.5em]
+  {\sffamily\small\color{inksoft}}
+  {\contentslabel{2.2em}}
+  {}
+  {\idaTocLeader\idaTocPage}
+
+\titlecontents{subsection}
+  [4.8em]
+  {\sffamily\footnotesize\color{inksoft}}
+  {\contentslabel{2.4em}}
+  {}
+  {\hfill\idaTocPage}
+
+\titlecontents{figure}
+  [2.6em]
+  {\sffamily\small\color{ink}}
+  {\contentslabel{2.6em}}
+  {}
+  {\idaTocLeader\idaTocPage}
+
+\titlecontents{table}
+  [2.6em]
+  {\sffamily\small\color{ink}}
+  {\contentslabel{2.6em}}
+  {}
+  {\idaTocLeader\idaTocPage}
+
+\pretocmd{\@starttoc}{\setlength{\parskip}{0pt}}{}{}
+
+% Book's lists put \@mkboth inside the heading. With titleps that re-enters
+% the mark system and overflows the input stack. Headings stay plain.
+\renewcommand{\tableofcontents}{%
+  \chapter*{\contentsname}%
+  \@starttoc{toc}%
+}
+\renewcommand{\listoffigures}{%
+  \chapter*{\listfigurename}%
+  \@starttoc{lof}%
+}
+\renewcommand{\listoftables}{%
+  \chapter*{\listtablename}%
+  \@starttoc{lot}%
+}
+\makeatother

@@ -1,0 +1,46 @@
+% Purpose: A4 grid, asymmetric margins, and blank versos.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles/layout}[2026/10/05 IDA thesis page grid]
+
+\RequirePackage{geometry}
+\geometry{
+  a4paper,
+  twoside,
+  inner=24mm,
+  outer=46mm,
+  top=27mm,
+  bottom=28mm,
+  bindingoffset=6mm,
+  headheight=16pt,
+  headsep=15pt,
+  footskip=14pt,
+  marginparwidth=34mm,
+  marginparsep=5mm,
+  includehead
+}
+
+\raggedbottom
+
+\makeatletter
+% Open-right blank versos carry neither a running head nor a folio.
+\renewcommand{\cleardoublepage}{%
+  \clearpage
+  \if@twoside
+    \ifodd\c@page
+    \else
+      \hbox{}%
+      \thispagestyle{empty}%
+      \newpage
+      \if@twocolumn
+        \hbox{}%
+        \newpage
+      \fi
+    \fi
+  \fi
+}
+\makeatother
+
+\AtBeginDocument{%
+  \pagecolor{paper}%
+  \color{ink}%
+}

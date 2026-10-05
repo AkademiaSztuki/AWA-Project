@@ -1,0 +1,42 @@
+% Purpose: booktabs rhythm and chart colors aligned to the accent.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles/tables}[2026/10/05 IDA thesis tables]
+
+\RequirePackage{booktabs}
+\RequirePackage{tabularx}
+\RequirePackage{longtable}
+\RequirePackage{multirow}
+\RequirePackage{pgfplots}
+\RequirePackage{caption}
+
+\setlength{\heavyrulewidth}{0.45pt}
+\setlength{\lightrulewidth}{0.22pt}
+\setlength{\cmidrulewidth}{0.22pt}
+\setlength{\aboverulesep}{0.32\baselineskip}
+\setlength{\belowrulesep}{0.26\baselineskip}
+\setlength{\abovetopsep}{0.15\baselineskip}
+\setlength{\belowbottomsep}{0.15\baselineskip}
+
+\setlength{\floatsep}{1.05\baselineskip plus 0.3\baselineskip minus 0.2\baselineskip}
+\setlength{\textfloatsep}{1.15\baselineskip plus 0.35\baselineskip minus 0.25\baselineskip}
+\setlength{\intextsep}{0.95\baselineskip plus 0.25\baselineskip minus 0.2\baselineskip}
+
+% One accent, plus ink and grey. Existing coordinates are not rebuilt.
+\pgfplotsset{
+  compat=1.18,
+  every axis/.append style={
+    tick label style={font=\sffamily\footnotesize, color=inksoft},
+    label style={font=\sffamily\small, color=ink},
+    title style={font=\sffamily\small, color=ink},
+    axis line style={draw=inksoft!70},
+    tick style={draw=inksoft!70},
+    every axis plot/.append style={
+      fill=accent,
+      draw=accent!80!black
+    },
+    every node near coord/.append style={
+      font=\sffamily\scriptsize,
+      color=inksoft
+    }
+  }
+}

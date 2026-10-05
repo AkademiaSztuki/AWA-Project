@@ -1,0 +1,43 @@
+% Purpose: shared semantic macros used by the chapter files.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles/commands}[2026/10/05 IDA thesis semantic macros]
+
+\RequirePackage{xcolor}
+\RequirePackage{enumitem}
+
+\setlist{
+  leftmargin=1.5em,
+  itemsep=0.12\baselineskip,
+  parsep=0.06\baselineskip,
+  topsep=0.35\baselineskip,
+  partopsep=0pt
+}
+\setlist[description]{
+  font=\normalfont\sffamily\color{accent},
+  leftmargin=1.6em,
+  style=nextline,
+  itemsep=0.22\baselineskip,
+  topsep=0.4\baselineskip
+}
+
+\newcommand{\Todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+\newcommand{\AgentNote}[1]{\textcolor{teal}{\textit{[agent: #1]}}}
+\newcommand{\NeedsCite}[1]{\textcolor{red}{[ŹRÓDŁO DO UZUPEŁNIENIA]}}
+\newcommand{\BrakZrodla}{\textcolor{red}{[ŹRÓDŁO DO UZUPEŁNIENIA]}}
+
+\newcommand{\ChLabel}[2]{\label{ch#1:#2}}
+
+\newif\ifThesisDraft
+\ThesisDraftfalse
+\newcommand{\ChapterStatus}[2]{%
+  \ifThesisDraft
+    \begin{center}
+      \footnotesize\color{gray}
+      Status: \textbf{#1} \quad|\quad Owner: \texttt{#2} \quad|\quad \ThesisVersion
+    \end{center}
+    \vspace{0.35\baselineskip}
+  \fi
+}
+
+\newcommand{\RQ}[1]{\textbf{RQ#1}}
+\newcommand{\Hyp}[1]{\textbf{H#1}}
