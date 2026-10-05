@@ -1,0 +1,245 @@
+% OWNER: media-lab
+% STATUS: review
+% SOURCES: notes/SPIS_TRESCI_SZCZEGOLOWY.md §4; GLOSSARY.md §8.3; notes/SPIS_TRESCI_PROPOZYCJA_ASP.md §4
+\chapter{Sztuczna inteligencja dyfuzyjna dla architektury wnętrz --- medium i praktyka}
+\label{ch04:top}
+\ChapterStatus{draft}{media-lab}
+
+Rozdział przedstawia generatywne modele obrazu jako medium praktyki projektowej w architekturze wnętrz. Są one czymś więcej niż narzędziem do ilustracji: pośredniczą między zdjęciem pomieszczenia, briefem estetycznym i koncepcją wizualną.
+Punktem wyjścia jest moja praktyka w środowisku grafów ComfyUI, w którym testowałem modele, conditioningi strukturalne i segmentację, oraz jej stosunek do uproszczonego potoku produkcyjnego platformy IDA \parencite{idaPlatform2026}.
+
+Eksperymenty w ComfyUI (w tym kontrola geometrii przez mapy głębokości, conditioning oraz segmentację SAM/SAM2) stanowią warstwę praktyki autora. Produkcyjny artefakt IDA realizuje generację przez syntezę promptu i image-to-image w środowisku Vertex~AI / Gemini Image (wcześniej FLUX na Modal).
+Ani ComfyUI, ani ControlNet, ani SAM/SAM2 nie działają w produkcyjnym IDA. Są genealogią decyzji projektowych i materiałem do krytyki medium. Z tej krytyki wynikają wymogi skalowalności, powtarzalności i czytelności interfejsu w artefakcie terenowym (zob.\ zał.~\ref{app:g:top}).
+
+\section{Generatywne modele obrazu jako medium wizualizacji wnętrz}
+\label{ch04:sec:genai-medium}
+
+Rombach i współpracownicy pokazali, że modele dyfuzyjne w przestrzeni latentnej syntetyzują obrazy wysokiej rozdzielczości przy rozsądnym koszcie obliczeń i pozwalają warunkować generację tekstem oraz innymi sygnałami sterującymi \parencite{rombach2022ldm}.
+Dla architektury wnętrz zmienia to status wizualizacji koncepcyjnej. Obok renderu z modelu CAD/BIM pojawia się szybka synteza atmosfery, materiału i wyposażenia na podstawie fotografii lub szkicu pomieszczenia, którą można powtarzać wiele razy.
+
+To medium nie jest jednak przezroczystym oknem na przyszły projekt. Generator uczy się rozkładów wizualnych z korpusów treningowych.
+W moich próbach powielał typowe układy mebli, konwencje oświetlenia i estetykę katalogową, a przy tym często mylił się w geometrii architektonicznej: osie otworów, proporcje ścian, ciągłość podłogi.
+Wizualizacja koncepcyjna staje się więc polem negocjacji między zamiarem projektanta a statystyczną „pamięcią” modelu. Z tego powodu praktyka bliższa jest mediom generatywnym niż klasycznej wizualizacji technicznej.
+
+Literatura aplikacyjna o dyfuzji w projektowaniu przestrzeni i architekturze zawiera wiele studiów przypadku i raportów narzędziowych. Ich systematyczny przegląd wymaga ostrożności wobec jakości recenzji i trwałości identyfikatorów DOI.
+\NeedsCite{Zweryfikowany przegląd / kluczowe prace 2022--2026 o~dyfuzji w~architekturze i~designie wnętrz (tylko z~DOI lub arXiv).}
+
+Rozróżniam trzy rejestry użycia medium: (1)~eksplorację w pracowni, z pełną kontrolą grafu, conditioningami i maskami; (2)~potok produkcyjny IDA, czyli syntezę promptu i img2img w Vertex/Gemini; (3)~komunikację z użytkownikiem-laikiem, dla którego obraz ma być czytelny funkcjonalnie, a nie tylko atrakcyjny. Rozdział dotyczy głównie rejestru (1) i mostów decyzyjnych do rejestru (2).
+
+\section{Od text-to-image do image-to-image: geometria pokoju}
+\label{ch04:sec:t2i-i2i}
+
+Text-to-image (T2I) tworzy scenę z opisu językowego i nie musi zachować żadnego konkretnego układu przestrzennego. Na etapie moodboardu ta swoboda bywa zaletą. Kiedy jednak celem jest propozycja dla \emph{tego} pomieszczenia, z jego oknami, proporcjami ścian i perspektywą zdjęcia bazowego, staje się kłopotem.
+
+Image-to-image (I2I) i pokrewne tryby edycji warunkują syntezę obrazem wejściowym: zdjęciem pokoju, czasem także referencjami stylu. Od siły odszumiania (\emph{denoising}), wagi conditioningów i jakości maski zależy, czy model zachowa geometrię, czy przerysuje pokój według własnego prioru.
+W pracowni najczęściej obserwowałem pięć rodzajów niepowodzeń:
+\begin{itemize}
+  \item przesunięcie lub zanik otworów drzwiowych i okiennych;
+  \item załamanie linii styku ścian ze stropem i podłogą, co daje efekt „pływającej” perspektywy;
+  \item zdublowanie lub zniknięcie mebli niosących funkcję pokoju;
+  \item niespójną skalę, na przykład zbyt niskie oparcia albo „karłowate” stoły względem ścian;
+  \item lokalne „łatanie” tekstur bez ciągłości płaszczyzn.
+\end{itemize}
+
+Z punktu widzenia projektowania wnętrz błąd geometrii nie jest usterką kosmetyczną, bo odbiera propozycji wiarygodność jako odpowiedzi na realne pomieszczenie.
+Dlatego w pracowni na pierwszym miejscu postawiłem kontrolę struktury (głębia, krawędzie, maski stref), a nie „ładność” kadru.
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.28\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-geometry-fail-success.png}\\[0.5em]
+      \footnotesize Para: udana vs nieudana geometria po restylizacji tego samego zdjęcia pokoju.
+    }%
+  }
+  \caption{Porównanie udanej i nieudanej geometrii pomieszczenia po restylizacji.
+  Opracowanie własne autora --- pracownia generatywna.}
+  \label{fig:ch04:geometry}
+\end{figure}
+
+\section{Pracownia ComfyUI}
+\label{ch04:sec:comfyui}
+
+ComfyUI służy mi jako środowisko eksperymentalne. Graf węzłów pozwala powtarzalnie montować łańcuchy: ładowanie modelu, przygotowanie conditioningów, odszumianie i podgląd masek.
+W odróżnieniu od jednorazowego promptu w konsumenckim interfejsie graf jest artefaktem procesu, więc mogę go wersjonować, porównywać i dokumentować. Wybrane grafy i porównania zebrałem w załączniku~\ref{app:g:top}.
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.28\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-comfyui-graph.png}\\[0.5em]
+      \footnotesize Screenshot reprezentatywnego grafu ComfyUI (img2img + conditioning strukturalny).
+    }%
+  }
+  \caption{Reprezentatywny graf ComfyUI używany w pracowni do restylizacji wnętrza.
+  Opracowanie własne autora --- pracownia generatywna.}
+  \label{fig:ch04:comfyui-graph}
+\end{figure}
+
+\subsection{Dobór i porównanie modeli}
+\label{ch04:sec:modele}
+
+W pracowni porównałem między innymi trzy grupy modeli: warianty oparte na Stable Diffusion XL, modele z rodziny FLUX oraz warianty edycyjne i img2img. \textcolor{red}{[ŹRÓDŁO DO UZUPEŁNIENIA]}
+Porównanie nie było benchmarkiem akademickim z ustaloną metryką, taką jak FID. Oceniałem modele według \emph{kryteriów projektowych} ważnych dla wizualizacji wnętrz (tab.~\ref{tab:ch04:modele}).
+
+\begin{table}[htbp]
+  \centering
+  \caption{Kryteria porównania modeli w pracowni ComfyUI (ocena jakościowa autora).}
+  \label{tab:ch04:modele}
+  \begin{tabular}{@{}p{2.4cm}p{2.6cm}p{2.6cm}p{2.4cm}p{2.6cm}@{}}
+    \toprule
+    Kryterium & Wierność geometrii & Kontrola stylu & Czas / koszt & Uwagi praktyczne \\
+    \midrule
+    SDXL (+ ControlNet) & wysoka przy silnym conditioningu & dobra z~LoRA & umiarkowany & bogaty ekosystem węzłów \\
+    FLUX (warianty) & zmienna; silny prior estetyczny & bardzo dobra & wyższy & atrakcyjny „look”, ryzyko nadpisania layoutu \\
+    Modele edycyjne / I2I & zależna od denoise \& maski & umiarkowana--dobra & zróżnicowany & bliższe zadaniu restylizacji pokoju \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Modele o silnym priorze „pięknego kadru” częściej łamały geometrię przy wysokim odszumianiu. Konfiguracje z wyraźnym conditioningiem strukturalnym lepiej chroniły układ ścian, ale kosztem pewnej sztywności stylu.
+Te obserwacje uzasadniły decyzję produktową w IDA. Zamiast przenosić do produkcji cały graf ControlNet, ograniczyłem się do syntezy promptu i kontrolowanego I2I w API Gemini/Vertex. Straciłem część precyzji strukturalnej, a zyskałem powtarzalność i skalowalność badania terenowego.
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.28\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-model-comparison.png}\\[0.5em]
+      \footnotesize Siatka porównań modeli na tym samym zdjęciu pokoju (identyczny brief tekstowy).
+    }%
+  }
+  \caption{Porównanie modeli generatywnych na tym samym zdjęciu pomieszczenia.
+  Opracowanie własne autora --- pracownia generatywna.}
+  \label{fig:ch04:model-comparison}
+\end{figure}
+
+\subsection{LoRA i style adapters}
+\label{ch04:sec:lora}
+
+Adaptery typu LoRA pozwalają przesuwać charakter wizualny (materiał, nastrój światła, „ziarno” stylu) bez pełnego dotrenowania modelu bazowego. \textcolor{red}{[ŹRÓDŁO DO UZUPEŁNIENIA]}
+We wnętrzach liczy się kompromis: zbyt silny adapter narzuca estetykę kosztem wierności fotografii bazowej, a zbyt słaby zostawia wynik w strefie generycznego „AI look”.
+W pracowni traktowałem LoRA jako narzędzie do kształtowania \emph{charakteru} wizualizacji koncepcyjnej i zawsze podporządkowywałem je zachowaniu geometrii oraz czytelności funkcji pomieszczenia.
+
+\subsection{Workflow img2img i multi-reference}
+\label{ch04:sec:img2img}
+
+Typowy przebieg w pracowni składał się z pięciu kroków: (1)~zdjęcie pokoju jako obraz bazowy; (2)~opcjonalne referencje inspiracji (materiał, paleta, typ mebli) jako dodatkowe wejścia albo treść promptu; (3)~conditioning strukturalny; (4)~selektywne maski stref; (5)~ocena wyniku według checklisty jakości (podrozdz.~\ref{ch04:sec:checklista}).
+Multi-reference, czyli łączenie kilku inspiracji, wzbogaca brief, ale zwiększa ryzyko niespójności stylistycznej i konfliktów skali.
+W IDA analogiczną rolę pełnią ścieżki preferencji i analiza inspiracji przez VLM. Pełnego grafu ComfyUI w produkcji nie ma.
+
+\section{Kontrola struktury przestrzeni}
+\label{ch04:sec:struktura}
+
+Geometria pomieszczenia jest w mojej praktyce pierwszym kryterium akceptacji wyniku. Opisane niżej techniki należą do pracowni. Ich obecność w tekście nie oznacza, że działają w produkcyjnym IDA.
+
+\subsection{Mapy głębokości (depth)}
+\label{ch04:sec:depth}
+
+Mapa głębokości przybliża układ planów przestrzennych: bliższe i dalsze płaszczyzny, wnęki, otwory. Jako conditioning w grafie dyfuzyjnym pomaga utrzymać „pudełko” pokoju przy zmianie wyposażenia i materiałów.
+Najczęstsze błędy to spłaszczenie głębi (zanik różnicy planów), fałszywe uskoki na gładkich ścianach i konflikt między mapą głębokości a silnym priorem stylu. W takim konflikcie ściany „płyną”, a meble unoszą się nad podłogą.
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.28\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-depth-overlay.png}\\[0.5em]
+      \footnotesize Zdjęcie pokoju z~nakładką mapy głębokości (depth overlay).
+    }%
+  }
+  \caption{Nakładka mapy głębokości na fotografię pomieszczenia.
+  Opracowanie własne autora --- pracownia generatywna.}
+  \label{fig:ch04:depth}
+\end{figure}
+
+\subsection{ControlNet i conditioningi (canny, normals)}
+\label{ch04:sec:controlnet}
+
+Zhang, Rao i Agrawala wprowadzili ControlNet jako sposób dodawania warunków strukturalnych do modeli dyfuzyjnych text-to-image. Generację można dzięki temu sterować mapami krawędzi, głębokości, normalnych i innymi reprezentacjami \parencite{zhang2023controlnet}.
+W pracowni najbardziej przydały mi się trzy rodzaje conditioningu:
+\begin{itemize}
+  \item \emph{canny} (krawędzie): chroni ościeżnice, linie mebli i podziały ścian;
+  \item \emph{depth}: zachowuje plany przestrzenne;
+  \item \emph{normal maps}: wskazują lokalną orientację powierzchni i pomagają utrzymać spójność oświetlenia i materii.
+\end{itemize}
+Siłę conditioningu trzeba stroić. Zbyt wysoka daje wynik sztywny i „wyprasowany”, zbyt niska przywraca chaos geometrii.
+Ta krzywa kompromisu była jednym z powodów, dla których nie przeniosłem pełnego ControlNet do produkcji IDA. W badaniu terenowym nie da się oczekiwać od uczestnika, a także od infrastruktury API, powtarzalnego strojenia wag conditioningu.
+
+\subsection{Segmentacja SAM / SAM2}
+\label{ch04:sec:sam}
+
+Kirillov i współpracownicy opisali Segment Anything Model (SAM), który wydziela maski obiektów na obrazie w trybie interaktywnym i automatycznym \parencite{kirillov2023sam}. Ravi i współpracownicy rozszerzyli to podejście w SAM~2 na spójną segmentację obrazów i wideo \parencite{ravi2024sam2}.
+W pracowni używałem masek do restylizacji selektywnej: osobno ściany i podłogi, osobno strefy wypoczynku i ciągu komunikacyjnego, a także do usuwania lub wymiany pojedynczych mebli bez przebudowy całego kadru.
+
+Dla architektury wnętrz segmentacja łączy \emph{rozumienie} fotografii z \emph{interwencją} projektową, bo wskazuje projektantowi (albo potokowi), \emph{co} wolno zmienić.
+W IDA podobny efekt „pustej skorupy” uzyskuję inaczej: instrukcją systemową i trybem I2I, bez segmentacji SAM w produkcji.
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.28\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-sam-mask.png}\\[0.5em]
+      \footnotesize Maska SAM/SAM2 (np.\ strefa mebli) oraz wynik restylizacji wybranej strefy.
+    }%
+  }
+  \caption{Maska segmentacji SAM/SAM2 i wynik selektywnej restylizacji strefy.
+  Opracowanie własne autora --- pracownia generatywna.}
+  \label{fig:ch04:sam}
+\end{figure}
+
+\section{Inpainting, empty shell i usuwanie wyposażenia}
+\label{ch04:sec:inpaint}
+
+\emph{Empty shell}, czyli „pusta skorupa” pomieszczenia, oznacza w tej rozprawie stan obrazu, w którym zachowana jest geometria architektoniczna (ściany, podłoga, otwory, podstawowe światło), a warstwa wyposażenia jest usunięta albo silnie zneutralizowana.
+Tak przygotowany obraz umożliwia nową propozycję aranżacji. W pracowni ComfyUI droga do niego prowadziła zwykle przez maskę (często wspieraną przez SAM) i inpainting albo edycję warunkowaną.
+
+W produkcyjnym IDA empty shell powstaje bez pełnego ControlNet i bez SAM: instrukcja systemowa w prompcie oraz image-to-image w Vertex~AI / Gemini Image mają skłonić model do usunięcia lub przebudowy wyposażenia przy zachowaniu czytelności pomieszczenia \parencite{idaPlatform2026}.
+To świadome uproszczenie. Tracę część precyzji maskowania dostępnej w pracowni, ale zyskuję jednolity, audytowalny łańcuch generacji dla badania z użytkownikami.
+Przejście od wniosku z pracowni do decyzji produktowej jest w warstwie medium przykładem Research through Design. Rozwijam je w opisie artefaktu.
+
+\section{VLM i opis przestrzeni jako brief projektowy}
+\label{ch04:sec:vlm}
+
+Modele wizyjno-językowe (VLM) przekładają fotografię pomieszczenia na opis strukturalny i semantyczny: typ pokoju, dominanty materiałowe, jakość światła, możliwe konflikty funkcjonalne.
+Taki opis staje się briefem wejściowym do syntezy promptu. Warstwa \emph{rozumienia} poprzedza więc warstwę \emph{rysowania}.
+
+W pracowni używałem VLM eksploracyjnie, jako „pierwszego oglądu” kadru przez różne modele opisowe. W IDA analizę pokoju i inspiracji wykonuje Gemini Flash Lite, a jego wynik zasila builder syntezy promptu.
+Most między tym rozdziałem a artefaktem nie polega więc na przeniesieniu grafu ComfyUI. Polega na zachowaniu kolejności: \emph{zobacz przestrzeń, nazwij ją, dopiero potem generuj}.
+\NeedsCite{Prace o~VLM w~kontekście designu / briefowania przestrzeni --- wyłącznie po weryfikacji DOI.}
+
+\section{Krytyka medium}
+\label{ch04:sec:krytyka}
+
+\subsection{Halucynacje geometrii}
+Nawet przy conditioningu strukturalnym model może „dopowiadać” architekturę: dodawać wnęki, przesuwać ościeżnice, spłaszczać skosy. Taka halucynacja geometrii szkodzi zwłaszcza w kontakcie z klientem albo uczestnikiem badania, bo przy pobieżnym oglądzie wygląda wiarygodnie.
+Dlatego w checkliście jakości geometria poprzedza ocenę stylu.
+
+\subsection{Estetyka „AI look”}
+Powtarzalne tekstury, nadmiernie wygładzone powierzchnie, katalogowe oświetlenie i stereotypowe układy mebli tworzą rozpoznawalny idiom generatywny. W praktyce projektowej „AI look” konkuruje z zamiarem indywidualizacji.
+Medium, które obiecuje personalizację, łatwo wpada w estetykę uśrednioną. Adaptery stylu i referencje inspiracji łagodzą ten efekt, ale go nie usuwają.
+
+\subsection{Autorstwo i odpowiedzialność projektanta}
+Gdy obraz powstaje we współudziale modelu, pytanie o autorstwo koncepcji wnętrza nie znika. Przesuwa się na brief, selekcję, korektę i odrzucanie wyników.
+Odpowiedzialność za propozycję, w tym za błędy geometrii wprowadzające w błąd co do wykonalności, pozostaje po stronie projektanta albo zespołu prowadzącego artefakt. W tej rozprawie medium generatywne pośredniczy, ale nie jest autonomicznym „projektantem”.
+\NeedsCite{Literatura z~design research / teorii mediów o~autorstwie w~sztuce generatywnej --- po weryfikacji DOI.}
+
+\section{Checklista jakości wizualizacji koncepcyjnej}
+\label{ch04:sec:checklista}
+
+Poniższa checklista jest moim kryterium akceptacji wyniku w pracowni i punktem odniesienia dla oceny generacji w IDA. Nie zastępuje norm technicznych dokumentacji wykonawczej, bo dotyczy wizualizacji \emph{koncepcyjnej}.
+
+\begin{enumerate}
+  \item \textbf{Geometria:} czytelne ściany, podłoga, strop; zachowane otwory; spójna perspektywa.
+  \item \textbf{Światło:} kierunek i charakter oświetlenia nie przeczą fotografii bazowej bez uzasadnienia briefem.
+  \item \textbf{Materiał:} powierzchnie wiarygodne w skali; brak oczywistych „rozmyć” AI na dużych płaszczyznach.
+  \item \textbf{Zgodność z briefem:} nastrój, paleta i charakter wyposażenia odpowiadają syntezie preferencji i promptowi.
+  \item \textbf{Czytelność funkcji:} da się wskazać strefy użytkowe; meble nie blokują oczywistej komunikacji.
+  \item \textbf{Brak krytycznych artefaktów:} brak zdublowanych elementów mebli, „płynących” ościeżnic i tekstu-halucynacji na powierzchniach.
+\end{enumerate}
+
+Medium dyfuzyjne przydaje się w architekturze wnętrz o tyle, o ile podlega kryteriom jakości wywiedzionym z praktyki projektowej, a nie tylko z metryk generatywnych.
+Portfolio pracowni (zał.~\ref{app:g:top}) dokumentuje zarówno udane przypadki kontroli struktury, jak i porażki geometrii, które te kryteria wymusiły.

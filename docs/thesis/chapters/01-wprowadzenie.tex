@@ -1,5 +1,5 @@
 % OWNER: framing
-% STATUS: review
+% STATUS: draft (wersja robocza 3)
 % SOURCES: notes/SPIS_TRESCI_PROPOZYCJA_ASP.md, notes/HIPOTEZY_REWIZJA.md, GLOSSARY.md
 \chapter{Wprowadzenie}
 \label{ch01:top}
@@ -8,52 +8,53 @@
 \section{Wnętrze jako doświadczenie i obraz}
 \label{ch01:sec:tlo}
 
-Architektura wnętrz operuje nie tylko planem i materiałem, lecz także \emph{obrazem} proponowanego stanu przestrzeni: wizualizacją, która mediuje między intencją projektanta a wyobrażeniem użytkownika.
-W praktyce domowej ta mediacyjna funkcja narasta: decyzje o nastroju, materiale i układzie coraz częściej zapadają wobec ekranu --- moodboardów, renderów, a ostatnio także syntez generatywnych --- zanim jeszcze powstanie dokumentacja wykonawcza.
+Architektura wnętrz pracuje nie tylko planem i materiałem. Pracuje też \emph{obrazem} proponowanego stanu przestrzeni, czyli wizualizacją, która pośredniczy między zamiarem projektanta a wyobrażeniem użytkownika.
+W domowej praktyce ta rola rośnie: o nastroju, materiale i układzie pokoju coraz częściej rozstrzyga ekran, na którym oglądamy moodboardy, rendery, a ostatnio także obrazy generatywne, zanim powstanie jakakolwiek dokumentacja wykonawcza. \textcolor{red}{[ŹRÓDŁO DO UZUPEŁNIENIA]}
 
-Problem nie zaczyna się więc od aplikacji, lecz od pytania dyscypliny: \emph{jak projektować personalizację koncepcji wnętrza}, gdy doświadczenie przestrzeni jest zarazem estetyczne, afektywne i użytkowe, a narzędzie wizualne potrafi szybko produkować wiarygodne obrazy bez ujawniania przesłanek wyboru?
-Rozprawa sytuuje się w Akademii Sztuki w Szczecinie, w dyscyplinie sztuk plastycznych i konserwacji dzieł sztuki: interesuje ją artefakt i proces twórczy --- dialog estetyczny przełożony na kontrolowaną syntezę obrazu --- a nie katalog funkcji konsumenckiego oprogramowania.
+Problem nie zaczyna się więc od aplikacji. Zaczyna się od pytania dyscypliny: \emph{jak projektować personalizację koncepcji wnętrza}, skoro doświadczenie przestrzeni jest jednocześnie estetyczne, afektywne i użytkowe, a narzędzie wizualne potrafi w kilka sekund wytworzyć wiarygodny obraz, nie ujawniając przesłanek swojego wyboru?
+Rozprawa powstaje w Akademii Sztuki w Szczecinie, w dyscyplinie sztuk plastycznych i konserwacji dzieł sztuki. Interesuje mnie w niej artefakt i proces twórczy: dialog estetyczny przełożony na kontrolowaną syntezę obrazu. Katalog funkcji konsumenckiego oprogramowania nie jest jej przedmiotem.
 
 \section{Personalizacja estetyczna a narzędzia generatywne}
 \label{ch01:sec:luka}
 
-Rynek narzędzi określanych potocznie jako ,,AI do wnętrz'' oferuje zwykle szybką stylizację zdjęcia pomieszczenia: wybór gotowego stylu, krótki prompt, wynik w sekundach.
+Narzędzia nazywane potocznie „AI do wnętrz” oferują zwykle szybką stylizację zdjęcia pomieszczenia: użytkownik wybiera gotowy styl, wpisuje krótki prompt i po kilku sekundach dostaje wynik.
 \NeedsCite{przegląd / analiza krytyczna konsumenckich narzędzi AI do wizualizacji wnętrz (peer-review lub raport branżowy z~DOI/ISBN)}
-Taka ścieżka bywa użyteczna produktowo, lecz pomija to, czego projektant i badacz potrzebują jako tworzywa: rozróżnienia preferencji \emph{jawnych} i \emph{ukrytych}, nastroju regeneracyjnego przestrzeni, funkcji pokoju, osobowości jako hipotezy projektowej oraz --- nade wszystko --- możliwości sprawdzenia, który kanał danych faktycznie kieruje wyborem użytkownika.
+Takie rozwiązanie bywa użyteczne jako produkt. Pomija jednak to, czego potrzebują projektant i badacz: rozróżnienia preferencji \emph{jawnych} i \emph{ukrytych}, nastroju regeneracyjnego przestrzeni, funkcji pokoju, osobowości jako hipotezy projektowej, a przede wszystkim możliwości sprawdzenia, który kanał danych naprawdę kieruje wyborem użytkownika.
 
-Luka, którą adresuje praca, nie jest więc brakiem kolejnego generatora, lecz brakiem \textbf{zintegrowanego dialogu badawczo-projektowego}: instrumentarium preferencji osadzonego w doświadczeniu użytkownika, explainable syntezy briefu oraz ślepej macierzy wariantów, która pozwala empirycznie porównać źródła personalizacji.
-W tym ujęciu psychologia środowiskowa (m.in.\ postrzegana regeneracyjność, biophilia) i pomiar preferencji służą jako \emph{rama projektowania}, a nie jako samodzielny podręcznik psychometrii.
+Luką, którą wypełniam, nie jest zatem brak kolejnego generatora. Brakuje \textbf{zintegrowanego dialogu badawczo-projektowego}: zestawu instrumentów preferencji osadzonego w doświadczeniu użytkownika, przejrzystej (\emph{explainable}) syntezy briefu, czyli wytycznych przekazywanych generatorowi, oraz ślepej macierzy wariantów, która pozwala empirycznie porównać źródła personalizacji.
+Psychologię środowiskową (postrzegana regeneracyjność, biofilia) i pomiar preferencji traktuję jako ramę projektowania, nie jako podręcznik psychometrii.
 
 \section{Problem rozbieżności deklaracji i zachowania}
 \label{ch01:sec:problem}
 
-Użytkownicy potrafią deklarować styl, paletę czy ,,to, co lubią'', a jednocześnie w zachowaniu --- w szybkim geście wyboru, w czasie reakcji, w selekcji spośród wizualnie podobnych wariantów --- ujawniać inną logikę gustu.
-Rozróżnienie procesów szybkich i wolnych oraz pomiar asocjacji ukrytych należą do kanonu psychologii poznawczej i społecznej \parencite{kahneman2011thinking,greenwald1998iat}; w kontekście estetycznym rozbieżność preferencji jawnych i ukrytych staje się dramaturgią poznania własnego gustu, a nie wyłącznie błędem ankiety.
+Użytkownicy deklarują styl, paletę i to, co lubią, a w zachowaniu (w szybkim geście wyboru, w czasie reakcji, w wyborze spośród podobnych wariantów) często ujawniają inną logikę gustu.
+Kahneman rozróżnia myślenie szybkie i wolne, a Greenwald, McGhee i Schwartz proponują pomiar asocjacji ukrytych za pomocą czasów reakcji \footcite{kahneman2011thinking,greenwald1998iat}.
+Na tym tle rozbieżność preferencji jawnych i ukrytych przestaje być zwykłym błędem ankiety. Staje się materiałem do poznania własnego gustu.
 
-Dla projektowania wnętrz wspomaganego AI problem ten ma konsekwencję praktyczną: jeśli system ufa wyłącznie deklaracji (semantic differential, checklista stylu), może generować obrazy ,,zgodne z~formularzem'', lecz mijające się z~wyborem, jakiego użytkownik dokona w~ślepej konfrontacji wariantów.
-Jeśli ufa wyłącznie gestowi behawioralnemu, ryzykuje niedostateczne uwzględnienie funkcji przestrzeni i świadomych wartości.
-Stąd potrzeba artefaktu, który nie ukrywa konfliktu źródeł, lecz czyni go widocznym --- i mierzalnym.
+Dla projektowania wnętrz wspieranego przez AI wynika stąd konsekwencja praktyczna. System, który ufa wyłącznie deklaracji (dyferencjał semantyczny, lista stylów), może wytworzyć obrazy zgodne z formularzem, a rozmijające się z wyborem, jakiego użytkownik dokona w ślepym porównaniu wariantów.
+System, który ufa wyłącznie gestowi, może z kolei zlekceważyć funkcję pokoju i świadome wartości.
+Potrzebny jest więc artefakt, który nie ukrywa konfliktu źródeł, lecz go pokazuje i mierzy.
 
 \section{Cel, zakres i pytania badawcze}
 \label{ch01:sec:cel}
 
 \paragraph{Cel.}
-Celem rozprawy jest zaprojektowanie, zbudowanie i ewaluacja eksperymentalnej platformy badawczej IDA (\emph{AI Interior Design Dialogue Research Platform}) jako artefaktu Research through Design: narzędzia, które operacjonalizuje wieloźródłowy profil preferencji w explainable pipeline personalizacji koncepcji wnętrz oraz umożliwia terenowe badanie rozbieżności preferencji i skuteczności kanałów personalizacji \parencite{idaPlatform2026}.
+Chcę zaprojektować, zbudować i ocenić eksperymentalną platformę badawczą IDA (\emph{AI Interior Design Dialogue Research Platform}) jako artefakt Research through Design. Platforma zamienia wieloźródłowy profil preferencji w przejrzysty łańcuch personalizacji koncepcji wnętrz i pozwala w terenie badać rozbieżność preferencji oraz skuteczność kanałów personalizacji \footcite{idaPlatform2026}.
 
 \paragraph{Zakres.}
-Domena to koncepcyjne wizualizacje wnętrz mieszkalnych (image-to-image na bazie zdjęcia pokoju), a nie dokumentacja budowlana ani automatyczny kosztorys.
-Produkcyjna generacja obrazu w IDA opiera się na Gemini Image / Vertex~AI; persystencja danych badawczych --- na infrastrukturze GCP.
+Zajmuję się koncepcyjnymi wizualizacjami wnętrz mieszkalnych (image-to-image na podstawie zdjęcia pokoju). Dokumentacja budowlana i automatyczny kosztorys leżą poza zakresem.
+Produkcyjną generację obrazu w IDA wykonuje Gemini Image w Vertex~AI, a dane badawcze zapisuję w infrastrukturze GCP.
 Macierz generacji obejmuje \textbf{sześć} źródeł: \texttt{implicit}, \texttt{explicit}, \texttt{personality}, \texttt{mixed}, \texttt{mixed\_functional}, \texttt{inspiration\_reference}.
-Eksperymenty autora w ComfyUI (kontrola geometrii, segmentacja i~pokrewne) stanowią warstwę praktyki pracowni; \textbf{nie} są runtime produkcyjnym platformy --- uzasadniają jednak decyzje o uproszczeniu pipeline'u terenowego.
+Moje eksperymenty w ComfyUI (kontrola geometrii, segmentacja i pokrewne techniki) należą do praktyki pracowni. \textbf{Nie} są środowiskiem uruchomieniowym platformy, ale uzasadniają uproszczenia, które wprowadziłem w potoku terenowym.
 
 \paragraph{Pytania badawcze.}
-Oś empiryczną stanowi rewizja hipotez z~formuły H1--H5 na zestaw \RQ{1}--\RQ{6} (szczegóły i plan analiz: rozdz.~\ref{ch06:top}):
+Oś empiryczną tworzy zestaw \RQ{1}--\RQ{6}, który zastąpił wcześniejszą formułę H1--H5 (szczegóły i plan analiz: rozdz.~\ref{ch06:top}):
 \begin{enumerate}
   \item[\RQ{1}] Czy zintegrowany flow badawczy (RtD) umożliwia zebranie wielowymiarowego profilu bez katastrofalnego dropoutu?
   \item[\RQ{2}] Czy i w jakim stopniu preferencje ukryte i jawne się rozchodzą, oraz czy ta rozbieżność wiąże się z zachowaniem w macierzy generacji?
   \item[\RQ{3}] Które źródło w ślepej macierzy sześciu wariantów użytkownicy wybierają i czy wybór zależy od profilu? (rdzeń empiryczny)
-  \item[\RQ{4}] Czy cechy i facety Big Five wiążą się z parametrami estetycznymi oraz z preferencją źródła \texttt{personality}? (eksploracyjnie)
-  \item[\RQ{5}] Czy odległość PRS \texttt{current}$\rightarrow$\texttt{target} wiąże się z wyborem wariantu \texttt{mixed\_functional}?
+  \item[\RQ{4}] Czy cechy i facety Big Five wiążą się z parametrami estetycznymi profilu oraz z preferencją źródła \texttt{personality}? (eksploracyjnie)
+  \item[\RQ{5}] Czy odległość PRS \texttt{current}$\rightarrow$\texttt{target} wiąże się z preferencją wariantu \texttt{mixed\_functional}?
   \item[\RQ{6}] Czy uczestnicy postrzegają proces jako zrozumiały i dający sprawczość (agency) przy jednoczesnym zbieraniu danych badawczych?
 \end{enumerate}
 
@@ -61,51 +62,51 @@ Oś empiryczną stanowi rewizja hipotez z~formuły H1--H5 na zestaw \RQ{1}--\RQ{
 \label{ch01:sec:teza}
 
 \begin{quote}
-Platforma IDA --- jako artefakt Research through Design --- pokazuje, że personalizacja koncepcji wnętrz może być projektowana jako \textbf{dialog estetyczny} (preferencje jawne i ukryte, nastrój, funkcja, osobowość) przełożony na \textbf{kontrolowaną syntezę obrazu}, a nie jako ,,czarna skrzynka'' generatora.
-Praktyka z modelami dyfuzyjnymi (ComfyUI, kontrola geometrii, segmentacja) oraz produkcyjny pipeline IDA (synteza promptu $\rightarrow$ image-to-image w Gemini/Vertex) stanowią łącznie autorską metodę łączenia projektowania wnętrz, psychologii środowiskowej i mediów generatywnych.
+Platforma IDA, jako artefakt Research through Design, pokazuje, że personalizację koncepcji wnętrz można zaprojektować jako \textbf{dialog estetyczny} (preferencje jawne i ukryte, nastrój, funkcja, osobowość) przełożony na \textbf{kontrolowaną syntezę obrazu}, a nie jako czarną skrzynkę generatora.
+Praktyka z modelami dyfuzyjnymi (ComfyUI, kontrola geometrii, segmentacja) i produkcyjny potok IDA (synteza promptu $\rightarrow$ image-to-image w Gemini/Vertex) tworzą razem moją metodę łączenia projektowania wnętrz, psychologii środowiskowej i mediów generatywnych.
 \end{quote}
 
-Empirycznie oś wyników stanowią przede wszystkim \RQ{2} i~\RQ{3}; \RQ{1} i~\RQ{6} uzasadniają feasibility artefaktu; \RQ{4} i~\RQ{5} rozszerzają eksplorację.
-Teza nie obiecuje z góry potwierdzonych efektów wielkości przy małej próbie pilotażowej --- obiecuje spójny artefakt i ramę pomiaru.
+Oś wyników stanowią przede wszystkim \RQ{2} i~\RQ{3}. \RQ{1} i~\RQ{6} wspierają ocenę wykonalności artefaktu, a \RQ{4} i~\RQ{5} rozszerzają eksplorację.
+Próba pilotażowa jest mała, dlatego nie obiecuję potwierdzonych efektów. Obiecuję spójny artefakt i ramę pomiaru.
 
 \section{Pozycja metodologiczna: Research through Design}
 \label{ch01:sec:rtd}
 
-Praca przyjmuje paradygmat badań przez projektowanie (Research through Design, RtD).
-\textcite{frayling1993research} rozróżnia badania \emph{into}, \emph{through} i \emph{for} art and design; wariant \emph{through} czyni artefakt i proces projektowy sposobem produkcji wiedzy.
-W HCI \textcite{zimmerman2007rtd} ujmują RtD jako metodę, w której zaprojektowany obiekt jest argumentem: ucieleśnia hipotezę o preferowanym stanie świata i podlega krytycznej ewaluacji.
+Przyjmuję paradygmat badań przez projektowanie (Research through Design, RtD).
+Frayling rozróżnia badania \emph{into}, \emph{through} i \emph{for} art and design. W wariancie \emph{through} artefakt i proces projektowy stają się sposobem wytwarzania wiedzy \footcite{frayling1993research}.
+Zimmerman, Forlizzi i Evenson wprowadzają RtD do badań nad interakcją człowieka z komputerem (HCI) jako metodę, w której zaprojektowany obiekt jest argumentem: ucieleśnia hipotezę o preferowanym stanie świata i podlega krytycznej ocenie \footcite{zimmerman2007rtd}.
 
-Dowód w rozprawie składa się z trzech warstw (rozwinięcie: rozdz.~\ref{ch06:top}):
+Dowód w rozprawie ma trzy warstwy (rozwinięcie w rozdz.~\ref{ch06:top}):
 \begin{enumerate}
-  \item[(A)] \textbf{Praktyka pracowni} --- eksperymenty z modelami dyfuzyjnymi w ComfyUI (m.in.\ kontrola geometrii, segmentacja); warstwa wiedzy praktycznej autora, nie silnik produkcyjny IDA.
-  \item[(B)] \textbf{Artefakt IDA} --- działająca platforma dialogowa z explainable syntezą briefu, macierzą sześciu źródeł i ścieżkami Full/Fast \parencite{idaPlatform2026}.
-  \item[(C)] \textbf{Ewaluacja terenowa} --- udostępnienie artefaktu uczestnikom online i zbieranie danych pod \RQ{1}--\RQ{6}.
+  \item[(A)] \textbf{Praktyka pracowni}: moje eksperymenty z modelami dyfuzyjnymi w ComfyUI (m.in.\ kontrola geometrii, segmentacja). Jest to wiedza praktyczna autora, a nie silnik produkcyjny IDA.
+  \item[(B)] \textbf{Artefakt IDA}: działająca platforma dialogowa z przejrzystą syntezą briefu, macierzą sześciu źródeł i ścieżkami Full i Fast \footcite{idaPlatform2026}.
+  \item[(C)] \textbf{Ewaluacja terenowa}: udostępnienie artefaktu uczestnikom online i zbieranie danych pod \RQ{1}--\RQ{6}.
 \end{enumerate}
-Filozofia produktu --- Product-First, Research-Embedded, Minimalist Glass Design --- podporządkowuje instrumenty badawcze doświadczeniu, a nie odwrotnie.
+Filozofia produktu (Product-First, Research-Embedded, Minimalist Glass Design) podporządkowuje instrumenty badawcze doświadczeniu użytkownika, a nie odwrotnie.
 
 \section{Wkład własny}
 \label{ch01:sec:wklad}
 
-Wkład autora obejmuje trzy przenikające się rejestry:
+Mój wkład ma trzy rejestry, które się przenikają.
 
 \begin{description}[style=nextline]
   \item[Projektowy]
-  Koncepcja i realizacja IDA jako dialogu estetycznego (awatar mediujący, dramaturgia ścieżek Full/Fast, język glass), a nie kalkulatora stylu; \emph{design rationale} decyzji i świadomych odrzuceń.
+  Wymyśliłem i zrealizowałem IDA jako dialog estetyczny, a nie kalkulator stylu: awatar pośredniczący w rozmowie, rytm ścieżek Full i Fast, język glass. Dokumentuję uzasadnienia decyzji projektowych (\emph{design rationale}) i świadome odrzucenia.
 
   \item[Medialny]
-  Praktyka z medium dyfuzyjnym w pracowni (ComfyUI, kontrola struktury przestrzeni, segmentacja) oraz przeniesienie wybranych wniosków do skalowalnego pipeline'u produkcyjnego (Gemini/Vertex), z dokumentacją tego, czego świadomie \emph{nie} przeniesiono.
+  Pracowałem z medium dyfuzyjnym w pracowni (ComfyUI, kontrola struktury przestrzeni, segmentacja) i przeniosłem wybrane wnioski do skalowalnego potoku produkcyjnego (Gemini/Vertex). Zapisuję też, czego świadomie \emph{nie} przeniosłem.
 
   \item[Badawczy]
-  Operacjonalizacja wieloźródłowego profilu preferencji i ślepej macierzy sześciu źródeł jako eksperymentu \emph{w formie} artefaktu; rama \RQ{1}--\RQ{6} zastępująca zarzuconą formułę H1--H5; most między projektowaniem wnętrz, psychologią środowiskową a mediami generatywnymi w dyscyplinie sztuk.
+  Zoperacjonalizowałem wieloźródłowy profil preferencji i ślepą macierz sześciu źródeł jako eksperyment zawarty w artefakcie. Zastąpiłem zarzuconą formułę H1--H5 ramą \RQ{1}--\RQ{6}. Łączę w ten sposób projektowanie wnętrz, psychologię środowiskową i media generatywne w dyscyplinie sztuk.
 \end{description}
 
 \section{Struktura rozprawy}
 \label{ch01:sec:struktura}
 
 Rozdział~\ref{ch02:top} buduje ramę przestrzeni, regeneracyjności i biofilii jako kategorii projektowych.
-Rozdział~\ref{ch03:top} ujmuje preferencje jawne i ukryte oraz laddering jako tworzywo dialogu.
-Rozdział~\ref{ch04:top} dotyczy medium dyfuzyjnego i praktyki ComfyUI (warstwa~A).
-Rozdział~\ref{ch05:top} wprowadza Big Five / IPIP-NEO-120 jako hipotezę projektową, nie wyrok estetyczny.
-Rozdział~\ref{ch06:top} precyzuje metodologię RtD, trzy warstwy dowodu i plan analiz \RQ{1}--\RQ{6}.
-Rozdział~\ref{ch07:top} opisuje artefakt IDA --- koncepcję, budowę i rationale.
-Rozdziały~\ref{ch08:top}--\ref{ch10:top} przedstawiają ewaluację empiryczną, dyskusję i wnioski.
+Rozdział~\ref{ch03:top} omawia preferencje jawne i ukryte oraz laddering jako tworzywo dialogu.
+Rozdział~\ref{ch04:top} dotyczy medium dyfuzyjnego i mojej praktyki w ComfyUI (warstwa~A).
+Rozdział~\ref{ch05:top} wprowadza Big Five i IPIP-NEO-120 jako hipotezę projektową, nie wyrok estetyczny.
+Rozdział~\ref{ch06:top} opisuje metodologię RtD, trzy warstwy dowodu i plan analiz \RQ{1}--\RQ{6}.
+Rozdział~\ref{ch07:top} przedstawia artefakt IDA: koncepcję, budowę i uzasadnienia projektowe.
+Rozdziały~\ref{ch08:top}--\ref{ch10:top} zawierają wyniki pilotażu, dyskusję i wnioski.

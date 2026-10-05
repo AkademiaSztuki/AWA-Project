@@ -1,0 +1,85 @@
+% Purpose: book serif, grotesque labels, measure, notes, and quotes.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles/typography}[2026/10/05 IDA thesis typography]
+
+\RequirePackage{fontspec}
+\RequirePackage{microtype}
+\RequirePackage{setspace}
+\RequirePackage{indentfirst}
+\RequirePackage[hang]{footmisc}
+\RequirePackage{etoolbox}
+
+% TeX Gyre, Libertinus, and Source Serif are not installed.
+% Latin Modern Roman keeps full Polish coverage in the body.
+% Source Sans Pro (installed) is the grotesque for display, labels, and captions.
+\setmainfont{Latin Modern Roman}[
+  Ligatures = TeX,
+  Renderer = Node
+]
+\setsansfont{Source Sans Pro}[
+  Scale = MatchLowercase,
+  Ligatures = TeX,
+  BoldFont = {Source Sans Pro Bold},
+  ItalicFont = {Source Sans Pro Italic},
+  BoldItalicFont = {Source Sans Pro Bold Italic},
+  FontFace = {sb}{n}{Source Sans Pro Semibold},
+  FontFace = {sb}{it}{Source Sans Pro Semibold Italic},
+  Renderer = Node
+]
+\newfontfamily\idaSb{Source Sans Pro Semibold}[
+  Scale = MatchLowercase,
+  Ligatures = TeX,
+  Renderer = Node
+]
+\newfontfamily\idaTracked{Source Sans Pro Semibold}[
+  Scale = MatchLowercase,
+  LetterSpace = 14,
+  Ligatures = TeX,
+  Renderer = Node
+]
+% Latin Modern Mono has no bold face. Map bold requests onto the regular cut
+% and keep \texttt itself on the medium series.
+\setmonofont{Latin Modern Mono}[
+  Scale = MatchLowercase,
+  Ligatures = TeX,
+  BoldFont = {Latin Modern Mono},
+  BoldItalicFont = {Latin Modern Mono},
+  Renderer = Node
+]
+\DeclareTextFontCommand{\texttt}{\ttfamily\mdseries}
+
+\setstretch{1.16}
+\setlength{\parindent}{1.45em}
+\setlength{\parskip}{0.18\baselineskip plus 0.06\baselineskip minus 0.04\baselineskip}
+\setlength{\emergencystretch}{2em}
+
+\widowpenalty=10000
+\clubpenalty=10000
+\displaywidowpenalty=10000
+\brokenpenalty=5000
+
+% Notes: smaller, lower contrast, short accent rule. They stay in the book serif.
+\setlength{\footnotemargin}{1.5em}
+\setlength{\skip\footins}{0.85\baselineskip plus 0.25\baselineskip minus 0.15\baselineskip}
+\setlength{\footnotesep}{0.42\baselineskip}
+\renewcommand{\footnotelayout}{\color{inksoft}}
+\renewcommand{\footnoterule}{%
+  \kern 0.35\baselineskip
+  {\color{accent}\hrule width 1.5em height 0.35pt}%
+  \kern 0.32\baselineskip
+}
+
+% Narrow measure and a thin accent rule. Body text is not restyled into a quote.
+\RenewDocumentEnvironment{quote}{+b}{%
+  \par\vspace{0.65\baselineskip}%
+  \noindent
+  \begin{tabular}{@{}!{\color{accent}\vrule width 0.55pt}@{\hspace{0.75em}}%
+    >{\small\color{inksoft}\raggedright\arraybackslash}p{\dimexpr\linewidth-1.45em\relax}@{}}%
+    #1%
+  \end{tabular}%
+  \par\vspace{0.5\baselineskip}%
+}{}
+
+\RenewDocumentEnvironment{quotation}{+b}{%
+  \begin{quote}#1\end{quote}%
+}{}

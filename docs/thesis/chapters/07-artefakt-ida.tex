@@ -6,45 +6,48 @@
 \label{ch07:top}
 \ChapterStatus{draft}{artifact}
 
-Rozdział ten scala trzy warstwy opisu platformy IDA (\emph{AI Interior Design Dialogue Research Platform}) przewidziane w narracji spisu Akademii Sztuki: intencję i dramaturgię doświadczenia, budowę artefaktu (architektura, pipeline, macierz źródeł) oraz \emph{design rationale} --- dokumentację decyzji, odrzuceń i kompromisów \parencite{idaPlatform2026}. W ujęciu Research through Design artefakt nie jest jedynie implementacją systemu, lecz argumentem projektowym: ucieleśnia tezę, że personalizacja koncepcji wnętrz może być dialogiem estetycznym z kontrolowaną syntezą obrazu, a nie „czarną skrzynką” generatora \parencite{zimmerman2007rtd,frayling1993research}.
+Rozdział łączy trzy warstwy opisu platformy IDA (\emph{AI Interior Design Dialogue Research Platform}), zgodnie z narracją spisu Akademii Sztuki: zamysł i rytm doświadczenia, budowę artefaktu (architektura, potok, macierz źródeł) oraz \emph{design rationale}, czyli uzasadnienie decyzji, odrzuceń i kompromisów \footcite{idaPlatform2026}.
+W ujęciu Research through Design artefakt jest czymś więcej niż implementacją systemu. Jest argumentem projektowym: ucieleśnia tezę, że personalizacja koncepcji wnętrz może być dialogiem estetycznym z kontrolowaną syntezą obrazu, a nie czarną skrzynką generatora \footcite{zimmerman2007rtd,frayling1993research}.
 
-Eksperymenty w ComfyUI (w tym kontrola geometrii przez mapy głębokości, conditioning oraz segmentację SAM/SAM2) stanowią warstwę praktyki autora (rozdz.~\ref{ch04:top}); produkcyjny artefakt IDA realizuje generację przez syntezę promptu i image-to-image w środowisku Vertex~AI / Gemini Image (wcześniej FLUX na Modal).
+Eksperymenty w ComfyUI (w tym kontrola geometrii przez mapy głębokości, conditioning oraz segmentację SAM/SAM2) stanowią warstwę praktyki autora (rozdz.~\ref{ch04:top}). Produkcyjny artefakt IDA realizuje generację przez syntezę promptu i image-to-image w środowisku Vertex~AI / Gemini Image (wcześniej FLUX na Modal).
 
 % =============================================================================
 \section{Filozofia: Product-First · Research-Embedded · Minimalist Glass Design}
 \label{ch07:sec:filozofia}
 % =============================================================================
 
-Trzy hasła projektowe --- zawsze w tej kolejności --- wyznaczają kryteria decyzji w IDA \parencite{idaPlatform2026}.
+Trzy hasła, zawsze w tej kolejności, wyznaczają moje kryteria decyzji w IDA \footcite{idaPlatform2026}.
 
 \begin{description}[style=nextline]
   \item[Product-First]
-    Doświadczenie ma najpierw działać jako wiarygodny produkt wizualizacji wnętrz: użytkownik otrzymuje konkretną wartość (koncepcję przestrzeni na własnym zdjęciu), zanim odczuje ciężar instrumentarium badawczego. Badanie nie może „psuć” produktu --- przeciwnie, ma być w niego wplecione.
+    Doświadczenie ma najpierw działać jako wiarygodny produkt wizualizacji wnętrz. Użytkownik dostaje konkretną wartość, czyli koncepcję przestrzeni na własnym zdjęciu, zanim odczuje ciężar instrumentów badawczych. Badanie nie może psuć produktu, tylko ma być w niego wplecione.
   \item[Research-Embedded]
-    Instrumenty (PRS / mood grid, biophilia, Tinder IAT-like, semantic differential, laddering, IPIP-NEO-120) nie są osobnym „trybem laboratorium”, lecz etapami drogi projektowej. Dane powstają w naturalnym rytmie dialogu; persystencja w GCP umożliwia ewaluację RQ1--RQ6 bez osobnego protokołu papierowego.
+    Instrumenty (PRS / mood grid, biophilia, Tinder IAT-like, dyferencjał semantyczny, laddering, IPIP-NEO-120) nie tworzą osobnego trybu laboratoryjnego. Są etapami drogi projektowej. Dane powstają w naturalnym rytmie rozmowy, a zapis w GCP pozwala oceniać RQ1--RQ6 bez osobnego protokołu papierowego.
   \item[Minimalist Glass Design]
-    Język wizualny oparty na glassmorphismie, oszczędnej typografii i ruchu ma redukować szum poznawczy: bez emoji, bez dekoracyjnych ikon i bez kart-statystyk w pierwszym planie. Estetyka interfejsu jest częścią argumentu o klarowności personalizacji.
+    Język wizualny opiera się na glassmorphismie, oszczędnej typografii i ruchu. Ma zmniejszać szum poznawczy: bez emoji, bez ozdobnych ikon i bez kart ze statystykami na pierwszym planie. Estetyka interfejsu współtworzy argument o czytelności personalizacji.
 \end{description}
 
-Hasła te nie są sloganem marketingowym, lecz filtrem kompromisów (sekcja~\ref{ch07:sec:kompromisy}): gdy głębokość pomiaru koliduje z ukończeniem ścieżki, wygrywa rozwiązanie, które zachowuje zarówno wartość produktową, jak i minimalną kompletność danych badawczych.
+Hasła te służą mi jako filtr kompromisów (sekcja~\ref{ch07:sec:kompromisy}). Gdy głębokość pomiaru koliduje z ukończeniem ścieżki, wybieram rozwiązanie, które zachowuje i wartość produktową, i minimalną kompletność danych badawczych.
 
 % =============================================================================
 \section{IDA jako dialog, nie kalkulator stylu}
 \label{ch07:sec:dialog}
 % =============================================================================
 
-Konsumenckie narzędzia „AI interior” zwykle skracają personalizację do wyboru stylu i promptu tekstowego. IDA odwraca tę logikę: najpierw buduje wieloźródłowy profil preferencji (jawnych, ukrytych, osobowościowych i funkcjonalnych), dopiero potem syntezuje brief obrazu. Dialog --- prowadzony przez awatar IDA --- porządkuje przejścia między etapami, tłumaczy sens pytań i utrzymuje ciągłość narracyjną od zgody do ślepego wyboru w macierzy.
+Konsumenckie narzędzia „AI interior” zwykle redukują personalizację do wyboru stylu i promptu tekstowego. W IDA odwróciłem tę kolejność. Najpierw platforma buduje wieloźródłowy profil preferencji (jawnych, ukrytych, osobowościowych i funkcjonalnych), a dopiero potem syntezuje brief obrazu.
+Dialog prowadzi awatar IDA. Porządkuje przejścia między etapami, tłumaczy sens pytań i trzyma ciągłość narracji od zgody do ślepego wyboru w macierzy.
 
-W sensie RtD dialog jest formą \emph{research through}: uczestnik nie wypełnia ankiety „obok” produktu, lecz przechodzi dramaturgię poznania własnego gustu, której kulminacją jest porównanie sześciu wariantów bez etykiet źródeł \parencite{zimmerman2007rtd}.
+W sensie RtD dialog jest formą \emph{research through design}. Uczestnik nie wypełnia ankiety obok produktu, tylko przechodzi drogę poznawania własnego gustu, która kończy się porównaniem sześciu wariantów bez etykiet źródeł \footcite{zimmerman2007rtd}.
 
 % =============================================================================
 \section{Awatar IDA jako postać mediująca}
 \label{ch07:sec:awatar}
 % =============================================================================
 
-Awatar IDA nie jest chatbotem dekoracyjnym ani maskotką interfejsu. Pełni rolę przewodniczki: ustanawia rytuał przejść (onboarding, ścieżka pełna vs szybka, Room Setup, generacja), nadaje głos etyce zgody i utrzymuje spójność tonu --- spokojnego, eksperckiego, bez nadmiernej „sprzedażowości”. Scenariusz dialogu (skrypt produktowy) wiąże komunikaty z etapami flow: od powitania i wyboru ścieżki, przez Tinder i skale semantyczne, po analizę zdjęcia pokoju i domknięcie projektu.
+Awatar IDA nie jest chatbotem dla ozdoby ani maskotką interfejsu. Pełni rolę przewodniczki: wyznacza rytm przejść (onboarding, wybór ścieżki, Room Setup, generacja), mówi o etyce zgody i utrzymuje spokojny, ekspercki ton bez sprzedażowego nacisku.
+Scenariusz dialogu (skrypt produktowy) wiąże komunikaty z etapami przebiegu: od powitania i wyboru ścieżki, przez Tinder i skale semantyczne, po analizę zdjęcia pokoju i zamknięcie projektu.
 
-Obecność postaci mediującej ma dwa cele projektowe. Po pierwsze, \emph{agency}: użytkownik rozmawia z kimś, kto tłumaczy, \emph{dlaczego} kolejne kroki mają znaczenie dla koncepcji wnętrza (wątek RQ6). Po drugie, \emph{ramowanie badania}: zgoda i cel naukowy pojawiają się w dialogu, a nie wyłącznie w ścianie tekstu prawnego.
+Postać mediująca ma w projekcie dwa zadania. Po pierwsze, wspiera \emph{sprawczość} (agency): użytkownik rozmawia z kimś, kto tłumaczy, \emph{dlaczego} kolejne kroki mają znaczenie dla koncepcji wnętrza (wątek RQ6). Po drugie, \emph{ramuje badanie}: zgoda i cel naukowy pojawiają się w rozmowie, a nie tylko w bloku tekstu prawnego.
 
 \begin{figure}[htbp]
   \centering
@@ -61,9 +64,9 @@ Obecność postaci mediującej ma dwa cele projektowe. Po pierwsze, \emph{agency
 \label{ch07:sec:ui}
 % =============================================================================
 
-System wizualny IDA buduje atmosferę przez warstwy przezroczystości (glass), stonowaną paletę i ograniczenie elementów konkurujących o uwagę. Pierwszy plan doświadczenia należy do dialogu i treści etapu --- nie do paneli metryk ani promo-chipów. Ruch (wejścia ekranów, przejścia awatara, mikroanimacje powierzchni) służy hierarchii i obecności, nie ozdobie.
+System wizualny IDA buduje atmosferę z warstw przezroczystości (glass), stonowanej palety i niewielu elementów konkurujących o uwagę. Na pierwszym planie są dialog i treść etapu, a nie panele metryk czy promocyjne etykiety. Ruch (wejścia ekranów, przejścia awatara, mikroanimacje powierzchni) porządkuje hierarchię i podkreśla obecność postaci, nie ozdabia.
 
-Decyzja o „pustce” interfejsu jest świadoma: im mniej szumu wizualnego, tym łatwiej utrzymać skupienie na wyborach estetycznych (swipe, slidery, macierz). Dwa reprezentatywne ekrany --- landing / wybór ścieżki oraz macierz generacji --- dokumentują tę konwencję (ryc.~\ref{fig:ch07:ui-screens}; pełniejsze przebiegi w zał.~\ref{app:h:top}).
+Interfejs jest „pusty” z rozmysłem. Im mniej szumu wizualnego, tym łatwiej skupić się na wyborach estetycznych (swipe, slidery, macierz). Konwencję pokazują dwa ekrany: wybór ścieżki po wejściu na platformę i macierz generacji (ryc.~\ref{fig:ch07:ui-screens}). Pełniejsze przebiegi zebrałem w zał.~\ref{app:h:top}.
 
 \begin{figure}[htbp]
   \centering
@@ -80,42 +83,43 @@ Decyzja o „pustce” interfejsu jest świadoma: im mniej szumu wizualnego, tym
 \label{ch07:sec:gamifikacja}
 % =============================================================================
 
-Instrumenty psychologiczne w IDA przyjmują formę interakcji produktowej: mood grid zamiast surowej listy itemów PRS; dawki biophilii jako czytelne opcje wizualne; gest Tindera jako adaptacja IAT-like do preferencji estetycznych; semantic differential jako slidery języka wizualnego. Gamifikacja nie zastępuje walidacji konstruktu --- przy skali pilotażu praca nie rości sobie pełnej równoważności psychometrycznej ze skalami papierowymi --- lecz zwiększa szansę ukończenia flow (RQ1) i utrzymuje spójność z Product-First.
+W IDA instrumenty psychologiczne mają postać interakcji produktowej. Zamiast surowej listy pozycji PRS jest mood grid, dawki biophilii są czytelnymi opcjami wizualnymi, gest Tindera adaptuje IAT do preferencji estetycznych, a dyferencjał semantyczny to slidery w języku obrazu.
+Gamifikacja nie zastępuje walidacji konstruktu. Przy skali pilotażu nie twierdzę, że te formy są psychometrycznie równoważne skalom papierowym. Zwiększa natomiast szansę, że uczestnik dotrze do końca (RQ1), i zgadza się z Product-First.
 
-Granica etyczna jest jasna: mechaniki grywalizacji nie mogą ukrywać celu badawczego ani wymuszać odpowiedzi. Zgoda i możliwość wycofania pozostają warunkiem wejścia na ścieżkę (szczegóły w metodologii i zał.~F).
+Granica etyczna jest jasna: mechanika gry nie może ukrywać celu badawczego ani wymuszać odpowiedzi. Zgoda i możliwość wycofania pozostają warunkiem wejścia na ścieżkę (szczegóły w metodologii i w zał.~F).
 
 % =============================================================================
 \section{Ścieżka pełna (Full) i ścieżka szybka (Fast)}
 \label{ch07:sec:sciezki}
 % =============================================================================
 
-IDA oferuje dwa rytmy doświadczenia. \emph{Ścieżka pełna (Full)} prowadzi przez głęboki profil: kontekst użytkownika, Tinder, klimat i zmysły, inspiracje, IPIP-NEO-120, zdjęcie przestrzeni, potrzeby i nastrój pokoju (PRS current/target, aktywności, pain points, laddering), generację macierzy i domknięcie projektu. \emph{Ścieżka szybka (Fast)} skraca drogę do wizualnego eksperymentu --- mniej instrumentów, szybszy feedback obrazowy --- kosztem kompletności danych pod RQ2--RQ5.
+IDA oferuje dwa tempa doświadczenia. \emph{Ścieżka pełna (Full)} prowadzi przez głęboki profil: kontekst użytkownika, Tinder, klimat i zmysły, inspiracje, IPIP-NEO-120, zdjęcie przestrzeni, potrzeby i nastrój pokoju (PRS current i target, aktywności, punkty tarcia, laddering), generację macierzy i zamknięcie projektu.
+\emph{Ścieżka szybka (Fast)} skraca drogę do obrazu: zgoda, krótkie pytania demograficzne, zdjęcie, wybór stylu i jedna koncepcja. Płaci za to kompletnością danych pod RQ2--RQ5.
 
-Dual path jest kompromisem między dostępnością a głębokością: Full zasila rdzeń empiryczny (macierz sześciu źródeł, porównanie implicit/explicit, osobowość), Fast utrzymuje Product-First dla użytkowników niegotowych na długi rytuał. W danych ścieżka oznaczana jest jako \texttt{path\_type} ($\mathtt{fast}$ / $\mathtt{full}$).
+Dwie ścieżki to kompromis między dostępnością a głębokością. Full zasila rdzeń empiryczny (macierz sześciu źródeł, porównanie implicit i explicit, osobowość). Fast pozwala zachować Product-First wobec osób, które nie chcą długiego rytuału. W danych ścieżka jest zapisana jako \texttt{path\_type} ($\mathtt{fast}$ / $\mathtt{full}$).
 
 % =============================================================================
 \section{Pozycjonowanie wobec konsumenckich narzędzi AI do wnętrz}
 \label{ch07:sec:pozycjonowanie}
 % =============================================================================
 
-Wobec produktów generujących „ładne” wizualizacje na podstawie krótkiego promptu IDA pozycjonuje się jako \emph{platforma dialogu badawczego}: (1)~wieloźródłowy profil zamiast jednego suwaka stylu; (2)~explainable brief (mapowania facetów i wag źródeł --- zał.~\ref{app:c:top}); (3)~ślepa macierz jako eksperyment \emph{w formie} produktu; (4)~persystencja danych pod ewaluację terenową. Nie konkuruje katalogiem mebli ani automatycznym BOM --- status wyjścia to koncepcja / mood image, nie dokumentacja wykonawcza (sekcja~\ref{ch07:sec:status-wizualizacji}).
-
-Materiał z wcześniejszej refleksji nad GenAI i personalizacją w HCI (archiwum rozdziału o AI/HCI) wchodzi tu jako tło pozycjonowania, nie jako osobny rozdział teorio-informatyczny: problemem projektowym pozostaje brak dialogu preferencji w narzędziach konsumenckich, a nie sama dostępność modeli obrazu.
+Produkty generujące „ładne” wizualizacje z krótkiego promptu mają inny cel niż IDA. Pozycjonuję ją jako \emph{platformę dialogu badawczego} i wyróżniam cztery cechy: (1)~wieloźródłowy profil zamiast jednego suwaka stylu; (2)~przejrzysty brief (mapowania facetów i wagi źródeł, zał.~\ref{app:c:top}); (3)~ślepą macierz jako eksperyment zawarty w produkcie; (4)~zapis danych pod ewaluację terenową.
+IDA nie konkuruje katalogiem mebli ani automatycznym zestawieniem materiałów. Wynik to koncepcja i mood image, a nie dokumentacja wykonawcza (sekcja~\ref{ch07:sec:status-wizualizacji}).
 
 % =============================================================================
 \section{Architektura systemu}
 \label{ch07:sec:architektura}
 % =============================================================================
 
-Architektura produkcyjna IDA obejmuje trzy strefy (ryc.~\ref{fig:ch07:architecture}):
+Architektura produkcyjna IDA ma trzy strefy (ryc.~\ref{fig:ch07:architecture}):
 
 \begin{enumerate}
-  \item \textbf{Frontend doświadczenia} --- aplikacja webowa (App Router): flow Fast/Full, awatar, instrumenty, macierz, feedback.
-  \item \textbf{Warstwa persystencji i runtime (GCP)} --- Cloud Run, Cloud SQL, GCS; tożsamość sesji i \texttt{user\_hash}; zdarzenia badawcze. GCP \emph{nie} generuje obrazów --- przechowuje i serwuje dane badania.
-  \item \textbf{Warstwa generatywna (Vertex AI)} --- Gemini Image (\texttt{gemini-3.1-flash-image}) jako silnik img2img; Gemini Flash Lite jako VLM do analizy zdjęcia pokoju i inspiracji.
+  \item \textbf{Frontend doświadczenia}: aplikacja webowa (App Router) z przebiegami Fast i Full, awatarem, instrumentami, macierzą i zbieraniem opinii.
+  \item \textbf{Warstwa zapisu i uruchomienia (GCP)}: Cloud Run, Cloud SQL, GCS; tożsamość sesji i \texttt{user\_hash}; zdarzenia badawcze. GCP \emph{nie} generuje obrazów, tylko przechowuje i udostępnia dane badania.
+  \item \textbf{Warstwa generatywna (Vertex AI)}: Gemini Image (\texttt{gemini-3.1-flash-image}) jako silnik img2img oraz Gemini Flash Lite jako VLM do analizy zdjęcia pokoju i inspiracji.
 \end{enumerate}
 
-Synteza promptu (\texttt{prompt-synthesis}: scoring $\rightarrow$ builder JSON v3 $\rightarrow$ generacja) działa deterministycznie po stronie aplikacji: te same wejścia i to samo źródło macierzy dają ten sam brief strukturalny, co wspiera powtarzalność badania.
+Synteza promptu (\texttt{prompt-synthesis}: scoring $\rightarrow$ builder JSON v3 $\rightarrow$ generacja) działa po stronie aplikacji deterministycznie. Te same wejścia i to samo źródło macierzy dają ten sam brief strukturalny, co wspiera powtarzalność badania.
 
 \begin{figure}[htbp]
   \centering
@@ -132,7 +136,7 @@ Synteza promptu (\texttt{prompt-synthesis}: scoring $\rightarrow$ builder JSON v
 \label{ch07:sec:flow}
 % =============================================================================
 
-Kanoniczny przebieg ścieżki pełnej (uproszczony) obejmuje: zgodę i kontekst $\rightarrow$ profil gustu (Tinder, mood, zmysły, inspiracje, IPIP-NEO-120) $\rightarrow$ przestrzeń (zdjęcie, potrzeby, nastrój current/target) $\rightarrow$ generację macierzy sześciu źródeł $\rightarrow$ ślepy wybór i feedback UX (ryc.~\ref{fig:ch07:flow}). Awatar spina etapy komunikatem przejścia; użytkownik zawsze wie, \emph{co} robi i \emph{po~co} w logice projektu wnętrza.
+Ścieżka pełna przebiega w uproszczeniu tak: zgoda i kontekst $\rightarrow$ profil gustu (Tinder, nastrój, zmysły, inspiracje, IPIP-NEO-120) $\rightarrow$ przestrzeń (zdjęcie, potrzeby, nastrój current i target) $\rightarrow$ generacja macierzy sześciu źródeł $\rightarrow$ ślepy wybór i opinie o użyteczności (ryc.~\ref{fig:ch07:flow}). Awatar łączy etapy komunikatem przejścia, a użytkownik w każdej chwili wie, \emph{co} robi i \emph{po co} w logice projektu wnętrza.
 
 \begin{figure}[htbp]
   \centering
@@ -144,7 +148,10 @@ Kanoniczny przebieg ścieżki pełnej (uproszczony) obejmuje: zgodę i kontekst 
   \label{fig:ch07:flow}
 \end{figure}
 
-Szczegółowe, zanonimizowane sekwencje ekranów zebrano w załączniku~\ref{app:h:top}.
+Zanonimizowane sekwencje ekranów zebrałem w załączniku~\ref{app:h:top}. Narracyjny opis dzieła, czyli przebieg uczestnika przez interfejs obu ścieżek z ilustracjami z platformy, zawiera podsekcja~\ref{ch07:sec:opis-dziela} (wejście i wybór ścieżki). Ścieżkę szybką opisuje \ref{ch07:sec:flow-quick}, a pełną \ref{ch07:sec:opis-full}.
+
+\input{chapters/07c-opis-dziela-przebieg}
+% 07b (krótka sekwencja Fast) pozostaje w repozytorium, lecz nie jest już włączana: te same ryciny wchodzą do 07c.
 
 % =============================================================================
 \section{Warstwy danych}
@@ -158,31 +165,32 @@ Model danych badania jest hierarchiczny:
 \end{center}
 
 \noindent
-(w~PL: użytkownik $\rightarrow$ gospodarstwo domowe $\rightarrow$ pokój $\rightarrow$ sesja). Preferencje globalne (gust, Big Five, inspiracje) żyją bliżej użytkownika; funkcja, PRS current/target i geometria zdjęcia --- przy pokoju; wybór w macierzy i feedback --- przy sesji generacji. Anonimizacja opiera się na \texttt{user\_hash}; w rozprawie nie publikuje się PII ani surowych eksportów.
+(po polsku: użytkownik $\rightarrow$ gospodarstwo domowe $\rightarrow$ pokój $\rightarrow$ sesja). Preferencje globalne (gust, Big Five, inspiracje) leżą bliżej użytkownika. Funkcja, PRS current i target oraz geometria zdjęcia należą do pokoju. Wybór w macierzy i opinie należą do sesji generacji. Anonimizacja opiera się na \texttt{user\_hash}, a w rozprawie nie publikuję danych osobowych ani surowych eksportów.
 
 % =============================================================================
 \section{Analiza zdjęcia pokoju i inspiracji (VLM)}
 \label{ch07:sec:vlm}
 % =============================================================================
 
-Przed syntezą briefu IDA wywołuje Gemini Flash Lite (Vertex~AI) w dwóch rolach: (1)~analiza zdjęcia pokoju (typ przestrzeni, sygnały układu i światła); (2)~analiza obrazów inspiracji jako referencji estetycznych. Wynik VLM nie jest ostatecznym projektem --- stanowi wejście do scoringu i buildera. W pathie produktowym unika się ciężkiego lokalnego stacku CV (depth/SAM); rozumienie sceny jest „wystarczająco dobre” dla briefu koncepcyjnego i skalowalne w chmurze.
+Przed syntezą briefu IDA wywołuje Gemini Flash Lite (Vertex~AI) w dwóch rolach: (1)~analizuje zdjęcie pokoju (typ przestrzeni, sygnały układu i światła); (2)~analizuje obrazy inspiracji jako referencje estetyczne. Wynik VLM nie jest ostatecznym projektem. Wchodzi do scoringu i buildera jako jedno z wejść.
+W produkcie unikam ciężkiego lokalnego stosu wizji komputerowej (głębia, SAM). Rozumienie sceny jest „wystarczająco dobre” dla briefu koncepcyjnego i da się je skalować w chmurze.
 
 % =============================================================================
 \section{Pipeline syntezy promptów}
 \label{ch07:sec:pipeline}
 % =============================================================================
 
-Pipeline explainable personalization przebiega w warstwach (ryc.~\ref{fig:ch07:pipeline}):
+Pipeline \emph{explainable personalization} składa się z pięciu warstw (ryc.~\ref{fig:ch07:pipeline}):
 
 \begin{enumerate}
-  \item \textbf{Zbiór wejść} --- preferencje ukryte (swipe, sygnały behawioralne), jawne (slidery, paleta, materiały), osobowość (domeny i facety IPIP-NEO-120), funkcja pokoju (aktywności, pain points, ladder), PRS, inspiracje, analiza VLM.
-  \item \textbf{Filtrowanie według źródła macierzy} --- \texttt{filterInputsBySource}: każde z sześciu źródeł zeruje dane, które nie powinny wpływać na dany wariant, aby briefy były rzeczywiście różne.
-  \item \textbf{Scoring} --- wagi stylu, koloru, biophilii, nastroju itd.; dla źródła \texttt{mixed} kanoniczne wagi estetyczne wynoszą $0{,}40$ implicit / $0{,}30$ explicit / $0{,}30$ personality.
-  \item \textbf{Builder JSON v3} --- strukturalny prompt (\texttt{schema\_version: v3}) ze wspólnym rdzeniem pól dla wszystkich źródeł oraz blokiem \texttt{preserve} geometrii architektonicznej (okna, drzwi, kąt kamery, perspektywa, wysokość sufitu, obrys pomieszczenia); \texttt{restyle\_surfaces: true} pozwala zmienić wykończenia ścian/podłóg/sufitu.
-  \item \textbf{Generacja} --- Gemini Image (Vertex~AI) w trybie img2img na bazie zdjęcia (lub wersji empty shell) oraz briefu; dla \texttt{inspiration\_reference} możliwe dołączenie obrazów referencyjnych.
+  \item \textbf{Zbiór wejść}: preferencje ukryte (swipe, sygnały behawioralne) i jawne (slidery, paleta, materiały), osobowość (domeny i facety IPIP-NEO-120), funkcja pokoju (aktywności, punkty tarcia, ladder), PRS, inspiracje i analiza VLM.
+  \item \textbf{Filtrowanie według źródła macierzy} (\texttt{filterInputsBySource}): każde z sześciu źródeł zeruje dane, które nie mogą wpływać na dany wariant, żeby briefy naprawdę się różniły.
+  \item \textbf{Scoring}: wagi stylu, koloru, biophilii, nastroju itd. Dla źródła \texttt{mixed} kanoniczne wagi estetyczne wynoszą $0{,}40$ implicit / $0{,}30$ explicit / $0{,}30$ personality.
+  \item \textbf{Builder JSON v3}: strukturalny prompt (\texttt{schema\_version: v3}) ze wspólnym rdzeniem pól dla wszystkich źródeł i blokiem \texttt{preserve} dla geometrii architektonicznej (okna, drzwi, kąt kamery, perspektywa, wysokość sufitu, obrys pomieszczenia). Pole \texttt{restyle\_surfaces: true} pozwala zmienić wykończenia ścian, podłóg i sufitu.
+  \item \textbf{Generacja}: Gemini Image (Vertex~AI) w trybie img2img na podstawie zdjęcia (lub wersji empty shell) i briefu. Dla \texttt{inspiration\_reference} można dołączyć obrazy referencyjne.
 \end{enumerate}
 
-Powtarzalność i cytowalność mapowań (facety $\rightarrow$ styl/materiał/złożoność) udokumentowano w załączniku~\ref{app:c:top}; przykładowe briefy sześciu źródeł --- w załączniku~\ref{app:d:top}.
+Powtarzalność i możliwość zacytowania mapowań (facety $\rightarrow$ styl, materiał, złożoność) dokumentuje załącznik~\ref{app:c:top}. Przykładowe briefy sześciu źródeł zebrałem w załączniku~\ref{app:d:top}.
 
 \begin{figure}[htbp]
   \centering
@@ -199,7 +207,7 @@ Powtarzalność i cytowalność mapowań (facety $\rightarrow$ styl/materiał/z�
 \label{ch07:sec:macierz}
 % =============================================================================
 
-Rdzeniem empirycznym artefaktu jest ślepa macierz dokładnie \textbf{sześciu} źródeł generacji (\texttt{GenerationSource}). Każde źródło buduje osobny brief z innego podzbioru danych --- tabela~\ref{tab:ch07:sources} podaje kanoniczne klucze i sens projektowy.
+Rdzeniem empirycznym artefaktu jest ślepa macierz dokładnie \textbf{sześciu} źródeł generacji (\texttt{GenerationSource}). Każde źródło buduje osobny brief z innego podzbioru danych. Tabela~\ref{tab:ch07:sources} podaje kanoniczne klucze i sens projektowy.
 
 \begin{table}[htbp]
   \centering
@@ -231,7 +239,7 @@ Rdzeniem empirycznym artefaktu jest ślepa macierz dokładnie \textbf{sześciu} 
   \end{tabular}
 \end{table}
 
-Układ macierzy na ekranie nie ujawnia etykiet źródeł; po wyborze system zapisuje m.in.\ \texttt{selected\_source}, \texttt{blind\_selection\_made}, \texttt{selection\_time\_ms} --- pod RQ3 (oraz powiązania z RQ2/RQ4/RQ5). Schemat ślepej macierzy pokazuje ryc.~\ref{fig:ch07:matrix}.
+Układ macierzy na ekranie nie ujawnia etykiet źródeł. Po wyborze system zapisuje m.in.\ \texttt{selected\_source}, \texttt{blind\_selection\_made} i \texttt{selection\_time\_ms}, co służy RQ3 oraz jej powiązaniom z RQ2, RQ4 i RQ5. Schemat ślepej macierzy pokazuje ryc.~\ref{fig:ch07:matrix}.
 
 \begin{figure}[htbp]
   \centering
@@ -244,43 +252,47 @@ Układ macierzy na ekranie nie ujawnia etykiet źródeł; po wyborze system zapi
 \end{figure}
 
 % =============================================================================
-\section{Ślepy wybór i dramaturgia odkrywania preferencji}
+\section{Ślepy wybór i odkrywanie preferencji}
 \label{ch07:sec:slepy-wybor}
 % =============================================================================
 
-Ślepy wybór jest jednocześnie protokołem eksperymentalnym i gestem dramaturgicznym. Użytkownik porównuje sześć koncepcji „na oko” --- bez wiedzy, która powstała z swipe’ów, deklaracji, osobowości czy funkcji pokoju. Ujawnienie źródła po wyborze (lub w podsumowaniu) domyka łuk poznania: możliwa rozbieżność między tym, \emph{co się deklaruje}, a tym, \emph{co się wybiera}, staje się doświadczeniem, nie tylko wierszem w bazie (\texttt{preference\_comparison\_json}).
+Ślepy wybór pełni dwie funkcje: jest protokołem eksperymentalnym i jednocześnie doświadczeniem uczestnika. Etykiety źródeł są ukryte do momentu decyzji; uczestnik porównuje obrazy „na oko”, nie wiedząc, który wynika z szybkich reakcji, deklaracji, osobowości czy funkcji pokoju.
+W zarejestrowanej wersji interfejsu część wizji na ekranie porównania była dostępna dopiero po założeniu konta (ryc.~\ref{fig:ch07:opis-full-matrix} w opisie przebiegu). Interfejs mógł więc pokazać anonimowej sesji mniej niż sześć kart naraz, mimo że w tle nadal generuję sześć źródeł. Po pilotażu zmieniłem reguły wyświetlania, żeby nie mieszać warunków porównania z bramką konta; w danych z 1~października 2026 obowiązuje jeszcze wcześniejszy układ.
+Po wyborze (albo w podsumowaniu) ujawniam źródło. Rozbieżność między tym, \emph{co się deklaruje}, a tym, \emph{co się wybiera}, staje się wtedy czymś, czego uczestnik doświadcza, a nie tylko wierszem w bazie (\texttt{preference\_comparison\_json}).
 
-Wątek ten operacjonalizuje RQ2--RQ3 i odróżnia IDA od generatorów, w których użytkownik świadomie dopina prompt do oczekiwanego stylu.
+Ten mechanizm operacjonalizuje RQ2--RQ3 i odróżnia IDA od generatorów, w których użytkownik świadomie dopasowuje prompt do oczekiwanego stylu.
 
 % =============================================================================
 \section{Empty shell w produkcie a maski w pracowni}
 \label{ch07:sec:empty-shell}
 % =============================================================================
 
-Problem mebli na zdjęciu wejściowym --- jak restylizować pomieszczenie, nie dziedzicząc układu sof i dywanów --- rozwiązywano w pracowni autora maskami (SAM/SAM2), inpaintingiem i conditioningiem geometrii (rozdz.~\ref{ch04:top}). W produkcie IDA przyjęto uproszczenie \emph{prompt-based empty shell}: model Gemini otrzymuje instrukcję systemową usunięcia wyposażenia i zachowania pustej skorupy architektonicznej (ściany, podłoga, sufit, otwory), a następnie brief JSON v3 z \texttt{preserve} geometrii i nowym wyposażeniem zgodnym ze źródłem macierzy.
+Zdjęcie wejściowe z meblami stawia problem: jak przestylizować pokój, nie dziedzicząc układu sof i dywanów. W pracowni rozwiązywałem to maskami (SAM/SAM2), inpaintingiem i conditioningiem geometrii (rozdz.~\ref{ch04:top}).
+W produkcie IDA przyjąłem uproszczenie \emph{prompt-based empty shell}. Model Gemini dostaje instrukcję systemową usunięcia wyposażenia i zachowania pustej skorupy architektonicznej (ściany, podłoga, sufit, otwory), a potem brief JSON v3 z blokiem \texttt{preserve} i nowym wyposażeniem zgodnym ze źródłem macierzy.
+Uczestnik może też sam zlecić usunięcie mebli ze zdjęcia przyciskiem w kroku z pokojem. Przycisk uruchamia osobne zlecenie generacji z instrukcją usunięcia wyposażenia, a nie segmentację.
 
-To nie jest pełny stack ControlNet/depth w runtime. Świadomie wymieniono precyzję maski na skalowalność, jednolitość UX i powtarzalność procedury terenowej (sekcja~\ref{ch07:sec:comfyui-transfer}).
+To nie jest pełny stos ControlNet i depth w produkcji. Świadomie wymieniłem precyzję maski na skalowalność, jednolity interfejs i powtarzalność procedury terenowej (sekcja~\ref{ch07:sec:comfyui-transfer}).
 
 % =============================================================================
 \section{Ewolucja techniczna jako proces twórczy}
 \label{ch07:sec:ewolucja}
 % =============================================================================
 
-Genealogia artefaktu obejmuje dwa przejścia nazewnicze i infrastrukturalne:
+W genealogii artefaktu zaszły dwie zmiany nazwy i infrastruktury:
 
 \begin{enumerate}
-  \item \textbf{Aura $\rightarrow$ IDA} --- wczesne repozytorium / proto-produkt ustępuje nazwie i tożsamości IDA jako platformy dialogu badawczego; „Aura” pozostaje wyłącznie w genealogii historycznej.
-  \item \textbf{FLUX na Modal (+ wczesna persystencja Supabase) $\rightarrow$ Gemini / Vertex~AI (+ GCP)} --- wczesna generacja obrazu opierała się na FLUX hostowanym na Modal; obecnie silnikiem produkcyjnym jest Gemini Image w Vertex~AI, a dane badania spoczywają w GCP.
+  \item \textbf{Aura $\rightarrow$ IDA}: wczesne repozytorium i proto-produkt ustąpiły nazwie i tożsamości IDA jako platformy dialogu badawczego. „Aura” pozostaje wyłącznie w genealogii historycznej.
+  \item \textbf{FLUX na Modal (+ wczesny zapis w Supabase) $\rightarrow$ Gemini / Vertex~AI (+ GCP)}: wczesna generacja obrazu korzystała z modelu FLUX hostowanego na Modal. Obecnie silnikiem produkcyjnym jest Gemini Image w Vertex~AI, a dane badania leżą w GCP.
 \end{enumerate}
 
-Ewolucja nie jest kosmetyczną zmianą vendorów: zmienia się kontrakt promptu (JSON v3, system empty shell), model analizy VLM oraz warunki powtarzalności terenowej. FLUX/Modal opisuje się wyłącznie jako etap archiwalny --- nie jako obecny silnik produkcji.
+Ta zmiana to nie kosmetyka dostawców. Zmieniają się kontrakt promptu (JSON v3, system empty shell), model analizy VLM i warunki powtarzalności w terenie. FLUX/Modal opisuję wyłącznie jako etap archiwalny, a nie jako obecny silnik produkcji.
 
 % =============================================================================
-\section{Co z pracowni ComfyUI weszło do produktu, a co odrzucono}
+\section{Co z pracowni ComfyUI weszło do produktu, a co odrzuciłem}
 \label{ch07:sec:comfyui-transfer}
 % =============================================================================
 
-Tabela~\ref{tab:ch07:comfyui-transfer} podsumowuje transfer wiedzy z pracowni (rozdz.~\ref{ch04:top}) do runtime IDA.
+Tabela~\ref{tab:ch07:comfyui-transfer} zestawia transfer wiedzy z pracowni (rozdz.~\ref{ch04:top}) do produkcyjnego IDA.
 
 \begin{table}[htbp]
   \centering
@@ -321,22 +333,22 @@ Tabela~\ref{tab:ch07:comfyui-transfer} podsumowuje transfer wiedzy z pracowni (r
   \end{tabular}
 \end{table}
 
-Kryteria odrzucenia --- \textbf{skalowalność}, \textbf{UX} i \textbf{powtarzalność badania} --- są równorzędne wobec wierności geometrycznej osiąganej w pracowni. IDA nie udaje, że zastępuje ComfyUI; świadomie zawęża medium do tego, co da się utrzymać jako artefakt terenowy RtD.
+Przy odrzucaniu rozwiązań kierowałem się trzema równorzędnymi kryteriami: \textbf{skalowalnością}, \textbf{użytecznością interfejsu} i \textbf{powtarzalnością badania}. Wierność geometrii osiągana w pracowni nie miała nad nimi pierwszeństwa. IDA nie udaje, że zastępuje ComfyUI. Świadomie zawęża medium do tego, co da się utrzymać jako artefakt terenowy RtD.
 
 % =============================================================================
 \section{Kryteria sukcesu artefaktu}
 \label{ch07:sec:kryteria}
 % =============================================================================
 
-Sukces IDA ocenia się w czterech porządkach (bez wynajdywania metryk liczbowych poza planem ewaluacji w rozdziale wyników):
+Sukces IDA oceniam w czterech porządkach. Nie wymyślam przy tym metryk liczbowych poza planem ewaluacji z rozdziału wyników:
 
 \begin{description}[style=nextline]
   \item[Estetyczny]
-    Czy wizualizacje nadają się jako koncepcje / mood images z czytelną intencją stylu i zachowaną czytelnością przestrzeni?
+    Czy wizualizacje nadają się jako koncepcje i mood images, z czytelnym zamiarem stylu i zachowaną czytelnością przestrzeni?
   \item[Etyczny]
-    Czy zgoda, anonimizacja i transparentność personalizacji (w tym ujawnianie logiki źródeł po wyborze) są obecne w doświadczeniu?
+    Czy zgoda, anonimizacja i przejrzystość personalizacji (w tym ujawnienie logiki źródeł po wyborze) są obecne w doświadczeniu?
   \item[Badawczy]
-    Czy flow dostarcza dane pod RQ1--RQ6 (ukończenie, mismatch, \texttt{selected\_source}, Big Five, PRS gap, agency/clarity/satisfaction)?
+    Czy przebieg dostarcza dane pod RQ1--RQ6 (ukończenie, rozbieżność, \texttt{selected\_source}, Big Five, luka PRS, agency, clarity, satisfaction)?
   \item[Produktowy]
     Czy ścieżki Fast i Full pozostają zrozumiałe, a awatar i glass UI utrzymują ciągłość dialogu bez przeciążenia?
 \end{description}
@@ -346,7 +358,8 @@ Sukces IDA ocenia się w czterech porządkach (bez wynajdywania metryk liczbowyc
 \label{ch07:sec:iteracje}
 % =============================================================================
 
-W toku budowy świadomie porzucono m.in.: lokalną / ciężką analizę pokoju w stylu MiniCPM na rzecz Gemini Flash Lite; osobny etap „LLM refine” promptu jako domyślny obowiązek pipeline’u (pierwszeństwo ma regułowy scoring + builder v3); eksponowanie użytkownikowi parametrów dawnego silnika FLUX (strength, steps) --- produkt nie jest panelem ML; pełny runtime ComfyUI z ControlNet/SAM jako warstwę produkcyjną. Odrzucenia wynikają z tych samych kryteriów co w tabeli~\ref{tab:ch07:comfyui-transfer}: utrzymanie IDA jako lekkiego, powtarzalnego artefaktu dialogu.
+W trakcie budowy porzuciłem kilka rozwiązań: lokalną, ciężką analizę pokoju w stylu MiniCPM (zastąpiłem ją Gemini Flash Lite); osobny etap „LLM refine” jako domyślny obowiązek potoku (pierwszeństwo ma regułowy scoring i builder v3); pokazywanie użytkownikowi parametrów dawnego silnika FLUX (strength, steps), bo produkt nie jest panelem ML; wreszcie pełny runtime ComfyUI z ControlNet i SAM jako warstwę produkcyjną.
+Wszystkie odrzucenia wynikają z kryteriów z tabeli~\ref{tab:ch07:comfyui-transfer}. Chciałem zachować IDA jako lekki, powtarzalny artefakt dialogu.
 
 % =============================================================================
 \section{Kompromisy projektowe}
@@ -354,14 +367,14 @@ W toku budowy świadomie porzucono m.in.: lokalną / ciężką analizę pokoju w
 % =============================================================================
 
 \begin{description}[style=nextline]
-  \item[Długość ścieżki pełnej a dropout]
-    IPIP-NEO-120 i Room Setup pogłębiają profil, ale wydłużają rytuał; Dual path i dramaturgia awatara łagodzą napięcie (RQ1).
+  \item[Długość ścieżki pełnej a odpadanie uczestników]
+    IPIP-NEO-120 i Room Setup pogłębiają profil, ale wydłużają rytuał. Dwie ścieżki i prowadzenie przez awatara łagodzą to napięcie (RQ1).
   \item[Wierność skali a przyjemność interakcji]
-    Mood grid i Tinder zwiększają płynność kosztem „papierowej” postaci instrumentu; praca deklaruje limity psychometryczne w metodologii.
+    Mood grid i Tinder czynią interakcję płynniejszą, ale oddalają instrument od postaci papierowej. Limity psychometryczne opisuję w metodologii.
   \item[Kontrola geometrii a prostota produktu]
-    Precyzja SAM/depth ustępuje empty shell + \texttt{preserve}; świadomy deficyt precyzji wobec pracowni.
-  \item[Explainability a złożoność UI]
-    Mapowania i wagi są pełne w pipeline i załącznikach; interfejs użytkownika nie wykłada macierzy cytowań naukowych na każdym ekranie.
+    Precyzja SAM i depth ustępuje empty shell z blokiem \texttt{preserve}. To świadomy deficyt precyzji wobec pracowni.
+  \item[Przejrzystość a złożoność interfejsu]
+    Mapowania i wagi są kompletne w potoku i załącznikach, ale interfejs nie wykłada macierzy cytowań naukowych na każdym ekranie.
 \end{description}
 
 % =============================================================================
@@ -369,18 +382,20 @@ W toku budowy świadomie porzucono m.in.: lokalną / ciężką analizę pokoju w
 \label{ch07:sec:autorstwo}
 % =============================================================================
 
-W IDA autorstwo koncepcji wnętrza jest rozproszone: użytkownik wnosi zdjęcie, wybory i ostateczną selekcję w macierzy; projektant--badacz wnosi strukturę dialogu, mapowania i reguły briefu; model generatywny materializuje obraz. Artefakt broni tezy, że odpowiedzialność projektowa pozostaje po stronie człowieka, który definiuje kryteria \texttt{preserve}, źródła macierzy i status wizualizacji jako koncepcji --- nie po stronie „autonomicznego” stylu modelu. Ujęcie to jest zgodne z logiką RtD, w której artefakt i jego dokumentacja są nośnikiem wkładu \parencite{zimmerman2007rtd,frayling1993research}.
+Autorstwo koncepcji wnętrza jest w IDA rozproszone. Użytkownik wnosi zdjęcie, wybory i ostateczną selekcję w macierzy. Ja wnoszę strukturę dialogu, mapowania i reguły briefu. Model generatywny materializuje obraz.
+Bronię tezy, że odpowiedzialność projektowa zostaje po stronie człowieka, który określa kryteria \texttt{preserve}, źródła macierzy i status wizualizacji jako koncepcji, a nie po stronie „autonomicznego” stylu modelu. Takie stanowisko zgadza się z logiką RtD, w której artefakt i jego dokumentacja niosą wkład \footcite{zimmerman2007rtd,frayling1993research}.
 
 % =============================================================================
 \section{Status wizualizacji: koncepcja, mood image, nie dokumentacja}
 \label{ch07:sec:status-wizualizacji}
 % =============================================================================
 
-Wyjścia IDA należy czytać jako \emph{wizualizacje koncepcyjne} / mood images: służą decyzji estetycznej i rozmowie o preferencjach, nie zastępują projektu wykonawczego, inwentaryzacji ani doboru handlowego. To ograniczenie jest cechą, nie brakiem --- chroni przed nadmiernymi roszczeniami wobec medium dyfuzyjnego (halucynacje geometrii, „AI look”) opisanych w rozdziale o medium.
+Wyniki IDA należy czytać jako \emph{wizualizacje koncepcyjne} (mood images). Służą decyzji estetycznej i rozmowie o preferencjach. Nie zastępują projektu wykonawczego, inwentaryzacji ani doboru handlowego. To ograniczenie jest cechą artefaktu, nie brakiem: chroni przed nadmiernymi oczekiwaniami wobec medium dyfuzyjnego (halucynacje geometrii, „AI look”), które opisałem w rozdziale o medium.
 
 % =============================================================================
 \section{Portfolio przebiegów}
 \label{ch07:sec:portfolio}
 % =============================================================================
 
-Zanonimizowane sekwencje ekranów (onboarding $\rightarrow$ profil $\rightarrow$ pokój $\rightarrow$ macierz $\rightarrow$ wybór) zbiera załącznik~\ref{app:h:top}. W korpusie rozdziału pozostawiono placeholdery rycin (ryc.~\ref{fig:ch07:avatar}, \ref{fig:ch07:ui-screens}, \ref{fig:ch07:architecture}, \ref{fig:ch07:flow}, \ref{fig:ch07:pipeline}, \ref{fig:ch07:matrix}), do zastąpienia materiałem z \texttt{figures/ida/} przed wersją finalną.
+Zanonimizowane sekwencje ekranów (onboarding $\rightarrow$ profil $\rightarrow$ pokój $\rightarrow$ macierz $\rightarrow$ wybór) zbiera załącznik~\ref{app:h:top}.
+\AgentNote{Ryc.~\ref{fig:ch07:avatar}, \ref{fig:ch07:ui-screens}, \ref{fig:ch07:architecture}, \ref{fig:ch07:flow}, \ref{fig:ch07:pipeline}, \ref{fig:ch07:matrix} są placeholderami do zastąpienia materiałem z \texttt{figures/ida/} przed wersją finalną.}

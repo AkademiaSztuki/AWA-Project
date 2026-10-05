@@ -1,28 +1,38 @@
 % OWNER: framing
 % STATUS: review
-\begin{titlepage}
-  \centering
-  \vspace*{2cm}
-
-  {\large \ThesisAffiliation\par}
-  \vspace{1.5cm}
-
-  {\LARGE\bfseries \ThesisAuthor\par}
-  \vspace{2cm}
-
-  {\Huge\bfseries \ThesisTitle\par}
-  \vspace{1.5cm}
-
-  {\large Rozprawa doktorska\par}
-  \vspace{0.5cm}
-  {\large Dyscyplina: \ThesisDiscipline\par}
-
-  \vfill
-
-  {\large Promotor: \ThesisSupervisor\par}
-  \vspace{1.5cm}
-  {\large Szczecin \ThesisYear\par}
-
-  \vspace{0.5cm}
-  {\footnotesize Wersja robocza: \ThesisVersion\par}
-\end{titlepage}
+\thispagestyle{empty}
+\vspace*{0.16\textheight}
+{\idaTracked\footnotesize\color{accent}IDA\par}
+\vspace{1.5\baselineskip}
+{\idaSb\fontsize{20}{26}\selectfont\color{ink}\raggedright \ThesisTitle\par}
+\vspace{1.6\baselineskip}
+{\color{accent}\rule{1.6em}{0.45pt}\par}
+\vspace{1.1\baselineskip}
+{\sffamily\fontsize{13}{16}\selectfont \ThesisAuthor\par}
+\vspace{0.45\baselineskip}
+{\sffamily\small\color{inksoft} Rozprawa doktorska\par}
+\vfill
+{\sffamily\small\color{inksoft}\ThesisTitleShort\par}
+\cleardoublepage
+\thispagestyle{empty}
+\vspace*{0.1\textheight}
+{\idaTracked\footnotesize\color{accent}IDA\par}
+\vspace{1.35\baselineskip}
+{\idaSb\fontsize{18}{23}\selectfont\color{ink}\raggedright \ThesisTitle\par}
+\vspace{1.35\baselineskip}
+{\sffamily\fontsize{12.5}{16}\selectfont \ThesisAuthor\par}
+\vspace{0.4\baselineskip}
+{\sffamily\small\color{inksoft} Rozprawa doktorska\par}
+\vfill
+{\sffamily\small\color{inksoft}%
+  \ThesisAffiliation\par
+  \vspace{0.32\baselineskip}%
+  Dyscyplina: \ThesisDiscipline\par
+  \vspace{0.85\baselineskip}%
+  Promotor: \ThesisSupervisor\par
+  \vspace{0.85\baselineskip}%
+  Szczecin \ThesisYear\par
+  \vspace{0.7\baselineskip}%
+  \footnotesize \ThesisVersionLabel\par
+}
+\clearpage

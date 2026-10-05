@@ -1,0 +1,224 @@
+% OWNER: artifact
+% STATUS: draft
+% Opis dzieła: narracyjny przebieg uczestnika przez interfejs IDA (Fast + Full).
+% Ryciny Fast: figures/ida/flow/ch07-flow-quick-NN-*.png (istnieją).
+% Ryciny Full: figures/ida/flow-full/ch07-flow-full-NN-slug.png (wybrane 8 z 20; luki w serii opisane w tekście, patrz notes/flow-inventory-full.md).
+% Zastępuje w kolejności czytania 07b (07b pozostaje jako krótka sekwencja Fast w repozytorium).
+% Redakcja: pętla krytyk -> poprawka (notes/07c-redakcja-petla.md); druga redakcja całości: notes/REDAKCJA_CALOSC_PLAN.md
+
+\subsection{Opis dzieła: przebieg uczestnika przez interfejs IDA}
+\label{ch07:sec:opis-dziela}
+
+Interfejs IDA jest jednocześnie dziełem i narzędziem badawczym, więc opisuję go tak, jak widzi go uczestnik: od pierwszego wejścia, przez decyzję o głębokości spotkania, aż do chwili, gdy na ekranie pojawia się wnętrze wygenerowane z jego własnego zdjęcia. Każdy ekran omawiam tam, dokąd dociera opowieść, i od razu mówię, do czego służy w badaniu. Product-First i Research-Embedded nie są dla mnie dwiema warstwami, tylko jednym gestem (sekcja~\ref{ch07:sec:filozofia}). Ryciny to zrzuty ekranu z produkcyjnej platformy. Ilustrują zdania, przy których stoją, i nie służą jako dowód.
+
+\subsubsection*{Wejście i decyzja o głębokości}
+
+Uczestnik trafia najpierw na stronę wejściową. Nie jest to formularz badania, lecz zwykła strona produktu bez żargonu. Obiecuje koncepcję wnętrza dopasowaną do człowieka, który w nim zamieszka, i jednym przyciskiem, \emph{Stwórz moje wnętrze}, prowadzi do właściwego przebiegu (ryc.~\ref{fig:ch07:opis-fast-landing}).
+Zaprojektowałem tam awatara IDA z krótkim dialogiem powitalnym, który można pominąć. Nie dokumentuję go jednak ryciną, bo w zarejestrowanej sesji nakładka z przyciskiem pominięcia się nie pojawiła.
+Takie otwarcie wynika z Product-First: osoba, która przyszła po wizualizację, nie powinna zaczynać od aparatu badawczego. Badaniem jest jednak wszystko, co dzieje się dalej, i uczestnik dowiaduje się o tym przy zgodzie.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-01-landing.png}
+  \caption{Strona wejściowa IDA (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-landing}
+\end{figure}
+
+Pierwsza prośba dotyczy tempa. Ekran \emph{Wybierz swoją ścieżkę} stawia obok siebie dwie karty: \emph{Szybką ścieżkę}, zapowiedzianą jako 3--5~minut („prześlij zdjęcie, wybierz styl i generuj”), oraz \emph{Pełne doświadczenie}, zapowiedziane jako 20--30~minut i oznaczone jako polecane (ryc.~\ref{fig:ch07:opis-fast-path}). Czasy podaję tak, jak widać je na ekranie. Nie mierzyłem ich.
+W danych wybór zapisuje się jako \texttt{path\_type} (\texttt{fast} albo \texttt{full}), ale uczestnik widzi decyzję, ile siebie chce pokazać we własnym wnętrzu. Ten kompromis opisuję w sekcji~\ref{ch07:sec:sciezki}. Ścieżka pełna zasila rdzeń empiryczny pracy (macierz sześciu źródeł, pytania RQ2--RQ5). Ścieżka szybka pozwala komuś, kto nie chce długiego rytuału, zobaczyć efekt. Oba warianty są więc na ekranie widoczne, choć pełne doświadczenie ma wyróżnienie.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-02-path-selection.png}
+  \caption{Wybór ścieżki: szybkiej (Fast) albo pełnego doświadczenia (Full) (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-path}
+\end{figure}
+
+\subsection{Ścieżka szybka: od zgody do pierwszej koncepcji}
+\label{ch07:sec:flow-quick}
+
+Załóżmy, że uczestnik wybiera ścieżkę szybką. Pasek postępu ma cztery stacje: \emph{Start}, \emph{Przestrzeń}, \emph{Styl}, \emph{Generacja}. Pierwsza z nich nie jest jeszcze projektowaniem, lecz umową. Zanim IDA zapyta o cokolwiek dotyczącego wnętrza, przedstawia zgodę na udział w badaniu: zakres danych, ich przetwarzanie zgodnie z RODO i dobrowolność. Jedno zbiorcze pole akceptacji odblokowuje przycisk \emph{Dalej}, a bez zgody droga się tu kończy (ryc.~\ref{fig:ch07:opis-fast-consent}).
+Kto chce wiedzieć więcej, rozwija szczegóły: podstawę prawną, odbiorców danych, okres przechowywania i prawa uczestnika (ryc.~\ref{fig:ch07:opis-fast-consent-dialog}). Tę kolejność wymusza etyka badań, ale ustawia ona też sytuację. Uczestnik od początku wie, że rozmawia z narzędziem, które jest zarazem przedmiotem badania, a nie z neutralnym generatorem obrazów (zob.\ zał.~\ref{app:f:top}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-03-onboarding-consent.png}
+  \caption{Zgoda na udział w badaniu i warunki RODO (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-consent}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-03-onboarding-consent-dialog.png}
+  \caption{Rozwinięte szczegóły zgód (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-consent-dialog}
+\end{figure}
+
+Zaraz po zgodzie pytam o kilka podstawowych informacji: przedział wieku, płeć, wykształcenie i kraj (ryc.~\ref{fig:ch07:opis-fast-demographics}). W ścieżce szybkiej odpowiedzi nie służą jeszcze osobowości ani preferencjom. Pozwalają opisać, kto i jak daleko dociera przez przebieg (RQ1). Pytania o kontekst życiowy zostawiłem uczestnikom pełnego doświadczenia.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-04-demographics.png}
+  \caption{Skrócony blok demograficzny (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-demographics}
+\end{figure}
+
+Dopiero teraz do rozmowy wchodzi wnętrze. W stacji \emph{Przestrzeń} uczestnik przesyła zdjęcie własnego pokoju albo wybiera zdjęcie przykładowe, jeśli nie chce lub nie może pokazać mieszkania (ryc.~\ref{fig:ch07:opis-fast-room}). To najbardziej osobisty gest tej ścieżki i zarazem pierwszy krok techniczny, bo zdjęcie analizuje model wizyjno-językowy (VLM). Jego opis przestrzeni stanie się jednym z wejść do syntezy briefu (sekcje~\ref{ch07:sec:vlm} i~\ref{ch07:sec:pipeline}). Cała dalsza generacja opiera się na tym zdjęciu: ta sama przestrzeń, którą uczestnik zna z codzienności, wraca do niego przetworzona.
+Po wyborze zdjęcia ekran potwierdza je i podpisuje rozpoznany typ pomieszczenia, w opisanej sesji \emph{Pokój dzienny}. Można zmienić typ lub zdjęcie albo przejść dalej (ryc.~\ref{fig:ch07:opis-fast-room-selected}).
+Interfejs oferuje też przycisk \emph{Usuń meble} z dopiskiem „zalecane”. Zleca on modelowi usunięcie wyposażenia ze zdjęcia, zgodnie z logiką pustej skorupy pokoju (sekcja~\ref{ch07:sec:empty-shell}). W zarejestrowanym przebiegu uczestnik z niego nie skorzystał.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-05-room-upload.png}
+  \caption{Przesłanie zdjęcia pokoju albo wybór przykładu (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-room}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-11-room-sample-selected.png}
+  \caption{Potwierdzenie wybranego zdjęcia z rozpoznanym typem pomieszczenia (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-room-selected}
+\end{figure}
+
+Personalizację ścieżka szybka sprowadza do jednego, jawnego gestu: uczestnik wskazuje styl bazowy (ryc.~\ref{fig:ch07:opis-fast-style}). To najbliższy odpowiednik preferencji jawnych z pełnego profilu. Osoba mówi wprost, czego chce, ale nie ma tu drugiej strony, czyli preferencji ukrytych, osobowości i porównania wariantów. Za szybkość płaci się tym, że Fast pokazuje, jak działa produkt, a nie dostarcza materiału do ślepego porównania sześciu źródeł (sekcja~\ref{ch07:sec:macierz}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-06-style-selection.png}
+  \caption{Wybór stylu bazowego (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-style}
+\end{figure}
+
+W czwartej stacji obietnica z pierwszego ekranu ma się spełnić. Platforma przekazuje zdjęcie, opis przestrzeni i wybrany styl do warstwy generatywnej (Vertex~AI, Gemini Image; sekcja~\ref{ch07:sec:architektura}). W tym czasie interfejs nie zostawia uczestnika w ciszy: pasek postępu i komunikaty awatara (\emph{Przygotowuję środowisko AI}, \emph{Generuję obrazek z AI\ldots}) nadają oczekiwaniu rytm rozmowy (ryc.~\ref{fig:ch07:opis-fast-generating}).
+Na wynik trzeba poczekać, a to, co uczestnik widzi w tym czasie, może wpływać na jego ocenę całego doświadczenia (RQ6). Gdy pasek dochodzi do 100\% i pojawia się komunikat \emph{Gotowe!}, obrazu jeszcze nie widać. To dopiero chwila przejścia (ryc.~\ref{fig:ch07:opis-fast-ready}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-07-generating.png}
+  \caption{Generacja koncepcji: stan pośredni (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-generating}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-12-generation-ready.png}
+  \caption{Pasek postępu przy 100\% (\emph{Gotowe!}), jeszcze bez podglądu wyniku (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-ready}
+\end{figure}
+
+Dopiero potem ekran pokazuje wygenerowane wnętrze w dużej ramce, obok awatara (ryc.~\ref{fig:ch07:opis-fast-result}). Do tego momentu prowadziła cała ścieżka: pokój uczestnika w wybranym przez niego stylu. Traktuję wynik jako koncepcję i mood image, a nie dokumentację wykonawczą (sekcja~\ref{ch07:sec:status-wizualizacji}).
+Na tym etapie przewidziałem ocenę satysfakcji, ale w zarejestrowanej sesji kontrolki oceny nie znalazły się w kadrze i nie ilustruję ich osobną ryciną. Nad widokiem wyniku pojawia się następnie okno zapisu na koncie (ryc.~\ref{fig:ch07:opis-fast-account}). Uczestnik może wybrać \emph{Kontynuuj bez konta} i zakończyć przebieg anonimowo, więc konto jest zachętą, a nie warunkiem udziału.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-08-result.png}
+  \caption{Wygenerowana koncepcja wnętrza na zakończenie ścieżki szybkiej (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-result}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-08-result-dialog.png}
+  \caption{Okno zapisu na koncie z opcją kontynuacji bez konta (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-account}
+\end{figure}
+
+\subsubsection*{Zawrócenie do rozwidlenia: jak Fast prowadzi do Full}
+
+Po wyniku nie ma pożegnania. Aplikacja odsyła uczestnika do ekranu wyboru ścieżki, a w adresie zapisuje znacznik ukończenia (\texttt{fast\_completed=true}; ryc.~\ref{fig:ch07:opis-fast-completion}). Osoba, która zobaczyła już swoje wnętrze, może zapytać, czy da się lepiej, i wybrać pełne doświadczenie. Fast jest więc samodzielnym produktem i zaproszeniem do dłuższej rozmowy. Jego ukończenie zapisuję w danych osobno i nie wolno go mieszać z próbą ścieżki pełnej.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow/ch07-flow-quick-09-completion.png}
+  \caption{Powrót do wyboru ścieżki po ukończeniu Fast (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-fast-completion}
+\end{figure}
+
+\subsection{Pełne doświadczenie: dłuższa rozmowa o człowieku i przestrzeni}
+\label{ch07:sec:opis-full}
+
+Wybór pełnego doświadczenia zmienia charakter przebiegu. Zamiast kilku decyzji prowadzących do obrazu uczestnik wchodzi w rozmowę, w której IDA najpierw poznaje jego, potem przestrzeń, a dopiero na końcu pokazuje, co z tego wynika. Ekran wyboru zapowiada 20--30~minut. Przez ten czas awatar i prowadzenie krok po kroku mają spajać wiele odrębnych instrumentów, żeby uczestnik czuł rozmowę, a nie kolejne ankiety (sekcje~\ref{ch07:sec:dialog} i~\ref{ch07:sec:awatar}).
+
+Początek jest znany. Wejście i wybór ścieżki wyglądają tak jak wyżej (ryc.~\ref{fig:ch07:opis-fast-landing} i~\ref{fig:ch07:opis-fast-path}), po nich następuje zgoda i pytania o osobę, tym razem szersze. Obok demografii uczestnik odpowiada, z kim mieszka, jaki jest „vibe” jego życia w tej chwili i co jest dla niego najważniejsze w domu (ryc.~\ref{fig:ch07:opis-full-lifestyle}). W ścieżce szybkiej dane demograficzne opisują lejek wejścia. Tutaj stają się zmiennymi, względem których interpretuję późniejsze wybory.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow-full/ch07-flow-full-05-profile-lifestyle.png}
+  \caption{Pytania o styl życia w profilu Full (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-full-lifestyle}
+\end{figure}
+
+Potem rozmowa przechodzi do gustu i prowadzi go dwoma torami, które w rozprawie rozróżniam jako preferencje ukryte i jawne. Pierwszy tor to szybkie zadanie wyboru między obrazami wnętrz: uczestnik przesuwa kolejne karty (swipe), a system zapisuje też czas reakcji (ryc.~\ref{fig:ch07:opis-full-tinder}). Nazywam je zadaniem typu IAT (IAT-like). Wzoruje się na logice testów asocjacyjnych, ale klasycznym testem IAT nie jest. Uczestnik wybiera, zanim zdąży uzasadnić swój wybór.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow-full/ch07-flow-full-07-tinder-swipe.png}
+  \caption{Zadanie wyboru obrazów: pierwsza karta z serii 30 (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-full-tinder}
+\end{figure}
+
+Drugi tor to preferencje wypowiadane wprost: klimat i zmysły (dawka biophilii, skale semantyczne i próbki sensoryczne) oraz inspiracje, które uczestnik zbiera sam (ryc.~\ref{fig:ch07:opis-full-inspirations}). Kroki klimatu i zmysłów istnieją w przebiegu, ale ta seria zrzutów nie ma dla nich osobnej, czytelnej klatki, więc ich nie ilustruję. W zarejestrowanym przebiegu deklaracje następowały po zadaniu swipe, co chroni szybkie wybory przed wpływem wcześniejszych deklaracji (por.\ wątek RQ2). Dopiero macierz pokaże, czy to, co uczestnik wybiera szybko, rozmija się z tym, co deklaruje.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow-full/ch07-flow-full-11-inspirations.png}
+  \caption{Dodawanie własnych inspiracji --- stan początkowy ekranu (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-full-inspirations}
+\end{figure}
+
+W tym miejscu interfejs przechodzi od wnętrz do samego uczestnika. Kwestionariusz IPIP-NEO-120 mierzy pięć domen Wielkiej Piątki (Big Five) i trzydzieści ich facetów. Prowadzi przez niego awatar, więc uczestnik nie dostaje arkusza, tylko jedno pytanie naraz, z licznikiem postępu i pięciostopniową skalą odpowiedzi (ryc.~\ref{fig:ch07:opis-full-bigfive}).
+Po pytaniach o gust przychodzą pytania o siebie, a platforma zyskuje podstawę do wariantu osobowościowego, który w macierzy konkuruje z pozostałymi źródłami. Ekran nie przypisuje człowiekowi typu i nie sugeruje, że z profilu osobowości wynika styl wnętrza. Taki wniosek byłby deterministyczny, a rozprawa traktuje związek osobowości z estetyką jako pytanie eksploracyjne (RQ4), nie jako założenie interfejsu.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow-full/ch07-flow-full-13-big-five-item.png}
+  \caption{Pozycja kwestionariusza IPIP-NEO-120 (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-full-bigfive}
+\end{figure}
+
+Dopiero teraz IDA prosi o pokój. Uczestnik przesyła zdjęcie przestrzeni jak w ścieżce szybkiej, ale tutaj otwiera ono bogatszą konfigurację (ryc.~\ref{fig:ch07:opis-full-room}). Zanim zacznie się opis potrzeb, IDA pyta, skąd wziąć preferencje dla tego pomieszczenia: z zapisanego profilu czy z krótkiej ankiety dopasowanej do pokoju (ryc.~\ref{fig:ch07:opis-full-room-source}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow-full/ch07-flow-full-15-room-photo.png}
+  \caption{Przesłanie zdjęcia pokoju w ścieżce Full (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-full-room}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow-full/ch07-flow-full-16-room-preference-source.png}
+  \caption{Wybór źródła preferencji dla pomieszczenia (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-full-room-source}
+\end{figure}
+
+Następnie uczestnik opisuje, do czego pokój ma służyć: jakie aktywności się w nim odbywają, co mu przeszkadza (punkty tarcia) i, w kilku odpowiedziach, dlaczego to ważne. To laddering, czyli łańcuch „cecha $\rightarrow$ konsekwencja $\rightarrow$ wartość”. Do tego dochodzą dwa punkty na dwuwymiarowej siatce nastroju: jak uczestnik czuje się w pokoju i jak chciałby się w nim czuć (PRS aktualny i docelowy; według inwentarza kroki PRS przeplatają się z aktywnościami).
+Te kroki oraz podsumowanie pokoju istnieją w przebiegu, ale ta seria zrzutów ich nie obejmuje, więc nie mam dla nich ilustracji. PRS w IDA mierzy odległość między stanem obecnym a pożądanym, a nie zmianę po obejrzeniu wizualizacji, i tak go interpretuję (RQ5). Funkcja i nastrój pokoju zasilają wariant mieszany z funkcją przestrzeni.
+
+Wszystko to prowadzi do generacji macierzy. W odróżnieniu od jednej koncepcji ze ścieżki szybkiej uczestnik dostaje zestaw wariantów z sześciu źródeł informacji o nim: ukrytych, jawnych, osobowościowych, mieszanych, mieszanych z funkcją przestrzeni i z referencji inspiracji. Warianty mają być pokazywane bez informacji, które źródło za którym stoi, a uczestnik wybiera ten, który najbardziej mu odpowiada.
+W zarejestrowanym przebiegu anonimowego uczestnika ekran \emph{Porównaj wizje} pokazuje jednak trzy karty, z których tylko jedna jest odblokowana. Pozostałe zasłania zachęta do założenia konta, a komunikat informuje, że to pierwsza z sześciu wizji (ryc.~\ref{fig:ch07:opis-full-matrix}).
+Tej serii zrzutów nie traktuję jako dokumentacji pełnej siatki sześciu wariantów i nie twierdzę na jej podstawie, że przeprowadzono w niej ślepy wybór. Bramka konta ogranicza, ile wariantów uczestnik anonimowy może porównać, i trzeba to uwzględnić przy interpretacji RQ3.
+Dopiero po wyborze uczestnik dowiaduje się, z czego jego wybór wynikał (sekcja~\ref{ch07:sec:slepy-wybor}). Ten ekran jest dla empirii najważniejszy, bo źródło, które wygrywa u konkretnego człowieka, jest zmienną zależną w RQ3. Produkt i eksperyment nie dają się tu rozdzielić, bo uczestnik wybiera obraz swojego wnętrza.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow-full/ch07-flow-full-18-generate-matrix.png}
+  \caption{Ekran porównania wizji w sesji anonimowej: jedna wizja odblokowana, pozostałe zablokowane do czasu założenia konta (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-full-matrix}
+\end{figure}
+
+Po wyborze interfejs prosi jeszcze o ocenę samej drogi. Najpierw uczestnik wypełnia Skalę Użyteczności Systemu (SUS), czyli dziesięć pytań o to, jak łatwo korzystało mu się z platformy (ryc.~\ref{fig:ch07:opis-full-sus}; RQ1). Druga ankieta pyta o sprawczość, zrozumiałość tego, co dzieje się z uczestnikiem, i satysfakcję z wyniku (RQ6). Potem pojawia się ekran podziękowania. Dwa ostatnie kroki istnieją w przebiegu, ale ta seria zrzutów ich nie obejmuje, więc nie mam dla nich ilustracji.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\linewidth]{ida/flow-full/ch07-flow-full-20-survey-sus.png}
+  \caption{Pierwsza ankieta końcowa: Skala Użyteczności Systemu (screen z platformy IDA --- opracowanie własne).}
+  \label{fig:ch07:opis-full-sus}
+\end{figure}
+
+\subsection{Co wspólne obu ścieżkom i gdzie kończy się ten opis}
+
+Obie ścieżki łączy wygląd i sposób prowadzenia: szklane, półprzezroczyste powierzchnie (Minimalist Glass Design, sekcja~\ref{ch07:sec:ui}), jeden głos przewodniczki, interfejs w dwóch wersjach językowych (PL i EN) i ruch do przodu. W ścieżce szybkiej konto można pominąć (ryc.~\ref{fig:ch07:opis-fast-account}), a zgoda poprzedza zbieranie danych. Różni je głębokość. Ścieżka szybka daje obraz, a pełna daje obraz i materiał, z którego można wnioskować.
+
+Opis obejmuje to, co uczestnik widzi i robi. Nie rozstrzyga, czy interfejs jest łatwy w obsłudze, bo to przedmiot RQ1 i RQ6, oceniany na danych w rozdziale~\ref{ch08:top}. Zrzuty nie reprezentują też każdego urządzenia ani stanu aplikacji. Szczegóły techniczne generacji (potok, prompt, wagi źródeł) opisują sekcje~\ref{ch07:sec:pipeline} i~\ref{ch07:sec:macierz}.

@@ -1,0 +1,133 @@
+% OWNER: theory-b
+% STATUS: review
+% SOURCES: notes/SPIS_TRESCI_SZCZEGOLOWY.md §3.5--3.6 / most osobowości;
+%          notes/HIPOTEZY_REWIZJA.md (RQ4); GLOSSARY.md; appendix-c-mappings;
+%          research-mappings.ts / facet-derivation.ts (hipotezy projektowe)
+\chapter{Osobowość a preferencje przestrzenne}
+\label{ch05:top}
+\ChapterStatus{draft}{theory-b}
+
+Rozdział rozwija wątek osobowości zapowiedziany w modelu wieloźródłowym preferencji (rozdz.~\ref{ch03:top}). Model Wielkiej Piątki i instrument IPIP-NEO-120 pełnią w nim rolę \emph{hipotezy projektowej} dla syntezy briefu, a nie wyroku estetycznego o „właściwym” guście użytkownika.
+Rozdział uzasadnia źródło \texttt{personality} w ślepej macierzy sześciu wariantów artefaktu IDA i wiąże je z pytaniem eksploracyjnym~\RQ{4} \footcite{idaPlatform2026}.
+Mapowania domen i facetów na parametry wnętrza dokumentuje załącznik~\ref{app:c:top}, a potok i interfejs macierzy rozdz.~\ref{ch07:top}.
+
+\section{Model Wielkiej Piątki}
+\label{ch05:sec:bigfive}
+
+John, Naumann i Soto opisują Wielką Piątkę (\emph{Big Five}) jako taksonomię różnic indywidualnych w pięciu szerokich domenach: otwartość na doświadczenie (\emph{Openness}), sumienność (\emph{Conscientiousness}), ekstrawersja (\emph{Extraversion}), ugodowość (\emph{Agreeableness}) i neurotyczność, czyli emocjonalna labilność (\emph{Neuroticism}). Skrót OCEAN pochodzi od pierwszych liter ich angielskich nazw \footcite{john2008bigfive}.
+Model nie wyjaśnia „osobowości jako takiej” w sensie klinicznym. Daje wspólny język cech o względnie stałej strukturze, który przydaje się także poza psychologią różnic indywidualnych, na przykład w projektowaniu interakcji i rekomendacji.
+
+Dla badań przez projektowanie (RtD) ważne jest rozróżnienie: w IDA Big Five nie służy diagnozie uczestnika, tylko operacjonalizuje \emph{jeden z wielu} kanałów preferencji przestrzennych.
+Osobowość jest materiałem briefu, podobnie jak preferencje jawne i ukryte (rozdz.~\ref{ch03:top}), i nie rozstrzyga o estetyce.
+W ścieżce pełnej (Full) domeny i facety zasilają syntezę promptu. Ścieżka szybka (Fast) nie zawiera kwestionariusza IPIP-NEO-120, więc nie dostarcza danych pod~\RQ{4} (por.\ rozdz.~\ref{ch06:top} i~\ref{ch07:top}).
+
+\section{IPIP i IPIP-NEO-120}
+\label{ch05:sec:ipip}
+
+Publiczna pula pozycji IPIP (\emph{International Personality Item Pool}) pozwala budować skale Big Five bez barier licencyjnych, które towarzyszą inwentarzom komercyjnym.
+Obecna platforma IDA używa \textbf{IPIP-NEO-120}: 120 pozycji, pięć domen i trzydzieści facetów, po sześć na domenę. Wcześniejsze wersje projektu zakładały formy skrócone (m.in.\ IPIP-60), ale nie opisują stanu obecnego \footcite{idaPlatform2026}.
+\NeedsCite{Johnson IPIP-NEO-120 / dokumentacja IPIP; Costa \& McCrae NEO jako tradycja facetów --- weryfikacja DOI przed cytowaniem}
+
+Na poziomie facetów personalizacja ma sens. Sama domena, na przykład wysoka otwartość, jest zbyt szeroka, żeby wskazać styl wnętrza. Facet estetyki ($O2$), fantazji ($O1$) czy porządku ($C2$) pozwala sformułować węższą hipotezę projektową (tab.~\ref{tab:ch05:hipotezy}; zał.~\ref{app:c:top}).
+Zapis danych badawczych obejmuje m.in.\ \texttt{big5\_*}, \texttt{big5\_facets}, \texttt{big5\_responses} i znacznik kompletności (\texttt{has\_complete\_bigfive}).
+Rozprawa nie powtarza pełnej listy pozycji IPIP. Instrument i scoring opisuje załącznik~\ref{app:b:top}, a tekst główny parafrazuje tylko format pytań, bez treści chronionych pozycji.
+
+\section{Literatura: osobowość a preferencje środowiskowe}
+\label{ch05:sec:literatura}
+
+Literatura łącząca cechy osobowości z preferencjami estetycznymi i środowiskami mieszkalnymi wskazuje na asocjacje \emph{słabe do umiarkowanych}, a nie na prawa deterministyczne.
+Starsze obserwacje sugerują, że przestrzenie osób o wyższej otwartości bywają bogatsze w zróżnicowane obiekty i elementy artystyczne, a wyższa sumienność idzie w parze z porządkiem i czytelnym układem. Efekt zależy jednak od kontekstu, kultury i metody pomiaru.
+\NeedsCite{Gosling i~in.\ 2002 --- A room with a cue (JPSP); weryfikacja DOI}
+\NeedsCite{Graham, Gosling \& Travis 2017 --- psychology of home environments; weryfikacja DOI}
+\NeedsCite{Nasar 1989 --- symbolic meanings of house styles / Environment and Behavior; weryfikacja DOI}
+\NeedsCite{Whitfield \& Wiltshire 1990 --- color psychology (przegląd krytyczny); weryfikacja DOI}
+
+Wniosek projektowy dla IDA jest ostrożny. Literatura uzasadnia \emph{eksploracyjne} mapowanie cech na parametry briefu (złożoność wizualna, materiały, atmosfera), ale nie pozwala twierdzić, że Big Five „wyjaśnia gust”.
+Przy małej próbie pilotażowej korelacje domen i facetów z \texttt{implicit\_*}, \texttt{explicit\_*} oraz z wyborem źródła \texttt{personality} mają w \RQ{4} status eksploracyjny. Wartość $r\!>\!0{,}4$ nie może tu służyć jako wynik potwierdzający \footcite{idaPlatform2026}.
+Plan analiz i ograniczenia mocy testów opisuje rozdz.~\ref{ch06:top}.
+
+\section{Mapowanie facetów na parametry wnętrz}
+\label{ch05:sec:mapowanie}
+
+W potoku IDA wyniki IPIP-NEO-120 są normalizowane i trafiają do reguł stylu (\texttt{BIGFIVE\_STYLE\_MAPPINGS} w module \texttt{prompt-synthesis}).
+Warunki na domenach i facetach wskazują dominantę stylu, listę materiałów i złożoność wizualną briefu JSON~v3.
+Ta warstwa należy do \emph{explainable personalization}: można sprawdzić, która reguła wpłynęła na źródło \texttt{personality}, a także na \texttt{mixed} i \texttt{mixed\_functional}, gdzie osobowość wchodzi z wagą $0{,}30$.
+Szczegóły operacyjne podaje załącznik~\ref{app:c:top}, a scoring i interfejs macierzy rozdz.~\ref{ch07:sec:macierz}.
+
+Tabela~\ref{tab:ch05:hipotezy} zbiera wybrane hipotezy projektowe wraz z ostrzeżeniami interpretacyjnymi. Rozprawa nie dowodzi ich empirycznie.
+Są to reguły sterujące syntezą obrazu, które ślepy wybór użytkownika ma sprawdzić.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Domena / facet IPIP-NEO-120 $\rightarrow$ hipoteza projektowa $\rightarrow$ ostrożność interpretacji
+    (skrót mapowań IDA; pełnia w zał.~\ref{app:c:top}).}
+  \label{tab:ch05:hipotezy}
+  \begin{tabular}{@{}p{0.22\textwidth}p{0.38\textwidth}p{0.30\textwidth}@{}}
+    \toprule
+    Domena / facet & Hipoteza projektowa (brief) & Ostrożność interpretacji \\
+    \midrule
+    Otwartość ($O$); estetyka $O2$
+      & Wyższa złożoność, eklektyzm, materiały zróżnicowane / artystyczne
+      & $O$ obejmuje także intelektualną ciekawość --- nie zawsze „boho” \\
+    \addlinespace
+    Otwartość ($O$); fantazja $O1$ + niska $C$
+      & Styl bardziej swobodny, mniej „czystego” minimalizmu
+      & Niska $C$ $\neq$ niechlujstwo; może oznaczać elastyczność funkcji \\
+    \addlinespace
+    Sumienność ($C$); porządek $C2$
+      & Minimalizm, czytelne linie, niska złożoność wizualna
+      & Preferencja porządku $\neq$ odrzucenie dekoru; kontekst kulturowy \\
+    \addlinespace
+    Ekstrawersja ($E$); seeking $E5$
+      & Wyższa stymulacja, odważniejsza paleta / wzory
+      & Ekstrawersja społeczna $\neq$ maksymalizm estetyczny \\
+    \addlinespace
+    Ugodowość ($A$) + niska $N$
+      & Atmosfera ciepła, harmonijna; miękkie tekstylia
+      & Ryzyko stereotypu „przytulnie = ugodowo”; weryfikacja wyborem \\
+    \addlinespace
+    Neurotyczność ($N$); lęk $N1$
+      & Spokojniejsza atmosfera, ograniczona stymulacja
+      & Nie patologizować; unikać „bezpieczeństwa” jako piętna cechy \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\NeedsCite{podstawa empiryczna poszczególnych reguł --- m.in.\ tradycja środowisk osobowościowych (Gosling i~in.); nie cytować jako praw przyczynowych bez DOI}
+
+Każda hipoteza spotyka się z pozostałymi kanałami: swipe (implicit), deklaracjami (explicit), funkcją pokoju i inspiracjami.
+Źródło \texttt{personality} izoluje w macierzy kanał osobowościowy, a warianty mieszane łączą go z innymi sygnałami. Użytkownik wybiera \emph{obraz}, a nie etykietę cechy (rozdz.~\ref{ch07:sec:slepy-wybor}).
+
+\section{Krytyka i ograniczenia}
+\label{ch05:sec:krytyka}
+
+\subsection{Korelacje, nie przyczynowość}
+Asocjacje osobowość--estetyka nie uprawniają do wnioskowania przyczynowego ani do „odczytywania” stylu z cechy.
+W~\RQ{4} przy małym~$N$ wolno pokazać heatmapy i szerokie przedziały ufności. Nie wolno przedstawiać pilotażu jako walidacji psychometrycznej mapowań.
+
+\subsection{Ryzyko determinizmu i stereotypizacji}
+Formuła „jesteś typu~$X$, więc industrialny loft albo skandynawski minimalizm” szkodzi projektowi: odbiera użytkownikowi sprawczość i utrwala stereotypy.
+IDA przeciwdziała temu na trzy sposoby: (a)~łączy wiele źródeł, (b)~pokazuje warianty bez etykiet źródła, (c)~traktuje reguły jako hipotezy, które wybór behawioralny może obalić.
+Przejrzysty potok nie zwalnia z odpowiedzialności. XAI oznacza tu cytowalne reguły, a nie pełną wyjaśnialność modelu generatywnego. Ma umożliwiać krytykę, a nie uzasadniać determinizm.
+
+\subsection{Etyka, zgoda, RODO --- most do metodologii}
+Wnioskowanie o preferencjach z cech osobowości wymaga świadomej zgody, minimalizacji danych i jasno określonego celu przetwarzania.
+Procedurę zgód, anonimizację (\texttt{user\_hash}) i RODO opisuje rozdz.~\ref{ch06:sec:etyka} wraz z załącznikiem~\ref{app:f:top}. Tutaj wystarczy zasada: dane Big Five służą personalizacji briefu w badaniu RtD, a nie profilowaniu marketingowemu ani ocenie „jakości” osoby.
+\NeedsCite{etyka rekomendacji opartych o osobowość / fair ML --- przegląd peer-review; weryfikacja DOI przed cytowaniem}
+
+W logice RtD artefakt jest argumentem \footcite{zimmerman2007rtd}. Źródło \texttt{personality} sprawdza, czy kanał cech wnosi cokolwiek poza kanałami implicit i explicit, a odpowiedź daje wybór w macierzy, nie deklaracja badacza.
+
+\section{Uzasadnienie włączenia osobowości do pipeline IDA}
+\label{ch05:sec:uzasadnienie}
+
+Osobowość wchodzi do IDA jako trzeci filar estetyczny obok preferencji ukrytych i jawnych (rozdz.~\ref{ch03:sec:synteza}):
+\begin{enumerate}
+  \item \textbf{Źródło \texttt{personality}}: brief powstaje wyłącznie z mapowań IPIP-NEO-120, a pozostałe kanały estetyczne są wyzerowane.
+  \item \textbf{Wkład do \texttt{mixed} i \texttt{mixed\_functional}}: kanoniczna waga wynosi $0{,}30$ (obok implicit $0{,}40$ i explicit $0{,}30$). Funkcja pokoju dochodzi dopiero w \texttt{mixed\_functional}.
+  \item \textbf{Pytanie~\RQ{4}}: czy domeny i facety wiążą się z parametrami profilu (\texttt{implicit\_*}, \texttt{explicit\_*}) oraz z preferencją wariantu osobowościowego w ślepym wyborze (hipotezy robocze H4a--c, status eksploracyjny przy małym~$N$).
+\end{enumerate}
+
+Big Five trafia do IDA nie dlatego, że determinizm estetyczny jest prawdopodobny, lecz ze względu na \emph{kontrast eksperymentalny}. Bez osobnego wariantu nie da się sprawdzić, czy użytkownicy w ogóle wybierają koncepcje wyprowadzone z cech, gdy nie znają etykiety źródła (\RQ{3}/\RQ{4}).
+Osobowość pozostaje wątkiem pomocniczym wobec głównej osi empirycznej, czyli rozbieżności implicit i explicit oraz wyborów w macierzy. Zgadza się to z pozycją tej rozprawy w dyscyplinie sztuk, w której Big Five nie może przejąć narracji projektowej.
+
+IPIP-NEO-120 jest więc w IDA instrumentem hipotez projektowych, cytowalnym wejściem przejrzystego potoku i warunkiem eksploracji~\RQ{4}. Nie jest wyrokiem o guście ani zamiennikiem dialogu z użytkownikiem.

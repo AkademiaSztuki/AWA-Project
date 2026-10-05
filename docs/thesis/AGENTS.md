@@ -30,6 +30,12 @@ make clean
 
 Wymagania lokalne: TeX Live (LuaLaTeX), `latexmk`, `biber`, fonty Latin Modern.
 
+## Wersje robocze
+
+Kanoniczna reguła: `.cursor/rules/wersje-robocze.mdc`.
+
+Przebudowa składu (layout, `styles/`, hyperref, struktura, front matter — nie literówka): skompiluj PDF ekranowy, potem następny numer z `notes/WERSJA.md` → `wersje-tex/robocza-NN/` (`scripts/snapshot-wersja-tex.ps1`) i `wersje-pdf/robocza-NN.pdf` (`scripts/save-wersja-pdf.ps1`). Bez commita, dopóki użytkownik nie poprosi.
+
 ## Pasy agentów (ownership) — mapa po Fazie 0
 
 | Pas (`OWNER`) | Pliki | Fokus |
@@ -90,6 +96,9 @@ Nie ustawiaj `final`, dopóki nie znikną `\Todo` / `\NeedsCite` w pliku.
 - `notes/SPIS_TRESCI_SZCZEGOLOWY.md` — spis do pisania
 - `notes/SPIS_TRESCI_PROPOZYCJA_ASP.md` — narracja ASP
 - `notes/HIPOTEZY_REWIZJA.md` — RQ1–RQ6
+- `notes/HISTORIA_PROJEKTU_Z_ROZMOW_AGENTOW.md` — chronologia AWA/IDA, decyzje, porzucone kierunki (transkrypty agenta od ~03/2026 + indeks FTS 2025-07–2026-10 + Git); kanon do rozdz. artefaktu / RtD
+- `notes/GDZIE_SA_ROZMOWY_CURSOR.md` — `agent-transcripts` vs `conversation-search.db` (`local` / `cloud-cache`), backupy, eksport
+- `notes/drafts/transcripts/` — eksporty FTS top wątków (fragmenty); pełna treść starszych czatów → UI Cursor lub ręczna kopia
 - kod / SQL projektu — opisuj w rozdziałach o artefakcie i załącznikach; do bibliografii tylko gdy formalnie publikowane
 
 ## Czego nie robić

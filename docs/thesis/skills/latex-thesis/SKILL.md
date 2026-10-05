@@ -32,6 +32,8 @@ make pdf                        # full document
 
 Fix LaTeX errors in **your** files first. If the error is in shared preamble, stop and report as coordinator work.
 
+Po większej zmianie składu (nie po literówce) odłóż wersję według `.cursor/rules/wersje-robocze.mdc`: PDF ekranowy, `wersje-tex/robocza-NN/` i `wersje-pdf/robocza-NN.pdf` (numer z `notes/WERSJA.md`). Nie commituj bez prośby.
+
 ## Sources of truth for content
 
 | Topic | File |

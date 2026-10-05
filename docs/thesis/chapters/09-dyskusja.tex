@@ -1,103 +1,105 @@
 % OWNER: empirical
 % STATUS: draft
-% SOURCES: notes/HIPOTEZY_REWIZJA.md; rozdz. 2--7; plan analiz
+% SOURCES: notes/HIPOTEZY_REWIZJA.md; rozdz. 2--8; data/analysis-2026-10-01.json
 \chapter{Dyskusja}
 \label{ch09:top}
 \ChapterStatus{draft}{empirical}
 
-Dyskusja oddziela \emph{znaczenie} od \emph{raportu} (rozdz.~\ref{ch08:top}).
-Dopóki eksport nie uzupełni tabel i rycin wyników, interpretacje poniżej mają charakter \textbf{warunkowy}: wskazują, \emph{co oznaczałby} dany wzorzec wyników dla tezy RtD i dla dyscypliny sztuk (ASP), bez przypisywania sobie niezaobserwowanych efektów.
-Odniesienia teoretyczne czerpią z rozdziałów~\ref{ch02:top}--\ref{ch05:top}; rama metodyczna --- z~\ref{ch06:top}; artefakt --- z~\ref{ch07:top}.
+W rozdziale~\ref{ch08:top} podałem liczby. Tutaj mówię, co z nich wynika i czego nie wolno z nich wyprowadzać. Interpretuję własny pilotaż (jedno zdjęcie bazy z 1~października 2026) i zestawiam go z literaturą z rozdziałów~\ref{ch02:top}--\ref{ch05:top}. Rozdział~\ref{ch06:top} dostarcza ramy metodycznej, a rozdział~\ref{ch07:top} opisuje artefakt, na którym dane zebrano.
+Próba jest mała, więc wszystkie interpretacje mają status roboczy. Żadnej z nich nie przedstawiam jako potwierdzenia hipotezy.
 
 \section{Interpretacja wyników w świetle literatury}
 \label{ch09:sec:interpretacja}
 
 \paragraph{Rozbieżność preferencji (\RQ{2}) a procesy dualne.}
-Jeśli po eksporcie okaże się, że mismatch implicit/explicit współwystępuje z dłuższym \texttt{selection\_time\_ms} lub z preferencją źródeł mieszanych, wynik wpisywałby się w obraz myślenia szybkiego i wolnego oraz w logikę pomiaru asocjacji ukrytych \parencite{kahneman2011thinking,greenwald1998iat}: deklaracja i impuls nie muszą się pokrywać, a ślepa macierz staje się sceną ujawnienia tej rozbieżności (rozdz.~\ref{ch03:top}).
-Brak takiego związku nie falsyfikowałby samej ramy dualnej --- mógłby wskazywać na dominację szumu generacji, zbyt małe~$N$ lub na to, że kanały \texttt{mixed} absorbują konflikt zanim użytkownik „wybierze stronę”.
+Teoria procesów dualnych \footcite{kahneman2011thinking} i pomiar asocjacji ukrytych \footcite{greenwald1998iat} sugerują, że szybka reakcja i wypowiedziana deklaracja mogą się rozjeżdżać. Moje dane tylko częściowo to potwierdzają.
+Na skalach ciągłych (ciepło, jasność obrazu, złożoność) pomiary implicit i explicit idą w tę samą stronę: rho wynosi od 0,39 do 0,46 przy $n=72$. To nie jest rozbieżność kierunku, tylko ewentualna różnica w nazewnictwie stylów w JSON-ie wyboru.
+Do tego dochodzi słabość pomiaru: \texttt{style\_match} jest prawdziwy tylko u 10 osób, więc zmienna nie rozróżnia dostatecznie grup, żeby sprawdzić \Hyp{2a} i \Hyp{2b}. Wniosek jest więc ostrożny: rama dualna nie została tu ani potwierdzona, ani obalona.
 
-\paragraph{Skuteczność kanałów personalizacji (\RQ{3}).}
-Częstszy wybór \texttt{mixed} / \texttt{mixed\_functional} niż źródeł „czystych” (hipoteza robocza~\Hyp{3a}) oznaczałby, że użytkownicy w warunkach ślepych preferują syntezę wieloźródłową --- argument za explainable pipeline IDA \parencite{idaPlatform2026}, a nie za pojedynczy „wyroczniowy” kanał gustu.
-Dominacja jednego źródła czystego (np.\ wyłącznie \texttt{explicit} lub wyłącznie \texttt{inspiration\_reference}) skłaniałaby do rewizji wag syntezy i dramaturgii odkrywania (rozdz.~\ref{ch07:sec:slepy-wybor}).
-W obu przypadkach DV pozostaje wybór źródła, nie ogólna satysfakcja --- zgodnie z rewizją dawnego H3.
+\paragraph{Wybór źródła w ślepej macierzy (\RQ{3}).}
+Najczęściej wskazywano wariant implicit (11 z 29 osób, 19 z 59 wierszy feedbacku), a nie warianty mieszane. Hipoteza \Hyp{3a} się nie potwierdza w tym zbiorze: mixed i mixed\_functional razem wybrało 8 z 29 osób.
+Mogę wskazać trzy wyjaśnienia, ale żadnego nie umiem tu sprawdzić. Pierwsze: obrazy ze źródła implicit rzeczywiście trafiają w gust uczestnika, bo odzwierciedlają jego szybkie reakcje na bodźce. Drugie: warianty mieszane rozmywają to, co wyraziste w jednym kanale, i dlatego wypadają przeciętniej. Trzecie: wybór zależy od jakości konkretnych renderów bardziej niż od źródła briefu. To ostatnie wyjaśnienie jest dla mnie najpoważniejsze: w zapisie z 1~października 2026 z 1174 zleceń generacji 485 zakończyło się błędem, a 278 pozostało w stanie \texttt{pending} (rozdz.~\ref{ch08:sec:snapshot-2026-10-01}).
+\paragraph{Bramka konta przy porównaniu wizji.}
+W części sesji interfejs pokazywał na ekranie porównania tylko odblokowane karty, a resztę zasłaniała zachęta do konta (opis i zrzut w rozdz.~\ref{ch07:sec:opis-dziela}). Nie oznacza to, że cały pilotaż traci sens: większość pytań dotyczy przebiegu, profilu i rozkładów wyborów w tym, co zostało zapisane. Oznacza jednak, że interpretacja RQ3 musi uwzględniać warunki widoczności wariantów, a liczniki 16, 17 i 29 nie są wymienne. Po zebraniu danych zmieniłem produkt tak, by nie traktować anonimowej sesji jak pełnej siatki sześciu obrazów; w analizowanym zrzucie obowiązuje jeszcze wcześniejsza wersja.
+Ważne jest też to, czego wynik nie mówi. Nie mówi, że deklaracje są gorszym źródłem gustu, a szybkie wybory lepszym. Mówi tyle, że w tej próbie, przy ślepym porównaniu i z zastrzeżeniami o jakości renderów, osoby częściej wskazywały obraz zbudowany z ich szybkich reakcji niż obraz zbudowany z ich deklaracji.
 
-\paragraph{Osobowość jako hipoteza projektowa (\RQ{4}).}
-Ewentualne asocjacje Big Five z parametrami estetycznymi lub z wyborem \texttt{personality} należy czytać ostrożnie: taksonomia OCEAN uzasadnia \emph{kontrast eksperymentalny} kanału \parencite{john2008bigfive}, nie determinizm gustu (rozdz.~\ref{ch05:top}).
-Brak stabilnych korelacji przy małym~$N$ nie dyskwalifikuje źródła \texttt{personality} jako elementu macierzy --- dyskwalifikuje jedynie overclaim psychometryczny.
+\paragraph{Osobowość (\RQ{4}).}
+Taksonomia Big Five uzasadnia w mojej pracy kontrast eksperymentalny kanału, a nie determinizm gustu \footcite{john2008bigfive}. Dane to potwierdzają w skromnym sensie. Otwartość słabo wiąże się ze złożonością implicit (rho 0,20, $n=41$), a mocniej z ciepłem implicit (0,35). Ugodowość z ciepłem implicit: 0,41. Sumienność ze złożonością jawną ma ujemny znak (rho $-0{,}29$).
+Źródło personality wybrały zaledwie 2 osoby, więc o jego użyteczności nie wnioskuję. Brak stabilnych związków przy tej liczebności nie przesądza, czy kanał osobowościowy ma sens. Pozwala jedynie nie ogłaszać wniosków psychometrycznych.
 
 \paragraph{Luka PRS a funkcja przestrzeni (\RQ{5}).}
-Związek większej odległości \texttt{prs\_current}$\rightarrow$\texttt{prs\_target} z wyborem \texttt{mixed\_functional} wzmocniłby most między psychologią regeneracyjną a briefem generatywnym \parencite{kaplan1995restorative}: mood grid nie byłby ozdobą UI, lecz sygnałem preferencji wariantów uwzględniających funkcję (rozdz.~\ref{ch02:top}).
-Należy jednak unikać narracji „AI poprawia regeneracyjność” --- w obecnym schemacie brak pomiaru PRS po ekspozycji na wizualizację.
+Hipotezę, że większa odległość między nastrojem aktualnym a docelowym prowadzi do wyboru wariantu funkcjonalnego, wiązałem z ideą regeneracji u Kaplana \footcite{kaplan1995restorative}. Dane jej nie wspierają: rho wynosi $-0{,}28$ ($n=25$), a jedyna osoba, która wybrała mixed\_functional i ma obie osie, ma lukę bliską zera.
+Nie traktuję tego jako argumentu przeciw teorii. Mood grid nie jest skalą PRS-11, więc nie przenoszę wyniku na konstrukty z literatury. Nie mierzę też stanu po obejrzeniu wizualizacji, więc nie mogę twierdzić, że AI poprawia regeneracyjność, ani że jej nie poprawia.
 
-\paragraph{Feasibility i sprawczość (\RQ{1},~\RQ{6}).}
-Wysoka kompletność profilu przy akceptowalnym dropoutcie oraz spójne (dodatnie) korelacje agency/clarity z satisfaction oznaczałyby, że Research-Embedded nie musi niszczyć Product-First: instrumenty badawcze mogą współistnieć z poczuciem kontroli użytkownika \parencite{zimmerman2007rtd,idaPlatform2026}.
-Katastrofalny lejek lub niskie agency przy bogatym pomiarze wskazywałyby na konflikt dramaturgii --- sygnał do skrócenia Full lub do dalszego ukrywania „badawczości” za doświadczeniem.
+\paragraph{Wykonalność i sprawczość (\RQ{1},~\RQ{6}).}
+Na ścieżce Full 68 z 85 osób dochodzi do profilu rdzeniowego, a 16 do ślepego wyboru (19\%). Największe luki widać między profilem a zdjęciem pokoju (68 i 49 osób) oraz między profilem a ankietą końcową (25 osób). Ścieżka Fast zbiera zgodę i generację, ale nie dostarcza profilu.
+Wśród osób, które dotarły do ankiety, sprawczość i zrozumiałość procesu wiążą się z satysfakcją (rho 0,71 i 0,68, $n$ około 27). Jest to zgodne z założeniem Research-Embedded: instrumenty badawcze mogą współistnieć z poczuciem kontroli u osób, które przeszły całość \footcite{zimmerman2007rtd}. Dotyczy to jednak tylko tych, którzy doszli do końca. O pozostałych, czyli większości, nic z tej ankiety nie wiem.
+Wynik SUS (66,48, $n=27$) czytam ostrożnie, bo skala została zaadaptowana do kontekstu platformy (por.\ rozdz.~\ref{ch06:sec:instrumenty}).
 
 \section{Wkład metodologiczny Research through Design}
 \label{ch09:sec:rtd}
 
-W ujęciu \textcite{frayling1993research} wiedza powstaje \emph{through} artefakt i proces; u \textcite{zimmerman2007rtd} zaprojektowany obiekt jest argumentem o preferowanym stanie świata.
-IDA wnosi do tej tradycji trzy powiązane gesty metodologiczne:
+W ujęciu Fraylinga wiedza powstaje przez artefakt i proces \footcite{frayling1993research}, a w badaniach nad interakcją zaprojektowany obiekt bywa argumentem o preferowanym stanie świata \footcite{zimmerman2007rtd}.
+W tę tradycję wpisuję trzy decyzje projektowe:
 
 \begin{enumerate}
-  \item \textbf{Eksperyment w formie produktu} --- ślepa macierz sześciu źródeł jako procedura empiryczna wbudowana w flow, a nie ankieta „obok” generatora (rozdz.~\ref{ch07:sec:macierz}).
-  \item \textbf{Trzy warstwy dowodu} --- praktyka ComfyUI (A), platforma terenowa (B), ewaluacja użytkowników (C) --- z jasnym rozdzieleniem tego, co jest runtime, a co pracownią (rozdz.~\ref{ch04:top}, \ref{ch06:sec:warstwy}).
-  \item \textbf{Rewizja hipotez pod schemat danych} --- przejście z H1--H5 do \RQ{1}--\RQ{6} chroni przed HARKingiem i przed obietnicami bez operacjonalizacji (brak PRS post, brak dwell/hesitation).
+  \item \textbf{Eksperyment w formie produktu.} Ślepa macierz sześciu źródeł jest procedurą empiryczną wbudowaną w przebieg, a nie ankietą obok generatora (rozdz.~\ref{ch07:sec:macierz}).
+  \item \textbf{Trzy warstwy dowodu.} Praktyka ComfyUI (A), platforma terenowa (B) i ewaluacja użytkowników (C) są rozdzielone, więc wiadomo, co jest środowiskiem wykonawczym, a co pracownią (rozdz.~\ref{ch04:top}, \ref{ch06:sec:warstwy}).
+  \item \textbf{Rewizja hipotez pod schemat danych.} Przejście z H1--H5 do \RQ{1}--\RQ{6} ogranicza ryzyko dopasowywania hipotez do wyników po fakcie (HARKing) i obietnic bez operacjonalizacji (brak PRS po ekspozycji, brak pomiaru dwell i wahania).
 \end{enumerate}
 
-Nawet gdy warstwa~C pozostaje na etapie pilotażu opisowego, warstwy~A i~B już stanowią wkład RtD: dokumentują decyzje, odrzucenia i transfer wniosków z medium dyfuzyjnego do skalowalnego pipeline'u.
+Warstwa~C pozostaje pilotażem opisowym. Warstwy~A i~B stanowią jednak wkład RtD niezależnie od liczebności próby: dokumentują decyzje, odrzucenia i przeniesienie wniosków z medium dyfuzyjnego do skalowalnego potoku.
 
 \section{Wkład praktyczny dla projektowania wnętrz i narzędzi AI}
 \label{ch09:sec:praktyka}
 
-\paragraph{Dla praktyki projektowej (ASP / wnętrza).}
-Artefakt pokazuje, że personalizacja koncepcji może być dialogiem estetycznym --- z jawnym i ukrytym gustem, nastrojem, funkcją i (opcjonalnie) osobowością --- a nie „wylosowanym stylem” z promptu tekstowego.
-Dla projektanta oznacza to możliwość traktowania wizualizacji AI jako \emph{mood image} / koncepcji do rozmowy z klientem, przy zachowaniu geometrii \texttt{preserve} jako odpowiedzialności ludzkiej (rozdz.~\ref{ch07:sec:status-wizualizacji}).
+\paragraph{Dla praktyki projektowej.}
+Artefakt pokazuje, że personalizacja koncepcji może być rozmową o gustach, nastroju i funkcji pomieszczenia, a nie losowaniem stylu z promptu tekstowego. Wizualizację AI traktuję w niej jako mood image, czyli materiał do rozmowy z klientem, a odpowiedzialność za geometrię (\texttt{preserve}) pozostaje po stronie człowieka (rozdz.~\ref{ch07:sec:status-wizualizacji}).
 
 \paragraph{Dla narzędzi AI.}
-Jeśli wyniki~\RQ{3} potwierdzą wartość syntez mieszanych, praktyczna rekomendacja brzmi: budować produkty wokół porównywalnych wariantów z ujawnianiem źródła \emph{po} wyborze, zamiast jednego „najlepszego” renderu.
-Jeśli~\RQ{6} wykaże spadek sprawczości przy długim Full, rekomendacja dotyczy dramaturgii: badanie nie może być usprawiedliwieniem dla tarcia UX.
+Pilotaż nie potwierdza przewagi wariantów mieszanych, więc nie rekomenduję ich jako domyślnego wyboru. Rekomenduję tylko to, co daje się obronić: pokazywać porównywalne warianty i ujawniać ich źródło dopiero po wyborze, zamiast jednego „najlepszego” renderu. Jeśli długa ścieżka Full obniża sprawczość, to badanie nie może usprawiedliwiać tarcia w interfejsie. Mój pilotaż tego nie rozstrzyga, bo ankietę wypełniły głównie osoby, które doszły do końca.
 
 \paragraph{Dla mostu dyscyplin.}
-Praca łączy kategorie psychologii środowiskowej (rozdz.~\ref{ch02:top}) z medium generatywnym (rozdz.~\ref{ch04:top}) w artefakcie cytowalnym i audytowalnym \parencite{idaPlatform2026} --- wkład praktyczny polega na \emph{operacjonalizacji}, nie na nowej teorii ART czy Big Five.
+Praca łączy kategorie psychologii środowiskowej (rozdz.~\ref{ch02:top}) z medium generatywnym (rozdz.~\ref{ch04:top}) w artefakcie, który można opisać i sprawdzić \footcite{idaPlatform2026}. Wkład polega na operacjonalizacji, a nie na nowej teorii ART czy Big Five.
 
 \section{Ograniczenia}
 \label{ch09:sec:ograniczenia}
 
-Ograniczenia metodologiczne z~\cref{ch06:sec:ograniczenia} pozostają w mocy; poniżej doprecyzowanie dla interpretacji wyników:
+Ograniczenia z~\cref{ch06:sec:ograniczenia} pozostają w mocy. Dla interpretacji wyników dodaję następujące:
 
 \begin{itemize}
-  \item \textbf{Próba i dobór} --- self-selection online; brak reprezentatywności populacyjnej; generalizacja do „użytkowników AI-design” jest ostrożna.
-  \item \textbf{Małe~$N$ pilotażu} --- uniemożliwia stabilne modele wielozmiennowe i konfirmacyjną psychometrię; rozdz.~\ref{ch08:top} ma charakter szkieletu do wypełnienia.
-  \item \textbf{Język i kultura} --- flow PL/EN oraz kanon estetyczny bodźców mogą wpływać na swipe i deklaracje; wyniki nie przenoszą się automatycznie między kontekstami kulturowymi.
-  \item \textbf{Jakość generacji AI} --- wybór w macierzy confounds preferencję \emph{kanału danych} z estetyką konkretnego renderu (szum modelu niezależny od briefu).
-  \item \textbf{Luki pomiarowe} --- brak \texttt{prs\_post\_*}; brak dwell/hesitation w DB; \texttt{satisfaction\_*} niepowiązane per \texttt{selected\_source}.
-  \item \textbf{Warunki terenowe} --- słaba kontrola ekranu, oświetlenia i czasu względem laboratorium.
+  \item \textbf{Próba i dobór.} Uczestnicy zgłaszali się online, więc próba nie jest reprezentatywna. Zbiór 240 rekordów miesza sesje testowe, ścieżkę szybką, pełną i rekordy bez ścieżki.
+  \item \textbf{Małe~$N$.} Rdzeń empiryczny ślepego wyboru liczy kilkanaście do kilkudziesięciu osób, zależnie od licznika (16, 17 albo 29). Taka próba nie pozwala na modele wielozmiennowe ani na konfirmacyjną psychometrię.
+  \item \textbf{Trzy liczniki wyboru.} Flaga \texttt{blind\_selection\_made}, zaznaczenia w macierzy i wiersze feedbacku dają różne liczby. Dopóki nie ustalę, który z nich jest wyborem końcowym, trzymam je osobno.
+  \item \textbf{Jakość generacji.} Z 1174 zleceń 485 zakończyło się błędem, a 278 czeka w stanie \texttt{pending}. Nie wiem więc, ile obrazów uczestnik faktycznie zobaczył, a wybór miesza preferencję kanału z jakością renderu.
+  \item \textbf{Bramka konta.} W części sesji porównanie wizji nie pokazywało wszystkich sześciu kart naraz (rozdz.~\ref{ch07:sec:slepy-wybor}). To nie unieważnia zapisu wyborów, ale zmienia sens porównania źródeł w RQ3.
+  \item \textbf{Luki pomiarowe.} Brak \texttt{prs\_post\_*} i pomiaru dwell oraz wahania. Satysfakcja nie jest powiązana z \texttt{selected\_source}.
+  \item \textbf{Język i kultura.} Przebieg działa po polsku i angielsku, a bodźce mają określony kanon estetyczny. Wyniki nie przenoszą się automatycznie na inne konteksty.
+  \item \textbf{Warunki terenowe.} Kontroluję ekran, oświetlenie i czas słabiej niż w laboratorium.
 \end{itemize}
 
 \section{Zagrożenia etyczne}
 \label{ch09:sec:etyka}
 
 \paragraph{Personalizacja oparta na osobowości.}
-Mapowanie IPIP-NEO-120 $\rightarrow$ brief (rozdz.~\ref{ch05:top}, zał.\ mapowań) niesie ryzyko essentializacji gustu („Twój typ to styl~$X$”).
-IDA broni się dramaturgią: źródło \texttt{personality} jest jednym z sześciu wariantów w ślepym porównaniu, a nie wyrokiem o tożsamości; nadal jednak komunikacja wyników użytkownikowi musi unikać stygmatyzujących etykiet.
+Mapowanie IPIP-NEO-120 na brief (rozdz.~\ref{ch05:top}) grozi essencjalizacją gustu: „Twój typ to styl~$X$”. Zabezpieczam się układem eksperymentu. Źródło personality jest jednym z sześciu wariantów w ślepym porównaniu, a nie wyrokiem o tożsamości. Komunikacja wyniku do uczestnika nadal musi unikać etykiet, które piętnują.
 
 \paragraph{Przejrzystość algorytmu.}
-Explainable pipeline (JSON~v3, reguły facetów) zwiększa audytowalność względem czarnej skrzynki promptu, lecz nie znosi odpowiedzialności badacza za uproszczenia ART$\rightarrow$mood grid ani za błędy VLM.
-Uczestnik powinien rozumieć, że wizualizacja jest koncepcją, nie dokumentacją budowlaną (rozdz.~\ref{ch07:sec:status-wizualizacji}).
+Potok z jawnym opisem (JSON~v3, reguły facetów) ułatwia audyt w porównaniu z czarną skrzynką promptu, ale nie zdejmuje ze mnie odpowiedzialności za uproszczenia przejścia od ART do mood gridu ani za błędy modelu wizyjno-językowego. Uczestnik powinien wiedzieć, że wizualizacja jest koncepcją, a nie dokumentacją budowlaną (rozdz.~\ref{ch07:sec:status-wizualizacji}).
 
 \paragraph{Dane i zgoda.}
-RODO, wersjonowanie zgód i \texttt{user\_hash} (rozdz.~\ref{ch06:sec:etyka}) ograniczają ryzyko identyfikacji; zagrożeniem pozostaje wtórne użycie profilu estetyczno-osobowościowego poza kontektem badania --- stąd minimalizacja PII w eksporcie i zakaz publikacji surowych identyfikatorów.
+RODO, wersjonowanie zgód i \texttt{user\_hash} (rozdz.~\ref{ch06:sec:etyka}) ograniczają ryzyko identyfikacji. Zagrożeniem pozostaje wtórne użycie profilu estetyczno-osobowościowego poza kontekstem badania, dlatego w eksporcie minimalizuję dane osobowe i nie publikuję surowych identyfikatorów.
 
 \section{Kierunki dalszych badań}
 \label{ch09:sec:dalsze}
 
 \begin{enumerate}
-  \item \textbf{Docelowe~$N$ i plan analiz} --- rozkład wyborów macierzy (orient.\ $N\!\approx\!50$--$80$), modele mismatch~$\rightarrow$ source ($N\!\geq\!100$), korelacje Big Five ($N\!\approx\!80$--$150$) --- po uzgodnieniu z promotorem; ochrona przed HARKingiem przez zapis planu przed pełną analizą.
-  \item \textbf{Opcjonalny PRS post} --- krok po wyborze w macierzy („gdzie na mapie nastroju jest ta wizualizacja?”) przywróciłby wątek regeneracyjności po ekspozycji; bez tej zmiany~\RQ{5} pozostaje pytaniem o lukę current$\rightarrow$target, nie o efekt AI.
-  \item \textbf{Instrumentacja behawioralna} --- \texttt{dwell\_time\_ms}, \texttt{hesitation\_count} w swipach, jeśli wraca się do logiki dawnego H5.
-  \item \textbf{Multi-room i gospodarstwo} --- rozszerzenie warstw HOUSEHOLD/ROOM poza jedną przestrzeń sesji.
-  \item \textbf{VR / immersja} --- porównanie wyboru w macierzy 2D z ekspozycją immersyjną (osobny design).
-  \item \textbf{Badania longitudinalne} --- czy wybór źródła i satysfakcja utrzymują się po zamieszkaniu / realizacji koncepcji.
-  \item \textbf{Walidacja konstruktu} --- podpróba z równoległym PRS-11 / skalą papierową, jeśli celem stanie się psychometria zgamifikowanych instrumentów (poza obecnym~\RQ{1}).
+  \item \textbf{Większa próba i plan analiz zapisany z wyprzedzeniem.} Orientacyjnie: rozkład wyborów macierzy przy $N\!\approx\!50$--$80$, modele rozbieżność~$\rightarrow$ źródło przy $N\!\geq\!100$, korelacje Big Five przy $N\!\approx\!80$--$150$. Progi uzgodnię z promotorem. Zapis planu przed analizą ma chronić przed HARKingiem.
+  \item \textbf{Naprawa generacji.} Zanim zbiorę więcej danych o wyborze, muszę ograniczyć błędy i zlecenia w stanie oczekiwania, żeby uczestnik wybierał spośród kompletnych obrazów.
+  \item \textbf{Opcjonalny PRS po wyborze.} Pytanie „gdzie na mapie nastroju jest ta wizualizacja?” przywróciłoby wątek regeneracyjności po ekspozycji. Bez niego \RQ{5} pozostaje pytaniem o lukę current$\rightarrow$target, a nie o efekt AI.
+  \item \textbf{Instrumentacja behawioralna.} Zapis \texttt{dwell\_time\_ms} i \texttt{hesitation\_count} w swipach, jeśli wrócę do logiki dawnego H5.
+  \item \textbf{Wiele pomieszczeń i gospodarstwo domowe.} Rozszerzenie warstw HOUSEHOLD i ROOM poza jedną przestrzeń na sesję.
+  \item \textbf{Immersja (VR).} Porównanie wyboru w macierzy 2D z ekspozycją immersyjną, jako osobny projekt.
+  \item \textbf{Badania podłużne.} Czy wybór źródła i satysfakcja utrzymują się po zamieszkaniu lub realizacji koncepcji.
+  \item \textbf{Walidacja konstruktu.} Podpróba z równoległym PRS-11 lub skalą papierową, jeśli celem stanie się psychometria instrumentów w formie gry (poza obecnym \RQ{1}).
 \end{enumerate}

@@ -18,6 +18,8 @@
 *.vrb
 *.xdv
 main.pdf
+*.pdf
+wersje-pdf/
 build/
 
 # Chapter aux from \include

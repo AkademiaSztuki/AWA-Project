@@ -1,0 +1,20 @@
+% Purpose: numeric bibliography list — hanging indent, quieter size.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles/bibliography}[2026/10/05 IDA thesis bibliography]
+
+\renewcommand*{\bibfont}{\small}
+\setlength{\bibitemsep}{0.4\baselineskip}
+\setlength{\bibparsep}{0pt}
+\setlength{\bibhang}{1.8em}
+\setcounter{biburlucpenalty}{100}
+\setcounter{biburlnumpenalty}{100}
+\setcounter{biburllcpenalty}{100}
+
+\DeclareFieldFormat{labelnumberwidth}{%
+  \textcolor{accent}{\sffamily\mkbibbrackets{#1}}%
+}
+
+\AtBeginBibliography{%
+  \color{ink}%
+  \setlength{\parskip}{0pt}%
+}
