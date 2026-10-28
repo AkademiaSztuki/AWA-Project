@@ -1,0 +1,96 @@
+% OWNER: theory-b
+% STATUS: review (poprawiono: terminologia podwymiarów/aspektów cech, usunięto żargon bazodanowy, zaktualizowano cytowania)
+% SOURCES: notes/SPIS_TRESCI_SZCZEGOLOWY.md §3.5--3.6; notes/HIPOTEZY_REWIZJA.md (RQ4); GLOSSARY.md
+\chapter{Osobowość a preferencje przestrzenne}
+\label{ch05:top}
+\ChapterStatus{review}{theory-b}
+
+Rozdział rozwija wątek profilu psychologicznego zapowiedziany w wieloźródłowym modelu preferencji (rozdz.~\ref{ch03:top}). Model Wielkiej Piątki oraz kwestionariusz IPIP-NEO-120 pełnią w niniejszej pracy rolę \emph{hipotezy projektowej} dla syntezy briefu, a nie deterministycznego wyroku o „właściwym” guście użytkownika.
+Rozdział uzasadnia obecność wariantu osobowościowego (\texttt{personality}) w ślepej macierzy sześciu wariantów platformy IDA oraz wiąże go z pytaniem eksploracyjnym~\RQ{4} \footcite{idaPlatform2026}.
+Szczegółowe mapowania domen i ich składowych aspektów na parametry wnętrza dokumentuje załącznik~\ref{app:c:top}, a potok i interfejs macierzy rozdział~\ref{ch07:top}.
+
+\section{Model Wielkiej Piątki jako rama różnic indywidualnych}
+\label{ch05:sec:bigfive}
+
+John, Naumann i Soto opisują Wielką Piątkę (\emph{Big Five}) jako taksonomię różnic indywidualnych ustrukturyzowaną w pięciu nadrzędnych domenach: otwartość na doświadczenie (\emph{Openness}), sumienność (\emph{Conscientiousness}), ekstrawersja (\emph{Extraversion}), ugodowość (\emph{Agreeableness}) oraz neurotyczność, czyli wrażliwość emocjonalna (\emph{Neuroticism}) \footcite{john2008bigfive}.
+Model ten nie służy diagnozie klinicznej, lecz dostarcza powszechnie zwalidowanego aparatu pojęciowego do opisu względnie trwałych dyspozycji zachowania, znajdując zastosowanie również w badaniach nad interakcją człowieka z technologią i personalizacją środowisk cyfrowych.
+
+W badaniach przez projektowanie (Research through Design) kluczowe jest właściwe usytuowanie tej ramy: w IDA profil osobowości nie diagnozuje człowieka, lecz operacjonalizuje \emph{jeden z równorzędnych kanałów} poszukiwania tożsamości przestrzennej.
+Osobowość stanowi tworzywo wytycznych projektowych, podobnie jak wybory jawne i gesty intuicyjne (rozdz.~\ref{ch03:top}), nie przesądzając a priori o wartości estetycznej wnętrza.
+W ścieżce pełnej (Full) profile domen i aspektów zasilają syntezę promptu, podczas gdy skrócona ścieżka szybka (Fast) pomija ten etap, chroniąc użytkownika przed nadmiernym obciążeniem czasowym.
+
+\section{Kwestionariusz IPIP-NEO-120 i poziom aspektów cech}
+\label{ch05:sec:ipip}
+
+Zastosowanie publicznej puli pozycji IPIP (\emph{International Personality Item Pool}) pozwala na rzetelny pomiar cech Wielkiej Piątki w środowiskach badawczych online.
+Platforma IDA wykorzystuje inwentarz \textbf{IPIP-NEO-120}: 120 pozycji kwestionariuszowych mierzących pięć głównych domen oraz trzydzieści ich składowych aspektów (podwymiarów cech, ang.\ \emph{facets}), po sześć dla każdej domeny.
+
+Dla projektowania wnętrz operowanie wyłącznie na poziomie szerokich domen byłoby zbyt ogólne. Wysoki poziom otwartości na doświadczenie może bowiem oznaczać zarówno fascynację sztuką współczesną i eklektyzmem (aspekt estetyki, $O2$), jak i bogatą wyobraźnię przestrzenną (aspekt fantazji, $O1$). Dopiero analiza podwymiarów cech pozwala na sformułowanie precyzyjnych hipotez projektowych (tab.~\ref{tab:ch05:hipotezy}; zał.~\ref{app:c:top}).
+W bazie danych platformy zapisuję znormalizowane profile domen i podwymiarów wraz ze znacznikiem ukończenia kwestionariusza, co umożliwia późniejszą weryfikację ich związku z wyborami estetycznymi.
+
+\section{Literatura: osobowość a środowisko mieszkalne}
+\label{ch05:sec:literatura}
+
+Literatura wiążąca cechy osobowości z preferencjami estetycznymi i aranżacją wnętrz mieszkalnych wskazuje na zależności o charakterze \emph{umiarkowanym i probabilistycznym}, a nie przyczynowo-deterministycznym.
+Klasyczne badania Samuela Goslinga i zespołu nad sygnałami tożsamościowymi w sypialniach i biurach (\emph{A room with a cue}) wykazały, że przestrzeń fizyczna człowieka jest nośnikiem czytelnych śladów psychologicznych: osoby o wysokiej otwartości otaczają się zróżnicowanymi, nieszablonowymi przedmiotami i sztuką, podczas gdy wysoka sumienność manifestuje się porządkiem, klarowną organizacją i ergonomią \footcite{gosling2002room}.
+
+Wniosek dla projektu IDA nakazuje zachowanie metodologicznego umiaru. Badania uzasadniają wykorzystanie cech osobowości jako \emph{eksploracyjnego punktu wyjścia} dla wariantów stylistycznych, wykluczają jednak traktowanie testu psychologicznego jako sztywnego algorytmu dyktującego człowiekowi, w jakim wnętrzu „powinien” mieszkać.
+Związek profilu osobowości z preferencjami estetycznymi w pytaniu~\RQ{4} ma zatem charakter badania tendencji i korelacji, a nie budowy deterministycznego systemu rekomendacji.
+
+\section{Translacja podwymiarów cech na wytyczne projektowe}
+\label{ch05:sec:mapowanie}
+
+W procesie syntezy koncepcji w IDA znormalizowane wyniki inwentarza IPIP-NEO-120 poddaję autorskim regułom interpretacyjnym.
+Konfiguracje domen i podwymiarów wskazują proponowaną dominantę stylistyczną, paletę materiałową oraz poziom złożoności wizualnej wnętrza.
+Warstwa ta wpisuje się w postulat przejrzystej personalizacji (\emph{explainable personalization}): projektant i badacz mogą dokładnie prześledzić, jakie przesłanki psychologiczne wpłynęły na wygenerowanie wariantu osobowościowego oraz wariantu mieszanego.
+
+Tabela~\ref{tab:ch05:hipotezy} podsumowuje autorskie reguły translacji cech na atrybuty przestrzenne wraz z koniecznymi zastrzeżeniami interpretacyjnymi. Reguły te nie stanowią dogmatów psychologicznych, lecz są hipotezami projektowymi, które weryfikuje użytkownik w ślepym wyborze.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Aspekty osobowości w IPIP-NEO-120 $\rightarrow$ autorska hipoteza projektowa $\rightarrow$ ostrożność interpretacji (skrót założeń; pełne mapowania w zał.~\ref{app:c:top}).}
+  \label{tab:ch05:hipotezy}
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.24\textwidth}>{\raggedright\arraybackslash}p{0.36\textwidth}>{\raggedright\arraybackslash}p{0.32\textwidth}@{}}
+    \toprule
+    Domena / aspekt cechy & Hipoteza projektowa & Ostrożność interpretacji \\
+    \midrule
+    Otwartość ($O$); estetyka ($O2$)
+      & Większa złożoność, eklektyzm, zróżnicowane faktury, akcenty sztuki
+      & Otwartość to także ciekawość intelektualna, nie tylko styl boho \\
+    \addlinespace
+    Otwartość ($O$); fantazja ($O1$) + niska sumienność ($C$)
+      & Układ swobodny, odejście od surowego minimalizmu, organiczność
+      & Niska sumienność nie oznacza chaosu, lecz elastyczność funkcji \\
+    \addlinespace
+    Sumienność ($C$); porządek ($C2$)
+      & Klarowne podziały, niska złożoność, dyskretne przechowywanie
+      & Preferencja ładu nie wyklucza ciepła i dekoracyjności \\
+    \addlinespace
+    Ekstrawersja ($E$); poszukiwanie doznań ($E5$)
+      & Żywsza paleta barwna, wyraziste kontrasty, strefy integracji
+      & Ekstrawersja społeczna nie musi oznaczać krzykliwości wizualnej \\
+    \addlinespace
+    Ugodowość ($A$) + niska neurotyczność ($N$)
+      & Miękkie tekstylia, ciepłe światło, harmonijna tonacja
+      & Unikać stereotypu redukującego ugodowość do „przytulności” \\
+    \addlinespace
+    Wrażliwość / neurotyczność ($N$); lęk ($N1$)
+      & Stonowane tła, zredukowany szum wizualny, poczucie azylu
+      & Nie patologizować; przestrzeń kojąca jako powszechna potrzeba \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Krytyka determinizmu i odpowiedzialność etyczna}
+\label{ch05:sec:krytyka}
+
+Zastosowanie psychometrii w architekturze wnętrz niesie ryzyko sprowadzenia człowieka do uproszczonej etykiety: „jesteś introwertykiem, więc musisz mieszkać w chłodnym minimalizmie”. Taka stereotypizacja odbiera użytkownikowi podmiotowość i zubaża dialog estetyczny.
+
+Platforma IDA przeciwstawia się temu determinizmowi na trzech poziomach:
+\begin{enumerate}
+  \item \textbf{Polifonia źródeł:} osobowość jest tylko jednym z sześciu równorzędnych wariantów i nie ma prawa zdominować preferencji wyrażanych intuicyjnym gestem czy wyborem funkcji pokoju.
+  \item \textbf{Ślepy wybór:} użytkownik ocenia obrazy bez znajomości etykiet źródeł, co pozwala sprawdzić, czy koncepcja wywiedziona z cech osobowości naprawdę odpowiada jego zmysłowym pragnieniom.
+  \item \textbf{Ochrona danych i podmiotowość:} badanie opiera się na pełnej zgodzie RODO, minimalizacji danych i anonimizacji identyfikatorów, wykluczając profilowanie komercyjne na rzecz rzetelnej refleksji badawczej.
+\end{enumerate}
+
+W paradygmacie Research through Design obecność wariantu osobowościowego w macierzy służy konfrontacji: pozwala sprawdzić, czy wiedza o psychologicznych cechach mieszkańca wnosi cenną wartość do procesu projektowego, czy też w konfrontacji z obrazem wygrywają bezpośrednie wybory intuicyjne i zmysłowe.

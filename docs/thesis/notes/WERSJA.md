@@ -1,5 +1,7 @@
 # Mapa wersji roboczej (IDA)
 
+Najnowsze opublikowane archiwum: **[robocza-08.pdf](../wersje-pdf/robocza-08.pdf)**; źródła: [robocza-08](../wersje-tex/robocza-08/). Zachowane są także PDF-y 01–07 i snapshot źródeł 07. Poniższa mapa opisuje starszy katalog roboczy (06).
+
 ## Obecna: **robocza-06** (logicznie 0006, 2026-10-05)
 
 | Co | Gdzie |
@@ -60,4 +62,4 @@ Figury (`figures/`) nie są kopiowane do snapshotów — współdzielone z katal
 ## Inne pliki PDF
 
 - `main-verify.pdf` — build testowy, nie archiwum wersji.
-- `wersje-pdf/` — w `.gitignore` (tylko lokalnie).
+- `wersje-pdf/robocza-*.pdf` — publikowane w Git na prośbę użytkownika; pozostałe pliki kompilacji są ignorowane.

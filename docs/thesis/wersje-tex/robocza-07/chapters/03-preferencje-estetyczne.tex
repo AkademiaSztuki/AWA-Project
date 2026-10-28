@@ -1,0 +1,154 @@
+% OWNER: theory-a
+% STATUS: review (poprawiono: terminologia, usunięto potoczne Tinder na rzecz afektywnej selekcji kart, usunięto disclaimer ComfyUI, uzupełniono źródła)
+% SOURCES: notes/SPIS_TRESCI_SZCZEGOLOWY.md §3; GLOSSARY.md; notes/HIPOTEZY_REWIZJA.md
+\chapter{Preferencje estetyczne: jawne, ukryte i behawioralne}
+\label{ch03:top}
+\ChapterStatus{review}{theory-a}
+
+Rozdział przedstawia strukturę preferencji estetycznych jako wieloźródłowe tworzywo procesu personalizacji w platformie IDA.
+Wychodzi od klasycznego rozróżnienia na preferencje \textbf{jawne} (\emph{explicit}), deklarowane świadomie przez użytkownika, preferencje \textbf{ukryte} (\emph{implicit}), rejestrowane poprzez spontaniczne reakcje afektywne, oraz wskaźniki \textbf{behawioralne}. Profil osobowości (Big Five) stanowi trzeci filar modelu, szczegółowo rozwinięty w rozdziale~\ref{ch05:top}.
+Celem metodycznym jest synteza wieloźródłowa, zasilająca eksperymentalną, ślepą macierz sześciu wariantów koncepcji wnętrza \footcite{idaPlatform2026}.
+
+\section{Preferencje jawne (explicit)}
+\label{ch03:sec:explicit}
+
+Preferencje jawne obejmują wybory, które użytkownik potrafi zwerbalizować i świadomie wskazać: nazwy stylów, palety barwne, preferowane materiały oraz pożądany poziom jasności czy ciepła.
+Charles Osgood, George Suci i Percy Tannenbaum zaproponowali technikę dyferencjału semantycznego do pomiaru konotacyjnych znaczeń pojęć na skalach rozpiętych między parami przymiotników przeciwstawnych \footcite{osgood1957measurement}.
+W interfejsie IDA adaptacja ta przybiera postać intuicyjnych suwaków (m.in.\ ciepło, jasność, złożoność wizualna) oraz kafelków wyboru palet materiałowych.
+
+Samoświadomość estetyczna bywa jednak zwodnicza. Deklaracja „preferuję chłodny minimalizm” nierzadko współwystępuje z entuzjastycznym wyborem bogatych fakturowo, ciepłych wnętrz w teście reakcji wizualnej. Dlatego obok deklaracji słownych niezbędny jest równoległy kanał preferencji ukrytych (rozdz.~\ref{ch03:sec:implicit}), a badanie rozbieżności między nimi stanowi jedno z głównych pytań badawczych pracy (\RQ{2}).
+
+Do rejestru jawnego należy również przesłanie własnych obrazów inspiracji (rozdz.~\ref{ch03:sec:inspiracje}). Choć inspiracja operuje językiem formy, to użytkownik decyduje w pełni świadomie, \emph{jaki} obraz przedstawić systemowi jako wzorzec.
+
+\section{Preferencje ukryte (implicit) i afektywna selekcja kart}
+\label{ch03:sec:implicit}
+
+Anthony Greenwald i współpracownicy wprowadzili test utajonych skojarzeń (Implicit Association Test, IAT), wykazując, że pomiar czasów reakcji na bodźce pozwala badać postawy i preferencje z pominięciem filtrów racjonalizacji i autoprezentacji \footcite{greenwald1998iat}.
+W badaniach nad interakcją człowieka z komputerem (HCI) oraz w systemach rekomendacyjnych adaptacją tej idei stała się technika szybkiej, binarnej selekcji kart wizualnych (ang.\ \emph{card swiping}). Szybki gest odrzucenia lub polubienia obrazu pozwala na uchwycenie pierwotnej, afektywnej reakcji estetycznej.
+
+W platformie IDA kanał ten przybrał formę modułu afektywnej selekcji kart: uczestnikowi prezentowana jest seria starannie dobranych wizualizacji wnętrz, które akceptuje lub odrzuca. System rejestruje kierunek wyboru oraz czas decyzji (\texttt{reaction\_time\_ms}), budując zagregowany profil preferencji intuicyjnych zasilający wariant ukryty (\texttt{implicit}) w macierzy.
+Termin „ukryte” odnosi się w niniejszej pracy do pośredniej metody pomiaru behawioralnego i nie niesie psychoanalitycznych założeń o nieświadomości.
+
+\begin{figure}[htbp]
+  \centering
+  \Todo{wstaw plik: figures/ch03/ch03-tinder-iat-flow.pdf --- schemat przepływu: bodziec wizualny $\rightarrow$ gest akceptacji/odrzucenia $\rightarrow$ czas reakcji $\rightarrow$ profil preferencji ukrytych}
+  \caption[Schemat modułu afektywnej selekcji kart wizualnych w IDA. Opracowanie własne; rama teoretyczna IAT: Greenwald, McGhee i Schwartz; artefakt IDA.]{Schemat modułu afektywnej selekcji kart wizualnych w IDA.
+    Opracowanie własne; rama teoretyczna IAT: \textcite{greenwald1998iat}; artefakt: \footcite{idaPlatform2026}.}
+  \label{fig:ch03:tinder-iat}
+\end{figure}
+
+\section{Rozbieżność między deklaracją a zachowaniem}
+\label{ch03:sec:rozbieznosci}
+
+Daniel Kahneman opisuje architekturę poznawczą człowieka jako współdziałanie dwóch trybów: szybkiego, automatycznego i emocjonalnego Systemu~1 oraz wolnego, analitycznego i racjonalizującego Systemu~2 \footcite{kahneman2011thinking}.
+W doświadczeniu estetycznym wnętrza oba te systemy często generują sprzeczne sygnały. \textcolor{orange}{Deklaracja słowna (System~2) bywa zdominowana przez gust aspiracyjny, mody kulturowe i potrzebę aprobaty społecznej, podczas gdy natychmiastowy gest afektywny (System~1) odsłania bezpośrednie zapotrzebowanie zmysłowe na poczucie przytulności, ciepła czy intymnego azylu.}
+
+W platformie IDA stopień zgodności obu kanałów jest precyzyjnie kalkulowany (m.in.\ zgodność stylu, palety barw i nasycenia biofilią).
+Pytanie~\RQ{2} weryfikuje, czy owa rozbieżność znajduje odzwierciedlenie w zachowaniu uczestnika przed macierzą wygenerowanych koncepcji: czy wydłuża czas namysłu nad wyborem oraz czy skłania do częstszego wybierania wariantów zrównoważonych (mieszanych).
+Rozbieżność ta nie jest więc traktowana jako błąd pomiaru, lecz jako fundamentalna dramaturgia samopoznania estetycznego użytkownika.
+
+\section{Wskaźniki behawioralne i czas wyboru}
+\label{ch03:sec:behavioral}
+
+Obok kierunku gestu system rejestruje czas reakcji uczestnika na poszczególne obrazy wnętrz. Czas ten przybliża stopień pewności decyzji: natychmiastowe odrzucenie sygnalizuje dysonans estetyczny, podczas gdy dłuższy namysł może świadczyć o ambiwalencji lub głębszej fascynacji kompozycją.
+
+W ślepej macierzy kluczowym parametrem staje się łączny czas porównywania wariantów (\texttt{selection\_time\_ms}). W odróżnieniu od laboratoryjnego śledzenia mikroruchów oka, badanie terenowe IDA koncentruje się na naturalnym rytmie interakcji, chroniąc poczucie swobody uczestnika.
+
+\section{Drabinowanie wartości (means-end laddering)}
+\label{ch03:sec:laddering}
+
+Thomas Reynolds i Jonathan Gutman sformułowali metodę drabinowania w teorii środków i celów (\emph{means-end chain}), ukazując, w jaki sposób konkretne atrybuty fizyczne obiektu łączą się z konsekwencjami funkcjonalnymi, by ostatecznie zakorzenić się w fundamentalnych wartościach egzystencjalnych człowieka \footcite{reynolds1988laddering}.
+W module konfiguracji pokoju IDA dialog z awatarem prowadzi użytkownika po szczeblach tej drabiny: od pytania o konkretne wyposażenie i bariery użytkowe (punkty tarcia), przez ich wpływ na codzienne samopoczucie, aż po głęboką odpowiedź na pytanie, dlaczego dana zmiana jest dla niego ważna.
+
+Dzięki temu generatywny brief przestaje być powierzchownym zbiorem przymiotników stylistycznych. Wiedza o tym, że poszukiwane „ciepłe drewno” ma sprzyjać wyciszeniu po stresującej pracy i budować poczucie bezpieczeństwa rodziny, pozwala na wygenerowanie wariantu funkcjonalnego (\texttt{mixed\_functional}) o autentycznym ładunku tożsamościowym.
+
+\section{Inspiracje wizualne jako osobisty atlas wyobraźni}
+\label{ch03:sec:inspiracje}
+
+Przesłanie fotografii inspiracji wprowadza do dialogu preferencję przez konkretny okaz zmysłowy. Użytkownik wskazuje atmosferę, której złożoności nie potrafi wyrazić za pomocą suwaków czy słów.
+W potoku IDA przesłane obrazy referencyjne są analizowane przez multimodalny model wizyjno-językowy, który wyodrębnia dominanty kompozycyjne, oświetleniowe i materiałowe. Wyniki tej analizy zasilają wariant referencji inspiracji (\texttt{inspiration\_reference}) w macierzy.
+
+\section{Synteza wieloźródłowa i architektura wariantów}
+\label{ch03:sec:synteza}
+
+Wieloźródłowy model preferencji w IDA nie rości sobie pretensji do arbitralnego wskazywania „jedynego prawdziwego gustu”. Traktuje wrażliwość estetyczną jako zjawisko polifoniczne, przekładając poszczególne kanały na sześć zróżnicowanych wariantów koncepcji (tab.~\ref{tab:ch03:sources} i~\ref{tab:ch03:instruments}).
+
+\begin{table}[htbp]
+  \centering
+  \caption{Sześć źródeł wytycznych generacji koncepcji wnętrza w eksperymencie IDA.}
+  \label{tab:ch03:sources}
+  \begin{tabular}{@{}llp{0.44\textwidth}@{}}
+    \toprule
+    Klucz źródła & Nazwa wariantu & Źródła danych wejściowych \\
+    \midrule
+    \texttt{implicit}
+      & Wariant preferencji ukrytych
+      & Gesty afektywnej selekcji kart, czasy reakcji \\
+    \texttt{explicit}
+      & Wariant preferencji jawnych
+      & Dyferencjał semantyczny, deklarowana paleta i styl \\
+    \texttt{personality}
+      & Wariant osobowościowy
+      & Aspekty cech inwentarza IPIP-NEO-120 (rozdz.~\ref{ch05:top}) \\
+    \texttt{mixed}
+      & Wariant zrównoważony (mieszany)
+      & Fuzja danych ukrytych, jawnych i osobowościowych \\
+    \texttt{mixed\_functional}
+      & Wariant mieszany z funkcją pokoju
+      & Fuzja preferencji + luka nastroju PRS, aktywności i wartości \\
+    \texttt{inspiration\_reference}
+      & Wariant referencji inspiracji
+      & Analiza wizualna fotografii referencyjnej użytkownika \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Zestawienie instrumentów badania preferencji zintegrowanych w platformie IDA.}
+  \label{tab:ch03:instruments}
+  \begin{tabular}{@{}p{0.20\textwidth}p{0.22\textwidth}p{0.24\textwidth}p{0.24\textwidth}@{}}
+    \toprule
+    Instrument & Podstawa teoretyczna & Forma interakcji w IDA & Rola w procesie \\
+    \midrule
+    Mapa nastroju PRS
+      & \textcite{hartig1997prs,kaplan1995restorative}
+      & Siatka 2D nastroju
+      & Pomiar luki regeneracyjnej \\
+    Biofilia
+      & \textcite{kellert2008biophilic}
+      & 4 stopnie nasycenia
+      & Warunkowanie obecności natury \\
+    Dyferencjał semantyczny
+      & \textcite{osgood1957measurement}
+      & Suwaki atrybutów stylu
+      & Pomiar preferencji jawnych \\
+    Afektywna selekcja kart
+      & \textcite{greenwald1998iat}
+      & Gesty akceptacji/odrzucenia
+      & Pomiar preferencji ukrytych \\
+    Drabinowanie wartości
+      & \textcite{reynolds1988laddering}
+      & Dialog w Room Setup
+      & Kontekst funkcjonalno-życiowy \\
+    Inspiracje wizualne
+      & Praktyka projektowa
+      & Upload zdjęć referencyjnych
+      & Bezpośredni transfer nastroju \\
+    Big Five / IPIP-NEO-120
+      & \textcite{john2008bigfive,gosling2002room}
+      & Skale podwymiarów cech
+      & Hipoteza osobowościowa \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \Todo{wstaw plik: figures/ch03/ch03-multisource-model.pdf --- diagram: kanały preferencji $\rightarrow$ synteza briefu $\rightarrow$ macierz 6 wariantów $\rightarrow$ ślepy wybór}
+  \caption[Wieloźródłowy model preferencji estetycznych w platformie IDA. Opracowanie własne na podstawie artefaktu.]{Wieloźródłowy model preferencji estetycznych w platformie IDA.
+    Opracowanie własne na podstawie \footcite{idaPlatform2026}.}
+  \label{fig:ch03:multisource}
+\end{figure}
+
+Sześć wygenerowanych koncepcji spotyka się w ślepym porównaniu. Użytkownik nie wie, które źródło wygenerowało dany obraz, oceniając wyłącznie siłę oddziaływania plastycznego i emocjonalnego przedstawionej przestrzeni. To właśnie ten moment stanowi empiryczny rdzeń pracy, weryfikowany w pytaniu~\RQ{3}.

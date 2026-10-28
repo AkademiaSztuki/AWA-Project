@@ -1,0 +1,221 @@
+% OWNER: media-lab
+% STATUS: review (wersja robocza-08: pogłębiona wersja książkowa z pełnym osadzeniem w teorii architektury i kompletem literatury CV/GenAI)
+% SOURCES: notes/SPIS_TRESCI_SZCZEGOLOWY.md §4; GLOSSARY.md; references.bib
+\chapter{Sztuczna inteligencja dyfuzyjna w architekturze wnętrz --- mechanizmy kontroli, narzędzia i próby w ComfyUI}
+\label{ch04:top}
+\ChapterStatus{review}{media-lab}
+
+Współczesne projektowanie wnętrz coraz rzadziej zaczyna się od czystej kartki papieru i wykreślania rzutu w programie kreślarskim. Coraz częściej pierwszym miejscem spotkania projektanta z wyobraźnią mieszkańca staje się syntetyczny obraz --- wizualizacja wyłaniająca się z algorytmu generatywnego. W niniejszym rozdziale przyglądam się modelom dyfuzyjnym nie jak automatycznym maszynkom do produkowania efektownych ilustracji, lecz jak nowemu, wymagającemu medium koncepcyjnemu. Traktuję je jako tworzywo plastyczne, które pośredniczy między zastaną fotografią prawdziwego pokoju, zapisem ludzkich potrzeb a nową wizją przestrzeni.
+
+Opowieść tę buduję na fundamencie moich własnych prób warsztatowych, które prowadziłem w modułowym środowisku węzłowym ComfyUI. To właśnie tam --- łącząc ze sobą kolejne ogniwa przetwarzania obrazu, mapy głębi, detektory krawędzi oraz algorytmy wycinania masek --- badałem, jak dalece można nagiąć statystyczny model sztucznej inteligencji do poszanowania praw architektury. Doświadczenia z tego autorskiego poligonu stanowią bezpośrednią genezę decyzji projektowych, które podjąłem przy budowie platformy IDA \footcite{idaPlatform2026}. Pozwalają one zrozumieć, dlaczego rozbudowany warsztat węzłowy jest niezastąpionym instrumentem w rękach artysty-projektanta, a jednocześnie dlaczego w otwartym badaniu terenowym musiał ustąpić miejsca lżejszej, przejrzystej architekturze dialogu.
+
+\section{Generatywne modele dyfuzyjne w wizualizacji wnętrz: zmiana paradygmatu obrazu}
+\label{ch04:sec:genai-medium}
+
+\textcolor{orange}{Przez ostatnie dekady cyfrowy warsztat architekta wnętrz opierał się na paradygmacie symulacji fizycznej. W klasycznych środowiskach projektowych CAD i BIM oraz w silnikach renderujących śledzących bieg promieni świetlnych (ang.\ \emph{ray tracing} i \emph{path tracing}) obraz powstaje „od wewnątrz”: projektant musi najpierw mozolnie wymodelować trójwymiarową bryłę każdego mebla, nadać powierzchniom fizyczne parametry odbicia i chropowatości, a następnie ustawić wirtualne źródła światła. Obraz jest tu bezpośrednią pochodną geometrii. Pojawienie się generatywnych modeli dyfuzyjnych odwróciło ten porządek o sto osiemdziesiąt stopni: w syntezie neuronowej obraz rodzi się „od zewnątrz” --- z zagęszczania statystycznego szumu ku formom zapamiętanym z milionów fotografii kulturowych.}
+
+Przełom techniczny, który otworzył tę drogę, zawdzięczamy pracy Robina Rombacha i współpracowników nad modelami dyfuzji utajonej (\emph{Latent Diffusion Models}) \footcite{rombach2022ldm} oraz ich późniejszemu rozwinięciu do architektury wysokiej rozdzielczości \textbf{SDXL}, opracowanej przez zespół Dustina Podella \footcite{podell2024sdxl}. Autorzy ci wykazali, że przeniesienie procesu stopniowego odszumiania obrazu z ciężkiej obliczeniowo matrycy pikseli do skompresowanej przestrzeni ukrytej (\emph{latent space}) pozwala na tworzenie bogatych fakturalnie przedstawień przy ułamku dawnego zapotrzebowania na pamięć, umożliwiając zarazem sterowanie procesem za pomocą języka naturalnego i sygnałów graficznych. Dla praktyki projektowania wnętrz moment ten oznaczał głęboką zmianę rytmu pracy koncepcyjnej. Obok wielogodzinnego budowania scen trójwymiarowych pojawiło się medium działające z lekkością i bezpośredniością szkicu --- pozwalające w ciągu kilkunastu sekund sprawdzić, jak w zastanym pokoju zagra miękkie światło popołudnia, surowy len, trawertyn czy przyciemniony dąb.
+
+Szybkość ta kryje w sobie jednak fundamentalne niebezpieczeństwo. Model dyfuzyjny nie „rozumie” przestrzeni w sposób, w jaki rozumie ją wykształcony architekt. Nie wie, czym jest ściana konstrukcyjna, jak działa grawitacja ani dlaczego skrzydło drzwiowe potrzebuje wolnego pola obrotu. Ucząc się wyłącznie dwuwymiarowych rozkładów prawdopodobieństwa z gigantycznych zbiorów danych treningowych, generator nabiera silnej bezwładności estetycznej. Pozostawiony sam sobie, ciąży ku katalogowej przeciętności: powiela opatrzone układy mebli, a przy pierwszej okazji łamie dyscyplinę budowlaną wnętrza. W moich wczesnych próbach model pozbawiony zewnętrznego nadzoru strukturalnego nagminnie przesuwał otwory okienne, wyginał linię stropu i gubił proporcje ścian. Wizualizacja koncepcyjna w dobie sztucznej inteligencji staje się zatem obszarem nieustannej negocjacji między zamysłem projektanta a statystyczną bezwładnością algorytmu.
+
+\section{Wyzwanie geometrii: od opisu słownego do pracy na amatorskiej fotografii pokoju}
+\label{ch04:sec:t2i-i2i}
+
+Napięcie między malarską swobodą modelu a dyscypliną architektury ujawnia się z całą ostrością w chwili, gdy przechodzimy od generowania obrazu wyłącznie z tekstu (ang.\ \emph{text-to-image}) do pracy na fotografii istniejącego pomieszczenia (ang.\ \emph{image-to-image}). Generacja czysto tekstowa potrafi wyczarować niezwykle sugestywny nastrój i świetnie sprawdza się jako luźna tablica inspiracji (moodboard) na samym początku rozmowy z klientem. Dla mieszkańca, który stoi we własnym, nieustawnym pokoju, obraz wygenerowany wyłącznie z opisu słownego jest jednak bezużyteczny. Prawdziwe mieszkanie stawia opór: ma konkretny rozstaw ścian, określoną wysokość nadproży, pion kanalizacyjny, grzejnik pod oknem i światło wpadające tylko z jednej strony świata.
+
+\textcolor{orange}{Problem ten komplikuje się jeszcze bardziej, gdy uświadomimy sobie, jakimi zdjęciami dysponuje zwykły użytkownik przystępujący do badania w platformie takiej jak IDA. Nie są to wystylizowane, wypoziomowane fotografie z czasopism architektonicznych wykonywane obiektywami typu \emph{tilt-shift}, lecz amatorskie kadry z telefonów komórkowych. Charakteryzują się one zazwyczaj agresywnym, szerokokątnym polem widzenia (odpowiednik ogniskowej $13$--$24\text{ mm}$), wyraźną dystorsją beczkowatą na krawędziach kadru, przypadkowym punktem widzenia z wysokości wzroku stojącego człowieka, mieszanym oświetleniem (jednoczesne światło dzienne z okna i ciepłe światło żarówki pod sufitem) oraz obecnością codziennego, nieuporządkowanego dobytku.}
+
+Wprowadzenie takiej fotografii jako punktu startowego procesu odszumiania otwiera fundamentalny dylemat warsztatowy, którym rządzi parametr siły odszumiania (ang.\ \emph{denoising strength}), określający, jak głęboko algorytm ingeruje w strukturę zdjęcia bazowego. Kiedy w swoich próbach ustawiałem ten parametr ostrożnie --- poniżej progu $0{,}35$ --- pokój zachowywał wprawdzie swoje ściany i okna, lecz model stawał się bezradny wobec istniejącego umeblowania i bałaganu. Zamiast zaproponować nową koncepcję przestrzenną, ograniczał się do powierzchownego przemalowania starej szafy czy zmiany koloru narzuty. Gdy natomiast zwiększałem swobodę modelu powyżej wartości $0{,}65$, aby pozwolić mu na odważną metamorfozę stylu, algorytm natychmiast zrywał więź z rzeczywistością: burzył układ ścian, zmieniał ogniskową obiektywu i traktował fotografię jedynie jako mglistą plamę barwną.
+
+Obserwując dziesiątki takich nieudanych generacji na fotografiach prawdziwych mieszkań, wyodrębniłem pięć powtarzających się patologii przestrzennych, którym ulega model dyfuzyjny pozbawiony dodatkowego nadzoru geometrycznego:
+\begin{enumerate}
+  \item \textbf{Pływająca perspektywa} --- utrata sztywności prostoliniowych krawędzi zbiegu ścian, podłogi i sufitu, przez co pokój sprawia wrażenie oglądanego przez krzywe zwierciadło.
+  \item \textbf{Deformacja i zanik otworów budowlanych} --- samowolne przesuwanie ościeżnic, zmiana proporcji przeszkleń lub kuriozalne zamienianie okien i drzwi w wiszące na ścianach obrazy bądź lustra.
+  \item \textbf{Zaburzenia skali antropometrycznej} --- wprowadzanie sprzętów oderwanych od wymiarów ludzkiego ciała, takich jak fotele sięgające połowy wysokości pomieszczenia czy miniaturowe stoliki kawowe.
+  \item \textbf{Halucynacje kubaturowe} --- dopisywanie przez model nieistniejących załamań muru, głębokich nisz, filarów lub schodów prowadzących donikąd.
+  \item \textbf{Zatracenie tektoniki i ciążenia} --- wtapianie brył mebli w płaszczyznę ściany bądź zawieszanie sprzętów w próżni, bez czytelnego punktu podparcia na posadzce.
+\end{enumerate}
+
+W architekturze wnętrz każdy z tych błędów natychmiast niszczy wiarygodność wizualizacji. \textcolor{orange}{Jak przypomina Gaston Bachelard, pamięć i poczucie bezpieczeństwa w domu są ściśle splecione z jego fizycznymi wymiarami, pionem ścian i horyzontem podłogi \footcite{bachelard1975wyobraznia}. Kiedy obraz fałszuje kubaturę własnego pokoju, odbiorca traci poczucie tożsamości miejsca --- przestaje rozpoznawać w wizualizacji swoją przestrzeń.} Dlatego pierwszym zadaniem, jakie postawiłem przed sobą w środowisku ComfyUI, było znalezienie sposobu na oddzielenie nienaruszalnej „skorupy” architektonicznej od zmiennej warstwy wystroju (ryc.~\ref{fig:ch04:geometry}).
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.26\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-geometry-fail-success.png}\\[0.5em]
+      \footnotesize Zestawienie: próba nieudana z załamaniem perspektywy i deformacją ścian (wysokie odszumianie bez nadzoru geometrycznego) wobec próby udanej z zachowaniem kubatury pomieszczenia.
+    }%
+  }
+  \caption{Porównanie zniekształcenia geometrii architektonicznej i udanej restylizacji z zachowaniem kubatury na tym samym zdjęciu bazowym.
+  Opracowanie własne autora.}
+  \label{fig:ch04:geometry}
+\end{figure}
+
+\section{Metody kontroli struktury i geometrii: ControlNet we wnętrzach}
+\label{ch04:sec:controlnet}
+
+Przełomowym narzędziem, które pozwoliło mi zapanować nad opisanym wyżej chaosem przestrzennym, okazała się architektura ControlNet opracowana przez Lvmin Zhanga, Anyi Rao i Maneesha Agrawalę \footcite{zhang2023controlnet}. Jej istota polega na zamrożeniu oryginalnych wag modelu dyfuzyjnego i dołączeniu do niego równoległej, trenowalnej ścieżki neuronowej spinanej za pomocą tzw.\ splotów zerowych (\emph{zero convolutions}). Mówiąc językiem warsztatu projektowego: ControlNet działa jak niewidzialny ruszt konstrukcyjny, który nakłada się na proces malowania obrazu. Zanim model zacznie wypełniać kadr światłem i materią, otrzymuje pomocniczą mapę wyekstrahowaną ze zdjęcia pokoju --- czarno-biały rysunek linii, krawędzi lub głębi, którego nie wolno mu zignorować.
+
+W serii systematycznych prób poddałem weryfikacji sześć odmiennych metod takiego prowadzenia obrazu, sprawdzając, jak każda z nich zachowuje się w zderzeniu z materią wnętrza mieszkalnego (ryc.~\ref{fig:ch04:depth}).
+
+Pierwszym i najbardziej oczywistym kandydatem był klasyczny detektor krawędzi \textbf{Canny} \footcite{canny1986edge}, który zamienia fotografię w gęstą siatkę białych konturów na czarnym tle. We wnętrzach Canny działa z chirurgiczną precyzją: znakomicie trzyma pion ościeżnic, rysunek ram okiennych i listew przypodłogowych. Szybko jednak odkryłem jego ciemną stronę. Algorytm ten jest całkowicie „ślepy” na hierarchię architektoniczną --- z jednakową skrupulatnością obrysowuje krawędź ściany nośnej, jak i fałdę narzuty na łóżku, wzór perskiego dywanu czy kable wystające spod biurka. Przy próbie głębszej zmiany aranżacji ta nadmiarowość staje się przekleństwem: model, zmuszony do respektowania każdego drobnego konturu, nie potrafi usunąć starego fotela, lecz próbuje wpasować nowy mebel w obrys poprzedniego.
+
+Zupełnie inną logikę oferuje estymacja głębi jednoocznej (\textbf{Depth}), której fundamenty w uczeniu maszynowym położyli René Ranftl i współpracownicy w architekturze MiDaS \textcolor{orange}{\footcite{ranftl2020midas}}, a którą do niezwykle wysokiej precyzji doprowadził model \textbf{Depth Anything} opracowany przez zespół Lihe Yanga \textcolor{orange}{\footcite{yang2024depthanything}}. Zamiast ostrych kresek otrzymujemy tu miękką, tonalną mapę odległości poszczególnych płaszczyzn od oka aparatu, przechodzącą płynnie od jasnego pierwszego planu do ciemnej głębi pokoju. Dla projektanta wnętrz mapa głębi jest odkryciem fundamentalnym: koduje ona czystą bryłę pomieszczenia --- swoiste „pudełko przestrzenne” --- gubiąc jednocześnie drobny rysunek detali i faktur. Dzięki temu model doskonale wie, gdzie kończy się podłoga i pod jakim kątem biegnie ściana, ale zachowuje wystarczającą swobodę, by wewnątrz tej bryły zaproponować zupełnie inną plastykę mebli.
+
+Doskonałym dopełnieniem mapy głębi okazały się mapy wektorów normalnych (\textbf{Normal maps}), które opisują kąt nachylenia każdej płaszczyzny w przestrzeni trójwymiarowej za pomocą barw składowych. Ich wartość doceniłem szczególnie przy pracy nad światłocieniem: wektory normalne pozwalają modelowi bezbłędnie odróżnić pionowe lico tynku od poziomej tafli parkietu i sufitu, co zapobiega zjawisku „rozlewania się” plam świetlnych na narożnikach ścian.
+
+Aby jednak odzyskać ostrość krawędzi architektonicznych bez wpadania w pułapkę detektora Canny, sięgnąłem po wyspecjalizowany model \textbf{M-LSD} (\emph{Mobile Line Segment Detection}), zaprojektowany przez Geona Gu i współpracowników \footcite{gu2022mlsd}. Algorytm ten ignoruje wszelkie krzywizny, miękkie tkaniny, rośliny i drobny bałagan, wyławiając z obrazu wyłącznie długie, geometryczne odcinki linii prostych. W rezultacie z fotografii zagraconego salonu M-LSD wydobywa czysty szkielet tektoniczny: zbiegi ścian, belkowanie stropu i prostokąty okien.
+
+Warsztat ten uzupełniłem o dwie metody o charakterze bardziej szkicowym i malarskim. Pierwszą z nich są moduły \textbf{Scribble i Lineart}, które pozwalają projektantowi dorysować odręcznie kilka kresek bezpośrednio na zdjęciu pustego pokoju, aby wskazać modelowi, gdzie dokładnie ma stanąć bryła nowej wyspy kuchennej czy regału.
+
+\textcolor{orange}{Drugą, niezwykle istotną dla całej koncepcji mojej pracy metodą jest \textbf{IP-Adapter} (\emph{Image Prompt Adapter}), opracowany przez Hu Ye i współpracowników \footcite{ye2023ipadapter}. W praktyce projektowania wnętrz bardzo szybko natrafiamy bowiem na niewystarczalność języka pojęciowego: nawet najdłuższy opis słowny w prompcie nie jest w stanie precyzyjnie oddać subtelnego odcienia spatynowanego mosiądzu, mięsistości tkaniny \emph{bouclé} czy specyficznego, mlecznego rozproszenia światła w stylu japandi. IP-Adapter rozwiązuje ten problem poprzez sprzężoną uwagę krzyżową (\emph{decoupled cross-attention}), pozwalając podać modelowi dyfuzyjnemu fotografię inspiracji jako bezpośredni „prompt wizualny”. Doświadczenia z tym mechanizmem w ComfyUI stały się dla mnie bezpośrednim impulsem do stworzenia szóstego kanału w ślepej macierzy platformy IDA --- wariantu referencji inspiracji (\texttt{inspiration\_reference}), w którym wybrane przez uczestnika obrazy bezpośrednio kształtują atmosferę jego pokoju.}
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.26\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-depth-overlay.png}\\[0.5em]
+      \footnotesize Zdjęcie bazowe pokoju oraz odpowiadające mu mapy kontrolne: głębia (Depth Anything), linie proste (M-LSD) oraz krawędzie Canny.
+    }%
+  }
+  \caption{Zestawienie fotografii pomieszczenia z mapami nadzoru geometrycznego wykorzystywanymi w próbach testowych.
+  Opracowanie własne autora.}
+  \label{fig:ch04:depth}
+\end{figure}
+
+\section{Maskowanie, inpainting i segmentacja semantyczna (SAM / SAM 2)}
+\label{ch04:sec:sam}
+
+Nawet najlepiej zestrojona kontrola głębi i linii prostych napotyka jednak granicę w sytuacji, gdy wnętrze wymaga interwencji selektywnej. W praktyce projektowej niezwykle często spotykamy przestrzenie o silnej, zastanej tożsamości materiałowej --- mieszkania w kamienicach z oryginalnym dębowym parkietem ułożonym w jodełkę, zabytkową stolarką drzwiową czy piecem kaflowym, których mieszkaniec pod żadnym pozorem nie chce utracić, pragnąc jedynie wymienić współczesne, przypadkowe umeblowanie. Przepuszczenie całego takiego kadru przez globalny proces generacji nieuchronnie zatarłoby autentyzm tych detali. Naturalną odpowiedzią warsztatową staje się wówczas technika domalowywania lokalnego (ang.\ \emph{inpainting}), w której chronione fragmenty obrazu zasłania się maską, pozwalając modelowi działać wyłącznie w odsłoniętej strefie.
+
+Tradycyjne, ręczne obrysowywanie skomplikowanych kształtów krzeseł, lamp i roślin za pomocą pędzla lub lassa w programie graficznym jest zajęciem żmudnym i niemożliwym do zautomatyzowania. W moich badaniach w ComfyUI połączyłem więc technikę maskowania z przełomowymi modelami automatycznej segmentacji semantycznej z rodziny \textbf{Segment Anything (SAM)}, opracowanymi przez zespół Alexandra Kirillova \footcite{kirillov2023sam}, oraz ich rozwinięciem \textbf{SAM~2} autorstwa Nikhila Raviego i współpracowników \footcite{ravi2024sam2}. Modele te potrafią błyskawicznie wyodrębnić z fotografii spójne obrysy poszczególnych przedmiotów. Co więcej, zestawienie modułu SAM z otwartym detektorem obiektów sterowanym tekstem \textbf{Grounding DINO}, stworzonym przez Shilonga Liu i zespół \textcolor{orange}{\footcite{liu2024groundingdino}}, pozwoliło mi zbudować w ComfyUI ścieżkę, w której wystarczy wpisać słowo „meble”, „dywan” lub „ściany”, aby algorytm samoczynnie zlokalizował te obiekty i wygenerował precyzyjną, czarno-białą maskę oddzielającą ruchome wyposażenie od stałej substancji budowlanej (ryc.~\ref{fig:ch04:sam}).
+
+\subsection{Koncepcja pustej skorupy (empty shell)}
+\label{ch04:sec:empty-shell}
+
+Praca z automatycznymi maskami doprowadziła mnie do sformułowania jednego z kluczowych pojęć metodologicznych tej rozprawy --- koncepcji \textbf{pustej skorupy pomieszczenia} (ang.\ \emph{empty shell}). Zauważyłem bowiem, że dopóki na zdjęciu wejściowym znajdują się stare, masywne meble (na przykład ciemna, rozbudowana meblościanka czy narożna sofa), dopóty rzucają one swój „cień” na mapę głębi i podświadomie zmuszają model generatywny do powtarzania dotychczasowego układu funkcjonalnego. Aby prawdziwie uwolnić wyobraźnię przestrzenną bez burzenia murów, pokój trzeba najpierw wizualnie opróżnić.
+
+Przez „pustą skorupę” rozumiem taki stan pośredni obrazu, w którym pełna geometria kubatury, rytm okien, bieg podłogi oraz naturalny kierunek wpadającego światła zostają wiernie ocalone, natomiast wszelkie ruchome sprzęty, tekstylia i przedmioty codziennego użytku zostają z kadru wymazane, odsłaniając czyste tło architektoniczne. W warsztacie ComfyUI realizowałem ten proces w dwóch aktach: w pierwszym kroku automatyczna maska SAM wycinała meble, a model domalowujący rekonstruował w ich miejscu brakujące fragmenty parkietu, listew przypodłogowych i ścian; dopiero w drugim kroku na tak oczyszczoną scenę nakładałem mapę głębi i wprowadzałem nową koncepcję estetyczną.
+
+Doświadczenie to okazało się bezcenne przy późniejszym projektowaniu samej platformy IDA. Choć w aplikacji internetowej zrezygnowałem z ciężkiego, wieloetapowego wycinania masek SAM na rzecz skalowalności, samą ideę \emph{empty shell} przeniosłem tam wprost: zaimplementowałem dedykowany mechanizm oczyszczania pokoju z wyposażenia za pomocą precyzyjnej instrukcji systemowej modelu wizyjnego (opisany szerzej w rozdz.~\ref{ch07:sec:empty-shell}), dając użytkownikowi możliwość rozpoczęcia dialogu projektowego od czystej, niezapisanej przestrzeni.
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.26\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-sam-mask.png}\\[0.5em]
+      \footnotesize Maska segmentacji SAM wyodrębniająca strefę umeblowania oraz wynik restylizacji samej strefy wypoczynkowej z nienaruszoną architekturą ścian.
+    }%
+  }
+  \caption{Selektywna restylizacja strefy wnętrza przy użyciu automatycznej maski segmentacji SAM.
+  Opracowanie własne autora.}
+  \label{fig:ch04:sam}
+\end{figure}
+
+\section{Autorskie próby i testy w środowisku ComfyUI}
+\label{ch04:sec:comfyui-proby}
+
+Wybór środowiska ComfyUI jako mojego głównego laboratorium badawczego nie był przypadkowy. Większość komercyjnych programów do generowania obrazów przypomina zamknięte pudełka: oferuje użytkownikowi estetyczne okienko do wpisania tekstu i jeden lub dwa suwaki, ukrywając pod maską cały proces podejmowania decyzji plastycznych. ComfyUI działa zupełnie inaczej --- jest otwartą przestrzenią opartą na grafach węzłowych (ang.\ \emph{node-based workflows}), przypominającą bardziej stół montażowy lub modularny syntezator dźwięku niż tradycyjny program graficzny (ryc.~\ref{fig:ch04:comfyui-graph}).
+
+Praca na węzłach dała mi jako projektantowi cztery fundamentalne przewagi warsztatowe. Po pierwsze, uzyskałem pełną kontrolę nad przygotowaniem obrazu bazowego --- mogłem na żywo obserwować i korygować czułość detektorów linii czy rozdzielczość map głębi jeszcze przed uruchomieniem właściwego generatora. Po drugie, ComfyUI pozwoliło mi zestawiać wiele modułów ControlNet w równoległe łańcuchy (tzw.\ \emph{multi-ControlNet}) i precyzyjnie dyrygować czasem ich działania --- na przykład nakazując modelowi ścisłe trzymanie się linii architektonicznych tylko przez pierwszą połowę procesu wywoływania obrazu, a w drugiej połowie pozwalając mu na miękkie dopracowanie światła i tkanin. Po trzecie, mogłem swobodnie wpinać w ten obieg lekkie moduły dostrajające styl (adaptery LoRA) oraz obrazy referencyjne. Po czwarte wreszcie --- każdy wygenerowany w ComfyUI obraz zapisuje w swoich metadanych kompletny schemat użytego grafu wraz z ziarnem losowości (\emph{seed}), co zapewniło moim próbom stuprocentową powtarzalność i pozwoliło porównywać wpływ pojedynczego parametru na dokładnie tym samym ujęciu pokoju.
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.28\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-comfyui-graph.png}\\[0.5em]
+      \footnotesize Zrzut autorskiego grafu ComfyUI: węzły ładowania modeli, łańcuch multi-ControlNet (Depth + M-LSD), obsługa masek oraz moduł próbkowania.
+    }%
+  }
+  \caption{Autorski graf przepływu pracy w ComfyUI wykorzystywany do testów kontroli geometrii i restylizacji wnętrz.
+  Opracowanie własne autora.}
+  \label{fig:ch04:comfyui-graph}
+\end{figure}
+
+\subsection{Wnioski z testów modeli bazowych i odkrycie paradoksu nadmiernego rygoru}
+\label{ch04:sec:modele-testy}
+
+W zbudowanym w ten sposób warsztacie skonfrontowałem ze sobą dwie wiodące rodziny modeli generatywnych: dojrzałą architekturę \textbf{Stable Diffusion XL (SDXL)} \textcolor{orange}{\footcite{podell2024sdxl}} oraz nowszą generację modeli opartych na przepływach rektyfikowanych \textbf{FLUX} (w wariantach \emph{Dev} oraz \emph{Schnell}), wspomagane niskorzędowymi adapterami wag \textbf{LoRA} \footcite{hu2022lora} (tab.~\ref{tab:ch04:modele}).
+
+Modele z rodziny SDXL okazały się niezwykle zdyscyplinowanym rzemieślnikiem. Dzięki dopracowanym modułom ControlNet reagowały na mapy głębi i detekcję linii M-LSD z ogromną posłusznością, pozwalając utrzymać rzut i perspektywę pokoju niemal bez odchyleń. Ich słabością bywała natomiast pewna suchość plastyczna --- przy trudniejszych materiałach, takich jak surowy len, matowe drewno czy rozproszone w głębi pokoju światło dzienne, SDXL wymagał wsparcia celowanymi adapterami LoRA, aby uniknąć sztucznego, nieco plastikowego wykończenia powierzchni.
+
+Zupełnie inaczej zachowywał się model FLUX. Już w pierwszych próbach zachwycił mnie niezwykłą kulturą malarską: potrafił oddać miękkość światła ślizgającego się po tynku, wyczuwalną pod palcami fakturę plecionki i subtelną głębię cieni bez żadnych dodatkowych protez. Ta siła okazała się jednak obosieczna. FLUX posiada tak silnie ukształtowany własny „instynkt estetyczny” (prior), że w starciu z zewnętrznymi mapami ControlNet nieustannie próbuje się spod nich wyzwolić --- przy standardowych ustawieniach potrafi zignorować mapę głębi i przebudować pokój na własną modłę, a przy zbyt mocnym dociśnięciu wag kontrolnych gwałtownie traci jakość i generuje artefakty. Opanowanie go wymagało wypracowania subtelnej strategii: narzucania rygoru geometrycznego wyłącznie w początkowej fazie formowania kompozycji (przez pierwsze 40\% kroków odszumiania) i całkowitego zwalniania blokady w fazie wykańczania detalu.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Jakościowe podsumowanie autorskich prób doboru modeli i mechanizmów kontroli w ComfyUI.}
+  \label{tab:ch04:modele}
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.21\textwidth}>{\raggedright\arraybackslash}p{0.22\textwidth}>{\raggedright\arraybackslash}p{0.22\textwidth}>{\raggedright\arraybackslash}p{0.26\textwidth}@{}}
+    \toprule
+    Rozwiązanie & Wierność geometrii pokoju & Swoboda kreacji stylu & Wnioski praktyczne \\
+    \midrule
+    SDXL + Canny & Wysoka (sztywna) & Ograniczona & Zbyt mocno blokuje wymianę mebli \\
+    SDXL + Depth + M-LSD & Bardzo wysoka & Dobra & \textbf{Optymalny kompromis} dla wnętrz \\
+    FLUX + ControlNet & Zmienna (silny instynkt własny) & Bardzo wysoka & Świetna plastyka materii, ryzyko ucieczki kubatury \\
+    SDXL + Inpainting SAM & Bardzo wysoka w strefie & Wysoka w masce & Idealne do selektywnej wymiany stref \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Najważniejszym odkryciem, jakie wyniosłem z setek godzin spędzonych nad grafami w ComfyUI, było jednak zjawisko, które nazwałem \textbf{paradoksem nadmiernego rygoru}. Intuicja podpowiadałaby, że im mocniej zwiążemy model mapami krawędzi i głębi (ustawiając wagi blisko wartości $1{,}0$), tym lepszy projekt wnętrza otrzymamy. Rzeczywistość plastyczna okazała się odwrotna. Kiedy waga nadzoru krawędziowego przekraczała próg $0{,}8$, rzut pokoju stawał się wprawdzie nienaganny, ale wnętrze umierało estetycznie: powierzchnie robiły się płaskie i martwe, tkaniny przypominały wycięte z blachy, a światło traciło naturalną miękkość. Skrępowany sztywnym gorsetem krawędzi model nie miał przestrzeni, by namalować swobodnie opadającą fałdę zasłony, miękką poduszkę czy organiczną gałąź rośliny.
+
+Dopiero świadome poluzowanie tego gorsetu przyniosło przełom (ryc.~\ref{fig:ch04:model-comparison}). Najbardziej przekonujące, żywe, a zarazem wierne architektonicznie rezultaty uzyskiwałem, łącząc ze sobą miękką mapę głębi \textbf{Depth Anything (z wagą $0{,}7$)} oraz rzadką siatkę linii prostych \textbf{M-LSD (z wagą $0{,}4$)}, przy umiarkowanym odszumianiu rzędu $0{,}55$--$0{,}65$ i wsparciu lekkiego adaptera LoRA. W takim układzie mapa głębi i linie proste trzymały w ryzach architektoniczne „pudełko” ścian i okien, pozostawiając wewnątrz niego pełną swobodę dla tchnienia światła i plastyki nowych materiałów.
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \parbox[c][0.26\textheight][c]{0.92\textwidth}{%
+      \centering
+      \Todo{wstaw plik: figures/comfyui/ch04-model-comparison.png}\\[0.5em]
+      \footnotesize Porównanie wygenerowanych koncepcji na tym samym zdjęciu bazowym: wariant ze zbyt sztywnym nadzorem krawędziowym Canny, wariant zbalansowany (Depth + M-LSD) oraz wariant bez nadzoru z załamaną geometrią.
+    }%
+  }
+  \caption{Wpływ doboru wag nadzoru strukturalnego na efekt restylizacji wnętrza.
+  Opracowanie własne autora.}
+  \label{fig:ch04:model-comparison}
+\end{figure}
+
+\section{Przejście od prób w ComfyUI do architektury platformy IDA}
+\label{ch04:sec:most-ida}
+
+Zebrane w ComfyUI doświadczenia postawiły mnie przed zasadniczym pytaniem projektowym: skoro wielowęzłowy graf łączący mapy głębi, detekcję linii M-LSD i maski SAM daje tak wysoką kontrolę nad wnętrzem, to czy należy przenieść go wprost jako silnik uruchomieniowy do platformy badawczej IDA? Odpowiedź, do jakiej doszedłem, była jednoznacznie przecząca --- i to właśnie ona stanowi jeden z najważniejszych momentów metodologicznych tej pracy.
+
+Środowisko węzłowe jest znakomitym instrumentem w rękach badacza i projektanta, który rozumie wzajemne oddziaływania wag, kroków odszumiania i preprocesorów. Gdyby jednak zwykły uczestnik badania terenowego został skonfrontowany z koniecznością strojenia parametrów technicznych lub korygowania masek, intymny dialog o potrzebach mieszkaniowych natychmiast zamieniłby się w frustrujący kurs obsługi oprogramowania, prowadząc do masowego porzucania procedury (wbrew założeniom pytania \RQ{1}). Równie istotna okazała się bariera infrastrukturalna: utrzymywanie w chmurze ciężkiego stosu wielu modeli wizji komputerowej i grafów dyfuzyjnych generujących na żywo po sześć wariantów dla każdego badanego wiązałoby się z wielominutowym czasem oczekiwania i brakiem stabilności w warunkach domowych.
+
+\textcolor{orange}{Przede wszystkim jednak o rezygnacji z ręcznie strojonego grafu na rzecz jednolitego potoku chmurowego przesądził rygor eksperymentalny ślepej macierzy (pytanie \RQ{3}). Aby porównanie sześciu źródeł personalizacji (\texttt{implicit}, \texttt{explicit}, \texttt{personality}, \texttt{mixed}, \texttt{mixed\_functional} oraz \texttt{inspiration\_reference}) było metodologicznie czyste, wszystkie sześć obrazów wyświetlanych uczestnikowi obok siebie musi zachowywać tę samą perspektywę i kubaturę pokoju, różniąc się wyłącznie treścią estetyczną wynikającą z danego kanału preferencji. Gdyby poszczególne warianty różniły się stopniem deformacji ścian, badany wybierałby kadr poprawniejszy geometrycznie, a nie ten, który rzeczywiście odpowiada jego wrażliwości.}
+
+W duchu badań przez projektowanie (\emph{Research through Design}) dokonałem więc świadomego przekładu: zamiast przenosić do platformy IDA ciężką maszynerię węzłów z ComfyUI, przeniosłem do niej \textbf{wypracowane w ComfyUI zasady myślenia o przestrzeni}. Po pierwsze, funkcję wirtualnego analityka sceny powierzyłem szybkiemu modelowi wizyjno-językowemu (Gemini Flash Lite), który przed rozpoczęciem generacji „czyta” fotografię pokoju, rozpoznając układ planów, oświetlenie i charakter wnętrza. Po drugie, odkrytą w ComfyUI zasadę nienaruszalności „skorupy” architektonicznej zapisałem w postaci twardego bloku wytycznych konstrukcyjnych (\texttt{preserve} w schemacie JSON~v3) oraz instrukcji systemowej trybu \emph{empty shell}, egzekwowanej przez model generatywny Gemini Image w środowisku Vertex~AI. Po trzecie wreszcie --- cały ciężar eksperymentu przesunąłem z technicznego żonglowania wagami na \textbf{ślepą macierz sześciu źródeł preferencji}. Dzięki temu każdy uczestnik otrzymuje obrazy wygenerowane w tym samym, stabilnym rygorze geometrycznym, a jedynym czynnikiem różnicującym poszczególne wizualizacje staje się ludzkie źródło wytycznych.
+
+\section{Krytyka medium i kryteria jakości wizualizacji}
+\label{ch04:sec:krytyka}
+
+Praca z obrazem syntetycznym w dyscyplinie sztuk plastycznych wymaga wyjścia poza czystą pragmatykę narzędzia i postawienia pytań o naturę samego medium: o jego skłonność do kulturowego ujednolicenia, o status autora oraz o granicę między iluzją a rzetelną propozycją przestrzenną.
+
+\subsection{Estetyka uśrednienia („AI look”) i homogenizacja kulturowa wnętrz}
+Każdy, kto dłużej obcuje z obrazami generowanymi przez sztuczną inteligencję, zaczyna dostrzegać w nich trudny do pomylenia, nużący rys --- swoistą „estetykę uśrednienia” (określaną potocznie mianem \emph{AI look}). Jej symptomami są nienaturalnie gładkie, bezszwowe powierzchnie, teatralnie rozżarzone punkty świetlne, przesadna symetria oraz katalogowy zestaw tych samych, powtarzanych w nieskończoność dekoracji rodem z popularnych portali społecznościowych. W projektowaniu wnętrz mieszkalnych owa syntetyczna politura jest zjawiskiem głęboko destrukcyjnym, ponieważ wypłukuje przestrzeń z autentyzmu i indywidualnego charakteru.
+
+\textcolor{orange}{Patrząc na to zjawisko przez pryzmat fenomenologii architektury Juhaniego Pallasmy, można powiedzieć, że uśredniony obraz generatywny jest skrajnym triumfem „retinalności” --- obrazem stworzonym wyłącznie dla szybkiego, powierzchownego oka, a całkowicie pozbawionym ciężaru dotykowego, zapachu, akustyki i śladu czasu \footcite{pallasmaa2012oczy}. Prawdziwe wnętrze domowe żyje niedoskonałością: matowym porowatym tynkiem, rysunkiem słojów drewna, które starzeje się wraz z mieszkańcami, oraz światłem, które zostawia w kątach pokoju strefy kojącego półmroku. Co więcej, globalne modele dyfuzyjne niosą ze sobą silne skrzywienie kulturowe: trenowane głównie na komercyjnych fotografiach z zachodnich portali nieruchomości i katalogów deweloperskich, mają tendencję do narzucania każdemu pomieszczeniu bezosobowej estetyki luksusowego lobby hotelowego, zacierając lokalną specyfikę środkowoeuropejskich mieszkań w kamienicach czy blokach modernistycznych.} Przełamanie tego cyfrowego banału wymaga od projektanta świadomego oporu przeciwko statystycznej gładkości modelu --- narzucania w wytycznych wyczuwalnych, organicznych faktur, naturalnych materiałów oraz nasycenia biofilicznego, które przywracają wizualizacji zmysłową gęstość.
+
+\subsection{Autorstwo i odpowiedzialność w procesie ko-kreacji}
+Drugim fundamentalnym zagadnieniem jest pytanie o podmiotowość twórczą: kto właściwie jest autorem koncepcji wnętrza wyłaniającej się z modelu dyfuzyjnego? Odrzucam w tej pracy zarówno naiwny entuzjazm przypisujący maszynie status autonomicznego artysty, jak i lękowy pogląd, jakoby narzędzia generatywne sprowadzały architekta wnętrz do roli biernego operatora.
+
+\textcolor{orange}{W proponowanym przeze mnie ujęciu proces generatywny jest formą wielostronnej ko-kreacji, w której ciężar autorstwa przesuwa się z manualnego wykreślania pojedynczego detalu na \textbf{zaprojektowanie architektury dialogu, kuratorstwo wytycznych oraz rygor selekcji} \footcite{zimmerman2007rtd,frayling1993research}.} Użytkownik wnosi do tego spotkania własną wrażliwość, pamięć zamieszkiwania i fotografię swojej przestrzeni; ja jako projektant i twórca artefaktu IDA kształtuję strukturę rozmowy, formułuję hipotezy łączące psychologię z formą i wyznaczam nieprzekraczalne ramy geometryczne; model dyfuzyjny pełni zaś rolę wirtuozerskiego, lecz wymagającego stałego nadzoru wykonawcy wizualnego. Pełna odpowiedzialność etyczna i zawodowa za to, czy powstały obraz szanuje prawa ergonomii, logikę konstrukcji i godność mieszkańca, pozostaje niezmiennie po stronie człowieka.
+
+\subsection{Kryteria weryfikacji jakości wizualizacji koncepcyjnej wnętrza}
+\label{ch04:sec:checklista}
+
+Aby opisana wyżej postawa krytyczna nie pozostała jedynie deklaracją teoretyczną, na zamknięcie badań warsztatowych w ComfyUI sformułowałem sześć kryteriów oceny plastyczno-architektonicznej, którym poddawałem wygenerowane obrazy przed włączeniem wypracowanych reguł do platformy IDA:
+\begin{enumerate}
+  \item \textbf{Spójność tektoniczna} --- zachowanie ciągłości i prostoliniowości krawędzi zbiegu ścian, stropu oraz posadzki, wolne od efektu „pływania” płaszczyzn i fałszywych załamań perspektywy.
+  \item \textbf{Wierność otworów budowlanych} --- nienaruszona lokalizacja, rytm oraz proporcje okien i drzwi względem wyjściowej fotografii pomieszczenia.
+  \item \textbf{Prawidłowość skali antropometrycznej} --- zachowanie wiarygodnych, ergonomicznych proporcji mebli i wyposażenia w odniesieniu do wysokości kondygnacji oraz wymiarów człowieka.
+  \item \textbf{Czystość i haptyczność materii} --- przekonujące, zróżnicowane oddanie faktur (naturalnego rysunku drewna, miękkości splotu tkanin, mineralnej matowości tynku i kamienia), pozbawione syntetycznych rozmyć oraz nienaturalnych zrostów materiałowych.
+  \item \textbf{Logika światłocienia} --- pełna zgodność kierunku padania cieni oraz temperatury barwowej z widocznymi na zdjęciu oknami i rozmieszczeniem opraw oświetleniowych.
+  \item \textbf{Czytelność funkcjonalna} --- respektowanie naturalnych ciągów komunikacyjnych w pokoju, wykluczające blokowanie drzwi przez wygenerowane sprzęty lub wtapianie mebli w przegrody budowlane.
+\end{enumerate}
+
+Tak zdefiniowane sito kryteriów zamyka etap autorskiej eksploracji medium dyfuzyjnego. Stanowi ono bezpośredni pomost prowadzący od warsztatowych zmagań z geometrią obrazu w ComfyUI do kolejnych rozdziałów pracy: refleksji nad rolą osobowości (rozdz.~\ref{ch05:top}), metodologii badania (rozdz.~\ref{ch06:top}) oraz pełnego opisu dzieła IDA (rozdz.~\ref{ch07:top}).

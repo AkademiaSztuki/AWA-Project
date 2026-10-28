@@ -105,4 +105,4 @@ Nie ustawiaj `final`, dopóki nie znikną `\Todo` / `\NeedsCite` w pliku.
 
 - Merge `pisemna` → `main` bez decyzji użytkownika
 - Edycja `apps/`, `infra/` na tym branchu
-- Commit PDF do gita (`exports/` i `*.pdf` build są ignorowane; wyjątek: figury źródłowe w `figures/`)
+- Commit roboczych PDF kompilacji do gita (`exports/` i `*.pdf` build są ignorowane; wyjątki: figury źródłowe w `figures/` oraz archiwalne `wersje-pdf/robocza-*.pdf`, publikowane na wyraźną prośbę użytkownika)

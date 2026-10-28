@@ -19,7 +19,7 @@
 *.xdv
 main.pdf
 *.pdf
-wersje-pdf/
+wersje-pdf/*
 build/
 
 # Chapter aux from \include
@@ -31,3 +31,8 @@ backmatter/*.aux
 exports/**
 !exports/.gitkeep
 main.bbl-SAVE-ERROR
+
+# Published version archive (explicitly requested)
+!wersje-pdf/robocza-*.pdf
+!wersje-pdf/README.md
+!wersje-pdf/.gitattributes

@@ -1,0 +1,107 @@
+% OWNER: framing
+% STATUS: review (poprawiono: terminologia, usunięto wzmianki o „pracowni”, zaktualizowano cytowania)
+% SOURCES: notes/SPIS_TRESCI_PROPOZYCJA_ASP.md, notes/HIPOTEZY_REWIZJA.md, GLOSSARY.md
+\chapter{Wprowadzenie}
+\label{ch01:top}
+\ChapterStatus{review}{framing}
+
+\section{Wnętrze jako doświadczenie i obraz}
+\label{ch01:sec:tlo}
+
+Architektura wnętrz operuje nie tylko rzutem budowlanym i materią fizyczną. Jej kluczowym narzędziem staje się \emph{obraz} proponowanego stanu przestrzeni --- wizualizacja, która zapośrednicza relację między zamysłem projektanta a wyobrażeniem i potrzebami mieszkańca.
+W codziennej praktyce projektowej rola ekranu systematycznie rośnie: o nastroju, doborze materiałów i układzie funkcjonalnym coraz częściej przesądzają cyfrowe moodboardy, rendery, a ostatnio także generatywne obrazy syntetyczne, zanim powstanie jakakolwiek dokumentacja wykonawcza \textcolor{orange}{\footcite{pallasmaa2012oczy}}.
+
+Problem nie sprowadza się jednak do samej technologii czy oprogramowania. Wynika z fundamentalnego pytania dyscypliny: \emph{jak projektować personalizację koncepcji wnętrza}, skoro doświadczenie przestrzeni mieszkalnej ma charakter wielozmysłowy, afektywny i tożsamościowy, podczas gdy współczesne narzędzia generatywne potrafią w ułamku sekundy wytworzyć atrakcyjny obraz, ukrywając przesłanki własnego działania w „czarnej skrzynce” algorytmu?
+Niniejsza rozprawa powstaje w Akademii Sztuki w Szczecinie, w dyscyplinie sztuk plastycznych i konserwacji dzieł sztuki. Przedmiotem moich dociekań jest artefakt projektowy oraz proces twórczy: dialog estetyczny przełożony na kontrolowaną syntezę obrazu przestrzeni.
+
+\section{Personalizacja estetyczna a narzędzia generatywne}
+\label{ch01:sec:luka}
+
+Dostępne komercyjnie aplikacje określane mianem „AI do wnętrz” proponują zazwyczaj uproszczoną stylizację przesłanego zdjęcia: użytkownik wskazuje gotowy styl z listy, wpisuje krótki prompt tekstowy i otrzymuje efektowny render.
+Rozwiązania te bywają atrakcyjne produktowo, pomijają jednak to, co stanowi istotę dialogu projektowego: rozróżnienie preferencji \emph{jawnych} (deklarowanych) i \emph{ukrytych} (afektywnych), odczuwany nastrój regeneracyjny przestrzeni, rytuały domowe oraz wieloźródłowe uwarunkowania gustu. Przede wszystkim zaś nie pozwalają użytkownikowi zweryfikować, z jakich przesłanek zrodziła się przedstawiona mu propozycja.
+
+Luką projektowo-badawczą, na którą odpowiada ta praca, jest brak \textbf{zintegrowanej platformy dialogu}: systemu łączącego autorskie instrumentarium badania preferencji z przejrzystą (\emph{explainable}) syntezą briefu oraz eksperymentalną, ślepą macierzą wariantów, która pozwala empirycznie ocenić skuteczność poszczególnych źródeł personalizacji.
+Kategorie psychologii środowiskowej (takie jak postrzegana regeneracyjność czy biofilia) traktuję jako ramy myślenia projektowego, a nie jako czysty pomiar laboratoryjny.
+
+\section{Problem rozbieżności deklaracji i zachowania}
+\label{ch01:sec:problem}
+
+Użytkownicy zapytani wprost o upodobania deklarują określony styl, paletę barwną i materiały, podczas gdy w zachowaniu intuicyjnym --- w szybkim geście akceptacji lub odrzucenia obrazu --- ujawniają zgoła odmienną logikę wrażliwości estetycznej.
+Kahneman opisuje ten rozdźwięk przez pryzmat myślenia szybkiego i wolnego, a Greenwald, McGhee i Schwartz wskazują na możliwość pomiaru postaw utajonych poprzez rejestrację automatycznych reakcji afektywnych \footcite{kahneman2011thinking,greenwald1998iat}.
+\textcolor{orange}{W perspektywie fenomenologii i poetyki zamieszkiwania ta rozbieżność przestaje być jedynie błędem kwestionariusza: staje się fascynującym napięciem między gustem deklaratywnym, ukształtowanym przez mody i normy społeczne, a autentyczną, intymną potrzebą zmysłowego zadomowienia człowieka \footcite{bachelard1975wyobraznia,pallasmaa2012oczy}.}
+
+Dla projektowania wnętrz wspomaganego przez sztuczną inteligencję fakt ten niesie daleko idące konsekwencje. System oparty wyłącznie na deklaracjach słownych ryzykuje wygenerowanie aranżacji poprawnej formalnie, lecz obcej emocjonalnie dla mieszkańca. Z kolei system polegający wyłącznie na gestach intuicyjnych może zignorować funkcję pokoju i świadome wymagania użytkowe.
+Celem projektu IDA jest stworzenie artefaktu, który nie tuszuje owego konfliktu źródeł, lecz czyni zeń świadome tworzywo procesu projektowego.
+
+\section{Cel, zakres i pytania badawcze}
+\label{ch01:sec:cel}
+
+\paragraph{Cel.}
+Zaprojektowanie, realizacja i ewaluacja eksperymentalnej platformy badawczo-projektowej IDA (\emph{AI Interior Design Dialogue Research Platform}) jako artefaktu w paradygmacie Research through Design. Platforma przekłada wieloźródłowy profil preferencji na kontrolowany proces personalizacji wnętrz, umożliwiając badanie rozbieżności między deklaracją a zachowaniem oraz ocenę źródeł wytycznych w ślepym porównaniu koncepcji \footcite{idaPlatform2026}.
+
+\paragraph{Zakres.}
+Praca koncentruje się na koncepcyjnych wizualizacjach wnętrz mieszkalnych (synteza image-to-image warunkowana fotografią pokoju użytkownika). Opracowanie dokumentacji techniczno-wykonawczej i kosztorysów leży poza zakresem rozprawy.
+Część terenowa platformy operuje na zoptymalizowanym potoku generacji obrazu w środowisku chmurowym, zasilającym macierz \textbf{sześciu} wariantów: \texttt{implicit}, \texttt{explicit}, \texttt{personality}, \texttt{mixed}, \texttt{mixed\_functional} oraz \texttt{inspiration\_reference}.
+Autorskie próby w środowisku ComfyUI (m.in.\ techniki ControlNet, estymacja głębi, segmentacja SAM) stanowią praktyczny poligon testowy projektanta, uzasadniający decyzje podjęte w finalnym artefakcie IDA.
+
+\paragraph{Pytania badawcze.}
+Oś dociekań wyznacza zestaw pytań badawczych \RQ{1}--\RQ{6}:
+\begin{enumerate}
+  \item[\RQ{1}] Czy zintegrowany proces badania preferencji w formie interaktywnego dialogu (RtD) pozwala na zebranie wielowymiarowego profilu bez nadmiernego odsetka porzucenia procedury przez uczestników?
+  \item[\RQ{2}] W jakim stopniu preferencje ukryte i jawne rozmijają się w wyborach estetycznych i jak ta rozbieżność wpływa na zachowanie w macierzy generacji?
+  \item[\RQ{3}] Które źródło wytycznych w ślepej macierzy sześciu wariantów użytkownicy wybierają najczęściej i czy wybór ten koreluje z profilem respondenta? (rdzeń empiryczny)
+  \item[\RQ{4}] Czy wymiary osobowości Wielkiej Piątki wykazują związki z preferencjami przestrzennymi i wyborem wariantu osobowościowego? (eksploracyjnie)
+  \item[\RQ{5}] Czy rozpiętość nastroju między stanem obecnym a pożądanym w pokoju (PRS) wiąże się z preferencją wariantu łączącego nastrój z funkcją (\texttt{mixed\_functional})?
+  \item[\RQ{6}] W jaki sposób uczestnicy oceniają przejrzystość procesu i poczucie własnej sprawczości w toku interakcji z platformą?
+\end{enumerate}
+
+\section{Teza pracy}
+\label{ch01:sec:teza}
+
+\begin{quote}
+Platforma IDA, jako artefakt Research through Design, dowodzi, że personalizację koncepcji wnętrz mieszkalnych można zaprojektować jako \textbf{wieloźródłowy dialog estetyczny} (uwzględniający preferencje intuicyjne, jawne, nastrój regeneracyjny, funkcję oraz osobowość) przełożony na \textbf{kontrolowaną syntezę obrazu}, stanowiący alternatywę dla algorytmicznej „czarnej skrzynki”.
+Autorskie próby z modelami dyfuzyjnymi i mechanizmami kontroli struktury w ComfyUI w połączeniu z architekturą IDA tworzą spójną metodę projektową integrującą architekturę wnętrz, psychologię środowiskową i nowe media cyfrowe w dyscyplinie sztuk plastycznych.
+\end{quote}
+
+Z uwagi na pilotażowy charakter wdrożenia terenowego, celem empirycznym pracy nie jest dowodzenie uniwersalnych praw statystycznych, lecz wykazanie spójności metodologicznej artefaktu oraz zidentyfikowanie kierunków preferencji użytkowników w kontakcie z generatywnym obrazem wnętrza.
+
+\section{Pozycja metodologiczna: Research through Design}
+\label{ch01:sec:rtd}
+
+Przyjmuję metodologię badań przez projektowanie (Research through Design, RtD).
+Christopher Frayling wyróżnia badania \emph{into}, \emph{through} oraz \emph{for} art and design. W paradygmacie badań \emph{poprzez} projektowanie sam proces twórczy i powstający artefakt stają się narzędziem generowania wiedzy dyscyplinowej \footcite{frayling1993research}.
+Zimmerman, Forlizzi i Evenson wprowadzili RtD do obszaru interakcji człowieka z technologią, wskazując, że zaprojektowany obiekt ucieleśnia hipotezę o pożądanym stanie rzeczywistości i stanowi materialny argument podlegający krytycznej ewaluacji \footcite{zimmerman2007rtd}.
+
+Struktura dowodzenia w niniejszej rozprawie obejmuje trzy powiązane warstwy:
+\begin{enumerate}
+  \item[(A)] \textbf{Autorskie testy i próby w ComfyUI}: eksploracja możliwości i ograniczeń modeli dyfuzyjnych, metod zachowania geometrii i segmentacji masek (doświadczenie warsztatowe projektanta).
+  \item[(B)] \textbf{Artefakt IDA}: wdrożona platforma dialogowa z awatarem, przejrzystą syntezą wytycznych i macierzą sześciu źródeł koncepcji \footcite{idaPlatform2026}.
+  \item[(C)] \textbf{Ewaluacja w badaniu z użytkownikami}: weryfikacja funkcjonowania artefaktu i analiza wyborów estetycznych w świetle pytań \RQ{1}--\RQ{6}.
+\end{enumerate}
+
+\section{Wkład własny}
+\label{ch01:sec:wklad}
+
+Mój autorski wkład manifestuje się w trzech przenikających się wymiarach:
+
+\begin{description}[style=nextline]
+  \item[Wymiar projektowy]
+  Koncepcja i realizacja IDA jako wielopoziomowego dialogu estetycznego: autorska kreacja awatara jako postaci mediującej, dramaturgia przejść, język wizualny \emph{Minimalist Glass Design} oraz rygorystyczna dokumentacja decyzji i kompromisów projektowych.
+
+  \item[Wymiar techniczno-medialny]
+  Przeprowadzenie systematycznych testów nad mechanizmami kontroli geometrii w modelach dyfuzyjnych (ComfyUI, ControlNet, SAM) oraz opracowanie metody translacji zróżnicowanych danych psychologicznych na wytyczne wizualne modelu generatywnego.
+
+  \item[Wymiar badawczy]
+  Operacjonalizacja wieloźródłowego modelu preferencji i konstrukcja procedury ślepej macierzy sześciu źródeł, umożliwiająca empiryczne badanie rozbieżności między deklaracjami a intuicyjnymi wyborami człowieka w środowisku generatywnym.
+\end{description}
+
+\section{Struktura rozprawy}
+\label{ch01:sec:struktura}
+
+Rozdział~\ref{ch02:top} buduje teoretyczną ramę relacji człowieka z przestrzenią, regeneracyjności oraz biofilii w architekturze wnętrz.
+Rozdział~\ref{ch03:top} omawia naturę preferencji estetycznych, rozbieżność między deklaracją a gestem afektywnym oraz technikę drabinowania wartości.
+Rozdział~\ref{ch04:top} poświęcony jest sztucznej inteligencji dyfuzyjnej, metodom kontroli geometrii oraz autorskim próbom w środowisku ComfyUI.
+Rozdział~\ref{ch05:top} przedstawia model Wielkiej Piątki jako hipotezę projektową wzbogacającą proces personalizacji.
+Rozdział~\ref{ch06:top} precyzuje metodologię RtD, procedurę badania oraz plan analiz.
+Rozdział~\ref{ch07:top} zawiera całościowy opis artefaktu IDA jako dzieła projektowego: architekturę doświadczenia, dramaturgię interfejsu i design rationale.
+Rozdziały~\ref{ch08:top}--\ref{ch10:top} dokumentują wyniki zebrane w pilotażu, krytyczną dyskusję oraz wnioski końcowe.

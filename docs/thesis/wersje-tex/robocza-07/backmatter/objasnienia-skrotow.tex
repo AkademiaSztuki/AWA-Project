@@ -1,0 +1,101 @@
+% OWNER: coordinator
+% STATUS: draft
+% Sense only, from GLOSSARY.md and the thesis prose. Not new research.
+% ASP has no page: the abbreviation does not occur in the included corpus.
+
+\idaExpl{AI}{AI}{sztuczna inteligencja}{%
+W rozprawie skrót oznacza sztuczną inteligencję w~postaci narzędzi generatywnych, nie jeden nazwany model.
+Rozdział o~medium traktuje generatywne modele obrazu jako pośrednika między zdjęciem pomieszczenia, briefem estetycznym i~koncepcją wizualną.
+Produkcyjna generacja obrazu w~platformie należy do Gemini Image.
+Eksperymenty w~grafach są osobną warstwą autorskich testów medium, nie tym skrótem.}
+
+\idaExpl{BigFive}{Big Five}{model Wielkiej Piątki, OCEAN}{%
+Model pięciu domen osobowości, w~pracy czytany wraz ze składowymi podwymiarami (aspektami cech).
+Kwestionariusz na sto dwadzieścia pozycji mierzy te domeny w~profilu uczestnika, a~wynik zasila wariant osobowościowy macierzy.
+Pytanie badawcze o~tej relacji jest eksploracyjne: czy cechy i~ich podwymiary wiążą się z~parametrami estetycznymi profilu oraz z~wyborem tego wariantu.}
+
+\idaExpl{ComfyUI}{ComfyUI}{środowisko grafów do testów warsztatowych}{%
+Środowisko, w~którym testowałem modele generatywne, conditioningi strukturalne i~segmentację.
+Należy do praktyki badawczej autora.
+Nie jest środowiskiem uruchomieniowym platformy: pełnego grafu w~produkcji nie ma, a~wnioski z~tych prób uzasadniają uproszczenia potoku terenowego.}
+
+\idaExpl{ControlNet}{ControlNet}{conditioning struktury obrazu}{%
+Warstwa autorskich testów, która warunkuje generację strukturą obrazu: mapą głębokości, krawędziami i~pokrewnymi sygnałami.
+Służy temu, żeby restylizacja nie gubiła geometrii pomieszczenia.
+W~produkcyjnym uruchomieniu platformy nie działa; zostaje genealogią decyzji o~kontroli przestrzeni.}
+
+\idaExpl{FLUX}{FLUX}{wczesna rodzina modeli dyfuzyjnych}{%
+Rodzina modeli używana we wczesnej fazie generacji, na Modal.
+W~tekście jest genealogią: tak powstawał obraz, zanim produkcja przeszła na Gemini w~Vertex AI.
+Nie jest obecnym silnikiem platformy.}
+
+\idaExpl{GCP}{GCP}{Google Cloud Platform}{%
+Infrastruktura, w~której zapisuję dane badawcze platformy.
+W~kanonie obejmuje persystencję --- Cloud SQL, Cloud Run i~GCS --- i~nie generuje obrazów.
+Generacja obrazu jest osobno, na platformie modeli.}
+
+\idaExpl{HCI}{HCI}{Human--Computer Interaction}{%
+Badania nad interakcją człowieka z~komputerem.
+W~rozprawie badania przez projektowanie wchodzą w~to pole jako metoda, w~której zaprojektowany obiekt jest argumentem: ucieleśnia hipotezę o~preferowanym stanie świata i~podlega krytycznej ocenie.
+Skrót nie nazywa modułu platformy.}
+
+\idaExpl{IAT}{IAT}{Implicit Association Test}{%
+Test ukrytych skojarzeń.
+Mierzy siłę skojarzeń czasem odpowiedzi w~zadaniach kategoryzacji, nie samoopisem.
+W~platformie jest adaptacją do gestu przesunięcia; nie jest opisem psychoanalitycznym.
+Słownik odróżnia preferencje ukryte od „nieświadomych” bez dopowiedzenia.}
+
+\idaExpl{IDA}{IDA}{AI Interior Design Dialogue Research Platform}{%
+Artefakt badawczy tej rozprawy: platforma dialogowa, która zamienia wieloźródłowy profil preferencji w~przejrzysty łańcuch personalizacji koncepcji wnętrz.
+Ma ścieżkę pełną i~szybką, awatar pośredniczący w~rozmowie oraz ślepą macierz sześciu źródeł.
+Produkcyjną generację obrazu wykonuje Gemini Image.
+Eksperymentalne środowisko ComfyUI nie jest jej środowiskiem uruchomieniowym.
+Nazwa Aura należy tylko do genealogii, nie do tego produktu.}
+
+\idaExpl{IPIP-NEO-120}{IPIP-NEO-120}{International Personality Item Pool, 120 pozycji, 30 podwymiarów cech}{%
+Kwestionariusz Wielkiej Piątki używany w~platformie.
+Awatar prowadzi przez niego po jednym pytaniu, ze skalą odpowiedzi.
+Wynik --- domeny i~ich składowe podwymiary --- wchodzi do profilu i~do wariantu osobowościowego macierzy.
+Ta wersja jest stanem produkcji.}
+
+\idaExpl{LLM}{LLM}{Large Language Model}{%
+Model językowy dużej skali.
+W~budowie potoku osobny etap „LLM refine” został porzucony jako domyślny obowiązek.
+Pierwszeństwo ma regułowy scoring i~builder JSON~v3.}
+
+\idaExpl{PRS}{PRS}{Perceived Restorativeness Scale}{%
+Skala postrzeganej regeneracyjności środowiska.
+W~rozprawie jest kategorią projektową, nie obietnicą, że obraz „leczy” przestrzeń.
+W~obecnej platformie nie jest to pomiar przed i~po ekspozycji na generację: siatka nastroju zbiera stan idealny, obecny i~docelowy.
+Odległość między stanem obecnym a~docelowym jest zmienną przy wariancie mieszanym z~funkcją przestrzeni.}
+
+\idaExpl{RQ}{RQ}{pytanie badawcze, w pracy RQ1--RQ6}{%
+Oś empiryczna rozprawy: sześć pytań, które zastąpiły wcześniejszą formułę H1--H5.
+Dotyczą wykonalności przebiegu, rozbieżności preferencji ukrytych i~jawnych, wyboru źródła w~ślepej macierzy, związku cech osobowości z~estetyką, odległości nastroju oraz czytelności i~sprawczości procesu.
+Rdzeniem empirycznym jest wybór źródła spośród sześciu wariantów.}
+
+\idaExpl{RtD}{RtD}{Research through Design, badania przez projektowanie}{%
+Metodologia nadrzędna rozprawy.
+W~wariancie \emph{through} artefakt i~proces projektowy są sposobem wytwarzania wiedzy, nie tylko przedmiotem opisu.
+Dowód ma trzy warstwy: autorskie testy medium (ComfyUI), artefakt platformy i~ewaluację terenową.}
+
+\idaExpl{SAM}{SAM / SAM2}{Segment Anything Model}{%
+Modele segmentacji używane w~warsztatowych próbach do masek.
+Razem z~kontrolą geometrii należą do eksperymentów autora, nie do produkcyjnego uruchomienia platformy.
+Zostają materiałem krytyki medium: czego do artefaktu terenowego nie przenosić.}
+
+\idaExpl{VertexAI}{Vertex AI}{platforma Google Cloud do modeli generatywnych}{%
+Tu działa produkcyjna generacja obrazu platformy, Gemini Image, oraz analiza zdjęcia pokoju i~inspiracji modelem wizyjno-językowym.
+To stan obecny potoku, po przejściu z~wcześniejszej generacji na Modal.
+Sama persystencja danych leży obok, w~infrastrukturze chmury, i~obrazów nie wytwarza.}
+
+\idaExpl{VLM}{VLM}{Vision--Language Model, model wizyjno-językowy}{%
+Przekłada fotografię pomieszczenia na opis strukturalny i~semantyczny: typ pokoju, materiały, światło.
+W~platformie tę rolę pełni Gemini Flash Lite, także wobec obrazów inspiracji.
+Wynik nie jest gotowym projektem.
+Wchodzi do scoringu i~buildera jako jedno z~wejść briefu.}
+
+\idaExpl{XAI}{XAI}{Explainable Artificial Intelligence}{%
+W~tej rozprawie: cytowalne reguły syntezy, nie pełna wyjaśnialność modelu generatywnego.
+Ma umożliwiać krytykę decyzji personalizacji, a~nie uzasadniać determinizm osobowości.
+Słownik wiąże to z~przejrzystym potokiem i~mapowaniami, które da się wskazać.}

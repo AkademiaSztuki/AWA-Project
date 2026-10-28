@@ -1,0 +1,33 @@
+% OWNER: framing
+% STATUS: review
+% SOURCES: notes/SPIS_TRESCI_PROPOZYCJA_ASP.md, notes/HIPOTEZY_REWIZJA.md, GLOSSARY.md, metadata.tex, data/analysis-2026-10-01.json
+\chapter*{Streszczenie}
+\addcontentsline{toc}{chapter}{Streszczenie}
+\ChapterStatus{review}{framing}
+
+Rozprawa dotyczy personalizacji koncepcji wnętrz mieszkalnych wspomaganej sztuczną inteligencją. Proces ten ujmuję jako wieloźródłowy dialog estetyczny, a nie automatyczny generator stylów, sytuując pracę w praktyce badawczo-projektowej Akademii Sztuki w Szczecinie (dyscyplina: sztuki plastyczne i konserwacja dzieł sztuki).
+
+Punktem wyjścia pracy są dwa problemy projektowo-badawcze. Po pierwsze, konsumenckie narzędzia generatywne pomijają wieloźródłowy profil preferencji (obejmujący wybory jawne, reakcje ukryte, nastrój regeneracyjny, funkcję przestrzeni oraz cechy osobowości) i nie pozwalają zweryfikować, który kanał wytycznych rzeczywiście kieruje wyborem użytkownika. Po drugie, deklaracje estetyczne i intuicyjne zachowania wyboru często się rozmijają, wskutek czego generator działający jak algorytmiczna „czarna skrzynka” nie wystarcza ani projektantowi wnętrz, ani badaczowi.
+
+W odpowiedzi na tę lukę zaprojektowałem, zbudowałem i przebadałem w warunkach terenowych platformę IDA (\emph{AI Interior Design Dialogue Research Platform}) w paradygmacie badań przez projektowanie (\emph{Research through Design}, RtD). Dzieło przekształca instrumenty badania preferencji w przejrzysty (\emph{explainable}) łańcuch syntezy wytycznych projektowych i generacji obrazu na podstawie fotografii pokoju uczestnika (z wykorzystaniem modelu Gemini Image w środowisku Vertex~AI). Kulminacją procesu jest porównanie w ślepej macierzy \textbf{sześciu} wariantów, z których każdy opiera się na odmiennym źródle personalizacji.
+
+Dowód naukowy i artystyczny składa się z trzech warstw: (A)~autorskich prób i testów warsztatowych w środowisku ComfyUI (kontrola geometrii architektonicznej, segmentacja semantyczna; ComfyUI stanowi poligon badawczy autora, a nie środowisko uruchomieniowe platformy IDA), (B)~działającego artefaktu terenowego IDA oraz (C)~ewaluacji online podporządkowanej pytaniom \RQ{1}--\RQ{6} (ciągłość doświadczenia dialogowego, rozbieżność preferencji ukrytych i jawnych, wybór źródła w ślepej macierzy, eksploracyjne związki z Wielką Piątką i skalą PRS, a także poczucie sprawczości, zrozumiałość procesu i satysfakcja). Główna teza pracy głosi, że personalizację wnętrz można zaprojektować jako wieloźródłowy dialog estetyczny przełożony na kontrolowaną syntezę obrazu, łączący projektowanie wnętrz, psychologię środowiskową i sztukę mediów generatywnych.
+
+Dane zebrane w odczycie z 1~października 2026 roku mają charakter pilotażowy i poddaję je analizie opisowej bez testów konfirmacyjnych. Na ścieżce pełnej (85 badanych) 68 osób ukończyło profil rdzeniowy; znacznik finalnego ślepego wyboru odnotowano u 16 osób na ścieżce pełnej (17 w całym zbiorze), bezpośrednie zaznaczenie w macierzy u 29 osób, natomiast wiersze opinii z wybranym źródłem u 59 rekordów (w pracy rozróżniam te trzy liczniki). W ślepej macierzy uczestnicy najczęściej wskazywali wariant wywiedziony z preferencji ukrytych (11 z 29 osób). Robocze założenia o przewadze wariantów mieszanych oraz o związku luki nastrojowej PRS z wyborem wariantu funkcjonalnego nie znalazły w tej próbie oparcia, natomiast poczucie sprawczości i zrozumiałość procesu wiązały się wyraźnie dodatnio z satysfakcją u osób, które ukończyły pełny przebieg.
+
+\vspace{1.5em}
+\begin{otherlanguage}{english}
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+\ChapterStatus{draft}{framing}
+
+This dissertation concerns the personalization of residential interior concepts with artificial intelligence. I treat it as an aesthetic dialogue rather than another style generator, and I situate it in the research-through-design practice of the Academy of Art in Szczecin (discipline: fine arts and conservation of works of art).
+
+Two problems motivate the work. Consumer generative tools usually ignore a multi-source preference profile (explicit and implicit preferences, restorative mood, room function, personality) and give no way to test which data channel actually drives the user's choice. In addition, aesthetic self-reports and choice behaviour often diverge, so a black-box generator serves neither the designer nor the researcher.
+
+I designed, built, and field-tested the IDA platform (\emph{AI Interior Design Dialogue Research Platform}) within a Research through Design paradigm. The artefact turns preference instruments into an explainable chain of brief synthesis and image-to-image generation based on a photograph of the participant's room. Production uses Gemini Image on Vertex~AI. Participants compare \textbf{six} variants in a blind matrix, each built from a different personalization source.
+
+The evidence has three layers: (A)~my exploratory trials and tests in the ComfyUI environment (geometry control, segmentation; ComfyUI is not the IDA runtime), (B)~the deployed artefact, and (C)~online evaluation under research questions RQ1--RQ6 (feasibility of the flow, mismatch between implicit and explicit preferences, source selection in the matrix, exploratory links to Big Five and PRS, agency, clarity, and satisfaction). The thesis argues that interior personalization can be designed as an aesthetic dialogue translated into controlled image synthesis, one that joins interior design, environmental psychology, and generative media.
+
+The data come from a snapshot of 1~October 2026 and are pilot-scale; I report them descriptively, without confirmatory tests. On the full path (85 participants), 68 completed the core profile; 16 on full (17 overall) flagged a blind selection, 29 had a matrix selection, and 59 feedback rows recorded a source (separate counters). In the matrix, the implicit-preference variant was chosen most often (11 of 29 participants with a recorded selection). The hypotheses that mixed variants would dominate and that the PRS gap would predict choosing the room-function variant found no support in these data, while agency and clarity correlated positively with satisfaction among those who reached the survey.
+\end{otherlanguage}

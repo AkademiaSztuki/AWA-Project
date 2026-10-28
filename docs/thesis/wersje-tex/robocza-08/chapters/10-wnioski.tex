@@ -1,0 +1,80 @@
+% OWNER: empirical
+% STATUS: review (zredagowano w robocza-08: pełna synteza doktorska, styl eseju projektowego)
+% SOURCES: notes/HIPOTEZY_REWIZJA.md; cel i teza rozdz. 1; wyniki rozdz. 8 (data/analysis-2026-10-01.json)
+\chapter{Wnioski końcowe}
+\label{ch10:top}
+\ChapterStatus{review}{empirical}
+
+Rozdział zamykający rozprawę podsumowuje stopień realizacji postawionego celu projektowo-badawczego, zbiera syntetyczne odpowiedzi na pytania badawcze \RQ{1}--\RQ{6} oraz formułuje oryginalny wkład pracy w dyscyplinie sztuk plastycznych i konserwacji dzieł sztuki. Formułowane poniżej wnioski empiryczne opierają się na pilotażowym odczycie danych z 1~października 2026 roku (rozdz.~\ref{ch08:top}), zachowując właściwy dla tej skali próby ostrożny, opisowy i eksploracyjny charakter.
+
+\section{Realizacja celu pracy}
+\label{ch10:sec:cel}
+
+Nadrzędnym celem rozprawy (rozdz.~\ref{ch01:sec:cel}) było zaprojektowanie, zrealizowanie i poddanie ewaluacji eksperymentalnej platformy IDA (\emph{AI Interior Design Dialogue Research Platform}) jako dzieła w paradygmacie badań przez projektowanie (\emph{Research through Design}, RtD). Platforma miała zintegrować wieloźródłowy profil preferencji z przejrzystym (\emph{explainable}) procesem syntezy wytycznych wizualnych, umożliwiając terenowe badanie rozbieżności między deklaracją a zachowaniem oraz ocenę skuteczności poszczególnych źródeł personalizacji \footcite{idaPlatform2026}.
+
+\paragraph{Zakres zrealizowanych zadań projektowo-badawczych.}
+\begin{itemize}
+  \item \textbf{Dzieło projektowo-badawcze IDA (warstwa B dowodu).} Zaprojektowałem i wdrożyłem kompletne środowisko dialogowe obejmujące ścieżkę pełną (Full) i szybką (Fast), postać mediującą awatara, estetykę \emph{Minimalist Glass Design}, deterministyczny moduł syntezy briefu (JSON~v3), eksperymentalną ślepą macierz sześciu źródeł oraz chmurową architekturę zapisu danych badawczych (rozdz.~\ref{ch07:top}).
+  \item \textbf{Warsztatowa eksploracja medium dyfuzyjnego (warstwa A dowodu).} Przeprowadziłem serię autorskich prób i testów w środowisku węzłowym ComfyUI (badając m.in.\ conditioning geometryczny ControlNet, estymację głębi, detekcję linii M-LSD oraz segmentację semantyczną SAM i SAM~2), wypracowałem koncepcję pustej skorupy pomieszczenia (\emph{empty shell}) i udokumentowałem transfer tych doświadczeń do skalowalnego potoku chmurowego (rozdz.~\ref{ch04:top}).
+  \item \textbf{Rama metodologiczna RtD.} Sformułowałem trójwarstwową strukturę dowodzenia, zrewidowałem wyjściowe założenia badawcze do postaci sześciu pytań \RQ{1}--\RQ{6} ściśle dopasowanych do schematu bazy danych oraz określiłem rygorystyczne granice interpretacji (rozdz.~\ref{ch06:top}).
+  \item \textbf{Pilotaż terenowy (warstwa C dowodu).} Przeprowadziłem ewaluację działającego artefaktu na zbiorze 240 rekordów z ważną zgodą badawczą, obejmującym 85 uczestników na ścieżce pełnej, spośród których 68 ukończyło wielowymiarowy profil rdzeniowy (rozdz.~\ref{ch08:top}).
+\end{itemize}
+
+\paragraph{Granice przeprowadzonego pilotażu.}
+Zgromadzona próba pilotażowa nie pozwala na konfirmacyjne rozstrzyganie hipotez statystycznych. Zapis ślepego wyboru rozkłada się w badanym zrzucie na trzy odrębne liczniki (16 osób z flagą wyboru na ścieżce pełnej, 29 osób z zaznaczoną kartą w tabeli macierzy oraz 59 rekordów w tabeli opinii), a proces generacji obrazów w okresie testowym obarczony był istotnym odsetkiem błędów technicznych (485 nieudanych zadań oraz 278 oczekujących na 1174 zleceń). Z tego względu warstwę empiryczną traktuję jako rzetelny pilotaż weryfikujący spójność metody i działanie instrumentów, w którym robocze hipotezy \Hyp{3a} oraz \Hyp{5a} nie znalazły potwierdzenia.
+
+\section{Syntetyczna odpowiedź na pytania badawcze}
+\label{ch10:sec:rq}
+
+Na podstawie analizy stanu bazy danych z 1~października 2026 roku (zestawionej szczegółowo w~\cref{tab:ch08:rq-summary}) formułuję następujące odpowiedzi na postawione pytania badawcze:
+
+\begin{description}[style=nextline]
+  \item[\RQ{1} --- ciągłość doświadczenia dialogowego i wykonalność przebiegu]
+  Zintegrowany proces dialogowy na ścieżce pełnej pozwolił 68 spośród 85 uczestników ukończyć wielowymiarowy profil rdzeniowy, a 16 osobom dotrzeć do finalnego znacznika ślepego wyboru (ryc.~\ref{fig:ch08:funnel}; \cref{ch08:sec:rq1}). Dowodzi to, że osadzenie instrumentów badawczych w narracji produktowej chroni początek ścieżki przed masowym porzuceniem, choć skompletowanie wszystkich warstw (test osobowości, fotografia pokoju, macierz i ankieta końcowa) powoduje stopniowe wykruszanie się badanych.
+
+  \item[\RQ{2} --- rozbieżność preferencji ukrytych i jawnych a zachowanie w macierzy]
+  Na ciągłych skalach atrybutów estetycznych (ciepło, jasność, złożoność) wybory intuicyjne i deklaratywne wykazują umiarkowaną zgodność kierunkową ($\rho$ od $0{,}39$ do $0{,}46$ przy $n=72$), natomiast wyraźny konflikt pojawia się w kategoryzacji nazw stylów (47 rozbieżnych etykiet na 58 przypadków; \cref{ch08:sec:rq2}). Ze względu na małą wariancję flagi \texttt{style\_match} bezpośredni wpływ tej rozbieżności na czas namysłu przed macierzą pozostaje nierozstrzygnięty w skali pilotażu \footcite{kahneman2011thinking,greenwald1998iat}.
+
+  \item[\RQ{3} --- wybór źródła wytycznych w ślepej macierzy]
+  W ślepym porównaniu sześciu koncepcji uczestnicy najczęściej wskazywali wariant wygenerowany z preferencji ukrytych (\texttt{implicit}: 11 z 29 osób w macierzy oraz 19 z 59 wpisów opinii), nie zaś warianty mieszane (\cref{ch08:sec:rq3}; ryc.~\ref{fig:ch08:selected-source}). Hipoteza \Hyp{3a} zakładająca dominację syntezy wieloźródłowej nie znalazła potwierdzenia w badanej próbie, co wskazuje na silną pozycję pierwotnych reakcji afektywnych w ocenie wizualizacji wnętrza.
+
+  \item[\RQ{4} --- wymiary Wielkiej Piątki a preferencje estetyczne i wariant osobowościowy]
+  Analiza eksploracyjna wykazała umiarkowane dodatnie związki otwartości na doświadczenie ($\rho = 0{,}35$) oraz ugodowości ($\rho = 0{,}41$) z intuicyjną preferencją ciepłych wnętrz, przy słabej korelacji otwartości ze złożonością wizualną ($\rho = 0{,}20$; \cref{ch08:sec:rq4}). Sam wariant osobowościowy (\texttt{personality}) został wybrany w macierzy jedynie przez dwie osoby, co potwierdza zasadność traktowania taksonomii Wielkiej Piątki \footcite{john2008bigfive} jako pomocniczej hipotezy projektowej, a nie deterministycznego wyznacznika stylu.
+
+  \item[\RQ{5} --- rozpiętość nastroju regeneracyjnego PRS a wariant funkcjonalny]
+  Hipoteza \Hyp{5a} wiążąca większą odległość między zastanym a pożądanym nastrojem pokoju (\texttt{current}$\rightarrow$\texttt{target}) z wyborem wariantu \texttt{mixed\_functional} nie uzyskała oparcia w danych ($\rho = -0{,}28$, $n=25$; \cref{ch08:sec:rq5}). Wynik ten odnosi się wyłącznie do roli luki nastrojowej w konstrukcji briefu i nie rozstrzyga o oddziaływaniu regeneracyjnym samego obrazu \footcite{kaplan1995restorative}.
+
+  \item[\RQ{6} --- poczucie sprawczości, zrozumiałość procesu i satysfakcja]
+  Wśród uczestników, którzy ukończyli pełny przebieg i wypełnili kwestionariusze ewaluacyjne, zarówno poczucie sprawczości ($\rho = 0{,}71$), jak i zrozumiałość procesu ($\rho = 0{,}68$) wiązały się silnie dodatnio z satysfakcją z rezultatu ($n \approx 27$; \cref{ch08:sec:rq6}). Rezultat ten potwierdza słuszność filozofii projektowej łączącej przejrzystość personalizacji z dialogowym prowadzeniem użytkownika.
+\end{description}
+
+\section{Oryginalność i wkład do dyscypliny}
+\label{ch10:sec:wklad}
+
+Oryginalny wkład rozprawy w dyscyplinie sztuk plastycznych i konserwacji dzieł sztuki (w obszarze projektowania wnętrz i sztuki mediów) opiera się na organicznym zespoleniu trzech filarów:
+
+\begin{enumerate}
+  \item \textbf{Dzieło projektowe IDA jako przestrzeń dialogu.} Stworzenie autorskiej platformy, która zastępuje konsumencki schemat „czarnej skrzynki” wieloetapowym doświadczeniem samopoznania estetycznego, zwieńczonym eksperymentem ślepej macierzy sześciu źródeł \footcite{idaPlatform2026,zimmerman2007rtd}.
+  \item \textbf{Metodyka kontroli medium dyfuzyjnego we wnętrzach.} Przeprowadzenie krytycznych badań warsztatowych w środowisku ComfyUI (identyfikacja pięciu anomalii geometrycznych, odkrycie paradoksu nadmiernego rygoru krawędziowego, opracowanie koncepcji \emph{empty shell}) oraz ich świadoma adaptacja do lekkiego potoku chmurowego z zachowaniem rygoru architektonicznego (\texttt{preserve}; rozdz.~\ref{ch04:top}, \ref{ch07:sec:comfyui-transfer}).
+  \item \textbf{Integracja psychologii środowiskowej z projektowaniem generatywnym.} Przełożenie teorii regeneracji uwagi (ART/PRS), biofilii, dyferencjału semantycznego, testów asocjacyjnych i drabinowania wartości na żywe tworzywo procesu projektowego w paradygmacie Research through Design \footcite{frayling1993research}.
+\end{enumerate}
+
+\paragraph{Wnioski ogólne.}
+\begin{enumerate}
+  \item Personalizację koncepcji wnętrz wspomaganą sztuczną inteligencją można i należy projektować jako przejrzysty dialog o potrzebach zmysłowych i funkcjonalnych człowieka, nie zaś jako bezrefleksyjną żonglerkę etykietami stylów.
+  \item Osadzenie ślepej macierzy wariantów wewnątrz produktu stanowi skuteczne narzędzie badawcze w paradygmacie RtD, pod warunkiem zapewnienia jednoznacznej telemetrii wyboru i niezawodności silnika renderującego.
+  \item Rola projektanta wnętrz w dobie mediów generatywnych nie zanika, lecz ewoluuje w stronę kuratorstwa wytycznych, projektowania architektury dialogu oraz stania na straży tektoniki, skali i prawdy materiału \footcite{pallasmaa2012oczy}.
+  \item Wyraźna przewaga wariantu opartego na afektywnej selekcji kart (\texttt{implicit}) nad deklaracjami słownymi w próbie pilotażowej wskazuje, że intuicyjny gest wzrokowy lepiej chwyta przedrefleksyjną potrzebę atmosfery wnętrza niż zracjonalizowany samoopis.
+\end{enumerate}
+
+\section{Rekomendacje projektowe i badawcze}
+\label{ch10:sec:rekomendacje}
+
+\paragraph{Dla projektantów architektury wnętrz.}
+Syntetyczne wizualizacje generowane przez sztuczną inteligencję warto włączać do praktyki projektowej jako otwarte obrazy nastroju (\emph{mood images}) służące pogłębieniu rozmowy z inwestorem. Kluczowe jest równoległe wsłuchiwanie się w deklaracje werbalne oraz spontaniczne reakcje wizualne klienta, a także ujawnianie przesłanek stojących za poszczególnymi wariantami dopiero po dokonaniu przez niego nieskrępowanego wyboru plastycznego.
+
+\paragraph{Dla twórców narzędzi generatywnych i badaczy RtD.}
+Instrumenty pomiaru preferencji należy wplatać w rytm doświadczenia estetycznego, unikając przytłaczania odbiorcy żargonem technicznym i surowymi ankietami. Jednocześnie warsztatowe próby z zaawansowanymi grafami węzłowymi (ComfyUI) należy precyzyjnie oddzielać na poziomie metodologicznym od docelowej architektury wdrożeniowej.
+
+\paragraph{Dla psychologii środowiskowej stosowanej.}
+Graficzna mapa nastroju (mood grid) oraz wektor luki między stanem zastanym a pożądanym stanowią obiecujące narzędzie operacjonalizacji potrzeb regeneracyjnych w briefie architektonicznym. Ewentualne wnioskowanie o realnym wpływie wygenerowanego obrazu na redukcję stresu lub regenerację uwagi wymaga jednak bezwzględnie wprowadzenia pomiaru podłużnego po ekspozycji \footcite{kaplan1995restorative}.

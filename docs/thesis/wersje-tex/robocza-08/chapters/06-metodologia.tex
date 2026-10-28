@@ -1,0 +1,272 @@
+% OWNER: methods
+% STATUS: review
+% SOURCES: notes/HIPOTEZY_REWIZJA.md (RQ1–RQ6); notes/SPIS_TRESCI_SZCZEGOLOWY.md §5; GLOSSARY.md; skill research-data
+\chapter{Metodologia badań}
+\label{ch06:top}
+\ChapterStatus{draft}{methods}
+
+Rozdział opisuje ramę metodologiczną rozprawy: pozycję Research through Design, trzy warstwy dowodu, fazy badania, procedurę ścieżek Fast i Full, instrumenty pomiarowe oraz plan analiz podporządkowany pytaniom \RQ{1}--\RQ{6}. Wyniki podaję w rozdziałach późniejszych. Tutaj nie raportuję wielkości próby ani rozkładów.
+
+\section{Paradygmat badawczy: Research through Design}
+\label{ch06:sec:paradygmat}
+
+Opieram się na tradycji badań przez projektowanie (Research through Design, RtD). Frayling rozróżnia badania \emph{into}, \emph{through} i \emph{for} art and design. W wariancie \emph{through} artefakt i proces projektowy są sposobem wytwarzania wiedzy \footcite{frayling1993research}. Zimmerman, Forlizzi i Evenson ujmują RtD w HCI jako metodę, w której zaprojektowany artefakt jest argumentem badawczym: ucieleśnia hipotezę o preferowanym stanie świata i pozwala go krytycznie ocenić \footcite{zimmerman2007rtd}.
+
+Moim artefaktem jest platforma IDA \footcite{idaPlatform2026}, czyli zintegrowany przebieg dialogowy, który łączy wieloźródłowy profil preferencji z generatywną personalizacją wizualizacji wnętrz i ze ślepą macierzą sześciu wariantów. Wiedza powstaje w nim nie tylko z pomiarów u użytkowników, lecz także z decyzji projektowych, iteracji i świadomie przyjętych ograniczeń medium (por.\ rozdziały o medium dyfuzyjnym i o budowie artefaktu).
+
+Dawną formułę hipotez H1--H5 zarzuciłem jako oś empiryczną. Operacjonalizacja opiera się na zrewidowanych pytaniach \RQ{1}--\RQ{6} (zob.\ \cref{ch06:sec:rq}).
+
+\section{Trzy warstwy dowodu}
+\label{ch06:sec:warstwy}
+
+Dowód w rozprawie ma trzy powiązane warstwy. Żadna nie zastępuje pozostałych.
+
+\begin{description}[style=nextline]
+  \item[(A) Eksploracja warsztatowa medium dyfuzyjnego (ComfyUI)]
+  Moje autorskie testy z modelami dyfuzyjnymi, kontrolą geometrii (m.in.\ mapy głębokości, conditioning strukturalny) i segmentacją w modularnym środowisku ComfyUI. Warstwa ta uzasadnia, co da się wiarygodnie przenieść do powtarzalnego potoku internetowego, a co stanowi zbyt duży narzut obliczeniowy lub operacyjny. ComfyUI \textbf{nie} jest środowiskiem uruchomieniowym platformy IDA.
+
+  \item[(B) Artefakt IDA]
+  Działająca platforma badawczo-projektowa: ścieżki Full i Fast, synteza briefu, generacja image-to-image w Vertex~AI / Gemini Image, zapis danych badawczych w GCP i ślepa macierz sześciu źródeł \footcite{idaPlatform2026}. Budowę opisuje rozdział o artefakcie.
+
+  \item[(C) Ewaluacja terenowa]
+  Udostępnienie IDA uczestnikom online, w warunkach zbliżonych do realnego użycia. Zbieram profil, zachowania w macierzy i ankiety użyteczności. Ta warstwa odpowiada na \RQ{1}--\RQ{6}. Przy małej próbie pilotażowej analiza pozostaje przede wszystkim opisowa.
+\end{description}
+
+\section{Projekt i fazy badania}
+\label{ch06:sec:projekt}
+
+Badanie ma charakter mieszany: (1)~projektowanie i iteracja artefaktu (RtD) oraz (2)~ewaluacja terenowa z instrumentami psychometrycznymi i behawioralnymi, osadzonymi w przebiegu platformy. Nie jest to klasyczny RCT ani eksperyment laboratoryjny.
+
+\paragraph{Fazy.}
+\begin{enumerate}
+  \item \textbf{Eksploracja medium i prototypowanie (warstwa A)}: warsztatowe testy generatywne w ComfyUI, wybór uproszczeń produktowych, implementacja instrumentów w interfejsie.
+  \item \textbf{Pilotaż terenowy}: uruchomienie przebiegu, kontrola jakości danych, lejek ukończenia, pierwsze rozkłady wyborów w macierzy. Z pilotażu wnioskuję o wykonalności (\RQ{1}) i o działaniu instrumentów.
+  \item \textbf{Główne zbieranie}: powiększenie próby według planu uzgodnionego z promotorem (orientacyjne przedziały w \cref{tab:ch06:rq}).
+  \item \textbf{Analiza i synteza}: analizy opisowe, a przy wystarczającym~$N$ także inferencyjne, oraz włączenie ich do argumentu RtD.
+\end{enumerate}
+
+\paragraph{Kryteria przejścia między fazami.}
+Z pilotażu do głównego zbierania przechodzę, gdy zapis kluczowych zmiennych (m.in.\ \texttt{blind\_selection\_made}, \texttt{selected\_source}, zgody) jest stabilny, lejek nie ma luk spowodowanych błędami systemu, a plan analiz chroni przed HARKingiem. Ze zbierania do syntezy przechodzę po sprawdzeniu kompletności eksportu i udokumentowaniu wykluczeń (odpadanie uczestników, wycofanie zgody).
+
+\section{Uczestnicy i dobór}
+\label{ch06:sec:uczestnicy}
+
+\paragraph{Kryteria włączenia.}
+Do badania zapraszam osoby pełnoletnie, które świadomie zgodziły się na udział i przetwarzanie danych oraz potrafią przejść cały przebieg w przeglądarce (przesłać fotografię pomieszczenia, wykonać zadanie afektywnej selekcji kart i wypełnić kwestionariusze). Wyłączam rekordy bez wymaganych zgód, z wycofaną zgodą w trakcie albo z oczywiście niespójnymi danymi technicznymi (np.\ brak \texttt{consent\_timestamp}).
+
+\paragraph{Dobór.}
+Dobór jest okazjonalny: uczestnicy dołączali samodzielnie przez publicznie dostępną stronę platformy. To ogranicza uogólnianie, ale odpowiada ewaluacji artefaktu RtD w warunkach terenowych.
+
+\paragraph{Wielkość próby.}
+W tym rozdziale nie podaję liczebności próby. Przy małej próbie pilotażowej plan przewiduje analizy opisowe (lejki, częstości, eksploracyjne asocjacje z szerokimi przedziałami niepewności). Docelowe wielkości dla analiz inferencyjnych są \emph{planem}, a nie osiągniętym~$N$ (\cref{tab:ch06:rq}).
+
+\section{Procedura: ścieżki Fast i Full oraz ślepa macierz}
+\label{ch06:sec:procedura}
+
+Uczestnik wybiera ścieżkę \textbf{pełną (Full)} albo \textbf{szybką (Fast)}; wybór zapisuje się jako \texttt{path\_type}. Ścieżka Full prowadzi przez głęboki profil badawczy. Ścieżka Fast obejmuje zgodę, krótkie pytania demograficzne, zdjęcie pokoju, wybór stylu i generację jednej koncepcji, więc nie dostarcza kompletu danych potrzebnych większości pytań badawczych.
+
+\paragraph{Szkielet ścieżki Full.}
+\begin{enumerate}
+  \item Onboarding i zgody (badanie, przetwarzanie, art.~13 RODO).
+  \item Profil rdzeniowy: m.in.\ preferencje jawne (semantic differential, paleta, materiały), biophilia, inspiracje, mood grid PRS (ideal), afektywna selekcja kart na wzór zadania IAT (\texttt{participant\_swipes}).
+  \item Big Five --- IPIP-NEO-120 (\texttt{/flow/big-five}).
+  \item Konfiguracja pokoju (Room Setup): fotografia pomieszczenia, aktywności, punkty tarcia (bariery użytkowe), drabinowanie wartości (laddering) oraz pomiar nastroju PRS (stan obecny i docelowy).
+  \item Generacja macierzy sześciu źródeł i \textbf{ślepy wybór} wariantu (\texttt{selected\_source}).
+  \item Ankiety UX (SUS, agency, clarity, satisfaction).
+\end{enumerate}
+
+\paragraph{Szkielet ścieżki Fast.}
+Zgoda, krótkie pytania demograficzne, zdjęcie pokoju (własne albo przykładowe), wybór stylu bazowego i generacja jednej koncepcji. Taki przebieg nie zbiera profilu preferencji ani osobowości, więc z danych Fast trudno porównywać kanały personalizacji. Służy on głównie \RQ{1} i \RQ{6} (wykonalność, użyteczność) oraz eksploracji produktowej, a nie ślepej macierzy.
+
+\paragraph{Ślepa macierz (punkt eksperymentalny).}
+Po syntezie promptów system generuje sześć wariantów z różnych źródeł i prezentuje je bez etykiet w zbalansowanym, losowym układzie siatki. Uczestnik ocenia obrazy na podstawie własnego odbioru zmysłowego i plastycznego, a następnie wskazuje preferowany wariant; zapis obejmuje m.in.\ \texttt{blind\_selection\_made}, \texttt{generation\_feedback.selected\_source} i wpisy \texttt{participant\_matrix\_entries}. Sześć źródeł (kanon): \texttt{implicit}, \texttt{explicit}, \texttt{personality}, \texttt{mixed}, \texttt{mixed\_functional}, \texttt{inspiration\_reference}. Dopiero po dokonaniu wyboru następuje kulminacja doświadczenia i ujawnienie źródeł (dramaturgia „odkrycia kart”).
+
+\begin{figure}[htbp]
+  \centering
+  \fbox{%
+    \begin{minipage}{0.92\textwidth}
+      \centering\footnotesize\ttfamily
+      \vspace{0.6em}
+      Onboarding + zgody\\
+      $\downarrow$\\
+      \textbf{Full:} profil (explicit, selekcja kart, PRS ideal, inspiracje)\\
+      \quad\Big|\\\textbf{Fast:} demografia\\
+      $\downarrow$\\
+      \textbf{Full:} IPIP-NEO-120 $\rightarrow$ Room Setup (PRS current/target, ladder)\\
+      \quad\Big|\\\textbf{Fast:} zdjęcie pokoju $\rightarrow$ wybór stylu\\
+      $\downarrow$\\
+      \textbf{Full:} macierz 6 źródeł $\rightarrow$ \underline{ślepy wybór} (\texttt{selected\_source})\\
+      \quad\Big|\\\textbf{Fast:} jedna koncepcja\\
+      $\downarrow$\\
+      Ankiety UX (SUS / agency / clarity / satisfaction)
+      \vspace{0.6em}
+    \end{minipage}%
+  }
+  \caption{Schemat procedury Fast/Full z punktem ślepej macierzy (opracowanie własne autora).
+  \Todo{Wstaw docelowy plik graficzny: \texttt{figures/ch06-procedure-fast-full.pdf} --- diagram wektorowy tej samej logiki.}}
+  \label{fig:ch06:procedure}
+\end{figure}
+
+\section{Instrumenty pomiarowe}
+\label{ch06:sec:instrumenty}
+
+Instrumenty są częścią produktu (Research-Embedded). Nie tworzą osobnego pakietu papierowego, tylko kolejne kroki przebiegu. Zestawienie główne podaje \cref{tab:ch06:instruments}, a treść ekranów opisuje załącznik~\ref{app:b:top}.
+Skalę użyteczności systemu (SUS) stosuję w autorskiej adaptacji kwestionariusza Johna Brooke'a \footcite{brooke1996sus}, a skale sprawczości, zrozumiałości i satysfakcji zbudowałem jako dedykowane narzędzia ewaluacji interakcji.
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \setlength{\tabcolsep}{3.5pt}
+  \caption{Mapowanie instrumentów pomiarowych w platformie IDA (zestawienie zbiorcze).}
+  \label{tab:ch06:instruments}
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.17\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.20\textwidth}>{\raggedright\arraybackslash}p{0.21\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}@{}}
+    \toprule
+    Narzędzie & Źródło naukowe & Forma w IDA & Główne zmienne & Ograniczenia \\
+    \midrule
+    PRS / mapa nastroju &
+    \textcite{hartig1997prs} (adaptacja projektowa) &
+    Siatka 2D w profilu i konfiguracji pokoju &
+    \texttt{prs\_ideal\_*}, \texttt{prs\_current\_*}, \texttt{prs\_target\_*} &
+    Brak pomiaru \texttt{prs\_post\_*} po ekspozycji na AI \\
+    \addlinespace
+    Afektywna selekcja kart &
+    \textcite{greenwald1998iat} (adaptacja gestu) &
+    Selekcja binarna kart w profilu &
+    \texttt{participant\_swipes}, \texttt{implicit\_*}, \texttt{reaction\_time\_ms} &
+    Brak pomiaru czasu wahania w bazie \\
+    \addlinespace
+    Dyferencjał semantyczny &
+    \textcite{osgood1957measurement} (forma własna) &
+    Suwaki cech, paleta, materiały &
+    \texttt{explicit\_*} &
+    Samoopis podatny na deklaratywność \\
+    \addlinespace
+    Biofilia &
+    \textcite{kellert2008biophilic} &
+    Wybór stopnia nasycenia (0--3) &
+    \texttt{biophilia\_score}, zgodność w profilu &
+    Uproszczona dawka wizualna \\
+    \addlinespace
+    Drabinowanie (laddering) &
+    \textcite{reynolds1988laddering} &
+    Dialog w konfiguracji pokoju &
+    \texttt{ladder\_*}, \texttt{room\_activities}, \texttt{room\_pain\_points} &
+    Zależność od refleksyjności badanego \\
+    \addlinespace
+    IPIP-NEO-120 &
+    Big Five \cite{john2008bigfive}; pula IPIP &
+    Sekwencja 120 pytań z awatarem &
+    \texttt{big5\_*}, \texttt{big5\_facets}, \texttt{big5\_responses} &
+    Czasochłonność; brak walidacji papierowej \\
+    \addlinespace
+    Ślepa macierz 6 źródeł &
+    Autorski eksperyment w artefakcie &
+    Siatka 6 wizualizacji bez etykiet &
+    \texttt{selected\_source}, \texttt{participant\_matrix\_entries} &
+    Zależność od jakości pojedynczego renderu \\
+    \addlinespace
+    SUS / sprawczość / zrozumiałość &
+    SUS \cite{brooke1996sus}; skale własne &
+    Kwestionariusze po wyborze &
+    \texttt{sus\_*}, \texttt{agency\_*}, \texttt{clarity\_*}, \texttt{satisfaction\_*} &
+    Ocena dotyczy całej sesji, nie pojedynczego źródła \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Pytania badawcze, zmienne i plan analiz}
+\label{ch06:sec:rq}
+\label{ch06:sec:zmienne}
+\label{ch06:sec:statystyka}
+
+Oś empiryczną tworzą pytania \RQ{1}--\RQ{6}. Dla każdego pytania podaję hipotezę roboczą (do sprawdzenia przy większej próbie), główne zmienne oraz analizę przy małym~$N$ (pilotaż) i przy docelowym~$N$ (plan). Słownik zmiennych zawiera załącznik~\ref{app:e:top}, schemat zapisu danych załącznik~\ref{app:a:top}.
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \setlength{\tabcolsep}{3.5pt}
+  \caption{Pytania badawcze \RQ{1}--\RQ{6}: hipotezy robocze, zmienne i plan analiz.}
+  \label{tab:ch06:rq}
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.07\textwidth}>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.24\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}@{}}
+    \toprule
+    RQ & Hipoteza robocza & Zmienne kluczowe & Analiza pilotażowa (małe~$N$) & Analiza docelowa (plan) \\
+    \midrule
+    \RQ{1} &
+    Ścieżka pełna z ukończonym profilem rdzeniowym dostarcza kompletu danych w głównych wymiarach bez nadmiernego porzucania procedury &
+    \texttt{core\_profile\_complete}, \texttt{current\_step}, znaczniki czasu, zdarzenia \texttt{page\_view} &
+    Lejek ukończenia, odsetek braków (opisowo) &
+    Stabilne estymaty ukończenia; porównanie ścieżek \\
+    \addlinespace
+    \RQ{2} &
+    (H2a) Większa rozbieżność kanałów wydłuża czas wyboru lub sprzyja wariantom mieszanym; (H2b) brak zgodności stylu obniża wybór wariantu jawnego &
+    \texttt{preference\_comparison\_json}, \texttt{style\_match}, \texttt{selected\_source}, \texttt{selection\_time\_ms} &
+    Rozkłady rozbieżności; studia przypadków; współczynniki korelacji &
+    Modele asocjacji rozbieżności z zachowaniem w macierzy ($N \geq 100$) \\
+    \addlinespace
+    \RQ{3} &
+    (H3a) Warianty mieszane wybierane częściej niż źródła jednokanałowe; (H3b) pełne Big Five sprzyja wyborowi osobowości/mieszanego; (H3c) inspiracje sprzyjają referencji &
+    \texttt{selected\_source}, \texttt{participant\_matrix\_entries}, \texttt{blind\_selection\_made}, \texttt{inspirations\_count} &
+    Rozkład częstości wyborów według źródła &
+    Testy rozkładu i modele wyboru ($N \approx 50$--$80$+) \\
+    \addlinespace
+    \RQ{4} &
+    (H4a--c, eksploracyjnie) Domeny i podwymiary cech Big Five wiążą się z parametrami profilu oraz wyborem wariantu osobowościowego &
+    \texttt{big5\_*}, \texttt{big5\_facets}, \texttt{implicit\_*}, \texttt{explicit\_*}, \texttt{selected\_source} &
+    Korelacje eksploracyjne Spearmana bez założeń konfirmacyjnych ($r > 0{,}4$) &
+    Modele wielozmiennowe przy większej próbie ($N \approx 80$--$150$) \\
+    \addlinespace
+    \RQ{5} &
+    (H5a) Większa odległość euklidesowa nastroju PRS (\texttt{current}$\rightarrow$\texttt{target}) sprzyja wyborowi wariantu funkcjonalnego (\texttt{mixed\_functional}) &
+    \texttt{prs\_current\_*}, \texttt{prs\_target\_*}, \texttt{selected\_source} &
+    Opis luki nastrojowej względem wyborów w macierzy &
+    Model asocjacji luki z wyborem; opcjonalny pomiar po ekspozycji \\
+    \addlinespace
+    \RQ{6} &
+    (H6a) Poczucie sprawczości i zrozumiałość procesu korelują dodatnio z satysfakcją; (H6b) porównanie ścieżek pełnej i szybkiej &
+    \texttt{agency\_*}, \texttt{clarity\_*}, \texttt{satisfaction\_*}, \texttt{sus\_*}, \texttt{path\_type} &
+    Rozkłady skal doświadczenia i korelacje Spearmana &
+    Porównanie ścieżek przy zrównoważonych podgrupach \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Priorytet empiryczny.}
+Rdzeniem wyników są \RQ{2} i~\RQ{3} (rozbieżność preferencji oraz wybór źródła w ślepej macierzy). \RQ{1} i~\RQ{6} służą ocenie wykonalności artefaktu RtD. \RQ{4} i~\RQ{5} mają charakter eksploracyjny, więc przy małym~$N$ nie wysuwam twierdzeń konfirmacyjnych.
+
+\paragraph{Czego plan nie obiecuje przy małym~$N$.}
+Nie obiecuję walidacji konstruktu zgamifikowanego PRS względem papierowego PRS-11, potwierdzenia silnych korelacji Big Five z preferencjami ani testów mediacji wielopoziomowych. Nie obiecuję też klasycznego pomiaru PRS przed ekspozycją na wizualizacje AI i po niej, bo schemat danych nie zawiera pól \texttt{prs\_post\_*}.
+
+\section{Wiarygodność i trafność}
+\label{ch06:sec:trafnosc}
+
+Strategia walidacji jest stopniowana. W pilotażu najważniejsza jest \textbf{wykonalność}: czy instrumenty zapisują kompletne i spójne dane i czy uczestnicy docierają do kolejnych kroków (\RQ{1}). Trafności konstruktu skal zgamifikowanych (siatka PRS, selekcja kart jako adaptacja IAT) nie sprawdzam jeszcze równoległym pomiarem papierowym. Ewentualna podpróba walidacyjna wymagałaby osobnego projektu.
+
+W ślepej macierzy wiarygodność opieram na trzech zabiegach: (a)~ukrywam etykiety źródła do momentu wyboru, (b)~normalizuję zapis w tabeli \allowbreak\texttt{participant\_matrix\_entries}, (c)~oddzielam generację od interpretacji wyniku. Ograniczeniem pozostaje zależność od jakości modelu generatywnego, bo szum estetyczny nie zależy od kanału danych.
+
+Dane z modułu afektywnej selekcji kart obejmują \texttt{reaction\_time\_ms}. Nie interpretuję ich jako pełnego pomiaru dwell ani hesitation, ponieważ te miary nie są zapisywane w obecnej bazie.
+
+\section{Ograniczenia metodologiczne}
+\label{ch06:sec:ograniczenia}
+
+\begin{itemize}
+  \item \textbf{Samodzielne zgłoszenie online}: próba nie jest probabilistyczna, więc uogólnienie na populację użytkowników narzędzi AI do wnętrz jest ograniczone.
+  \item \textbf{Brak laboratorium}: kontrola warunków ekspozycji (ekran, oświetlenie, czas) jest słabsza niż w eksperymencie laboratoryjnym.
+  \item \textbf{Warstwa A $\neq$ RCT}: warsztatowa eksploracja ComfyUI dostarcza wiedzy projektowej, a nie randomizowanego dowodu, że „AI leczy regeneracyjność”.
+  \item \textbf{Mały~$N$ pilotażu}: uniemożliwia konfirmacyjną psychometrię i stabilne modele wielozmiennowe.
+  \item \textbf{Luki pomiarowe}: brak PRS po ekspozycji na AI, brak dwell i hesitation w bazie, satysfakcja niepowiązana z \texttt{selected\_source}.
+  \item \textbf{Zależność od generacji}: wybór w macierzy miesza preferencję kanału danych z jakością konkretnego renderu.
+\end{itemize}
+
+\section{Etyka i ochrona danych (RODO)}
+\label{ch06:sec:etyka}
+
+Prowadzę badanie zgodnie z rozporządzeniem RODO \footcite{eu2016gdpr}. Zanim zbiorę dane, uczestnik osobno zgadza się na udział w badaniu i na przetwarzanie danych oraz potwierdza, że zapoznał się z klauzulą informacyjną (art.~13 RODO). Wersja zgody jest zapisywana, a znacznik czasu zgody jest wymagany.
+
+\paragraph{Anonimizacja i minimalizacja.}
+Identyfikatorem badawczym jest \texttt{user\_hash}. W tabelach badawczych nie przechowuję danych osobowych (imienia, adresu e-mail itd.) jako pól analitycznych. Powiązanie z kontem uwierzytelniania, jeśli istnieje, jest oddzielone od eksportu do analizy. W rozprawie i załącznikach nie publikuję danych, które pozwalałyby zidentyfikować osoby.
+
+\paragraph{Wycofanie.}
+Uczestnik może wycofać zgodę, a wtedy dalsze zbieranie danych ustaje. Retencję danych historycznych, potrzebną do integralności zbioru badawczego, opisuje klauzula (załącznik~\ref{app:f:top}).
+
+\paragraph{Bezpieczeństwo techniczne (szkic).}
+Dane zapisuję w GCP (Cloud SQL i powiązane usługi), a dostęp ograniczam do infrastruktury badawczej projektu. Załączniki A--F nie zawierają sekretów (kluczy API, connection stringów) ani surowych eksportów z danymi osobowymi.

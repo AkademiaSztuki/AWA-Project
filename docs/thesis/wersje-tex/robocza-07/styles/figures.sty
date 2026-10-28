@@ -1,0 +1,138 @@
+% Purpose: quiet captions and reusable image layouts.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles/figures}[2026/10/05 IDA thesis figures]
+
+\RequirePackage{graphicx}
+\RequirePackage{caption}
+\RequirePackage{changepage}
+\RequirePackage{etoolbox}
+
+\setkeys{Gin}{keepaspectratio}
+
+\DeclareCaptionFont{idaaccent}{\color{accent}}
+\DeclareCaptionFont{idasoft}{\color{inksoft}}
+\captionsetup{
+  font = {small, sf, idasoft},
+  labelfont = {sf, idaaccent},
+  labelsep = quad,
+  format = plain,
+  justification = raggedright,
+  singlelinecheck = false,
+  skip = 0.5\baselineskip
+}
+\captionsetup[figure]{position=below}
+\captionsetup[table]{position=above, skip=0.4\baselineskip}
+
+\addto\captionspolish{%
+  \renewcommand{\figurename}{Rycina}%
+  \renewcommand{\listfigurename}{Spis rycin}%
+}
+
+% Optional first argument is a list of \includegraphics keys.
+% The caption argument may contain \label. Aspect ratio is never stretched.
+
+\NewDocumentCommand{\fullpageimage}{O{} m +m}{%
+  \begin{figure}[p]
+    \centering
+    \includegraphics[width=\textwidth,height=0.78\textheight,keepaspectratio,#1]{#2}
+    \caption{#3}
+  \end{figure}%
+}
+
+\NewDocumentCommand{\wideimage}{O{} m +m}{%
+  \begin{figure}[htbp]
+    \begin{adjustwidth*}{0pt}{-\marginparwidth}
+      \centering
+      \includegraphics[width=\linewidth,keepaspectratio,#1]{#2}
+      \caption{#3}
+    \end{adjustwidth*}%
+  \end{figure}%
+}
+
+\NewDocumentCommand{\splitimage}{O{} m +m}{%
+  \begin{figure}[htbp]
+    \centering
+    \begin{minipage}[c]{0.58\linewidth}
+      \centering
+      \includegraphics[width=\linewidth,keepaspectratio,#1]{#2}
+    \end{minipage}\hfill
+    \begin{minipage}[c]{0.36\linewidth}
+      \caption{#3}
+    \end{minipage}
+  \end{figure}%
+}
+
+\NewDocumentCommand{\imagepair}{O{} m m +m}{%
+  \begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.48\linewidth,keepaspectratio,#1]{#2}\hfill
+    \includegraphics[width=0.48\linewidth,keepaspectratio,#1]{#3}
+    \caption{#4}
+  \end{figure}%
+}
+
+\newif\ifidaseqsep
+\NewDocumentCommand{\imageSequence}{O{} m +m}{%
+  \begin{figure}[htbp]
+    \centering
+    \idaseqsepfalse
+    \renewcommand{\do}[1]{%
+      \ifidaseqsep\hfill\fi
+      \idaseqseptrue
+      \includegraphics[height=0.2\textheight,keepaspectratio,#1]{##1}%
+    }%
+    \docsvlist{#2}%
+    \caption{#3}
+  \end{figure}%
+}
+
+\NewDocumentCommand{\sideCaption}{O{} m +m}{%
+  \begin{figure}[htbp]
+    \begin{adjustwidth*}{0pt}{-\marginparwidth}
+      \begin{minipage}[c]{\textwidth}
+        \centering
+        \includegraphics[width=\linewidth,keepaspectratio,#1]{#2}
+      \end{minipage}\hfill
+      \begin{minipage}[c]{\marginparwidth}
+        \caption{#3}
+      \end{minipage}
+    \end{adjustwidth*}%
+  \end{figure}%
+}
+
+\NewDocumentCommand{\researchblock}{m +m}{%
+  \par\vspace{0.7\baselineskip}%
+  \noindent
+  \begin{tabular}{@{}!{\color{accent}\vrule width 0.5pt}@{\hspace{0.7em}}%
+    p{\dimexpr\linewidth-1.15em\relax}@{}}%
+    {\sffamily\small\color{accent}#1\par\vspace{0.22\baselineskip}}%
+    #2%
+  \end{tabular}%
+  \par\vspace{0.5\baselineskip}%
+}
+
+\NewDocumentCommand{\processblock}{m +m}{%
+  \par\vspace{0.7\baselineskip}%
+  \noindent
+  {\color{accent}\rule{1.2em}{0.4pt}\par\vspace{0.28\baselineskip}}%
+  {\sffamily\small\color{accent}#1\par\vspace{0.2\baselineskip}}%
+  #2%
+  \par\vspace{0.45\baselineskip}%
+}
+
+\NewDocumentCommand{\quotePage}{+m}{%
+  \cleardoublepage
+  \thispagestyle{ida@chapter}%
+  \vspace*{0.2\textheight}%
+  {\color{accent}\rule{1.5em}{0.45pt}\par\vspace{0.8\baselineskip}}%
+  \begin{minipage}{0.86\linewidth}
+    \sffamily\fontsize{15}{20}\selectfont\color{ink}\raggedright #1
+  \end{minipage}%
+  \clearpage
+}
+
+\NewDocumentCommand{\designNote}{+m}{%
+  \par\vspace{0.4\baselineskip}%
+  {\sffamily\small\color{inksoft}\raggedright #1\par}%
+  \vspace{0.3\baselineskip}%
+}

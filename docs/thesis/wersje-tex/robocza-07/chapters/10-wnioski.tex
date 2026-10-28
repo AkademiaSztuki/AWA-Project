@@ -1,0 +1,84 @@
+% OWNER: empirical
+% STATUS: draft
+% SOURCES: notes/HIPOTEZY_REWIZJA.md; cel i teza rozdz. 1; wyniki rozdz. 8 (data/analysis-2026-10-01.json)
+\chapter{Wnioski końcowe}
+\label{ch10:top}
+\ChapterStatus{draft}{empirical}
+
+Ten rozdział zbiera cel pracy, odpowiedzi na pytania badawcze i wkład. Nie powtarzam dyskusji z rozdziału~\ref{ch09:top}. Odpowiedzi opieram na pilotażu z 1~października 2026 (rozdz.~\ref{ch08:top}), więc są one opisowe i robocze.
+
+\section{Realizacja celu pracy}
+\label{ch10:sec:cel}
+
+Celem rozprawy (rozdz.~\ref{ch01:sec:cel}) było zaprojektowanie, zbudowanie i ewaluacja platformy IDA jako artefaktu Research through Design. Platforma miała łączyć wieloźródłowy profil preferencji, przejrzysty potok personalizacji i terenowe badanie rozbieżności preferencji oraz skuteczności kanałów \footcite{idaPlatform2026}.
+
+\paragraph{Co zrealizowałem.}
+\begin{itemize}
+  \item \textbf{Artefakt (warstwa B).} Działający przebieg Full i Fast, synteza briefu, macierz sześciu źródeł, ślepy wybór i zapis danych badawczych (rozdz.~\ref{ch07:top}).
+  \item \textbf{Warsztatowa eksploracja medium (warstwa A).} Autorskie próby w środowisku ComfyUI oraz opisany transfer wniosków do potoku internetowego wraz ze świadomymi odrzuceniami (rozdz.~\ref{ch04:top}).
+  \item \textbf{Rama metodyczna.} Trzy warstwy dowodu, rewizja H1--H5 do \RQ{1}--\RQ{6}, plan analiz i ograniczenia schematu (rozdz.~\ref{ch06:top}).
+  \item \textbf{Pilotaż terenowy (warstwa C).} Odczyt danych z 240 rekordów ze zgodą, z czego 85 na ścieżce Full i 68 z profilem rdzeniowym (rozdz.~\ref{ch08:top}).
+\end{itemize}
+
+\paragraph{Czego nie zrealizowałem.}
+Nie mam próby, która pozwalałaby potwierdzać hipotezy. Ślepy wybór widać w trzech licznikach (16 na full przy fladze, 17 w całym zbiorze, 29 zaznaczeń w macierzy, 59 wierszy feedbacku), a generacja obrazów w tym zrzucie często kończyła się błędem (485 z 1174) lub nie doszła do końca (278 \texttt{pending}). Część empiryczną traktuję jako pilotaż opisowy artefaktu i zapisu danych, a nie jako dowód skuteczności kanałów --- w tym nie potwierdzają się hipotezy \Hyp{3a} i \Hyp{5a}.
+
+\section{Odpowiedź na pytania badawcze}
+\label{ch10:sec:rq}
+
+Poniżej podaję odpowiedzi w stanie na 1~października 2026. Zestawienie liczbowe jest w~\cref{tab:ch08:rq-summary}.
+
+\begin{description}[style=nextline]
+  \item[\RQ{1} --- wykonalność przebiegu]
+  Na ścieżce Full 68 z 85 osób dochodzi do profilu rdzeniowego, a do ślepego wyboru 16 (ryc.~\ref{fig:ch08:funnel}; \cref{ch08:sec:rq1}). Przebieg da się więc ukończyć bez załamania na starcie, ale komplet danych (osobowość, macierz, ankieta) ma mniej osób. Ścieżka Fast nie zbiera profilu.
+
+  \item[\RQ{2} --- rozbieżność implicit i explicit a macierz]
+  Skale ciągłe są zgodne co do kierunku (rho 0,39--0,46, $n=72$). Związku rozbieżności z wyborem źródła nie da się tu ocenić, bo \texttt{style\_match} jest prawie zawsze fałszywy (\cref{ch08:sec:rq2}). Ramą interpretacji są procesy dualne i pomiar asocjacji ukrytych \footcite{kahneman2011thinking,greenwald1998iat}.
+
+  \item[\RQ{3} --- wybór źródła w ślepej macierzy]
+  Najczęściej wybierano implicit (11 z 29 osób), a nie warianty mieszane. Hipoteza \Hyp{3a} nie znajduje oparcia w tej próbie (\cref{ch08:sec:rq3}; ryc.~\ref{fig:ch08:selected-source}). Wynik ograniczają trzy niezgodne liczniki wyboru i jakość generacji.
+
+  \item[\RQ{4} --- Big Five a estetyka i źródło personality]
+  Analiza ma status eksploracyjny. Otwartość słabo wiąże się ze złożonością implicit (rho 0,20), a mocniej z ciepłem implicit (0,35). Źródło personality wybrały dwie osoby, więc nie wnioskuję o jego skuteczności (\cref{ch08:sec:rq4}). Taksonomię OCEAN przyjmuję za \textcite{john2008bigfive}.
+
+  \item[\RQ{5} --- luka PRS a \texttt{mixed\_functional}]
+  Hipoteza \Hyp{5a} nie ma oparcia (rho $-0{,}28$, $n=25$). To pytanie o odległość current$\rightarrow$target, a nie o skutek wizualizacji AI (\cref{ch08:sec:rq5}; konstrukt wiążę z ART u \textcite{kaplan1995restorative}).
+
+  \item[\RQ{6} --- sprawczość, zrozumiałość, satysfakcja]
+  U osób, które dotarły do ankiety, sprawczość i zrozumiałość procesu wiążą się z satysfakcją (rho 0,71 i 0,68, $n$ około 27). Fast ma dwie ankiety, więc porównania ścieżek nie przeprowadzam (\cref{ch08:sec:rq6}).
+\end{description}
+
+\section{Oryginalność i wkład naukowy}
+\label{ch10:sec:wklad}
+
+Oryginalność rozprawy w dyscyplinie sztuk (projektowanie wnętrz, media) nie wynika z pojedynczego testu istotności. Opiera się na połączeniu trzech rzeczy:
+
+\begin{enumerate}
+  \item \textbf{Artefakt IDA.} Dialogowa platforma personalizacji koncepcji wnętrz z jawną syntezą i ślepą macierzą sześciu źródeł jako eksperymentem w samym produkcie \footcite{idaPlatform2026,zimmerman2007rtd}.
+  \item \textbf{Eksploracja medium dyfuzyjnego.} Autorskie testy z modelami dyfuzyjnymi w środowisku ComfyUI (kontrola geometrii, segmentacja) i udokumentowane przeniesienie wniosków do zoptymalizowanego potoku internetowego (Gemini Image, Vertex~AI), bez utożsamiania lokalnych eksperymentów ze środowiskiem wdrożeniowym (rozdz.~\ref{ch04:top}, \ref{ch07:sec:comfyui-transfer}).
+  \item \textbf{Metoda RtD.} Badanie przez projektowanie \footcite{frayling1993research}: trzy warstwy dowodu, hipotezy dopasowane do realnego schematu danych oraz most między psychologią środowiskową, preferencjami jawnymi i ukrytymi a generatywną wizualizacją wnętrz.
+\end{enumerate}
+
+\paragraph{Wnioski ogólne.}
+\begin{enumerate}
+  \item Personalizację koncepcji wnętrz można projektować jako rozmowę o gustach, a nie jako czarną skrzynkę generatora.
+  \item Ślepe porównanie wariantów z kilku źródeł jest użyteczną formą empirii w RtD, o ile zapis wyboru jest jednoznaczny. W moim pilotażu nie był: trzy liczniki wyboru dały trzy różne liczby.
+  \item Warsztatowe próby w ComfyUI i artefakt IDA razem tworzą metodę łączenia medium dyfuzyjnego z odpowiedzialnością projektową (\texttt{preserve}, status mood image).
+  \item Badanie terenowe musi podążać za schematem danych. Pytań bez operacjonalizacji (dawny H2 przed i po, dawny H5 o czasie wahania) nie mogę uczynić osią rozprawy.
+  \item W tej próbie szybkie reakcje (implicit) wskazywano w ślepym porównaniu częściej niż warianty mieszane. Wniosek ma sens tylko jako hipoteza do sprawdzenia na większej próbie i po naprawie generacji.
+\end{enumerate}
+
+\section{Rekomendacje}
+\label{ch10:sec:rekomendacje}
+
+\paragraph{Dla projektantów wnętrz.}
+Generatywne wizualizacje warto traktować jako materiał do rozmowy z użytkownikiem przestrzeni. Dobrze zbierać równolegle sygnały jawne i behawioralne i nie utożsamiać jednego renderu z „prawdziwym gustem” klienta. Źródło personalizacji można ujawniać dopiero po wyborze, jak w macierzy IDA.
+
+\paragraph{Dla badaczy HCI i RtD.}
+Instrumenty badawcze osadzałbym w doświadczeniu produktu, a warsztatowe testy medium opisywałbym osobno od środowiska wdrożeniowego. Gdy schemat bazy nie wspiera dawnych obietnic, trzeba rewidować hipotezy. Najpierw raportować wykonalność (lejek), dopiero potem psychometrię.
+
+\paragraph{Dla psychologii środowiskowej stosowanej.}
+Mood grid i lukę current$\rightarrow$target można wykorzystać w briefie projektowym. Efektu regeneracyjnego AI nie wolno wnioskować z samego wyboru wariantu, bo wymaga on osobnego pomiaru po ekspozycji \footcite{kaplan1995restorative}.
+
+\paragraph{Dla dalszej pracy.}
+Najpierw naprawię generacje i ujednolicę licznik ślepego wyboru. Potem zwiększę próbę zgodnie z planem analiz zapisanym przed pełną analizą. Kwestię pomiaru PRS po wyborze rozstrzygnę z promotorem.

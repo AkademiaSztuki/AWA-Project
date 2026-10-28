@@ -1,0 +1,205 @@
+% Purpose: chapter openers, short running heads, and section hierarchy.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles/chapters}[2026/10/05 IDA thesis chapter system]
+
+\RequirePackage[pagestyles,nobottomtitles*]{titlesec}
+\RequirePackage{etoolbox}
+
+\newif\ifida@front
+\newif\ifida@appendix
+\ida@fronttrue
+
+\makeatletter
+% Full title (as written in the chapter file) -> short running head.
+% TOC and the printed \chapter title stay untouched.
+\newcommand{\idaShort}[2]{%
+  \expandafter\gdef\csname ida@short@\detokenize{#1}\endcsname{#2}%
+}
+
+\idaShort{Wprowadzenie}{Wprowadzenie}
+\idaShort{Projektowanie wnętrz, psychologia środowiskowa i doświadczenie przestrzeni}{Psychologia środowiskowa}
+\idaShort{Preferencje estetyczne: jawne, ukryte i behawioralne}{Preferencje estetyczne}
+\idaShort{Sztuczna inteligencja dyfuzyjna w architekturze wnętrz --- mechanizmy kontroli, narzędzia i próby w ComfyUI}{Medium dyfuzyjne}
+\idaShort{Osobowość a preferencje przestrzenne}{Osobowość}
+\idaShort{Metodologia badań}{Metodologia}
+\idaShort{Artefakt badawczy IDA --- koncepcja, budowa i uzasadnienie projektowe}{Artefakt IDA}
+\idaShort{Wyniki badań}{Wyniki}
+\idaShort{Dyskusja}{Dyskusja}
+\idaShort{Wnioski końcowe}{Wnioski}
+\idaShort{Schemat bazy danych badawczych}{Schemat bazy}
+\idaShort{Treść instrumentów i ekranów}{Instrumenty}
+\idaShort{Mapowanie podwymiarów cech na parametry promptu}{Mapowanie podwymiarów cech}
+\idaShort{Przykładowe prompty i warianty macierzy}{Prompty}
+\idaShort{Wykaz zmiennych eksportowanych do analizy}{Zmienne}
+\idaShort{Zgoda badawcza i klauzula informacyjna}{Zgoda badawcza}
+\idaShort{Portfolio prób i testów w ComfyUI}{ComfyUI}
+\idaShort{Wybrane przebiegi platformy IDA}{Przebiegi IDA}
+\idaShort{Bibliografia}{Bibliografia}
+\idaShort{Streszczenie}{Streszczenie}
+\idaShort{Abstract}{Abstract}
+\idaShort{Wykaz skrótów i symboli}{Skróty}
+\idaShort{Spis treści}{Spis}
+\idaShort{Spis rycin}{Ryciny}
+\idaShort{Spis tabel}{Tabele}
+
+\newcommand{\idaPadChapter}{%
+  \ifnum\value{chapter}<10 0\fi\thechapter
+}
+
+\newcommand{\idaChapterLabel}{%
+  \idaSb\color{accent}%
+  \fontsize{42}{44}\selectfont
+  \ifida@appendix
+    \thechapter
+  \else
+    \idaPadChapter
+  \fi
+}
+
+\newcommand{\idaChapterFont}{%
+  \normalfont\idaSb\filright\color{ink}%
+  \fontsize{16.5}{21}\selectfont
+}
+
+\newcommand{\idaNumberlessFont}{%
+  \normalfont\idaSb\filright
+  \ifida@front
+    \color{inksoft}\fontsize{12.5}{16}\selectfont
+  \else
+    \color{ink}\fontsize{16.5}{21}\selectfont
+  \fi
+}
+
+\titleformat{\chapter}[display]
+  {\idaChapterFont}
+  {\idaChapterLabel}
+  {0.55\baselineskip}
+  {}
+\titlespacing*{\chapter}{0pt}{2.6\baselineskip}{2.1\baselineskip}
+
+\titleformat{name=\chapter,numberless}[display]
+  {\idaNumberlessFont}
+  {\ifida@front\textcolor{accent}{\rule{1.35em}{0.4pt}}\fi}
+  {0.45\baselineskip}
+  {}
+\titlespacing*{name=\chapter,numberless}{0pt}{1.15\baselineskip}{1.15\baselineskip}
+
+\titleformat{\section}
+  {\normalfont\idaSb\filright\fontsize{12.4}{15.5}\selectfont\color{ink}}
+  {\color{accent}\thesection}
+  {0.65em}
+  {}
+\titlespacing*{\section}{0pt}{1.55\baselineskip}{0.45\baselineskip}
+
+\titleformat{\subsection}
+  {\normalfont\sffamily\filright\fontsize{11.2}{14}\selectfont\color{ink}}
+  {\textcolor{accent}{\thesubsection}}
+  {0.55em}
+  {}
+\titlespacing*{\subsection}{0pt}{1.15\baselineskip}{0.32\baselineskip}
+
+\titleformat{\subsubsection}
+  {\normalfont\sffamily\filright\normalsize\color{inksoft}}
+  {\thesubsubsection}
+  {0.5em}
+  {}
+\titlespacing*{\subsubsection}{0pt}{0.95\baselineskip}{0.28\baselineskip}
+
+\titleformat{\paragraph}[runin]
+  {\normalfont\idaSb\color{ink}}
+  {}
+  {0pt}
+  {}
+\titlespacing*{\paragraph}{0pt}{0.8\baselineskip}{0.55em}
+
+% Reserved for a future opener lede. Not inserted into chapters.
+\newcommand{\chapterintro}[1]{%
+  \par\vspace{0.15\baselineskip}%
+  {\sffamily\small\color{inksoft}\raggedright #1\par}%
+  \vspace{0.85\baselineskip}%
+}
+
+% Running heads are navigation, not glossary uses.
+\newcommand{\ida@nolinkhead}{%
+  \ifdefined\ida@nolinkattr\ida@nolinkattr=1 \fi
+}
+\newcommand{\idaFolio}{%
+  \begingroup\ida@nolinkhead
+  \sffamily\footnotesize\color{inksoft}\thepage
+  \endgroup
+}
+\newcommand{\idaVersoMark}{%
+  \begingroup\ida@nolinkhead
+  \sffamily\footnotesize\color{accent}IDA%
+  \endgroup
+}
+\newcommand{\idaRectoMark}{%
+  \begingroup\ida@nolinkhead
+  \sffamily\footnotesize\color{inksoft}\chaptertitle
+  \endgroup
+}
+
+% Verso: IDA. Recto: short chapter title. Folio on the outer edge.
+\newpagestyle{ida@main}{%
+  \setheadrule{0pt}%
+  \setfootrule{0pt}%
+  \sethead[\idaFolio][][\idaVersoMark]%
+    {\idaRectoMark}{}{\idaFolio}%
+  \setfoot[][][]{}{}{}%
+}
+% Chapter openers: folio only, same position, no running title.
+\newpagestyle{ida@chapter}{%
+  \setheadrule{0pt}%
+  \setfootrule{0pt}%
+  \sethead[\idaFolio][][]%
+    {}{}{\idaFolio}%
+  \setfoot[][][]{}{}{}%
+}
+\newpagestyle{ida@front}{%
+  \setheadrule{0pt}%
+  \setfootrule{0pt}%
+  \sethead[\idaFolio][][]%
+    {}{}{\idaFolio}%
+  \setfoot[][][]{}{}{}%
+}
+\assignpagestyle{\chapter}{ida@chapter}
+
+% titleps resets \chaptermark inside \pagestyle. Re-install the short-title
+% wrapper afterwards, and keep it global so the group around \pagestyle
+% does not drop it (otherwise recto heads lose \chaptertitle).
+\newcommand{\ida@ourchaptermark}[1]{%
+  \@ifundefined{ida@short@\detokenize{#1}}{%
+    \ida@titlepschaptermark{#1}%
+  }{%
+    \ida@titlepschaptermark{\csname ida@short@\detokenize{#1}\endcsname}%
+  }%
+}
+\newcommand{\ida@installmarks}{%
+  \ifx\chaptermark\ida@ourchaptermark\else
+    \global\let\ida@titlepschaptermark\chaptermark
+    \global\let\chaptermark\ida@ourchaptermark
+  \fi
+}
+\AddToHook{cmd/pagestyle/after}{\ida@installmarks}
+
+% 0 = roman front matter, 1 = arabic. Used by return-link labels.
+\newcount\ida@pagemode
+
+\apptocmd{\frontmatter}{%
+  \ida@fronttrue
+  \ida@appendixfalse
+  \ida@pagemode=0
+  \pagestyle{ida@front}%
+}{}{}
+\apptocmd{\mainmatter}{%
+  \ida@frontfalse
+  \ida@appendixfalse
+  \ida@pagemode=1
+  \pagestyle{ida@main}%
+}{}{}
+\apptocmd{\appendix}{%
+  \ida@frontfalse
+  \ida@appendixtrue
+  \pagestyle{ida@main}%
+}{}{}
+\makeatother

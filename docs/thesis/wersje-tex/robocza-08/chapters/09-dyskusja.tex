@@ -1,0 +1,96 @@
+% OWNER: empirical
+% STATUS: review (zredagowano w robocza-08: styl eseju projektowego, spójność opisu macierzy, wątek Pallasmy w \textcolor{orange})
+% SOURCES: notes/HIPOTEZY_REWIZJA.md; rozdz. 2--8; data/analysis-2026-10-01.json
+\chapter{Dyskusja}
+\label{ch09:top}
+\ChapterStatus{review}{empirical}
+
+W rozdziale~\ref{ch08:top} przedstawiłem ilościowy obraz działania platformy IDA w pierwszym wdrożeniu terenowym. Niniejszy rozdział poświęcam krytycznej interpretacji tych obserwacji oraz wyznaczeniu granic poznawczych przeprowadzonego pilotażu. Zestawiam tu dane z odczytu bazy z 1~października 2026 roku z literaturą przedmiotu omówioną w rozdziałach~\ref{ch02:top}--\ref{ch05:top}, ramą metodologiczną badań przez projektowanie (rozdz.~\ref{ch06:top}) oraz architekturą samego dzieła (rozdz.~\ref{ch07:top}). Ze względu na pilotażową skalę próby wszystkie poniższe interpretacje mają charakter roboczy i eksploracyjny --- żadnej z nich nie formułuję jako konfirmacyjnego dowodu statystycznego.
+
+\section{Interpretacja wyników w świetle literatury}
+\label{ch09:sec:interpretacja}
+
+\paragraph{Rozbieżność preferencji (\RQ{2}) a teoria procesów dualnych.}
+Koncepcja dwóch systemów poznawczych Daniela Kahnemana \footcite{kahneman2011thinking} oraz paradygmat pomiaru skojarzeń utajonych Anthony'ego Greenwalda i współpracowników \footcite{greenwald1998iat} wskazują, że spontaniczna reakcja afektywna oraz zracjonalizowana deklaracja słowna często podążają odmiennymi torami. Zgromadzony w pilotażu materiał empiryczny potwierdza to założenie jedynie częściowo. Na ciągłych skalach atrybutów przestrzennych (ciepło, jasność, złożoność wizualna) pomiary wywiedzione z afektywnej selekcji kart (\texttt{implicit}) oraz z suwaków deklaratywnych (\texttt{explicit}) wykazują umiarkowaną zgodność kierunkową: współczynnik korelacji rangowej Spearmana $\rho$ przyjmuje wartości od $0{,}39$ do $0{,}46$ przy $n=72$. Rozbieżność ujawnia się natomiast wyraźnie na poziomie kategoryzacji nazw stylów zapisanych w strukturze porównawczej profilu (47 rozbieżnych etykiet na 58 analizowanych rekordów). Ponieważ jednak binarna flaga zgodności stylu (\texttt{style\_match}) okazała się prawdziwa wyłącznie u 10 badanych, zmienna ta nie różnicuje próby w stopniu pozwalającym na rzetelną weryfikację hipotez szczegółowych \Hyp{2a} i \Hyp{2b}. Wniosek z pilotażu pozostaje zatem wyważony: dualna natura preferencji zaznacza się w rozdźwięku między słowną etykietą stylu a ciągłymi parametrami obrazu, lecz jej wpływ na czas namysłu w macierzy wymaga weryfikacji na większej próbie.
+
+\paragraph{Wybór źródła w ślepej macierzy (\RQ{3}).}
+W ślepym porównaniu wariantów badani najczęściej wskazywali koncepcję wygenerowaną wyłącznie z preferencji ukrytych (\texttt{implicit}: 11 z 29 osób w tabeli macierzy oraz 19 z 59 wpisów w tabeli opinii), nie zaś warianty syntetyzujące wiele źródeł. Hipoteza \Hyp{3a} zakładająca przewagę wariantów mieszanych nie znalazła w tym zbiorze oparcia: warianty \texttt{mixed} oraz \texttt{mixed\_functional} wybrało łącznie 8 z 29 osób.
+
+\textcolor{orange}{Z perspektywy projektanta wnętrz przewaga wariantu wywiedzionego z afektywnej selekcji kart (\texttt{implicit}) nad wariantem czysto deklaratywnym (\texttt{explicit}: 3 z 29 osób) stanowi niezwykle istotny trop projektowy. Sugeruje on, że w bezpośrednim, zmysłowym kontakcie z wizualizacją własnego pokoju badani chętniej wybierają przestrzeń odpowiadającą ich pierwotnej, intuicyjnej wrażliwości na światło, nastrój i fakturę materii \footcite{pallasmaa2012oczy,kahneman2011thinking} niż aranżację zbudowaną ze zwerbalizowanych deklaracji stylistycznych.}
+
+Należy przy tym rozważyć trzy konkurencyjne wyjaśnienia tego rezultatu, których na obecnym etapie nie sposób rozstrzygnąć statystycznie. Po pierwsze, obrazy wywiedzione ze ścieżki behawioralnej mogą rzeczywiście trafniej oddawać zmysłowe potrzeby mieszkańca. Po drugie, algorytmiczne łączenie wielu kanałów w wariantach mieszanych może prowadzić do uśrednienia wyrazistości plastycznej koncepcji. Po trzecie wreszcie, decyzja użytkownika w ślepej macierzy zależy w dużym stopniu od jakości plastycznej pojedynczego renderu: w odczycie z 1~października 2026 roku spośród 1174 zadań generacji aż 485 zakończyło się błędem, a 278 pozostało w stanie oczekiwania (\texttt{pending}; zob.\ rozdz.~\ref{ch08:sec:snapshot-2026-10-01}).
+
+\paragraph{Warunki ekspozycji wariantów i ewolucja interfejsu macierzy.}
+Interpretując wybory w macierzy (\RQ{3}), należy uwzględnić również czynnik interfejsowy. W części wczesnych sesji pilotażowych ekran porównania w trybie anonimowym wyświetlał część odblokowanych kart, zachęcając do zapisania projektu na koncie. Choć nie przekreśla to wartości poznawczej pilotażu w zakresie przebiegu dialogu i budowy profilu, wymaga skrupulatnego rozróżniania trzech liczników wyboru w bazie danych (16 osób ze znacznikiem na ścieżce pełnej, 17 w całym zbiorze, 29 osób z zaznaczonym kafelkiem w macierzy oraz 59 wierszy opinii). Wnioski z tego etapu posłużyły mi bezpośrednio do udoskonalenia dzieła w duchu Research through Design: przeprojektowałem ekran ślepej macierzy tak, aby pełna, symetryczna siatka sześciu wariantów była prezentowana uczestnikowi bez przeszkód przed jakimkolwiek pytaniem o rejestrację konta (rozdz.~\ref{ch07:sec:slepy-wybor}).
+
+\paragraph{Osobowość jako hipoteza projektowa (\RQ{4}).}
+Wprowadzenie taksonomii Wielkiej Piątki \footcite{john2008bigfive} oraz inwentarza IPIP-NEO-120 służyło w platformie IDA zbudowaniu wyrazistego kontrastu eksperymentalnego, a nie psychometrycznemu determinizmowi (rozdz.~\ref{ch05:top}). Obserwacje z pilotażu korespondują z tym ostrożnym założeniem. Otwartość na doświadczenie wykazuje słaby związek ze złożonością wizualną w kanale ukrytym ($\rho = 0{,}20$, $n=41$), a wyraźniejszy z preferencją wizualnego ciepła ($\rho = 0{,}35$). Jeszcze silniejsza dodatnia asocjacja łączy ugodowość z ciepłem ukrytym ($\rho = 0{,}41$), podczas gdy sumienność koreluje ujemnie z deklarowaną złożonością wnętrza ($\rho = -0{,}29$). Sam wariant czysto osobowościowy (\texttt{personality}) został wskazany w ślepej macierzy zaledwie przez 2 osoby, co potwierdza, że izolowany profil psychometryczny nie zastępuje bezpośredniego dialogu o cechach przestrzeni.
+
+\paragraph{Luka nastroju regeneracyjnego PRS a funkcja przestrzeni (\RQ{5}).}
+Hipotezę łączącą większą odległość między zastanym a pożądanym nastrojem pokoju (\texttt{current}$\rightarrow$\texttt{target}) z częstszym wyborem wariantu funkcjonalnego (\texttt{mixed\_functional}) wywiodłem z teorii regeneracji uwagi Stephena Kaplana \footcite{kaplan1995restorative}. Dane pilotażowe nie wspierają tego przypuszczenia ($\rho = -0{,}28$, $n=25$), a jedyny uczestnik z kompletem pomiarów obu osi, który wybrał wariant funkcjonalny, charakteryzował się minimalną luką nastrojową. Rezultat ten nie podważa jednak samej teorii środowisk regeneracyjnych: autorska siatka nastroju (mood grid) stanowi projektową adaptację wytycznych, a nie psychometryczny ekwiwalent skali PRS-11 \footcite{hartig1997prs,pasini2014prs11}. Ponadto schemat bazy nie obejmował ponownego pomiaru nastroju po ekspozycji na wygenerowany obraz, toteż badanie ocenia użyteczność luki nastrojowej jako wytycznej do briefu, a nie terapeutyczny efekt wizualizacji.
+
+\paragraph{Wykonalność przebiegu i poczucie sprawczości (\RQ{1},~\RQ{6}).}
+Na ścieżce pełnej 68 z 85 uczestników ukończyło wieloźródłowy profil rdzeniowy, natomiast do finalnego znacznika ślepego wyboru dotarło 16 osób (19\%). Największy spadek zaangażowania następuje na styku profilu ogólnego i wymagającej konfiguracji konkretnego pokoju (spadek z 68 do 49 osób) oraz przy przejściu do generacji i kwestionariuszy końcowych (25 osób). Wśród badanych, którzy przeszli pełny proces i wypełnili ankietę ewaluacyjną, poczucie sprawczości oraz zrozumiałość procesu wykazują silną dodatnią korelację z satysfakcją ($\rho = 0{,}71$ oraz $\rho = 0{,}68$ przy $n \approx 27$). Potwierdza to trafność założenia \emph{Research-Embedded}: wplecenie instrumentów badawczych w spójną narrację prowadzoną przez awatara buduje poczucie podmiotowości u osób kończących doświadczenie \footcite{zimmerman2007rtd}.
+
+\section{Wkład metodologiczny Research through Design}
+\label{ch09:sec:rtd}
+
+W ujęciu Christophera Fraylinga wiedza w sztukach projektowych rodzi się poprzez sam proces kształtowania artefaktu \footcite{frayling1993research}, a w tradycji badań nad interakcją zaprojektowany obiekt stanowi materialny argument o pożądanym stanie rzeczywistości \footcite{zimmerman2007rtd}. W paradygmat ten wpisuję trzy kluczowe rozstrzygnięcia niniejszej pracy:
+
+\begin{enumerate}
+  \item \textbf{Eksperyment wpleciony w strukturę dzieła.} Ślepa macierz sześciu źródeł nie jest zewnętrznym testem laboratoryjnym dołączonym do generatora, lecz organiczną kulminacją dialogu projektowego (rozdz.~\ref{ch07:sec:macierz}).
+  \item \textbf{Trójwarstwowa struktura dowodu.} Wyraźne rozgraniczenie warsztatowych prób w środowisku ComfyUI (warstwa~A), wdrożonego dzieła IDA (warstwa~B) oraz ewaluacji terenowej (warstwa~C) pozwoliło oddzielić eksplorację możliwości medium dyfuzyjnego od rygoru powtarzalnej platformy udostępnionej badanym (rozdz.~\ref{ch04:top}, \ref{ch06:sec:warstwy}).
+  \item \textbf{Rzetelność operacyjna wobec schematu danych.} Rewizja wstępnych założeń H1--H5 do postaci pytań badawczych \RQ{1}--\RQ{6} uchroniła pracę przed nadinterpretacją i wtórnym dopasowywaniem hipotez (HARKing) tam, gdzie schemat bazy nie rejestrował pomiaru po ekspozycji lub czasu wahania.
+\end{enumerate}
+
+Podczas gdy warstwa~C zachowuje w niniejszej rozprawie status pilotażu opisowego, warstwy~A oraz~B stanowią pełnoprawny, zamknięty wkład projektowo-badawczy: dokumentują warsztat medium, architekturę translacji preferencji oraz świadomie przyjęte kompromisy projektowe.
+
+\section{Wkład praktyczny dla projektowania wnętrz i narzędzi generatywnych}
+\label{ch09:sec:praktyka}
+
+\paragraph{Dla praktyki projektowania wnętrz.}
+Dzieło IDA pokazuje, że wspomagana sztuczną inteligencją personalizacja koncepcji wnętrza może przybrać formę pogłębionej rozmowy o wrażliwości zmysłowej, nastroju regeneracyjnym i rytuałach domowych, zamiast redukcji do losowania stylu z krótkiego opisu tekstowego. Wygenerowany obraz traktuję przy tym konsekwentnie jako wizualizację koncepcyjną (\emph{mood image}) inicjującą dialog z mieszkańcem, podczas gdy odpowiedzialność za tektonikę i zachowanie geometrii (\texttt{preserve}) pozostaje po stronie projektanta (rozdz.~\ref{ch07:sec:status-wizualizacji}).
+
+\paragraph{Dla projektowania systemów generatywnych.}
+Przeprowadzony pilotaż nie potwierdził przewagi algorytmicznych wariantów mieszanych nad czystym kanałem preferencji ukrytych. Zamiast narzucać użytkownikowi jeden „uśredniony” render, rekomenduję prezentowanie zestawu alternatyw wywiedzionych z odrębnych kanałów i ujawnianie ich genezy dopiero po dokonaniu ślepego wyboru. Odkrycie przed użytkownikiem napięcia między jego deklaracją a intuicyjnym gestem stanowi wartość poznawczą samą w sobie.
+
+\paragraph{Dla integracji dyscyplin.}
+Praca przerzuca pomost między psychologią środowiskową (rozdz.~\ref{ch02:top}), empiryczną estetyką preferencji (rozdz.~\ref{ch03:top}) a warsztatem generatywnej sztucznej inteligencji (rozdz.~\ref{ch04:top}), ucieleśniając te wątki w działającym artefakcie \footcite{idaPlatform2026}.
+
+\section{Ograniczenia badań}
+\label{ch09:sec:ograniczenia}
+
+Oprócz ograniczeń metodologicznych sformułowanych w rozdziale~\ref{ch06:sec:ograniczenia}, interpretacja wyników pilotażu wymaga uwzględnienia następujących uwarunkowań:
+
+\begin{itemize}
+  \item \textbf{Dobór próby i heterogeniczność sesji.} Uczestnicy dołączali do platformy w otwartym naborze internetowym. Zbiór 240 rekordów ze zgodą obejmuje zarówno ścieżkę szybką, ścieżkę pełną, jak i przerwane sesje wstępne.
+  \item \textbf{Skala próby w ślepej macierzy.} Rdzeń empiryczny ślepego wyboru obejmuje --- w zależności od przyjętego licznika --- 16, 17 lub 29 osób (oraz 59 wierszy w tabeli opinii), co wyklucza stosowanie wielozmiennowych modeli konfirmacyjnych.
+  \item \textbf{Niezgodność trzech liczników wyboru.} Różnice między flagą \texttt{blind\_selection\_made}, zaznaczeniem w \texttt{participant\_matrix\_entries} a wpisem w \texttt{generation\_feedback} wymagają ostrożnego, rozdzielnego raportowania.
+  \item \textbf{Niezawodność potoku generacji obrazu.} W odczycie z 1~października 2026 roku spośród 1174 zleceń generacji 485 zakończyło się błędem, a 278 pozostało w stanie oczekiwania (\texttt{pending}). Wybór w macierzy mógł zatem zależeć od dostępności i jakości technicznej poszczególnych wizualizacji.
+  \item \textbf{Luki w operacjonalizacji zmiennych.} Schemat bazy danych nie rejestruje nastroju PRS po ekspozycji na wizualizację (\texttt{prs\_post\_*}), czasu zatrzymania wzroku (\texttt{dwell\_time\_ms}) ani satysfakcji przypisanej do pojedynczego źródła macierzy.
+  \item \textbf{Kontekst kulturowy i warunki ekspozycji.} Badanie prowadzono w wersjach polsko- i anglojęzycznej na zróżnicowanych ekranach użytkowników, bez laboratoryjnej kalibracji oświetlenia i barwy.
+\end{itemize}
+
+\section{Odpowiedzialność etyczna projektanta}
+\label{ch09:sec:etyka}
+
+\paragraph{Przeciwdziałanie determinizmowi psychometrycznemu.}
+Translacja wyników IPIP-NEO-120 na wytyczne projektowe (rozdz.~\ref{ch05:top}) niesie ryzyko esencjalizacji gustu i szufladkowania mieszkańca według schematu „Twój profil osobowości wymusza styl~$X$”. Architektura eksperymentu w IDA świadomie rozbraja to zagrożenie: wariant osobowościowy jest tylko jedną z sześciu równorzędnych propozycji w ślepym porównaniu, a nie autorytatywnym wyrokiem o tożsamości człowieka. Komunikaty zwrotne w interfejsie muszą konsekwentnie unikać wartościujących etykiet psychologicznych.
+
+\paragraph{Przejrzystość procesu syntezy.}
+Zastosowanie jawnego schematu wytycznych (JSON~v3 oraz reguły translacji podwymiarów cech w zał.~\ref{app:c:top}) zapewnia pełną audytowalność procesu w porównaniu z konsumenckimi generatorami typu „czarna skrzynka”. Nie zdejmuje to jednak z projektanta odpowiedzialności za nieuniknione uproszczenia towarzyszące przełożeniu teorii Kaplana na dwuwymiarową siatkę nastroju ani za niedoskonałości analizy obrazu przez model wizyjno-językowy. Uczestnik przez cały czas trwania sesji zachowuje świadomość, że obcuje z wizualizacją koncepcyjną, a nie z dokumentacją budowlaną (rozdz.~\ref{ch07:sec:status-wizualizacji}).
+
+\paragraph{Ochrona prywatności i podmiotowości.}
+Wdrożenie rygorów rozporządzenia RODO, wersjonowanie zgód oraz posługiwanie się zanonimizowanym identyfikatorem \texttt{user\_hash} (rozdz.~\ref{ch06:sec:etyka}) chronią uczestników przed identyfikacją. Ponieważ jednak wieloźródłowy profil estetyczno-osobowościowy stanowi wrażliwy zapis preferencji człowieka, w eksportach badawczych bezwzględnie stosuję zasadę minimalizacji danych i wykluczam jakiekolwiek profilowanie komercyjne.
+
+\section{Kierunki dalszych prac badawczo-projektowych}
+\label{ch09:sec:dalsze}
+
+\begin{enumerate}
+  \item \textbf{Powiększenie próby badawczej w oparciu o predefiniowany plan analiz.} Docelowe oszacowanie rozkładu wyborów w macierzy wymaga próby rzędu $N \approx 50$--$80$ pełnych sesji, analiza wpływu rozbieżności na zachowanie wyboru --- $N \geq 100$, natomiast stabilne oszacowanie korelacji z wymiarami Wielkiej Piątki --- $N \approx 80$--$150$.
+  \item \textbf{Stabilizacja infrastruktury generatywnej.} Przed uruchomieniem głównego naboru konieczne jest wyeliminowanie błędów potoku generacji i zadań zawieszonych w stanie \texttt{pending}, aby każdy badany oceniał kompletną, technicznie jednorodną siatkę sześciu wariantów.
+  \item \textbf{Wprowadzenie pomiaru nastroju po ekspozycji na wizualizację.} Dodanie opcjonalnego pytania zamykającego („W jakim punkcie siatki nastroju lokuje się wybrana przez Ciebie koncepcja?”) pozwoliłoby bezpośrednio skonfrontować lukę wejściową PRS z odczuwanym walorem regeneracyjnym obrazu.
+  \item \textbf{Pogłębiona rejestracja wskaźników behawioralnych.} Rozbudowa telemetrii o czas zatrzymania wzroku na karcie (\texttt{dwell\_time\_ms}) oraz licznik zmian decyzji (\texttt{hesitation\_count}) umożliwiłaby powrót do badania mikro-dynamiki wahania estetycznego.
+  \item \textbf{Wieloosobowe gospodarstwa domowe i sekwencje pomieszczeń.} Rozwinięcie warstw \texttt{HOUSEHOLD} oraz \texttt{ROOM} otwiera pole do badania negocjacji gustu między współmieszkańcami.
+  \item \textbf{Ekspozycja w środowisku immersyjnym (VR).} Zestawienie wyborów dokonywanych na płaskim ekranie w macierzy 2D z doświadczeniem tej samej przestrzeni w skali 1:1 w wirtualnej rzeczywistości stanowi naturalny kolejny krok badawczy.
+\end{enumerate}
